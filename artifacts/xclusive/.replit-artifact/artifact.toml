@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Xclusive"
+version = "1.0.0"
+id = "artifacts/xclusive"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19285
+
+[services.development]
+run = "pnpm --filter @workspace/xclusive run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/xclusive", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/xclusive/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19285"
+BASE_PATH = "/"

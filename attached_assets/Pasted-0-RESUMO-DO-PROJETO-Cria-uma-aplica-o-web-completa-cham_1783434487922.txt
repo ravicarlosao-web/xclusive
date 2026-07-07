@@ -1,0 +1,432 @@
+0. RESUMO DO PROJETO
+
+Cria uma aplicação web completa chamada Xclusive — uma rede social híbrida que combina as funcionalidades do Instagram (feed, stories, perfil, mensagens, explorar) com as do TikTok (reels em ecrã inteiro, scroll vertical infinito) e ainda um sistema de monetização de criadores (assinaturas, conteúdo exclusivo pago, gorjetas/tips), no estilo "criador ganha diretamente, sem intermediários".
+
+A aplicação deve ser construída como uma Single Page Application (SPA) responsiva, mobile-first mas otimizada primeiro para versão Web/Desktop (layout com barra lateral fixa, tal como o Instagram Web).
+
+
+1. IDENTIDADE VISUAL E DESIGN SYSTEM
+
+1.1 Paleta de cores (usar exatamente estas variáveis CSS globais)
+
+css:root {
+  --bg-primary: #0a0a0a;        /* Preto profundo - fundo principal de toda a app */
+  --bg-secondary: #121212;      /* Fundo de cards, modais, sidebar */
+  --bg-tertiary: #1a1a1a;       /* Fundo de inputs, hover states */
+  --border-color: #262626;      /* Bordas subtis entre secções */
+  --accent-pink: #ff3e72;       /* Rosa vibrante - cor de marca, CTAs, ícones ativos, links, logotipo */
+  --accent-pink-hover: #ff5c85; /* Hover state do rosa */
+  --accent-pink-dark: #e0335f;  /* Pressed state do rosa */
+  --text-primary: #ffffff;      /* Texto principal, títulos */
+  --text-secondary: #a0a0a0;    /* Texto secundário, legendas, timestamps, placeholders */
+  --text-offwhite: #f9f9f9;     /* Texto de botões secundários sobre fundo escuro */
+  --gradient-story: linear-gradient(45deg, #ff3e72, #ff8a5c, #ffc93e); /* Anel de story não visualizado */
+  --gradient-live: linear-gradient(90deg, #ff3e72, #ff005c);           /* Indicador de "AO VIVO" */
+  --success: #2ecc71;
+  --error: #ff4d4f;
+  --warning: #ffb020;
+}
+
+1.2 Tipografia
+
+
+Fonte principal: Inter ou Poppins (Google Fonts), pesos 400/500/600/700/800.
+Títulos (H1/H2): peso 700-800, letter-spacing: -0.02em.
+Corpo de texto: peso 400, line-height: 1.5.
+Logotipo "Xclusive": peso 800, com o "X" sempre na cor --accent-pink e o resto ("clusive") em --text-primary.
+
+
+1.3 Estilo visual geral (linguagem de design)
+
+
+Tema dark mode nativo (não é opcional, é o único tema no MVP).
+Cantos arredondados consistentes: 12px em cards/posts, 20px em botões grandes, 50% (circular) em avatares e botões de ação.
+Botões primários: fundo --accent-pink, texto branco, border-radius: 24px, padding: 12px 24px, efeito hover com leve scale(1.02) e brightness.
+Botões secundários: fundo transparente ou --bg-tertiary, borda 1px solid --border-color, texto --text-offwhite.
+Sombra suave em cards flutuantes: box-shadow: 0 4px 24px rgba(0,0,0,0.4).
+Ícones: usar biblioteca Lucide Icons ou Feather Icons, sempre stroke-width: 1.5-2px; ícone ativo/selecionado preenchido a rosa, ícone inativo em outline cinza-claro.
+Micro-animações: transições de 200-300ms ease-in-out em hovers, aberturas de modais com fade+scale, "like" com animação de coração a crescer (heart burst) em rosa.
+Skeleton loaders (placeholders cinza-escuro pulsantes) em todos os carregamentos de feed, stories e imagens — nunca mostrar ecrã em branco.
+
+
+1.4 Página de aterragem (Landing Page) — antes do login
+
+Estrutura exata (fundo --bg-primary a 100% da viewport):
+
+
+Navbar superior fixa: logotipo "Xclusive" à esquerda (X em rosa); à direita botões "Entrar" (texto simples) e "Criar conta" (botão rosa preenchido).
+Secção Hero central:
+
+Pequena etiqueta/pill acima do título com texto "Sem intermediários." em --accent-pink, fundo rgba(255,62,114,0.1), borda arredondada.
+Título grande: "Conteúdo exclusivo." em --text-primary, fonte grande (48-64px), negrito.
+Parágrafo descritivo por baixo em --text-secondary explicando a proposta de valor (ex: "A plataforma onde criadores partilham conteúdo exclusivo e ganham diretamente dos seus fãs, sem comissões abusivas.").
+Dois botões lado a lado: "Explorar criadores" (fundo --text-offwhite, texto escuro, botão secundário claro) e "Tornar-me criador" (fundo --accent-pink, texto branco, botão primário).
+
+
+
+Abaixo do hero: secção com grid de cartões de criadores em destaque (mockup/dummy), mostrando avatar, nome, nicho e número de subscritores, com efeito hover de leve zoom.
+Footer simples com links (Sobre, Termos, Privacidade, Suporte) em --text-secondary.
+
+
+
+2. STACK TECNOLÓGICA RECOMENDADA (para o Replit Agent decidir a estrutura)
+
+
+Frontend: React (Vite) + TypeScript + TailwindCSS (usando as variáveis de cor acima como theme.extend.colors) + React Router para navegação SPA.
+Gestão de estado: Zustand ou Context API para estado global (utilizador autenticado, tema, notificações não lidas).
+Backend: Node.js com Express (ou Fastify) + TypeScript.
+Base de dados: PostgreSQL (usar Replit Database/Neon ou similar) com Drizzle ORM ou Prisma.
+Autenticação: JWT com refresh tokens + cookies httpOnly, palavras-passe com hash bcrypt.
+Armazenamento de media (imagens/vídeos): usar um bucket de object storage (ex: Replit Object Storage / S3-compatible) — nunca guardar ficheiros binários diretamente na base de dados relacional.
+Tempo real: WebSockets (Socket.io) para mensagens diretas, notificações instantâneas, indicador "online agora" e "a escrever...".
+Pagamentos/monetização: integração simulada com Stripe (Stripe Connect para pagamentos a criadores), incluindo webhooks para confirmar subscrições e pagamentos únicos.
+Upload/processamento de vídeo: compressão client-side antes do upload (ex: usando ffmpeg.wasm) para os Reels.
+
+
+
+3. ARQUITETURA DE PÁGINAS / ROTAS
+
+/                        → Landing page (se não autenticado) / redireciona para /home (se autenticado)
+/login                   → Ecrã de login
+/registo                 → Ecrã de criação de conta
+/recuperar-password      → Recuperação de password
+/onboarding              → Fluxo pós-registo (escolher username, foto, interesses, tipo de conta)
+/home                    → Feed principal
+/explorar                → Grelha de descoberta (Explore)
+/reels                   → Feed vertical de Reels (estilo TikTok)
+/mensagens               → Lista de conversas
+/mensagens/:id           → Conversa individual
+/notificacoes            → Painel de notificações
+/criar                   → Modal/página de criação (post, story, reel)
+/perfil/:username        → Perfil público de um utilizador/criador
+/perfil/:username/seguidores
+/perfil/:username/a-seguir
+/definicoes              → Configurações de conta
+/definicoes/privacidade
+/definicoes/monetizacao  → Painel de criador (ganhos, planos de subscrição)
+/pesquisa?q=             → Resultados de pesquisa
+/p/:postId               → Vista expandida de um post individual
+/story/:username/:storyId → Visualizador de story em ecrã inteiro
+
+3.1 Layout base (para todas as páginas autenticadas)
+
+Estrutura tipo Instagram Web:
+
+
+Barra lateral esquerda fixa (largura ~245px em ecrãs grandes, colapsa para apenas ícones em ecrãs médios):
+
+Logotipo "Xclusive" no topo.
+Ícones de navegação, cada um com label ao lado: Início (casa), Pesquisar, Explorar (bússola), Reels (clapperboard/play), Mensagens (envelope/avião de papel, com badge de contagem de não lidas), Notificações (coração, com badge), Criar (ícone "+" dentro de quadrado), Perfil (avatar circular do utilizador).
+Se for conta de criador: item extra "Painel de Criador" com ícone de gráfico/dólar.
+Ícone ativo destacado a rosa; hover com fundo --bg-tertiary arredondado.
+Rodapé da sidebar: ícone "Mais" (☰) com menu dropdown (Definições, Guardados, Terminar sessão).
+
+
+
+Área central: conteúdo da página atual (feed, grid, etc.), largura máxima ~630px centrada para o feed.
+Coluna direita (apenas no /home): mini-perfil do utilizador logado no topo + secção "Sugestões para ti" (lista de criadores/utilizadores sugeridos com botão "Seguir").
+
+
+
+4. AUTENTICAÇÃO E ONBOARDING
+
+4.1 Registo
+
+Campos: nome completo, e-mail, username (validação em tempo real de disponibilidade, com debounce), password (com indicador de força), data de nascimento (para verificação de maioridade — mínimo 18 anos, obrigatório dado o modelo de conteúdo exclusivo/monetizado).
+
+
+Checkbox obrigatório de aceitação dos Termos de Serviço e Política de Privacidade.
+Botão "Criar conta" desabilitado até todos os campos válidos.
+Após submissão: envio de e-mail de verificação (simular com um estado "pendente de verificação").
+
+
+4.2 Login
+
+
+Campos e-mail/username + password.
+Opção "Lembrar-me" (checkbox) e "Esqueceste a password?".
+Mensagens de erro claras e específicas por campo (não genéricas).
+Rate-limiting visual: após 5 tentativas falhadas, bloquear temporariamente com contagem decrescente.
+
+
+4.3 Onboarding (fluxo em passos, com barra de progresso)
+
+
+Escolher foto de perfil (upload ou avatar por defeito gerado).
+Escrever bio curta (máx. 150 caracteres) + link opcional.
+Escolher tipo de conta: Pessoal ou Criador (se Criador → pedir categoria/nicho, ex: fitness, arte, música, culinária, lifestyle, etc.).
+Selecionar interesses (grid de tags clicáveis) para alimentar o algoritmo de recomendação inicial.
+Sugestão de 8-10 contas para seguir com base nos interesses escolhidos.
+
+
+
+5. PERFIL DE UTILIZADOR
+
+5.1 Cabeçalho do perfil
+
+
+Foto de capa opcional (banner) no topo, com foto de perfil circular sobreposta (borda em gradiente rosa se tiver stories ativos por ler, cinza se não).
+Nome de exibição + username (com "@") + badge de verificado (check azul/rosa) se aplicável + badge "Criador" se conta de criador.
+Bio (texto com suporte a #hashtags e @menções clicáveis) + link externo clicável.
+Contadores clicáveis: Publicações | Seguidores | A seguir (cada um abre modal/página de lista).
+Se for o próprio perfil: botão "Editar perfil" + ícone de definições.
+Se for perfil de outro utilizador: botões "Seguir" / "Deixar de seguir", "Mensagem", e menu de três pontos (Bloquear, Denunciar, Silenciar, Partilhar perfil).
+Se for perfil de criador com conteúdo pago: cartão de destaque com os planos de subscrição (ex: "Mensal — 9,99€/mês", "Trimestral — desconto") e botão CTA rosa "Subscrever"; também opção de desbloquear posts individuais (pay-per-view) fora da subscrição.
+
+
+5.2 Destaques de Stories (Highlights)
+
+
+Fila horizontal de círculos abaixo da bio, com capa personalizada e título (ex: "Viagens", "Bastidores"), que ao clicar abre esse conjunto de stories arquivadas permanentemente no perfil.
+Botão "+" no início da fila para o dono do perfil criar um novo destaque a partir de stories antigas.
+
+
+5.3 Abas de conteúdo do perfil
+
+Tabs horizontais com ícones: Grelha (Posts) | Reels | Marcado(a)s (posts em que foi marcado) | Conteúdo Exclusivo (apenas visível/desbloqueado conforme subscrição, com cadeado sobre thumbnails bloqueadas + overlay "Subscreve para desbloquear").
+
+
+Grelha em 3 colunas, formato quadrado, hover mostra overlay com contagem de likes (❤) e comentários (💬).
+Posts em vídeo mostram ícone de "play" no canto.
+Estado vazio elegante quando não há publicações ("Ainda sem publicações").
+
+
+5.4 Edição de perfil
+
+Modal/página com: alterar foto/capa, nome, username, bio, link, género, trocar para conta de criador, gestão de conta ligada ao Stripe (para criadores).
+
+
+6. FEED PRINCIPAL (Home)
+
+6.1 Barra de Stories (topo do feed)
+
+
+Fila horizontal com scroll, círculo "O teu story" (+ para adicionar) seguido dos stories de contas seguidas.
+Anel gradiente rosa/laranja em stories não vistos; anel cinza sólido em já vistos; anel deslocado para o fim da lista.
+Clique abre o visualizador de stories em ecrã inteiro (ver secção 7).
+
+
+6.2 Cartão de publicação (Post)
+
+Estrutura de cada post no feed, de cima para baixo:
+
+
+Cabeçalho: avatar circular pequeno + username (clicável) + localização opcional por baixo do nome + menu "..." à direita (Guardar, Não me interessa, Denunciar, Copiar link, [Editar/Apagar se for dono]).
+Media: imagem ou vídeo em proporção 1:1 ou 4:5, carrossel com múltiplas imagens (indicadores de pontos + setas nas laterais em hover, swipe em mobile). Vídeo com autoplay mudo em loop ao entrar no viewport + ícone de som.
+Barra de ações (ícones, esquerda para direita): ❤ Curtir (double-tap na imagem também curte, com animação de coração grande a aparecer e desaparecer), 💬 Comentar (abre painel de comentários), ➤ Partilhar/Enviar por mensagem, 🔖 Guardar (alinhado à direita, ícone de marcador).
+Contagem de likes: "Curtido por [nome] e mais X pessoas" (clicável, abre lista de likes).
+Legenda: username em negrito + texto (com hashtags/menções em rosa clicáveis), com "ver mais" se for longa.
+Link "Ver todos os X comentários" → expande secção de comentários inline com respostas aninhadas, likes em comentários, e campo para novo comentário com emoji picker.
+Timestamp relativo (ex: "há 2h", "há 3 dias").
+Se for post de conteúdo exclusivo/pago: overlay desfocado (blur) sobre a media com cadeado central e botão "Desbloquear por X€" ou "Subscrever para ver".
+
+
+6.3 Algoritmo/comportamento do feed
+
+
+Scroll infinito com paginação (infinite scroll + lazy loading de imagens).
+Mistura de posts de quem o utilizador segue + posts sugeridos ("Sugerido para ti", com etiqueta discreta) baseados em interesses.
+Anúncio de post "Patrocinado" ocasional (estrutura semelhante, com etiqueta "Patrocinado" e botão CTA).
+
+
+
+7. STORIES
+
+7.1 Criação de Story
+
+
+Câmara integrada no browser (usar getUserMedia) com opção de tirar foto, gravar vídeo curto (até 15s) ou carregar da galeria.
+Editor: texto sobreposto (várias fontes/cores), stickers (localização, hashtag, menção, música, enquete, pergunta, contagem decrescente, slider emoji, temperatura), desenho livre (caneta com cores), filtros de cor.
+Configuração de audiência: "Todos", "Apenas subscritores/pagantes" (para criadores), "Amigos próximos".
+Botão final "Partilhar no teu story".
+
+
+7.2 Visualizador de Story (ecrã inteiro, estilo Instagram/TikTok)
+
+
+Barra de progresso segmentada no topo (uma barra por story do mesmo utilizador), preenchimento automático em ~5s (imagem) ou duração real (vídeo).
+Avatar + username + timestamp no canto superior; botão "X" fechar; ícone "..." (silenciar, denunciar).
+Toque na metade direita do ecrã avança, metade esquerda recua; swipe para baixo fecha; swipe lateral muda para o story do próximo/anterior utilizador na fila.
+Segurar (long-press) pausa o story.
+Campo de resposta rápida no fundo ("Enviar mensagem...") + ícone de coração (like rápido) + ícone de partilhar.
+Se houver stickers interativos (enquete, pergunta, slider): renderizar interativos e enviar resposta como DM ao autor.
+Para o dono do story: em vez do campo de resposta, mostrar "Visto por X pessoas" clicável, abrindo lista de visualizadores com contagem de likes por pessoa.
+
+
+
+8. REELS (estilo TikTok)
+
+8.1 Feed de Reels
+
+
+Página /reels em ecrã inteiro, scroll vertical snap (um vídeo ocupa 100% da viewport, scroll/swipe passa para o próximo, com transição suave).
+Autoplay em loop com som ativado por padrão (diferente do feed normal); tocar no ecrã pausa/despausa.
+Sobreposição de informação no canto inferior esquerdo: avatar pequeno + username + botão "Seguir" inline + legenda (com hashtags clicáveis) + nome da música/áudio original com ícone de disco a rodar.
+Coluna de ações à direita (empilhada verticalmente): avatar do autor (com "+" para seguir sobreposto), ❤ Curtir + contagem, 💬 Comentar + contagem (abre painel deslizante de comentários por cima do vídeo), ➤ Partilhar + contagem, 🔖 Guardar, ⋮ Mais opções, disco de música rodando (clicável, leva à página do som com todos os reels que o usam).
+Indicador de progresso fino na parte inferior do vídeo.
+
+
+8.2 Criação de Reels
+
+
+Gravação diretamente no browser (câmara) ou upload de vídeo existente (até ex: 90 segundos).
+Ferramentas: cortar/aparar vídeo, adicionar música da biblioteca (pesquisa por música), ajustar velocidade (0.5x-2x), adicionar texto/stickers, filtros/efeitos visuais, gravação em camadas (adicionar clips).
+Ecrã final: escrever legenda, adicionar hashtags, escolher capa personalizada (frame do vídeo ou upload), definir se é conteúdo exclusivo (pago) ou público, botão "Publicar".
+
+
+
+9. MENSAGENS DIRETAS (Chat)
+
+9.1 Lista de conversas
+
+
+Lista com avatar, nome, prévia da última mensagem (truncada), timestamp, indicador de não lida (ponto rosa/negrito), indicador de "online agora" (ponto verde no avatar).
+Barra de pesquisa no topo para filtrar conversas/utilizadores.
+Separador de pedidos de mensagem ("Pedidos") para mensagens de contas não seguidas.
+Ícone "+" para nova mensagem/criar grupo.
+
+
+9.2 Janela de conversa
+
+
+Cabeçalho: avatar + nome + status ("online" / "visto há X min") + ícones de chamada de voz e chamada de vídeo (opcional/simulado) + info do perfil.
+Bolhas de mensagem: enviadas à direita (fundo rosa --accent-pink), recebidas à esquerda (fundo --bg-tertiary), cantos arredondados assimétricos (estilo iMessage/Instagram).
+Suporte para: texto, emojis, imagens/vídeos (com preview em galeria), áudio gravado (mensagem de voz com waveform), partilha de post/reel/story diretamente do feed, GIFs/stickers.
+Reações rápidas a mensagens individuais (double-tap/long-press → escolher emoji, aparece pequeno no canto da bolha).
+Indicador "a escrever..." em tempo real (via WebSocket).
+Confirmação de leitura ("Visto" + timestamp) opcional/configurável.
+Mensagens que desaparecem/temporárias (estilo "modo secreto") como opção avançada.
+Campo de input em baixo: ícone de emoji, campo de texto expansível, ícone de câmara/galeria, ícone de microfone (segurar para gravar áudio), botão enviar.
+Conteúdo pago via DM: opção de enviar uma foto/vídeo "bloqueado" que o destinatário paga para desbloquear (pay-per-view direto no chat) — útil para o modelo de monetização do Xclusive.
+
+
+
+10. EXPLORAR / DESCOBRIR
+
+
+Grelha responsiva tipo "mosaico" (mix de itens grandes e pequenos, como o Explore do Instagram), populada por conteúdo recomendado com base em interações passadas, sem ordem cronológica.
+Barra de pesquisa fixa no topo com sugestões instantâneas: separadores Contas / Hashtags / Sons / Locais.
+Tags de categorias horizontais no topo (ex: Moda, Fitness, Culinária, Arte, Música, Viagens) para filtrar a grelha.
+Clicar num item abre a vista expandida (post individual ou reel) num modal, com navegação para o item seguinte/anterior sem sair da grelha.
+Página de resultados de hashtag: capa + contagem de publicações + grelha de todos os posts com essa tag + botão seguir hashtag.
+
+
+
+11. NOTIFICAÇÕES
+
+
+Painel deslizante (dropdown) ou página dedicada, agrupado por: Hoje / Esta semana / Este mês.
+Tipos de notificação com ícone colorido correspondente: novo seguidor (com botão "Seguir de volta" inline), like em post/reel/comentário, novo comentário, menção, nova subscrição/pagamento recebido (para criadores, com ícone de dólar/rosa), story mencionando o utilizador, lembrete de story a expirar.
+Cada notificação clicável leva ao conteúdo relevante; thumbnail do post à direita quando aplicável.
+Badge numérico vermelho/rosa no ícone da sidebar com contagem de não lidas.
+
+
+
+12. CRIAÇÃO DE CONTEÚDO (botão "Criar")
+
+Modal central com abas: Publicação | Story | Reel | Live (transmissão ao vivo — pode ficar como "em breve" no MVP).
+
+
+Fluxo de Publicação: selecionar até 10 imagens/vídeos (arrastar para reordenar) → aplicar filtro/edição básica (brilho, contraste, corte) → adicionar legenda, localização, marcar pessoas → alternar "Ocultar contagem de likes" → alternar "Conteúdo Exclusivo" (define preço de desbloqueio ou exclusivo para subscritores) → Publicar.
+
+
+
+13. SISTEMA DE CRIADOR E MONETIZAÇÃO ("Painel de Criador")
+
+Página /definicoes/monetizacao acessível apenas a contas de tipo Criador:
+
+
+Cartões de estatísticas no topo: Ganhos este mês, Total de subscritores, Taxa de retenção, Visualizações totais.
+Gestão de planos de subscrição: criar/editar níveis (ex: Básico, Premium, VIP) com preço mensal e benefícios descritos.
+Conteúdo pago avulso (PPV): lista de posts/reels/mensagens vendidos individualmente com contagem de compras e receita gerada.
+Configuração de payout: ligação a conta Stripe Connect, escolha de método e frequência de levantamento, histórico de transações.
+Gráfico de ganhos ao longo do tempo (usar biblioteca de gráficos, ex: Recharts) com filtro por período.
+Mensagem de marca reforçando o valor "Sem intermediários — fica com [X]% do teu ganho" (percentagem configurável, ex: criador fica com 90%).
+
+
+
+14. PESQUISA GLOBAL
+
+
+Acessível pelo ícone de pesquisa na sidebar (abre painel deslizante, não navega para outra página, tal como no Instagram).
+Histórico de pesquisas recentes (com opção de limpar).
+Resultados instantâneos enquanto o utilizador escreve, separados por Contas (avatar + nome + badge verificado + nº seguidores) e Hashtags (contagem de posts).
+
+
+
+15. DEFINIÇÕES (Settings)
+
+Menu lateral dentro da página de definições com secções:
+
+
+Editar perfil
+Privacidade da conta (conta pública vs privada, quem pode comentar/enviar mensagem, lista de contas silenciadas/bloqueadas)
+Segurança (alterar password, autenticação de dois fatores, sessões ativas/dispositivos ligados)
+Notificações (toggles individuais por tipo de notificação, push vs e-mail)
+Monetização (ver secção 13)
+Conteúdo e visibilidade (ocultar contagem de likes, restringir comentários com palavras-chave filtradas)
+Sobre a conta / Terminar sessão / Eliminar conta
+
+
+
+16. MODELO DE BASE DE DADOS (schema sugerido)
+
+Tabelas principais e relações essenciais:
+
+
+users: id, username (único), email (único), password_hash, nome_exibicao, bio, avatar_url, capa_url, tipo_conta (pessoal/criador), verificado (bool), privado (bool), data_nascimento, criado_em.
+follows: id, seguidor_id (FK users), seguido_id (FK users), estado (aceite/pendente — para contas privadas), criado_em.
+posts: id, autor_id (FK users), legenda, localizacao, tipo (imagem/vídeo/carrossel), exclusivo (bool), preco_desbloqueio, criado_em.
+post_media: id, post_id (FK), url, ordem, tipo.
+likes: id, utilizador_id, alvo_tipo (post/reel/comentário), alvo_id, criado_em.
+comments: id, post_id, autor_id, comentario_pai_id (nullable, para respostas), texto, criado_em.
+stories: id, autor_id, media_url, tipo, duracao, audiencia (todos/subscritores/próximos), expira_em, criado_em.
+story_views: id, story_id, utilizador_id, visto_em.
+highlights: id, utilizador_id, titulo, capa_url.
+highlight_stories: highlight_id, story_id.
+reels: id, autor_id, video_url, capa_url, legenda, som_id, exclusivo (bool), criado_em.
+sounds: id, titulo, artista, audio_url, usado_por_contagem.
+conversations: id, tipo (privada/grupo), criado_em.
+conversation_participants: conversation_id, utilizador_id.
+messages: id, conversation_id, autor_id, tipo (texto/imagem/audio/post_partilhado/pago), conteudo, bloqueado (bool), preco, lido (bool), criado_em.
+notifications: id, destinatario_id, tipo, ator_id, alvo_id, lida (bool), criado_em.
+subscriptions: id, subscritor_id, criador_id, plano_id, estado (ativa/cancelada), inicio_em, renovacao_em.
+subscription_plans: id, criador_id, nome, preco, beneficios, ativo (bool).
+purchases: id, comprador_id, tipo_conteudo (post/reel/mensagem), conteudo_id, valor, criado_em.
+hashtags / post_hashtags: relação muitos-para-muitos entre posts/reels e hashtags.
+
+
+Índices recomendados: username, email únicos; índices compostos em follows(seguidor_id, seguido_id) e likes(alvo_tipo, alvo_id) para performance de contagens.
+
+
+17. REQUISITOS TÉCNICOS TRANSVERSAIS
+
+
+Responsividade: apesar de o foco inicial ser Web/Desktop, garantir breakpoints funcionais para tablet e mobile (sidebar colapsa para barra inferior fixa em ecrãs <768px, tal como o Instagram mobile web).
+Acessibilidade: contraste adequado (verificar que o cinza #a0a0a0 sobre #0a0a0a cumpre WCAG AA para texto secundário), alt text em imagens, navegação por teclado nos modais.
+Performance: lazy-loading de imagens/vídeos fora do viewport, compressão de imagens no upload, paginação em todas as listas (feed, comentários, notificações, mensagens).
+Segurança: sanitização de inputs (prevenir XSS em legendas/comentários), rate-limiting em endpoints sensíveis (login, criação de posts), validação de idade mínima (18 anos) no registo dado o modelo de conteúdo pago, moderação básica de conteúdo (lista de palavras bloqueadas, sistema de denúncias com fila de revisão).
+Estados vazios e de erro: cada lista/feed/grelha deve ter um estado vazio bem desenhado (ilustração/ícone + texto + CTA) e tratamento gracioso de erros de rede (toast/snackbar de erro, botão "Tentar novamente").
+Feedback visual constante: toasts/snackbars para ações (post publicado, erro ao publicar, seguidor adicionado, pagamento confirmado), sempre no canto superior direito, com a cor de acordo com o tipo (sucesso em verde, erro em vermelho, info neutro).
+
+
+
+18. PRIORIDADE DE IMPLEMENTAÇÃO (ordem sugerida ao Replit Agent)
+
+
+Design system global (cores, tipografia, componentes base de UI: botões, inputs, avatares, cards).
+Autenticação (registo, login, sessão) + onboarding.
+Layout base autenticado (sidebar + estrutura de rotas).
+Perfil de utilizador (visualização + edição).
+Feed principal com posts (CRUD completo) + likes + comentários.
+Stories (criação + visualização + destaques).
+Explorar (grelha + pesquisa).
+Reels (feed vertical + criação).
+Mensagens diretas + WebSockets em tempo real.
+Notificações em tempo real.
+Sistema de monetização/criador (subscrições, PPV, painel de ganhos).
+Polimento final: animações, estados vazios, responsividade, acessibilidade.
+
+
+
+Instrução final para o Replit Agent: implementa tudo o que está descrito acima, secção por secção, seguindo rigorosamente a paleta de cores e o estilo visual indicados na secção 1. Usa dados fictícios (seed/mock data realista) para popular o feed, explorar, reels e perfis durante o desenvolvimento, para que a aplicação seja imediatamente testável e visualmente completa desde a primeira execução.

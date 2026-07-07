@@ -1,0 +1,3 @@
+- [Xclusive auth wiring](xclusive-auth.md) — setAuthTokenGetter must be called at module level in AuthContext.tsx to wire JWT to all API hooks
+- [Xclusive codegen collision fix](xclusive-codegen.md) — Orval collides on Get*Params when endpoint has both path params AND query params; remove query params from those endpoints
+- [Xclusive stack overview](xclusive-stack.md) — DB schema, API routes, frontend pages, and seed users for the Xclusive social platform

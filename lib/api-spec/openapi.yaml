@@ -1,22 +1,30 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Xclusive API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: users
+  - name: posts
+  - name: stories
+  - name: reels
+  - name: explore
+  - name: messages
+  - name: notifications
+  - name: highlights
+  - name: creator
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +32,993 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Registar nova conta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Dados inválidos
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Autenticar utilizador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Credenciais inválidas
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Terminar sessão
+      responses:
+        "200":
+          description: Sessão terminada
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Utilizador autenticado
+      responses:
+        "200":
+          description: Utilizador atual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Não autenticado
+
+  # USERS
+  /users/suggestions:
+    get:
+      operationId: getUserSuggestions
+      tags: [users]
+      summary: Sugestões de utilizadores para seguir
+      responses:
+        "200":
+          description: Lista de sugestões
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSummary"
+
+  /users/me:
+    patch:
+      operationId: updateProfile
+      tags: [users]
+      summary: Atualizar perfil do utilizador autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Perfil atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/{username}:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Obter perfil de um utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Perfil do utilizador
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Utilizador não encontrado
+
+  /users/{username}/follow:
+    post:
+      operationId: followUser
+      tags: [users]
+      summary: Seguir utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A seguir
+
+    delete:
+      operationId: unfollowUser
+      tags: [users]
+      summary: Deixar de seguir utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deixou de seguir
+
+  /users/{username}/followers:
+    get:
+      operationId: getUserFollowers
+      tags: [users]
+      summary: Seguidores do utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de seguidores
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+
+  /users/{username}/following:
+    get:
+      operationId: getUserFollowing
+      tags: [users]
+      summary: Utilizadores que segue
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de seguidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+
+  /users/{username}/posts:
+    get:
+      operationId: getUserPosts
+      tags: [users]
+      summary: Posts de um utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPosts"
+
+  /users/{username}/reels:
+    get:
+      operationId: getUserReels
+      tags: [users]
+      summary: Reels de um utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de reels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReels"
+
+  # FEED
+  /feed:
+    get:
+      operationId: getFeed
+      tags: [posts]
+      summary: Feed principal do utilizador
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: Posts do feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPosts"
+
+  # POSTS
+  /posts:
+    post:
+      operationId: createPost
+      tags: [posts]
+      summary: Criar nova publicação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostInput"
+      responses:
+        "201":
+          description: Publicação criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/{id}:
+    get:
+      operationId: getPost
+      tags: [posts]
+      summary: Obter publicação
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Publicação
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "404":
+          description: Não encontrado
+
+    delete:
+      operationId: deletePost
+      tags: [posts]
+      summary: Eliminar publicação
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Eliminado
+
+  /posts/{id}/like:
+    post:
+      operationId: likePost
+      tags: [posts]
+      summary: Curtir publicação
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Curtido
+
+    delete:
+      operationId: unlikePost
+      tags: [posts]
+      summary: Remover curtida
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Curtida removida
+
+  /posts/{id}/save:
+    post:
+      operationId: savePost
+      tags: [posts]
+      summary: Guardar publicação
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Guardado
+
+    delete:
+      operationId: unsavePost
+      tags: [posts]
+      summary: Remover guardado
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removido
+
+  /posts/{id}/comments:
+    get:
+      operationId: getPostComments
+      tags: [posts]
+      summary: Comentários de uma publicação
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de comentários
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedComments"
+
+    post:
+      operationId: createComment
+      tags: [posts]
+      summary: Adicionar comentário
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Comentário criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+
+  /comments/{id}:
+    delete:
+      operationId: deleteComment
+      tags: [posts]
+      summary: Eliminar comentário
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Eliminado
+
+  # STORIES
+  /stories/feed:
+    get:
+      operationId: getStoriesFeed
+      tags: [stories]
+      summary: Stories do feed (accounts seguidas)
+      responses:
+        "200":
+          description: Lista de stories agrupadas por utilizador
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoryGroup"
+
+  /stories:
+    post:
+      operationId: createStory
+      tags: [stories]
+      summary: Criar story
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoryInput"
+      responses:
+        "201":
+          description: Story criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+
+  /stories/{id}:
+    delete:
+      operationId: deleteStory
+      tags: [stories]
+      summary: Eliminar story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Eliminado
+
+  /stories/{id}/view:
+    post:
+      operationId: viewStory
+      tags: [stories]
+      summary: Registar visualização de story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Visualização registada
+
+  /stories/{id}/views:
+    get:
+      operationId: getStoryViews
+      tags: [stories]
+      summary: Visualizações da story (apenas dono)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de visualizadores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoryView"
+
+  # REELS
+  /reels:
+    get:
+      operationId: getReels
+      tags: [reels]
+      summary: Feed de reels
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Lista de reels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReels"
+
+    post:
+      operationId: createReel
+      tags: [reels]
+      summary: Publicar reel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReelInput"
+      responses:
+        "201":
+          description: Reel criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reel"
+
+  /reels/{id}:
+    get:
+      operationId: getReel
+      tags: [reels]
+      summary: Obter reel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reel"
+
+  /reels/{id}/like:
+    post:
+      operationId: likeReel
+      tags: [reels]
+      summary: Curtir reel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Curtido
+
+    delete:
+      operationId: unlikeReel
+      tags: [reels]
+      summary: Remover curtida de reel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Curtida removida
+
+  # EXPLORE
+  /explore:
+    get:
+      operationId: getExplore
+      tags: [explore]
+      summary: Grelha de explorar (conteúdo recomendado)
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Posts recomendados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPosts"
+
+  /search:
+    get:
+      operationId: search
+      tags: [explore]
+      summary: Pesquisa global
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [accounts, hashtags, all]
+            default: all
+      responses:
+        "200":
+          description: Resultados de pesquisa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+
+  # CONVERSATIONS / MESSAGES
+  /conversations:
+    get:
+      operationId: getConversations
+      tags: [messages]
+      summary: Lista de conversas
+      responses:
+        "200":
+          description: Conversas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+
+    post:
+      operationId: createConversation
+      tags: [messages]
+      summary: Iniciar conversa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Conversa criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}/messages:
+    get:
+      operationId: getMessages
+      tags: [messages]
+      summary: Mensagens de uma conversa
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Mensagens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedMessages"
+
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Enviar mensagem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Mensagem enviada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  # NOTIFICATIONS
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Notificações do utilizador
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Notificações
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedNotifications"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Marcar todas as notificações como lidas
+      responses:
+        "200":
+          description: Notificações marcadas como lidas
+
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationsCount
+      tags: [notifications]
+      summary: Contagem de notificações não lidas
+      responses:
+        "200":
+          description: Contagem
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+
+  # HIGHLIGHTS
+  /highlights:
+    post:
+      operationId: createHighlight
+      tags: [highlights]
+      summary: Criar destaque de stories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HighlightInput"
+      responses:
+        "201":
+          description: Destaque criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Highlight"
+
+  /users/{username}/highlights:
+    get:
+      operationId: getUserHighlights
+      tags: [highlights]
+      summary: Destaques de um utilizador
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de destaques
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Highlight"
+
+  /highlights/{id}:
+    delete:
+      operationId: deleteHighlight
+      tags: [highlights]
+      summary: Eliminar destaque
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Eliminado
+
+  # CREATOR / MONETIZATION
+  /creator/stats:
+    get:
+      operationId: getCreatorStats
+      tags: [creator]
+      summary: Estatísticas do criador
+      responses:
+        "200":
+          description: Estatísticas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorStats"
+
+  /creator/plans:
+    get:
+      operationId: getSubscriptionPlans
+      tags: [creator]
+      summary: Planos de subscrição do criador
+      responses:
+        "200":
+          description: Planos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubscriptionPlan"
+
+    post:
+      operationId: createSubscriptionPlan
+      tags: [creator]
+      summary: Criar plano de subscrição
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionPlanInput"
+      responses:
+        "201":
+          description: Plano criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlan"
+
+  /creator/plans/{id}:
+    patch:
+      operationId: updateSubscriptionPlan
+      tags: [creator]
+      summary: Atualizar plano de subscrição
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionPlanUpdate"
+      responses:
+        "200":
+          description: Plano atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlan"
+
+    delete:
+      operationId: deleteSubscriptionPlan
+      tags: [creator]
+      summary: Eliminar plano
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Eliminado
+
+  /creator/earnings:
+    get:
+      operationId: getCreatorEarnings
+      tags: [creator]
+      summary: Ganhos do criador ao longo do tempo
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 1y]
+            default: 30d
+      responses:
+        "200":
+          description: Ganhos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EarningPoint"
+
+  /creator/transactions:
+    get:
+      operationId: getCreatorTransactions
+      tags: [creator]
+      summary: Histórico de transações do criador
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Transações
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTransactions"
+
+  /subscriptions:
+    post:
+      operationId: subscribe
+      tags: [creator]
+      summary: Subscrever criador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionInput"
+      responses:
+        "201":
+          description: Subscrito
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /subscriptions/{id}:
+    delete:
+      operationId: cancelSubscription
+      tags: [creator]
+      summary: Cancelar subscrição
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subscrição cancelada
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +1026,723 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # AUTH
+    RegisterInput:
+      type: object
+      required: [nomeCompleto, email, username, password, dataNascimento]
+      properties:
+        nomeCompleto:
+          type: string
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        password:
+          type: string
+        dataNascimento:
+          type: string
+          format: date
+        tipoConta:
+          type: string
+          enum: [pessoal, criador]
+          default: pessoal
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        lembrar:
+          type: boolean
+          default: false
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    # USERS
+    UserProfile:
+      type: object
+      required: [id, username, nomeExibicao, tipoConta, verificado, privado, totalSeguidores, totalSeguindo, totalPublicacoes, criadoEm]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        nomeExibicao:
+          type: string
+        bio:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        capaUrl:
+          type: ["string", "null"]
+        link:
+          type: ["string", "null"]
+        tipoConta:
+          type: string
+          enum: [pessoal, criador]
+        verificado:
+          type: boolean
+        privado:
+          type: boolean
+        totalSeguidores:
+          type: integer
+        totalSeguindo:
+          type: integer
+        totalPublicacoes:
+          type: integer
+        estaASeguir:
+          type: boolean
+        segueVoce:
+          type: boolean
+        criadoEm:
+          type: string
+          format: date-time
+
+    UserSummary:
+      type: object
+      required: [id, username, nomeExibicao, verificado]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        nomeExibicao:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        verificado:
+          type: boolean
+        tipoConta:
+          type: string
+        estaASeguir:
+          type: boolean
+        totalSeguidores:
+          type: integer
+
+    ProfileUpdate:
+      type: object
+      properties:
+        nomeExibicao:
+          type: string
+        bio:
+          type: string
+        link:
+          type: string
+        avatarUrl:
+          type: string
+        capaUrl:
+          type: string
+        tipoConta:
+          type: string
+          enum: [pessoal, criador]
+        privado:
+          type: boolean
+
+    PaginatedUsers:
+      type: object
+      required: [users, total, page, hasMore]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # POSTS
+    Post:
+      type: object
+      required: [id, autor, tipo, exclusivo, totalCurtidas, totalComentarios, guardado, curtido, criadoEm]
+      properties:
+        id:
+          type: integer
+        autor:
+          $ref: "#/components/schemas/UserSummary"
+        legenda:
+          type: ["string", "null"]
+        localizacao:
+          type: ["string", "null"]
+        tipo:
+          type: string
+          enum: [imagem, video, carrossel]
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostMedia"
+        exclusivo:
+          type: boolean
+        precoDesbloqueio:
+          type: ["number", "null"]
+        totalCurtidas:
+          type: integer
+        totalComentarios:
+          type: integer
+        curtido:
+          type: boolean
+        guardado:
+          type: boolean
+        criadoEm:
+          type: string
+          format: date-time
+
+    PostMedia:
+      type: object
+      required: [id, url, tipo, ordem]
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        tipo:
+          type: string
+          enum: [imagem, video]
+        ordem:
+          type: integer
+
+    PostInput:
+      type: object
+      required: [tipo, media]
+      properties:
+        legenda:
+          type: string
+        localizacao:
+          type: string
+        tipo:
+          type: string
+          enum: [imagem, video, carrossel]
+        media:
+          type: array
+          items:
+            type: object
+            required: [url, tipo]
+            properties:
+              url:
+                type: string
+              tipo:
+                type: string
+                enum: [imagem, video]
+        exclusivo:
+          type: boolean
+          default: false
+        precoDesbloqueio:
+          type: number
+
+    PaginatedPosts:
+      type: object
+      required: [posts, total, page, hasMore]
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Post"
+        total:
+          type: integer
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # COMMENTS
+    Comment:
+      type: object
+      required: [id, autor, texto, totalCurtidas, curtido, criadoEm]
+      properties:
+        id:
+          type: integer
+        autor:
+          $ref: "#/components/schemas/UserSummary"
+        texto:
+          type: string
+        comentarioPaiId:
+          type: ["integer", "null"]
+        respostas:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+        totalCurtidas:
+          type: integer
+        curtido:
+          type: boolean
+        criadoEm:
+          type: string
+          format: date-time
+
+    CommentInput:
+      type: object
+      required: [texto]
+      properties:
+        texto:
+          type: string
+        comentarioPaiId:
+          type: integer
+
+    PaginatedComments:
+      type: object
+      required: [comments, total, page, hasMore]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+        total:
+          type: integer
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # STORIES
+    Story:
+      type: object
+      required: [id, autor, mediaUrl, tipo, duracao, audiencia, expirado, visto, criadoEm]
+      properties:
+        id:
+          type: integer
+        autor:
+          $ref: "#/components/schemas/UserSummary"
+        mediaUrl:
+          type: string
+        tipo:
+          type: string
+          enum: [imagem, video]
+        duracao:
+          type: integer
+        audiencia:
+          type: string
+          enum: [todos, subscritores, proximos]
+        expirado:
+          type: boolean
+        visto:
+          type: boolean
+        totalVisualizacoes:
+          type: integer
+        expiraEm:
+          type: string
+          format: date-time
+        criadoEm:
+          type: string
+          format: date-time
+
+    StoryGroup:
+      type: object
+      required: [utilizador, stories, hasNaoVisto]
+      properties:
+        utilizador:
+          $ref: "#/components/schemas/UserSummary"
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Story"
+        hasNaoVisto:
+          type: boolean
+
+    StoryInput:
+      type: object
+      required: [mediaUrl, tipo]
+      properties:
+        mediaUrl:
+          type: string
+        tipo:
+          type: string
+          enum: [imagem, video]
+        duracao:
+          type: integer
+          default: 5
+        audiencia:
+          type: string
+          enum: [todos, subscritores, proximos]
+          default: todos
+
+    StoryView:
+      type: object
+      required: [utilizador, vistoEm]
+      properties:
+        utilizador:
+          $ref: "#/components/schemas/UserSummary"
+        vistoEm:
+          type: string
+          format: date-time
+
+    # REELS
+    Reel:
+      type: object
+      required: [id, autor, videoUrl, exclusivo, totalCurtidas, totalComentarios, curtido, guardado, criadoEm]
+      properties:
+        id:
+          type: integer
+        autor:
+          $ref: "#/components/schemas/UserSummary"
+        videoUrl:
+          type: string
+        capaUrl:
+          type: ["string", "null"]
+        legenda:
+          type: ["string", "null"]
+        somTitulo:
+          type: ["string", "null"]
+        somArtista:
+          type: ["string", "null"]
+        exclusivo:
+          type: boolean
+        totalCurtidas:
+          type: integer
+        totalComentarios:
+          type: integer
+        curtido:
+          type: boolean
+        guardado:
+          type: boolean
+        criadoEm:
+          type: string
+          format: date-time
+
+    ReelInput:
+      type: object
+      required: [videoUrl]
+      properties:
+        videoUrl:
+          type: string
+        capaUrl:
+          type: string
+        legenda:
+          type: string
+        exclusivo:
+          type: boolean
+          default: false
+
+    PaginatedReels:
+      type: object
+      required: [reels, page, hasMore]
+      properties:
+        reels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reel"
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # SEARCH
+    SearchResults:
+      type: object
+      required: [accounts, hashtags]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        hashtags:
+          type: array
+          items:
+            $ref: "#/components/schemas/HashtagResult"
+
+    HashtagResult:
+      type: object
+      required: [nome, totalPosts]
+      properties:
+        nome:
+          type: string
+        totalPosts:
+          type: integer
+
+    # MESSAGES
+    Conversation:
+      type: object
+      required: [id, participantes, tipo, criadoEm]
+      properties:
+        id:
+          type: integer
+        participantes:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        tipo:
+          type: string
+          enum: [privada, grupo]
+        ultimaMensagem:
+          $ref: "#/components/schemas/Message"
+        totalNaoLidas:
+          type: integer
+        criadoEm:
+          type: string
+          format: date-time
+
+    ConversationInput:
+      type: object
+      required: [participanteId]
+      properties:
+        participanteId:
+          type: integer
+
+    Message:
+      type: object
+      required: [id, autorId, tipo, criadoEm]
+      properties:
+        id:
+          type: integer
+        autorId:
+          type: integer
+        autor:
+          $ref: "#/components/schemas/UserSummary"
+        tipo:
+          type: string
+          enum: [texto, imagem, audio, post_partilhado]
+        conteudo:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        lido:
+          type: boolean
+        criadoEm:
+          type: string
+          format: date-time
+
+    MessageInput:
+      type: object
+      required: [tipo, conteudo]
+      properties:
+        tipo:
+          type: string
+          enum: [texto, imagem, audio]
+        conteudo:
+          type: string
+
+    PaginatedMessages:
+      type: object
+      required: [messages, page, hasMore]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # NOTIFICATIONS
+    Notification:
+      type: object
+      required: [id, tipo, lida, criadoEm]
+      properties:
+        id:
+          type: integer
+        tipo:
+          type: string
+          enum: [novo_seguidor, like_post, like_reel, comentario, mencao, nova_subscricao, pagamento_recebido]
+        ator:
+          $ref: "#/components/schemas/UserSummary"
+        lida:
+          type: boolean
+        postId:
+          type: ["integer", "null"]
+        postThumbnail:
+          type: ["string", "null"]
+        criadoEm:
+          type: string
+          format: date-time
+
+    PaginatedNotifications:
+      type: object
+      required: [notifications, page, hasMore]
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+
+    # HIGHLIGHTS
+    Highlight:
+      type: object
+      required: [id, titulo, criadoEm]
+      properties:
+        id:
+          type: integer
+        titulo:
+          type: string
+        capaUrl:
+          type: ["string", "null"]
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Story"
+        criadoEm:
+          type: string
+          format: date-time
+
+    HighlightInput:
+      type: object
+      required: [titulo, storyIds]
+      properties:
+        titulo:
+          type: string
+        capaUrl:
+          type: string
+        storyIds:
+          type: array
+          items:
+            type: integer
+
+    # CREATOR / MONETIZATION
+    CreatorStats:
+      type: object
+      required: [ganhosMes, totalSubscritores, taxaRetencao, visualizacoesTotais]
+      properties:
+        ganhosMes:
+          type: number
+        totalSubscritores:
+          type: integer
+        taxaRetencao:
+          type: number
+        visualizacoesTotais:
+          type: integer
+        ganhosTotal:
+          type: number
+        novosSubscritores:
+          type: integer
+
+    SubscriptionPlan:
+      type: object
+      required: [id, nome, preco, ativo, criadoEm]
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        preco:
+          type: number
+        beneficios:
+          type: ["string", "null"]
+        ativo:
+          type: boolean
+        totalSubscritores:
+          type: integer
+        criadoEm:
+          type: string
+          format: date-time
+
+    SubscriptionPlanInput:
+      type: object
+      required: [nome, preco]
+      properties:
+        nome:
+          type: string
+        preco:
+          type: number
+        beneficios:
+          type: string
+        ativo:
+          type: boolean
+          default: true
+
+    SubscriptionPlanUpdate:
+      type: object
+      properties:
+        nome:
+          type: string
+        preco:
+          type: number
+        beneficios:
+          type: string
+        ativo:
+          type: boolean
+
+    EarningPoint:
+      type: object
+      required: [data, valor]
+      properties:
+        data:
+          type: string
+        valor:
+          type: number
+        subscricoes:
+          type: integer
+        ppv:
+          type: number
+
+    Transaction:
+      type: object
+      required: [id, tipo, valor, criadoEm]
+      properties:
+        id:
+          type: integer
+        tipo:
+          type: string
+          enum: [subscricao, ppv, gorjeta]
+        valor:
+          type: number
+        utilizador:
+          $ref: "#/components/schemas/UserSummary"
+        descricao:
+          type: ["string", "null"]
+        criadoEm:
+          type: string
+          format: date-time
+
+    PaginatedTransactions:
+      type: object
+      required: [transactions, page, hasMore]
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        page:
+          type: integer
+        hasMore:
+          type: boolean
+
+    Subscription:
+      type: object
+      required: [id, estado, inicioEm]
+      properties:
+        id:
+          type: integer
+        plano:
+          $ref: "#/components/schemas/SubscriptionPlan"
+        criador:
+          $ref: "#/components/schemas/UserSummary"
+        estado:
+          type: string
+          enum: [ativa, cancelada]
+        inicioEm:
+          type: string
+          format: date-time
+        renovacaoEm:
+          type: ["string", "null"]
+
+    SubscriptionInput:
+      type: object
+      required: [planoId]
+      properties:
+        planoId:
+          type: integer
