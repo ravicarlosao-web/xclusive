@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FlaskConical } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -140,6 +140,48 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+
+          {/* Test accounts */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <FlaskConical className="w-3 h-3" /> Contas de teste
+              </span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Utilizador', email: 'demo@xclusive.pt', badge: 'pessoal' },
+                { label: 'Criador', email: 'ana@xclusive.pt', badge: 'criador ✓' },
+              ].map(({ label, email, badge }) => (
+                <button
+                  key={email}
+                  type="button"
+                  disabled={form.formState.isSubmitting}
+                  onClick={async () => {
+                    form.setValue('email', email);
+                    form.setValue('password', 'password123');
+                    form.setValue('lembrar', false);
+                    try {
+                      await login({ email, password: 'password123' });
+                    } catch (error: any) {
+                      toast({
+                        variant: 'destructive',
+                        title: 'Erro ao entrar com conta de teste',
+                        description: error.message || 'Verifica se a base de dados está configurada.',
+                      });
+                    }
+                  }}
+                  className="flex flex-col items-start gap-0.5 rounded-xl border border-border bg-secondary/40 hover:bg-secondary hover:border-primary/40 transition-all px-4 py-3 text-left disabled:opacity-50 disabled:cursor-not-allowed group"
+                >
+                  <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{label}</span>
+                  <span className="text-[11px] text-muted-foreground">{badge}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-center text-[11px] text-muted-foreground">password: <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">password123</code></p>
+          </div>
 
           <div className="text-center text-sm text-muted-foreground pt-4 border-t border-border">
             Ainda não tens conta?{' '}
