@@ -8,11 +8,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
+import { CreatePostModal } from '@/components/shared/CreatePostModal';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const [createPostOpen, setCreatePostOpen] = useState(false);
 
   const navItems = [
     { name: 'Início', path: '/home', icon: Home },
@@ -58,7 +60,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
             );
           })}
 
-          <button className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary text-foreground text-left w-full">
+          <button
+            onClick={() => setCreatePostOpen(true)}
+            className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary text-foreground text-left w-full"
+          >
             <PlusSquare className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
             <span className="hidden lg:block text-[15px]">Criar</span>
           </button>
@@ -118,6 +123,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <main className="flex-1 md:ml-[80px] lg:ml-[245px] pb-[60px] md:pb-0 w-full min-h-[100dvh]">
         {children}
       </main>
+
+      <CreatePostModal open={createPostOpen} onClose={() => setCreatePostOpen(false)} />
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-2">
