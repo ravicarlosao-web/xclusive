@@ -1,0 +1,128 @@
+Faz uma auditoria completa e honesta do projeto Xclusive. Para cada item da checklist abaixo, classifica com um destes estados:
+
+
+✅ Feito e testado — existe, funciona, foi verificado a correr (não apenas presente no código).
+⚠️ Parcial / com bugs — existe mas está incompleto, com erros, ou com comportamento diferente do especificado. Descreve exatamente o que falta ou o que está errado.
+❌ Não feito — não existe, ou existe apenas como placeholder/mock sem lógica real.
+❓ Não foi possível testar — explica porquê (ex: falta de credencial, dependência externa não configurada).
+
+
+No fim, produz uma tabela-resumo única com todos os itens e os seus estados, mais uma lista separada de "Bugs encontrados" e uma lista de "Próximos passos recomendados" ordenada por prioridade.
+
+Regra importante: se encontrares um endpoint, página ou função que existe mas devolve dados falsos/estáticos sem ligação real à base de dados, isso conta como ⚠️ Parcial, nunca como ✅ Feito.
+
+
+1. AUDITORIA DE BASE DE DADOS
+
+
+ Confirmar que existem realmente as 20 tabelas mencionadas — listar os nomes de todas as tabelas encontradas no schema (\dt ou equivalente) e comparar com as tabelas esperadas: users, follows, posts, post_media, likes, comments, stories, story_views, highlights, highlight_stories, reels, sounds, conversations, conversation_participants, messages, notifications, subscriptions, subscription_plans, purchases, hashtags/post_hashtags.
+ Para cada tabela: confirmar que as colunas batem certo com o schema pedido (tipos, nullability).
+ Verificar se existem os índices/constraints únicas mencionados (username único, email único, follows(seguidor_id, seguido_id), likes(alvo_tipo, alvo_id)).
+ Confirmar que as foreign keys entre tabelas estão realmente definidas (não apenas campos com nome parecido sem constraint).
+ Verificar se as 6 contas seed existem mesmo na base de dados e se demo@xclusive.pt consegue autenticar com password123.
+ Contar quantos registos existem em cada tabela de dados de demonstração (posts, stories, comentários, likes, planos de subscrição) — reportar números reais, não estimativas.
+
+
+2. AUDITORIA DE AUTENTICAÇÃO E SEGURANÇA
+
+
+ Testar registo de conta nova de ponta a ponta (preencher formulário → confirmar criação real na BD).
+ Testar login com conta seed e confirmar que o JWT é emitido e guardado corretamente.
+ Confirmar que SESSION_SECRET realmente falha o arranque do servidor se estiver ausente (testar removendo a variável).
+ Confirmar que as passwords estão mesmo hasheadas com bcrypt na tabela users (inspecionar um valor guardado — nunca deve ser texto simples).
+ Verificar requireAuth: chamar um endpoint protegido sem token e confirmar que devolve 401/403 corretamente.
+ Verificar optionalAuth: confirmar que endpoints públicos funcionam com e sem token, devolvendo dados diferentes quando aplicável (ex: estado de "já segue" só aparece autenticado).
+ Confirmar que setAuthTokenGetter está mesmo a injetar o header Authorization: Bearer em todos os pedidos autenticados do frontend — testar em pelo menos 5 hooks/páginas diferentes via inspeção de rede (Network tab), não apenas no código.
+ Testar logout: confirmar que o token é invalidado/removido e que páginas protegidas deixam de ser acessíveis.
+ Verificar se existe rate-limiting real em login/registo (tentar 6+ logins falhados seguidos e confirmar bloqueio).
+ Verificar sanitização de inputs em legendas/comentários (tentar submeter <script>alert(1)</script> e confirmar que não executa).
+ Confirmar validação de idade mínima (18 anos) no registo — tentar registar com data de nascimento de menor e confirmar rejeição.
+
+
+3. AUDITORIA DE ENDPOINTS DA API (os 50+ mencionados)
+
+
+ Listar todos os endpoints realmente registados no router (não confiar na contagem "50+" — contar manualmente e reportar o número exato).
+ Agrupar por categoria (auth, utilizadores, posts, stories, reels, explorar, mensagens, notificações, destaques, criador) e confirmar que cada categoria do prompt original tem cobertura CRUD completa onde fizer sentido (ex: posts deve ter create/read/update/delete, não só create+read).
+ Testar cada endpoint com uma chamada real (curl/Postman/thunder client) e reportar o código de estado devolvido e se o corpo da resposta tem os dados esperados.
+ Identificar endpoints que existem na documentação/código mas que devolvem erro 500 ou "not implemented".
+ Confirmar paginação real no feed: pedir página 2 e página 3 e confirmar que devolvem posts diferentes, não repetidos.
+ Confirmar que os endpoints de likes/comentários realmente persistem na BD (dar like, recarregar a página, confirmar que o like continua lá).
+
+
+4. AUDITORIA DAS 14 PÁGINAS DO FRONTEND
+
+Para cada página, confirmar que carrega sem erro, que os dados vêm da API (não hardcoded no componente) e que os elementos visuais batem certo com o prompt original:
+
+
+ Landing page — confirmar pill "Sem intermediários.", título "Conteúdo exclusivo.", botões "Explorar criadores" e "Tornar-me criador" com as cores certas, grid de criadores em destaque.
+ Login
+ Registo
+ Onboarding (5 passos) — confirmar que são mesmo 5 passos distintos, com barra de progresso, e que os dados escolhidos (foto, bio, tipo de conta, interesses, sugestões de seguir) ficam realmente guardados no perfil no final.
+ Home (feed) — barra de stories no topo, cartões de post completos (like/comentário/partilhar/guardar todos funcionais), coluna direita com sugestões.
+ Explorar — grid tipo mosaico, pesquisa com separadores Contas/Hashtags/Sons/Locais.
+ Reels — scroll vertical em ecrã inteiro, autoplay com som, coluna de ações à direita, todas funcionais (não apenas visuais).
+ Mensagens (lista + conversa) — confirmar troca de mensagens em tempo real entre duas contas seed diferentes (abrir em duas abas/sessões).
+ Notificações — gerar uma ação (ex: dar like numa conta) e confirmar que a notificação aparece em tempo real na outra conta.
+ Perfil — abas Grelha/Reels/Marcados/Exclusivo, destaques de stories, contadores clicáveis a abrir listas reais.
+ Definições
+ Monetização/painel de criador — confirmar se os "planos de subscrição", "PPV" e "painel de ganhos" são funcionais ou apenas UI estática sem lógica de pagamento por trás.
+
+
+5. AUDITORIA DE FUNCIONALIDADES ESPECÍFICAS CRÍTICAS
+
+
+ Stories: criação real com upload de imagem/vídeo, expiração automática ao fim de 24h (verificar se existe job/cron a fazer isso ou se é só campo expira_em ignorado), destaques permanentes a funcionar.
+ Reels: upload de vídeo real funciona (testar com ficheiro real, não só mock), reprodução em loop, contagem de likes/comentários/partilhas persiste.
+ WebSockets: confirmar que existe mesmo uma ligação WebSocket ativa (inspecionar aba Network → WS) para mensagens e notificações, e não apenas polling disfarçado ou dados estáticos.
+ Indicador "a escrever..." e "online agora" — confirmar que atualizam em tempo real entre duas sessões.
+ Sistema de monetização: confirmar se existe alguma integração real (mesmo que em modo teste/sandbox) com Stripe ou se é 100% simulado sem qualquer processamento de pagamento. Ser explícito sobre isto no relatório.
+ Conteúdo bloqueado/exclusivo: testar o fluxo completo — post marcado como exclusivo aparece desfocado para não-subscritores, e desbloqueia de verdade após simular subscrição/compra.
+ Pesquisa global: testar pesquisa por username, hashtag e confirmar resultados reais da BD.
+
+
+6. AUDITORIA DE DESIGN E UX
+
+
+ Confirmar com inspeção de CSS/DevTools que as cores usadas correspondem exatamente às variáveis pedidas (#0a0a0a, #ff3e72, #ffffff, #a0a0a0, #f9f9f9) — não apenas "parecidas".
+ Confirmar sidebar fixa funcional em desktop (todos os ícones navegam corretamente) e barra inferior em mobile (testar em viewport reduzido).
+ Confirmar skeleton loaders a aparecer de facto durante carregamento (atrasar rede propositadamente para testar, ex: throttling no DevTools).
+ Confirmar toasts/notificações a aparecer nas ações esperadas (publicar post, erro, seguidor adicionado, pagamento).
+ Verificar estados vazios (conta nova sem posts, sem mensagens, sem notificações) — confirmar que têm UI própria e não ecrã em branco/erro.
+
+
+7. AUDITORIA DE PERFORMANCE E ROBUSTEZ
+
+
+ Testar comportamento com internet lenta/instável (simular offline a meio de uma ação) — a app trata o erro graciosamente?
+ Verificar se há paginação em TODAS as listas longas (comentários, notificações, mensagens, seguidores) e não só no feed.
+ Verificar tempo de resposta dos endpoints principais (feed, explorar) sob uma carga mínima de dados de teste.
+ Confirmar que não há erros no console do browser (abrir DevTools em cada página e reportar warnings/erros).
+ Confirmar que não há erros/exceções não tratadas nos logs do servidor durante o uso normal da aplicação.
+
+
+
+FORMATO DE RESPOSTA ESPERADO
+
+No final da auditoria, entrega a resposta EXATAMENTE nesta estrutura:
+
+## RESUMO EXECUTIVO
+[2-3 frases sobre o estado geral real do projeto]
+
+## TABELA DE AUDITORIA
+| Secção | Item | Estado | Observações |
+|---|---|---|---|
+| ... | ... | ✅/⚠️/❌/❓ | ... |
+
+## BUGS ENCONTRADOS
+1. [descrição do bug, onde ocorre, como reproduzir]
+...
+
+## FUNCIONALIDADES QUE SÃO APENAS UI SEM LÓGICA REAL
+[lista explícita — isto é o mais importante do relatório]
+
+## PRÓXIMOS PASSOS RECOMENDADOS (por prioridade)
+1. ...
+2. ...
+
+Não sejas complacente. Se algo foi "referido como feito" na sessão anterior mas não resistir a um teste real agora, marca como ⚠️ ou ❌ e explica a discrepância. O objetivo desta auditoria é descobrir a verdade, não confirmar o que já foi dito.

@@ -6,6 +6,8 @@ const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required");
 }
+// Narrowed to string after the guard above; assert for TypeScript
+const SECRET: string = JWT_SECRET;
 
 export interface JwtPayload {
   userId: number;
@@ -13,11 +15,11 @@ export interface JwtPayload {
 }
 
 export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(payload, SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  return jwt.verify(token, SECRET) as JwtPayload;
 }
 
 export async function hashPassword(password: string): Promise<string> {
