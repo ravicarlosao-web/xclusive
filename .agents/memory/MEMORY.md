@@ -1,4 +1,5 @@
-- [Xclusive auth wiring](xclusive-auth.md) — setAuthTokenGetter must be called at module level in AuthContext.tsx to wire JWT to all API hooks
 - [Xclusive codegen collision fix](xclusive-codegen.md) — Orval collides on Get*Params when endpoint has both path params AND query params; remove query params from those endpoints
 - [Xclusive stack overview](xclusive-stack.md) — DB schema, API routes, frontend pages, and seed users for the Xclusive social platform
 - [Artifact re-registration after import](artifact-reregistration.md) — imported repo has artifact.toml files but empty listArtifacts()/no workflows; fix via verifyAndReplaceArtifactToml round-trip
+- [Xclusive file upload UX](xclusive-upload.md) — CreatePostModal usa blob URLs (sessão apenas); upload real precisa de object-storage multipart
+- [Xclusive register flow](xclusive-register.md) — 2 passos: info básica → país(AO/MZ/ZA/PT/BR)+telefone+tipoConta; rota é /registo não /register

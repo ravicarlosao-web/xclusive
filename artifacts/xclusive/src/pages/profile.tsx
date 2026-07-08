@@ -252,7 +252,7 @@ export default function Profile() {
                 Desbloqueia conteúdos privados, bastidores e interação direta com {profile.nomeExibicao}.
               </p>
               <Button className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 shadow-[0_0_20px_rgba(255,62,114,0.3)]">
-                Subscrever por 4.99€ / mês
+                Subscrever por 4.990 Kz / mês
               </Button>
             </div>
           </TabsContent>

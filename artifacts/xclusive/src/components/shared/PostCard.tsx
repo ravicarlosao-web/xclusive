@@ -97,7 +97,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             <h3 className="text-xl font-bold text-white mb-2">Conteúdo Exclusivo</h3>
             <p className="text-sm text-gray-300 mb-6">Subscreve a {post.autor.username} para desbloqueares este conteúdo.</p>
             <button className="bg-primary text-primary-foreground font-semibold px-6 py-2.5 rounded-full hover:bg-primary/90 transition-colors shadow-[0_0_20px_rgba(255,62,114,0.3)]">
-              Subscrever por {post.precoDesbloqueio ? `${post.precoDesbloqueio}€` : 'Plano'}
+              Subscrever por {post.precoDesbloqueio ? `${Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz` : 'Plano'}
             </button>
           </div>
         ) : null}
