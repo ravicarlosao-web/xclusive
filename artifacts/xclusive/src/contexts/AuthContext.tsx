@@ -40,6 +40,26 @@ function getMockUsers(): MockUser[] {
 function saveMockUsers(users: MockUser[]) {
   localStorage.setItem(MOCK_KEY, JSON.stringify(users));
 }
+
+// Pre-seed test accounts so they work even without a real DB
+const SEED_USERS: MockUser[] = [
+  { id: 1, nomeCompleto: 'Demo User', username: 'demo', email: 'demo@xclusive.pt', _devPassword: 'password123', dataNascimento: '1995-06-15', tipoConta: 'pessoal', pais: 'Angola', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=12', capaUrl: null, bio: 'Utilizador de demonstração 👋', link: null, nomeExibicao: 'Demo User', totalSeguidores: 24, totalSeguindo: 61, totalPublicacoes: 0, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 2, nomeCompleto: 'Ana Costa', username: 'ana', email: 'ana@xclusive.pt', _devPassword: 'password123', dataNascimento: '1998-03-22', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=47', capaUrl: null, bio: '📸 Fotografia & Lifestyle | Luanda 🇦🇴', link: 'https://xclusive.ao/ana', nomeExibicao: 'Ana Costa', totalSeguidores: 1248, totalSeguindo: 182, totalPublicacoes: 34, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 3, nomeCompleto: 'Marcos Silva', username: 'marcos', email: 'marcos@xclusive.pt', _devPassword: 'password123', dataNascimento: '1996-09-10', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=33', capaUrl: null, bio: '🎵 Músico | Produtor | Luanda', link: null, nomeExibicao: 'Marcos Silva', totalSeguidores: 3102, totalSeguindo: 95, totalPublicacoes: 57, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 4, nomeCompleto: 'Sofia Mendes', username: 'sofia', email: 'sofia@xclusive.pt', _devPassword: 'password123', dataNascimento: '2000-12-05', tipoConta: 'criador', pais: 'Moçambique', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=44', capaUrl: null, bio: '💄 Beleza & Moda | Maputo 🇲🇿', link: null, nomeExibicao: 'Sofia Mendes', totalSeguidores: 892, totalSeguindo: 312, totalPublicacoes: 22, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 5, nomeCompleto: 'Pedro Alves', username: 'pedro', email: 'pedro@xclusive.pt', _devPassword: 'password123', dataNascimento: '1993-07-18', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=60', capaUrl: null, bio: '🏋️ Fitness & Nutrição | Luanda', link: null, nomeExibicao: 'Pedro Alves', totalSeguidores: 5430, totalSeguindo: 47, totalPublicacoes: 89, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 6, nomeCompleto: 'Luna Ferreira', username: 'luna', email: 'luna@xclusive.pt', _devPassword: 'password123', dataNascimento: '2001-04-30', tipoConta: 'criador', pais: 'África do Sul', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=56', capaUrl: null, bio: '🎨 Arte Digital | Cape Town 🇿🇦', link: null, nomeExibicao: 'Luna Ferreira', totalSeguidores: 421, totalSeguindo: 203, totalPublicacoes: 15, criadoEm: '2024-01-01T00:00:00.000Z' },
+];
+
+function seedMockUsersIfEmpty() {
+  const existing = getMockUsers();
+  // Merge: keep real registered users, add seeds only if email not already present
+  const existingEmails = new Set(existing.map(u => u.email));
+  const toAdd = SEED_USERS.filter(s => !existingEmails.has(s.email));
+  if (toAdd.length > 0) {
+    saveMockUsers([...existing, ...toAdd]);
+  }
+}
 function mockUserToProfile(u: MockUser): UserProfile {
   return {
     id: u.id,
@@ -139,6 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mockUser, setMockUser] = useState<UserProfile | null>(() => getMockSession());
   const [isMockMode, setIsMockMode] = useState(false);
 
+  // Seed test accounts into mock store on first load
+  useEffect(() => {
+    seedMockUsersIfEmpty();
+  }, []);
+
   const isMockToken = token?.startsWith('mock_token_') ?? false;
 
   const { data: apiUser, isLoading: isUserLoading, error } = useGetMe({
@@ -171,7 +196,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [error, setToken, isMockToken]);
 
   const login = async (data: LoginInput) => {
-    // Try real API first
     try {
       const response = await apiLogin(data);
       setIsMockMode(false);
@@ -180,26 +204,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLocation('/home');
       return;
     } catch (apiError: any) {
-      // If network error or 5xx (not 401/403), fall back to mock
-      const isNetworkOrServerError = !apiError?.response || apiError?.response?.status >= 500;
-      if (isNetworkOrServerError) {
-        try {
-          const response = await mockLogin(data);
-          setIsMockMode(true);
-          setToken(response.token);
-          setMockUser(response.user);
-          setLocation('/home');
-          return;
-        } catch (mockError: any) {
-          throw mockError;
-        }
-      }
-      throw apiError;
+      const apiStatus: number | undefined = apiError?.response?.status ?? apiError?.status;
+      // Only surface API 4xx errors as real credential failures — everything else falls to mock
+      const isCredentialRejection = apiStatus && apiStatus >= 400 && apiStatus < 500;
+      if (isCredentialRejection) throw apiError;
+      // API is broken/unreachable — try mock store (has pre-seeded test accounts)
+      const response = await mockLogin(data); // throws with user-friendly message on wrong password
+      setIsMockMode(true);
+      setToken(response.token);
+      setMockUser(response.user);
+      setLocation('/home');
     }
   };
 
   const register = async (data: RegisterInput & { pais?: string; telefone?: string; tipoConta?: string }) => {
-    // Try real API first
     try {
       const response = await apiRegister(data);
       setIsMockMode(false);
@@ -208,21 +226,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLocation('/onboarding');
       return;
     } catch (apiError: any) {
-      // Fall back to mock on network/server error
-      const isNetworkOrServerError = !apiError?.response || apiError?.response?.status >= 500;
-      if (isNetworkOrServerError) {
-        try {
-          const response = await mockRegister(data);
-          setIsMockMode(true);
-          setToken(response.token);
-          setMockUser(response.user);
-          setLocation('/onboarding');
-          return;
-        } catch (mockError: any) {
-          throw mockError;
-        }
-      }
-      throw apiError;
+      const apiStatus: number | undefined = apiError?.response?.status ?? apiError?.status;
+      const isClientError = apiStatus && apiStatus >= 400 && apiStatus < 500;
+      if (isClientError) throw apiError;
+      // API broken — register in mock store
+      const response = await mockRegister(data);
+      setIsMockMode(true);
+      setToken(response.token);
+      setMockUser(response.user);
+      setLocation('/onboarding');
     }
   };
 
