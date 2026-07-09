@@ -158,24 +158,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                   loop
                   playsInline
                 />
-                {/* Gradient overlay + play badge + "Ver Reel" label */}
-                <div className="absolute inset-0 pointer-events-none">
-                  {/* subtle dark vignette so the badge is always readable */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
-                  {/* centered play circle */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                    <div className="w-16 h-16 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-2xl">
-                      <Play className="w-8 h-8 text-white fill-white ml-1" />
-                    </div>
-                    <span className="text-white text-xs font-semibold tracking-wide drop-shadow-lg bg-black/40 backdrop-blur-sm px-3 py-1 rounded-full">
-                      Ver Reel
-                    </span>
-                  </div>
-                  {/* VIDEO badge — top left */}
-                  <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold tracking-widest px-2 py-0.5 rounded">
-                    VÍDEO
-                  </div>
-                </div>
               </>
             ) : (
               <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
