@@ -239,6 +239,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [error, setToken, isMockToken]);
 
   const login = async (data: LoginInput) => {
+    // Test/seed accounts live only in the local mock store — there's no real DB backing
+    // them, so try mock first for any email that already exists there. This lets the
+    // "Contas de teste" shortcuts (and any locally-registered account) always work,
+    // regardless of whether a real backend/DB is connected.
+    const knownMockUser = getMockUsers().find(u => u.email === data.email);
+    if (knownMockUser) {
+      const response = await mockLogin(data); // throws with user-friendly message on wrong password
+      setIsMockMode(true);
+      setToken(response.token);
+      setMockUser(response.user);
+      setSaldo(getMockSaldo());
+      setLocation('/home');
+      return;
+    }
+
     try {
       const response = await apiLogin(data);
       setIsMockMode(false);
