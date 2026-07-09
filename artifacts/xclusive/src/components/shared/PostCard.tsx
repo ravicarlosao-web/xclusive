@@ -7,6 +7,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
+import { CommentsModal } from './CommentsModal';
+import { MOCK_COMMENTS } from '@/data/mockComments';
+import { getLocalCommentsForPost } from '@/lib/localComments';
 
 interface PostCardProps {
   post: Post;
@@ -24,6 +27,10 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [tipOpen, setTipOpen] = useState(false);
   const [gorjetasCount, setGorjetasCount] = useState(0);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(
+    post.totalComentarios + getLocalCommentsForPost(post.id).length,
+  );
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
@@ -156,7 +163,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
               <button onClick={handleLikeToggle} className="group">
                 <Heart className={cn("w-7 h-7 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} />
               </button>
-              <button className="group">
+              <button onClick={() => setCommentsOpen(true)} className="group">
                 <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
               </button>
               <button className="group">
@@ -203,9 +210,9 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           )}
 
           {/* Comments link */}
-          {post.totalComentarios > 0 && (
-            <button className="text-sm text-muted-foreground mb-1 hover:text-foreground">
-              Ver todos os {post.totalComentarios} comentários
+          {commentsCount > 0 && (
+            <button onClick={() => setCommentsOpen(true)} className="text-sm text-muted-foreground mb-1 hover:text-foreground">
+              Ver todos os {commentsCount} comentários
             </button>
           )}
 
@@ -230,6 +237,16 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         }}
         postId={post.id}
         onTipSent={handleTipSuccess}
+      />
+
+      {/* Comments Modal */}
+      <CommentsModal
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        postId={post.id}
+        postAuthorUsername={post.autor.username}
+        seedComments={MOCK_COMMENTS[post.id] || []}
+        onCommentAdded={() => setCommentsCount(c => c + 1)}
       />
     </>
   );
