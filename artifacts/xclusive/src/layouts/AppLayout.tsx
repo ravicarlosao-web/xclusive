@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon, Sparkles
+  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { CreatePostModal } from '@/components/shared/CreatePostModal';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, saldo } = useAuth();
   const [createPostOpen, setCreatePostOpen] = useState(false);
 
   const navItems = [
@@ -104,7 +104,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </nav>
 
-        <div className="p-3 lg:p-4 mt-auto">
+        <div className="p-3 lg:p-4 mt-auto flex flex-col gap-2">
+          {/* Carteira / Saldo */}
+          {saldo !== null && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50 border border-border/50">
+              <Wallet className="w-5 h-5 text-yellow-500 stroke-[1.5px] shrink-0" />
+              <div className="hidden lg:flex flex-col leading-tight">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Carteira</span>
+                <span className="text-sm font-bold">{saldo.toLocaleString('pt-PT')} Kz</span>
+              </div>
+            </div>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full">

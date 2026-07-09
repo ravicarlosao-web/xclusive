@@ -1,10 +1,12 @@
 import { Post } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { TipModal } from './TipModal';
 
 interface PostCardProps {
   post: Post;
@@ -15,11 +17,16 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
+  const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
   const [isSaved, setIsSaved] = useState(post.guardado);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [tipOpen, setTipOpen] = useState(false);
+  const [gorjetasCount, setGorjetasCount] = useState(0);
   const lastClickTime = useRef(0);
+
+  const isOwnPost = user?.username === post.autor.username;
 
   const handleLikeToggle = () => {
     if (isLiked) {
@@ -46,7 +53,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const handleMediaClick = () => {
     const now = Date.now();
     if (now - lastClickTime.current < 300) {
-      // Double click
       if (!isLiked) {
         setIsLiked(true);
         setLikesCount(prev => prev + 1);
@@ -58,131 +64,173 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     lastClickTime.current = now;
   };
 
+  const handleTipSuccess = () => {
+    setGorjetasCount(c => c + 1);
+  };
+
   return (
-    <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 sm:p-4">
-        <Link href={`/perfil/${post.autor.username}`} className="flex items-center gap-3 group">
-          <Avatar className="w-9 h-9 border border-border group-hover:scale-105 transition-transform">
-            <AvatarImage src={post.autor.avatarUrl || ''} />
-            <AvatarFallback>{post.autor.nomeExibicao?.[0] || 'U'}</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold hover:underline flex items-center gap-1">
-              {post.autor.username}
-              {post.autor.verificado && (
-                <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
-              )}
-            </span>
-            {post.localizacao && <span className="text-xs text-muted-foreground">{post.localizacao}</span>}
-          </div>
-        </Link>
-        <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
-          <MoreHorizontal className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Media */}
-      <div 
-        className="relative w-full bg-secondary aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer select-none"
-        onClick={handleMediaClick}
-      >
-        {post.exclusivo && !post.precoDesbloqueio ? (
-          <div className="absolute inset-0 backdrop-blur-md bg-black/40 z-10 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+    <>
+      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 sm:p-4">
+          <Link href={`/perfil/${post.autor.username}`} className="flex items-center gap-3 group">
+            <Avatar className="w-9 h-9 border border-border group-hover:scale-105 transition-transform">
+              <AvatarImage src={post.autor.avatarUrl || ''} />
+              <AvatarFallback>{post.autor.nomeExibicao?.[0] || 'U'}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold hover:underline flex items-center gap-1">
+                {post.autor.username}
+                {post.autor.verificado && (
+                  <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                )}
+              </span>
+              {post.localizacao && <span className="text-xs text-muted-foreground">{post.localizacao}</span>}
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Conteúdo Exclusivo</h3>
-            <p className="text-sm text-gray-300 mb-6">Subscreve a {post.autor.username} para desbloqueares este conteúdo.</p>
-            <button className="bg-primary text-primary-foreground font-semibold px-6 py-2.5 rounded-full hover:bg-primary/90 transition-colors shadow-[0_0_20px_rgba(255,62,114,0.3)]">
-              Subscrever por {post.precoDesbloqueio ? `${Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz` : 'Plano'}
-            </button>
-          </div>
-        ) : null}
+          </Link>
+          <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+        </div>
 
-        {post.media && post.media.length > 0 ? (
-          post.media[0].tipo === 'imagem' ? (
-            <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
+        {/* Media */}
+        <div
+          className="relative w-full bg-secondary aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer select-none"
+          onClick={handleMediaClick}
+        >
+          {post.exclusivo && !post.precoDesbloqueio ? (
+            <div className="absolute inset-0 backdrop-blur-md bg-black/40 z-10 flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Conteúdo Exclusivo</h3>
+              <p className="text-sm text-gray-300 mb-6">Subscreve a {post.autor.username} para desbloqueares este conteúdo.</p>
+              <button className="bg-primary text-primary-foreground font-semibold px-6 py-2.5 rounded-full hover:bg-primary/90 transition-colors shadow-[0_0_20px_rgba(255,62,114,0.3)]">
+                Subscrever por {post.precoDesbloqueio ? `${Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz` : 'Plano'}
+              </button>
+            </div>
+          ) : null}
+
+          {post.media && post.media.length > 0 ? (
+            post.media[0].tipo === 'imagem' ? (
+              <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
+            ) : (
+              <video src={post.media[0].url} className="w-full h-full object-cover" controls muted loop />
+            )
           ) : (
-            <video src={post.media[0].url} className="w-full h-full object-cover" controls muted loop />
-          )
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
-            <span className="text-muted-foreground font-medium">Conteúdo não disponível</span>
-          </div>
-        )}
-
-        {/* Exclusive Badge */}
-        {post.exclusivo && (
-          <div className="absolute top-3 right-3 bg-primary text-white text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg z-20">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.5 6.5H19l-5.5 4.5 2 7L10 15.5 4.5 20l2-7L1 8.5h6.5z"/></svg>
-            EXCLUSIVO
-          </div>
-        )}
-
-        {/* Double-click Heart Animation */}
-        <AnimatePresence>
-          {showHeartAnimation && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1.2 }}
-              exit={{ opacity: 0, scale: 1 }}
-              transition={{ duration: 0.3, type: "spring", bounce: 0.5 }}
-              className="absolute z-30 pointer-events-none drop-shadow-2xl text-primary"
-            >
-              <Heart className="w-24 h-24 fill-current" />
-            </motion.div>
+            <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
+              <span className="text-muted-foreground font-medium">Conteúdo não disponível</span>
+            </div>
           )}
-        </AnimatePresence>
-      </div>
 
-      {/* Actions */}
-      <div className="p-3 sm:p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-4">
-            <button onClick={handleLikeToggle} className="group">
-              <Heart className={cn("w-7 h-7 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} />
-            </button>
-            <button className="group">
-              <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
-            </button>
-            <button className="group">
-              <Send className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
+          {/* Exclusive Badge */}
+          {post.exclusivo && (
+            <div className="absolute top-3 right-3 bg-primary text-white text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg z-20">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.5 6.5H19l-5.5 4.5 2 7L10 15.5 4.5 20l2-7L1 8.5h6.5z"/></svg>
+              EXCLUSIVO
+            </div>
+          )}
+
+          {/* Double-click Heart Animation */}
+          <AnimatePresence>
+            {showHeartAnimation && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1.2 }}
+                exit={{ opacity: 0, scale: 1 }}
+                transition={{ duration: 0.3, type: "spring", bounce: 0.5 }}
+                className="absolute z-30 pointer-events-none drop-shadow-2xl text-primary"
+              >
+                <Heart className="w-24 h-24 fill-current" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Actions */}
+        <div className="p-3 sm:p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-4">
+              <button onClick={handleLikeToggle} className="group">
+                <Heart className={cn("w-7 h-7 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} />
+              </button>
+              <button className="group">
+                <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
+              </button>
+              <button className="group">
+                <Send className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
+              </button>
+
+              {/* Gorjeta — só aparece em posts de outros utilizadores */}
+              {!isOwnPost && (
+                <button
+                  onClick={() => setTipOpen(true)}
+                  className="group flex items-center gap-1"
+                  title="Dar gorjeta"
+                >
+                  <Coins className={cn(
+                    "w-7 h-7 transition-all group-active:scale-90",
+                    gorjetasCount > 0
+                      ? "text-yellow-500 fill-yellow-500/20"
+                      : "text-foreground hover:text-yellow-500 stroke-[1.5px]"
+                  )} />
+                  {gorjetasCount > 0 && (
+                    <span className="text-xs font-semibold text-yellow-500 leading-none">{gorjetasCount}</span>
+                  )}
+                </button>
+              )}
+            </div>
+            <button onClick={handleSaveToggle} className="group">
+              <Bookmark className={cn("w-7 h-7 transition-transform group-active:scale-90", isSaved ? "fill-foreground text-foreground" : "text-foreground hover:text-muted-foreground")} />
             </button>
           </div>
-          <button onClick={handleSaveToggle} className="group">
-            <Bookmark className={cn("w-7 h-7 transition-transform group-active:scale-90", isSaved ? "fill-foreground text-foreground" : "text-foreground hover:text-muted-foreground")} />
-          </button>
-        </div>
 
-        {/* Likes Count */}
-        <div className="font-semibold text-sm mb-2">
-          {likesCount.toLocaleString()} {likesCount === 1 ? 'Gosto' : 'Gostos'}
-        </div>
-
-        {/* Caption */}
-        {post.legenda && (
-          <div className="text-sm mb-2">
-            <Link href={`/perfil/${post.autor.username}`} className="font-semibold hover:underline mr-2">
-              {post.autor.username}
-            </Link>
-            <span className="whitespace-pre-wrap">{post.legenda}</span>
+          {/* Likes Count */}
+          <div className="font-semibold text-sm mb-2">
+            {likesCount.toLocaleString()} {likesCount === 1 ? 'Gosto' : 'Gostos'}
           </div>
-        )}
 
-        {/* Comments link */}
-        {post.totalComentarios > 0 && (
-          <button className="text-sm text-muted-foreground mb-1 hover:text-foreground">
-            Ver todos os {post.totalComentarios} comentários
-          </button>
-        )}
+          {/* Caption */}
+          {post.legenda && (
+            <div className="text-sm mb-2">
+              <Link href={`/perfil/${post.autor.username}`} className="font-semibold hover:underline mr-2">
+                {post.autor.username}
+              </Link>
+              <span className="whitespace-pre-wrap">{post.legenda}</span>
+            </div>
+          )}
 
-        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
-          {new Date(post.criadoEm).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
+          {/* Comments link */}
+          {post.totalComentarios > 0 && (
+            <button className="text-sm text-muted-foreground mb-1 hover:text-foreground">
+              Ver todos os {post.totalComentarios} comentários
+            </button>
+          )}
+
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            {new Date(post.criadoEm).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      {/* Tip Modal */}
+      <TipModal
+        open={tipOpen}
+        onClose={() => {
+          setTipOpen(false);
+          // check if tip was sent by listening to saldo change — handled in TipModal via onClose after success
+        }}
+        creator={{
+          username: post.autor.username,
+          nomeExibicao: post.autor.nomeExibicao || null,
+          avatarUrl: post.autor.avatarUrl || null,
+          verificado: post.autor.verificado ?? false,
+        }}
+        postId={post.id}
+        onTipSent={handleTipSuccess}
+      />
+    </>
   );
 }

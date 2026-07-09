@@ -4,3 +4,4 @@
 - [Xclusive file upload UX](xclusive-upload.md) — CreatePostModal usa blob URLs (sessão apenas); upload real precisa de object-storage multipart
 - [Xclusive register flow](xclusive-register.md) — 2 passos: info básica → país(AO/MZ/ZA/PT/BR)+telefone+tipoConta; rota é /registo não /register
 - [Xclusive KYC flow](xclusive-kyc.md) — 6-step creator verification at /tornar-criador; camera via getUserMedia only, auto-approves in mock mode only
+- [Xclusive gorjeta system](xclusive-gorjeta.md) — saldo in MockUser, sendTip with self-tip guard + optimistic concurrency, TipModal + PostCard button + sidebar wallet

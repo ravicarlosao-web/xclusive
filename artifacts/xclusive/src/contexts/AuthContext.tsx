@@ -31,7 +31,26 @@ interface MockUser {
   totalSeguidores: number;
   totalSeguindo: number;
   totalPublicacoes: number;
+  /** Saldo em Kwanza (Kz) — mock carteira */
+  saldo: number;
   criadoEm: string;
+}
+
+const MOCK_TRANSACTIONS_KEY = 'xclusive_mock_transactions';
+interface MockTransaction {
+  id: number;
+  fromUserId: number;
+  toUsername: string;
+  amount: number;
+  postId?: number;
+  tipo: 'gorjeta';
+  criadoEm: string;
+}
+function getTransactions(): MockTransaction[] {
+  try { return JSON.parse(localStorage.getItem(MOCK_TRANSACTIONS_KEY) || '[]'); } catch { return []; }
+}
+function saveTransactions(txs: MockTransaction[]) {
+  localStorage.setItem(MOCK_TRANSACTIONS_KEY, JSON.stringify(txs));
 }
 
 function getMockUsers(): MockUser[] {
@@ -43,20 +62,26 @@ function saveMockUsers(users: MockUser[]) {
 
 // Pre-seed test accounts so they work even without a real DB
 const SEED_USERS: MockUser[] = [
-  { id: 1, nomeCompleto: 'Demo User', username: 'demo', email: 'demo@xclusive.pt', _devPassword: 'password123', dataNascimento: '1995-06-15', tipoConta: 'pessoal', pais: 'Angola', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=12', capaUrl: null, bio: 'Utilizador de demonstração 👋', link: null, nomeExibicao: 'Demo User', totalSeguidores: 24, totalSeguindo: 61, totalPublicacoes: 0, criadoEm: '2024-01-01T00:00:00.000Z' },
-  { id: 2, nomeCompleto: 'Ana Costa', username: 'ana', email: 'ana@xclusive.pt', _devPassword: 'password123', dataNascimento: '1998-03-22', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=47', capaUrl: null, bio: '📸 Fotografia & Lifestyle | Luanda 🇦🇴', link: 'https://xclusive.ao/ana', nomeExibicao: 'Ana Costa', totalSeguidores: 1248, totalSeguindo: 182, totalPublicacoes: 34, criadoEm: '2024-01-01T00:00:00.000Z' },
-  { id: 3, nomeCompleto: 'Marcos Silva', username: 'marcos', email: 'marcos@xclusive.pt', _devPassword: 'password123', dataNascimento: '1996-09-10', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=33', capaUrl: null, bio: '🎵 Músico | Produtor | Luanda', link: null, nomeExibicao: 'Marcos Silva', totalSeguidores: 3102, totalSeguindo: 95, totalPublicacoes: 57, criadoEm: '2024-01-01T00:00:00.000Z' },
-  { id: 4, nomeCompleto: 'Sofia Mendes', username: 'sofia', email: 'sofia@xclusive.pt', _devPassword: 'password123', dataNascimento: '2000-12-05', tipoConta: 'criador', pais: 'Moçambique', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=44', capaUrl: null, bio: '💄 Beleza & Moda | Maputo 🇲🇿', link: null, nomeExibicao: 'Sofia Mendes', totalSeguidores: 892, totalSeguindo: 312, totalPublicacoes: 22, criadoEm: '2024-01-01T00:00:00.000Z' },
-  { id: 5, nomeCompleto: 'Pedro Alves', username: 'pedro', email: 'pedro@xclusive.pt', _devPassword: 'password123', dataNascimento: '1993-07-18', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=60', capaUrl: null, bio: '🏋️ Fitness & Nutrição | Luanda', link: null, nomeExibicao: 'Pedro Alves', totalSeguidores: 5430, totalSeguindo: 47, totalPublicacoes: 89, criadoEm: '2024-01-01T00:00:00.000Z' },
-  { id: 6, nomeCompleto: 'Luna Ferreira', username: 'luna', email: 'luna@xclusive.pt', _devPassword: 'password123', dataNascimento: '2001-04-30', tipoConta: 'criador', pais: 'África do Sul', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=56', capaUrl: null, bio: '🎨 Arte Digital | Cape Town 🇿🇦', link: null, nomeExibicao: 'Luna Ferreira', totalSeguidores: 421, totalSeguindo: 203, totalPublicacoes: 15, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 1, nomeCompleto: 'Demo User', username: 'demo', email: 'demo@xclusive.pt', _devPassword: 'password123', dataNascimento: '1995-06-15', tipoConta: 'pessoal', pais: 'Angola', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=12', capaUrl: null, bio: 'Utilizador de demonstração 👋', link: null, nomeExibicao: 'Demo User', totalSeguidores: 24, totalSeguindo: 61, totalPublicacoes: 0, saldo: 5000, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 2, nomeCompleto: 'Ana Costa', username: 'ana', email: 'ana@xclusive.pt', _devPassword: 'password123', dataNascimento: '1998-03-22', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=47', capaUrl: null, bio: '📸 Fotografia & Lifestyle | Luanda 🇦🇴', link: 'https://xclusive.ao/ana', nomeExibicao: 'Ana Costa', totalSeguidores: 1248, totalSeguindo: 182, totalPublicacoes: 34, saldo: 12500, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 3, nomeCompleto: 'Marcos Silva', username: 'marcos', email: 'marcos@xclusive.pt', _devPassword: 'password123', dataNascimento: '1996-09-10', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=33', capaUrl: null, bio: '🎵 Músico | Produtor | Luanda', link: null, nomeExibicao: 'Marcos Silva', totalSeguidores: 3102, totalSeguindo: 95, totalPublicacoes: 57, saldo: 34800, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 4, nomeCompleto: 'Sofia Mendes', username: 'sofia', email: 'sofia@xclusive.pt', _devPassword: 'password123', dataNascimento: '2000-12-05', tipoConta: 'criador', pais: 'Moçambique', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=44', capaUrl: null, bio: '💄 Beleza & Moda | Maputo 🇲🇿', link: null, nomeExibicao: 'Sofia Mendes', totalSeguidores: 892, totalSeguindo: 312, totalPublicacoes: 22, saldo: 8200, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 5, nomeCompleto: 'Pedro Alves', username: 'pedro', email: 'pedro@xclusive.pt', _devPassword: 'password123', dataNascimento: '1993-07-18', tipoConta: 'criador', pais: 'Angola', verificado: true, avatarUrl: 'https://i.pravatar.cc/150?img=60', capaUrl: null, bio: '🏋️ Fitness & Nutrição | Luanda', link: null, nomeExibicao: 'Pedro Alves', totalSeguidores: 5430, totalSeguindo: 47, totalPublicacoes: 89, saldo: 67300, criadoEm: '2024-01-01T00:00:00.000Z' },
+  { id: 6, nomeCompleto: 'Luna Ferreira', username: 'luna', email: 'luna@xclusive.pt', _devPassword: 'password123', dataNascimento: '2001-04-30', tipoConta: 'criador', pais: 'África do Sul', verificado: false, avatarUrl: 'https://i.pravatar.cc/150?img=56', capaUrl: null, bio: '🎨 Arte Digital | Cape Town 🇿🇦', link: null, nomeExibicao: 'Luna Ferreira', totalSeguidores: 421, totalSeguindo: 203, totalPublicacoes: 15, saldo: 3100, criadoEm: '2024-01-01T00:00:00.000Z' },
 ];
 
 function seedMockUsersIfEmpty() {
-  const existing = getMockUsers();
+  let existing = getMockUsers();
+  // Migrate: give saldo to any user who doesn't have it yet
+  let migrated = false;
+  existing = existing.map(u => {
+    if ((u as any).saldo === undefined) { migrated = true; return { ...u, saldo: 5000 }; }
+    return u;
+  });
   // Merge: keep real registered users, add seeds only if email not already present
   const existingEmails = new Set(existing.map(u => u.email));
   const toAdd = SEED_USERS.filter(s => !existingEmails.has(s.email));
-  if (toAdd.length > 0) {
+  if (toAdd.length > 0 || migrated) {
     saveMockUsers([...existing, ...toAdd]);
   }
 }
@@ -116,6 +141,7 @@ async function mockRegister(data: RegisterInput & { pais?: string; telefone?: st
     totalSeguidores: 0,
     totalSeguindo: 0,
     totalPublicacoes: 0,
+    saldo: 1000, // bónus de boas-vindas
     criadoEm: new Date().toISOString(),
   };
   saveMockUsers([...users, newUser]);
@@ -144,15 +170,29 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isMockMode: boolean;
+  /** Saldo da carteira em Kz (null se não autenticado ou modo API real) */
+  saldo: number | null;
   login: (data: LoginInput) => Promise<void>;
   register: (data: RegisterInput & { pais?: string; telefone?: string; tipoConta?: string }) => Promise<void>;
   logout: () => Promise<void>;
   setToken: (token: string | null) => void;
   /** Update the current user's account type locally (mock + optimistic). Used by KYC flow. */
   updateTipoConta: (tipo: 'pessoal' | 'criador') => void;
+  /** Envia gorjeta ao criador. Lança erro se saldo insuficiente. */
+  sendTip: (creatorUsername: string, amount: number, postId?: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function getMockSaldo(): number | null {
+  try {
+    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    if (!session) return null;
+    const users = getMockUsers();
+    const u = users.find(u => u.id === session.userId);
+    return (u as any)?.saldo ?? null;
+  } catch { return null; }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
@@ -160,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(() => localStorage.getItem('xclusive_token'));
   const [mockUser, setMockUser] = useState<UserProfile | null>(() => getMockSession());
   const [isMockMode, setIsMockMode] = useState(false);
+  const [saldo, setSaldo] = useState<number | null>(() => getMockSaldo());
 
   // Seed test accounts into mock store on first load
   useEffect(() => {
@@ -215,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsMockMode(true);
       setToken(response.token);
       setMockUser(response.user);
+      setSaldo(getMockSaldo());
       setLocation('/home');
     }
   };
@@ -236,9 +278,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsMockMode(true);
       setToken(response.token);
       setMockUser(response.user);
+      setSaldo(getMockSaldo());
       setLocation('/onboarding');
     }
   };
+
+  const sendTip = useCallback(async (creatorUsername: string, amount: number, postId?: number) => {
+    // Validate amount at service layer (not just UI)
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+      throw new Error('Valor de gorjeta inválido.');
+    }
+    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    if (!session) throw new Error('Não estás autenticado.');
+    const users = getMockUsers();
+    const senderIdx = users.findIndex(u => u.id === session.userId);
+    if (senderIdx === -1) throw new Error('Utilizador não encontrado.');
+    // Self-tip prevention at service layer
+    if (users[senderIdx].username === creatorUsername) throw new Error('Não podes dar gorjeta ao teu próprio conteúdo.');
+    const senderSaldo = users[senderIdx].saldo ?? 0;
+    if (senderSaldo < amount) throw new Error('Saldo insuficiente. Carrega a tua carteira.');
+    const creatorIdx = users.findIndex(u => u.username === creatorUsername);
+    if (creatorIdx === -1) throw new Error('Criador não encontrado.');
+    // Atomic read-modify-write with optimistic concurrency: re-read store immediately before write
+    const freshUsers = getMockUsers();
+    const freshSenderIdx = freshUsers.findIndex(u => u.id === session.userId);
+    const freshCreatorIdx = freshUsers.findIndex(u => u.username === creatorUsername);
+    if (freshSenderIdx === -1 || freshCreatorIdx === -1) throw new Error('Dados inconsistentes. Tenta de novo.');
+    const freshSaldo = freshUsers[freshSenderIdx].saldo ?? 0;
+    if (freshSaldo < amount) throw new Error('Saldo insuficiente. Carrega a tua carteira.');
+    freshUsers[freshSenderIdx].saldo = freshSaldo - amount;
+    freshUsers[freshCreatorIdx].saldo = (freshUsers[freshCreatorIdx].saldo ?? 0) + amount;
+    saveMockUsers(freshUsers);
+    const txs = getTransactions();
+    txs.push({ id: Date.now(), fromUserId: session.userId, toUsername: creatorUsername, amount, postId, tipo: 'gorjeta', criadoEm: new Date().toISOString() });
+    saveTransactions(txs);
+    setSaldo(freshUsers[freshSenderIdx].saldo);
+  }, []);
 
   const updateTipoConta = useCallback((tipo: 'pessoal' | 'criador') => {
     // Update mock store
@@ -281,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setMockUser(null);
       setIsMockMode(false);
+      setSaldo(null);
       queryClient.clear();
       setLocation('/');
     }
@@ -296,11 +372,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated,
       isMockMode: isMockToken,
+      saldo,
       login,
       register,
       logout,
       setToken,
       updateTipoConta,
+      sendTip,
     }}>
       {children}
     </AuthContext.Provider>

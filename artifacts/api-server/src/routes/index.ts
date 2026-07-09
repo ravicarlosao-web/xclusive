@@ -9,6 +9,7 @@ import exploreRouter from "./explore";
 import messagesRouter from "./messages";
 import notificationsRouter from "./notifications";
 import creatorRouter from "./creator";
+import gorjetaRouter from "./gorjeta";
 
 const router: Router = Router();
 
@@ -22,5 +23,6 @@ router.use(exploreRouter);
 router.use(messagesRouter);
 router.use(notificationsRouter);
 router.use(creatorRouter);
+router.use(gorjetaRouter);
 
 export default router;
