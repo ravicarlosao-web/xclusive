@@ -44,12 +44,12 @@ export const MOCK_FEED_POSTS: Post[] = [
     },
     legenda: '🎵 No estúdio a finalizar o novo projeto. Em breve vais ouvir algo que nunca esperavas. Stay tuned 👀\n\n#MarcosBeats #Angola #Afrohouse',
     localizacao: 'Estúdio Black Rose, Luanda',
-    tipo: 'imagem',
+    tipo: 'video',
     media: [
       {
         id: 2,
-        url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=600&h=600&fit=crop',
-        tipo: 'imagem',
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        tipo: 'video',
         ordem: 0,
       },
     ],
@@ -100,12 +100,12 @@ export const MOCK_FEED_POSTS: Post[] = [
     },
     legenda: 'Moçambique — o país que roubou o meu coração 🇲🇿 Ilha de Moçambique é Património da Humanidade e poucos angolanos sabem disso. Quem já foi?',
     localizacao: 'Ilha de Moçambique',
-    tipo: 'imagem',
+    tipo: 'video',
     media: [
       {
         id: 4,
-        url: 'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=600&h=600&fit=crop',
-        tipo: 'imagem',
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+        tipo: 'video',
         ordem: 0,
       },
     ],

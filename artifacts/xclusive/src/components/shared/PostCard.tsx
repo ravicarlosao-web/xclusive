@@ -1,10 +1,10 @@
 import { Post } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
 import { CommentsSection } from './CommentsSection';
@@ -21,6 +21,7 @@ interface PostCardProps {
 
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
   const [isSaved, setIsSaved] = useState(post.guardado);
@@ -34,6 +35,26 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
+  const isVideo = post.tipo === 'video' || post.media?.[0]?.tipo === 'video';
+  const feedVideoRef = useRef<HTMLVideoElement>(null);
+
+  // For video previews in the feed: play only when card is visible, pause when scrolled away
+  useEffect(() => {
+    if (!isVideo || !feedVideoRef.current) return;
+    const video = feedVideoRef.current;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, [isVideo]);
 
   const handleLikeToggle = () => {
     if (isLiked) {
@@ -58,6 +79,12 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   };
 
   const handleMediaClick = () => {
+    // Video posts → navigate directly to reels at that video
+    if (isVideo) {
+      setLocation(`/reels?id=${post.id}`);
+      return;
+    }
+    // Image posts → double-tap to like
     const now = Date.now();
     if (now - lastClickTime.current < 300) {
       if (!isLiked) {
@@ -121,10 +148,25 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           ) : null}
 
           {post.media && post.media.length > 0 ? (
-            post.media[0].tipo === 'imagem' ? (
-              <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
+            isVideo ? (
+              <>
+                <video
+                  ref={feedVideoRef}
+                  src={post.media[0].url}
+                  className="w-full h-full object-cover pointer-events-none"
+                  muted
+                  loop
+                  playsInline
+                />
+                {/* Play badge — signals this is a video that opens in Reels */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-xl">
+                    <Play className="w-7 h-7 text-white fill-white ml-1" />
+                  </div>
+                </div>
+              </>
             ) : (
-              <video src={post.media[0].url} className="w-full h-full object-cover" controls muted loop />
+              <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
             )
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
