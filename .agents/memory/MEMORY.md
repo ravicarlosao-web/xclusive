@@ -3,3 +3,4 @@
 - [Artifact re-registration after import](artifact-reregistration.md) — imported repo has artifact.toml files but empty listArtifacts()/no workflows; fix via verifyAndReplaceArtifactToml round-trip
 - [Xclusive file upload UX](xclusive-upload.md) — CreatePostModal usa blob URLs (sessão apenas); upload real precisa de object-storage multipart
 - [Xclusive register flow](xclusive-register.md) — 2 passos: info básica → país(AO/MZ/ZA/PT/BR)+telefone+tipoConta; rota é /registo não /register
+- [Xclusive KYC flow](xclusive-kyc.md) — 6-step creator verification at /tornar-criador; camera via getUserMedia only, auto-approves in mock mode only

@@ -99,10 +99,16 @@ export default function Profile() {
                     <Settings className="w-4 h-4 mr-2" /> Editar Perfil
                   </Button>
                 </Link>
-                {profile.tipoConta === 'criador' && (
+                {profile.tipoConta === 'criador' ? (
                   <Link href="/definicoes/monetizacao">
                     <Button className="font-semibold bg-primary hover:bg-primary/90 text-white">
                       Painel
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/tornar-criador">
+                    <Button className="font-semibold bg-gradient-to-r from-primary to-orange-500 hover:opacity-90 text-white shadow-[0_0_20px_rgba(255,62,114,0.25)] gap-1.5">
+                      <span className="text-base leading-none">⭐</span> Tornar-se Criador
                     </Button>
                   </Link>
                 )}

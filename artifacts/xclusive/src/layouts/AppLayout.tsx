@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon
+  Menu, LogOut, Settings, User as UserIcon, Sparkles
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -81,7 +81,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
           </Link>
 
-          {user?.tipoConta === 'criador' && (
+          {user?.tipoConta === 'criador' ? (
             <Link href="/definicoes/monetizacao">
               <div className={cn(
                 "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
@@ -89,6 +89,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
               )}>
                 <BarChart className={cn("w-6 h-6", location.startsWith('/definicoes/monetizacao') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
                 <span className="hidden lg:block text-[15px]">Painel Criador</span>
+              </div>
+            </Link>
+          ) : (
+            <Link href="/tornar-criador">
+              <div className={cn(
+                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-primary/10 border border-transparent hover:border-primary/30",
+                location.startsWith('/tornar-criador') ? "text-primary font-semibold bg-primary/10 border-primary/30" : "text-primary/70"
+              )}>
+                <Sparkles className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
+                <span className="hidden lg:block text-[14px] font-semibold">Tornar-se Criador</span>
               </div>
             </Link>
           )}

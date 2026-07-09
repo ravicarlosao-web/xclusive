@@ -22,6 +22,7 @@ import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import Monetization from '@/pages/monetization';
 import Onboarding from '@/pages/onboarding';
+import KYCPage from '@/pages/kyc';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,20 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Full-screen protected route — no AppLayout sidebar (used for immersive flows like KYC)
+function FullscreenProtectedRoute({ component: Component, path }: { component: any, path: string }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) setLocation('/login');
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
+  if (!isAuthenticated) return null;
+  return <Component />;
+}
 
 function ProtectedRoute({ component: Component, ...rest }: { component: any, path: string }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -81,6 +96,7 @@ function Router() {
       
       {/* Protected Routes */}
       <Route path="/onboarding">{(params) => <ProtectedRoute component={Onboarding} path="/onboarding" />}</Route>
+      <Route path="/tornar-criador">{() => <FullscreenProtectedRoute component={KYCPage} path="/tornar-criador" />}</Route>
       <Route path="/home">{(params) => <ProtectedRoute component={Home} path="/home" />}</Route>
       <Route path="/explorar">{(params) => <ProtectedRoute component={Explore} path="/explorar" />}</Route>
       <Route path="/reels">{(params) => <ProtectedRoute component={Reels} path="/reels" />}</Route>

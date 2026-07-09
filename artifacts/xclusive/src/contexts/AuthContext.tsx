@@ -148,6 +148,8 @@ interface AuthContextType {
   register: (data: RegisterInput & { pais?: string; telefone?: string; tipoConta?: string }) => Promise<void>;
   logout: () => Promise<void>;
   setToken: (token: string | null) => void;
+  /** Update the current user's account type locally (mock + optimistic). Used by KYC flow. */
+  updateTipoConta: (tipo: 'pessoal' | 'criador') => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -238,6 +240,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateTipoConta = useCallback((tipo: 'pessoal' | 'criador') => {
+    // Update mock store
+    const users = getMockUsers();
+    const currentUser = isMockToken ? mockUser : (apiUser || null);
+    if (currentUser) {
+      const idx = users.findIndex(u => u.id === currentUser.id);
+      if (idx !== -1) {
+        users[idx].tipoConta = tipo;
+        users[idx].verificado = true;
+        saveMockUsers(users);
+      }
+    }
+    // Update in-memory mock session
+    if (isMockToken && mockUser) {
+      const updated: UserProfile = { ...mockUser, tipoConta: tipo, verificado: true };
+      setMockUser(updated);
+      const session = localStorage.getItem(MOCK_SESSION_KEY);
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(parsed)); // session holds userId, user resolved dynamically
+        } catch {}
+      }
+    }
+    // For real API mode: invalidate so useGetMe refetches
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+  }, [isMockToken, mockUser, apiUser, queryClient]);
+
   const logout = async () => {
     try {
       if (isMockToken) {
@@ -270,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       setToken,
+      updateTipoConta,
     }}>
       {children}
     </AuthContext.Provider>
