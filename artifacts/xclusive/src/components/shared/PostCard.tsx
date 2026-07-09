@@ -38,9 +38,9 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const isVideo = post.tipo === 'video' || post.media?.[0]?.tipo === 'video';
   const feedVideoRef = useRef<HTMLVideoElement>(null);
 
-  // For video previews in the feed: play only when card is visible, pause when scrolled away
+  // For video previews in the feed: play only when card is visible and post is not locked
   useEffect(() => {
-    if (!isVideo || !feedVideoRef.current) return;
+    if (!isVideo || post.exclusivo || !feedVideoRef.current) return;
     const video = feedVideoRef.current;
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -54,7 +54,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     );
     observer.observe(video);
     return () => observer.disconnect();
-  }, [isVideo]);
+  }, [isVideo, post.exclusivo]);
 
   const handleLikeToggle = () => {
     if (isLiked) {
@@ -132,18 +132,42 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           className="relative w-full bg-secondary aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer select-none"
           onClick={handleMediaClick}
         >
-          {post.exclusivo && !post.precoDesbloqueio ? (
-            <div className="absolute inset-0 backdrop-blur-md bg-black/40 z-10 flex flex-col items-center justify-center p-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Conteúdo Exclusivo</h3>
-              <p className="text-sm text-gray-300 mb-6">Subscreve a {post.autor.username} para desbloqueares este conteúdo.</p>
-              <button className="bg-primary text-primary-foreground font-semibold px-6 py-2.5 rounded-full hover:bg-primary/90 transition-colors shadow-[0_0_20px_rgba(255,62,114,0.3)]">
-                Subscrever por {post.precoDesbloqueio ? `${Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz` : 'Plano'}
-              </button>
+          {post.exclusivo ? (
+            <div
+              className="absolute inset-0 backdrop-blur-xl bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center"
+              onClick={e => e.stopPropagation()}
+            >
+              {post.precoDesbloqueio ? (
+                /* ── Pay-per-view ── */
+                <>
+                  <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4">
+                    <svg className="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] font-bold tracking-widest text-amber-400 uppercase mb-1">Conteúdo Premium</span>
+                  <h3 className="text-lg font-bold text-white mb-1">Acesso único</h3>
+                  <p className="text-sm text-white/60 mb-5 max-w-[200px]">Desbloqueia apenas este post por um pagamento único.</p>
+                  <button className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(245,158,11,0.35)] text-sm">
+                    Desbloquear · {Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz
+                  </button>
+                </>
+              ) : (
+                /* ── Subscription only ── */
+                <>
+                  <div className="w-14 h-14 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center mb-4">
+                    <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Exclusivo para assinantes</span>
+                  <h3 className="text-lg font-bold text-white mb-1">Conteúdo bloqueado</h3>
+                  <p className="text-sm text-white/60 mb-5 max-w-[200px]">Subscreve {post.autor.username} para teres acesso a todo o conteúdo exclusivo.</p>
+                  <button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(255,62,114,0.35)] text-sm">
+                    Subscrever
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
 

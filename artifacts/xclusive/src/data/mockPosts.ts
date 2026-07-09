@@ -201,4 +201,124 @@ export const MOCK_FEED_POSTS: Post[] = [
     guardado: true,
     criadoEm: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(), // 30h atrás
   },
+
+  // ── Conteúdo bloqueado — só para assinantes (vídeo) ──────────────────────
+  {
+    id: 1008,
+    autor: {
+      id: 4,
+      username: 'sofia_fitness',
+      nomeExibicao: 'Sofia Fitness',
+      avatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=sofia&backgroundColor=1a0a0a&radius=50',
+      verificado: true,
+    },
+    legenda: '🔒 Treino completo de 45 min — só para assinantes. Plano de nutrição incluído.',
+    localizacao: 'Luanda Sport Club',
+    tipo: 'video',
+    media: [
+      {
+        id: 8,
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+        tipo: 'video',
+        ordem: 0,
+      },
+    ],
+    exclusivo: true,
+    precoDesbloqueio: null, // subscrição mensal
+    totalCurtidas: 3120,
+    totalComentarios: 87,
+    curtido: false,
+    guardado: false,
+    criadoEm: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
+  },
+
+  // ── Conteúdo bloqueado — pagamento único (imagem) ────────────────────────
+  {
+    id: 1009,
+    autor: {
+      id: 5,
+      username: 'pedro_viagens',
+      nomeExibicao: 'Pedro Viagens',
+      avatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=pedro&backgroundColor=0a1a0a&radius=50',
+      verificado: true,
+    },
+    legenda: '📸 Guia completo das melhores praias secretas de Moçambique — 47 fotos em alta resolução.',
+    localizacao: 'Pemba, Moçambique',
+    tipo: 'imagem',
+    media: [
+      {
+        id: 9,
+        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=600&fit=crop',
+        tipo: 'imagem',
+        ordem: 0,
+      },
+    ],
+    exclusivo: true,
+    precoDesbloqueio: 1500,
+    totalCurtidas: 1890,
+    totalComentarios: 42,
+    curtido: false,
+    guardado: false,
+    criadoEm: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+
+  // ── Conteúdo bloqueado — pagamento único (vídeo) ─────────────────────────
+  {
+    id: 1010,
+    autor: {
+      id: 3,
+      username: 'marcos_beats',
+      nomeExibicao: 'Marcos Beats',
+      avatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=marcos&backgroundColor=0d0d1a&radius=50',
+      verificado: true,
+    },
+    legenda: '🎧 Session completa de 1h gravada ao vivo no Black Rose. Stems disponíveis para download.',
+    localizacao: 'Estúdio Black Rose, Luanda',
+    tipo: 'video',
+    media: [
+      {
+        id: 10,
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        tipo: 'video',
+        ordem: 0,
+      },
+    ],
+    exclusivo: true,
+    precoDesbloqueio: 3500,
+    totalCurtidas: 5230,
+    totalComentarios: 198,
+    curtido: false,
+    guardado: false,
+    criadoEm: new Date(Date.now() - 1000 * 60 * 60 * 52).toISOString(),
+  },
+
+  // ── Conteúdo bloqueado — só para assinantes (imagem) ────────────────────
+  {
+    id: 1011,
+    autor: {
+      id: 2,
+      username: 'ana_kriativa',
+      nomeExibicao: 'Ana Kriativa',
+      avatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=ana&backgroundColor=1a1a2e&radius=50',
+      verificado: true,
+    },
+    legenda: '✨ Bastidores da sessão + 30 fotos sem edição. Acesso exclusivo para assinantes do plano mensal.',
+    localizacao: null,
+    tipo: 'imagem',
+    media: [
+      {
+        id: 11,
+        url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=600&fit=crop',
+        tipo: 'imagem',
+        ordem: 0,
+      },
+    ],
+    exclusivo: true,
+    precoDesbloqueio: null, // subscrição mensal
+    totalCurtidas: 7640,
+    totalComentarios: 304,
+    curtido: false,
+    guardado: false,
+    criadoEm: new Date(Date.now() - 1000 * 60 * 60 * 60).toISOString(),
+  },
 ];
