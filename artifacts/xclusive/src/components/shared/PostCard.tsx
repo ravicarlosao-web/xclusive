@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
+import { UnlockPostModal } from '@/components/wallet/UnlockPostModal';
+import { SubscribeModal } from '@/components/wallet/SubscribeModal';
 import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
@@ -20,7 +22,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
-  const { user } = useAuth();
+  const { user, isSubscribed, isPostUnlocked } = useAuth();
   const [, setLocation] = useLocation();
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
@@ -32,15 +34,26 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const [commentsCount, setCommentsCount] = useState(
     post.totalComentarios + getLocalCommentsForPost(post.id).length,
   );
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [localUnlocked, setLocalUnlocked] = useState(false);
+  const [localSubscribed, setLocalSubscribed] = useState(false);
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
   const isVideo = post.tipo === 'video' || post.media?.[0]?.tipo === 'video';
+
+  // Check if user already has access
+  const hasSubscription = localSubscribed || isSubscribed(post.autor.username);
+  const hasUnlocked = localUnlocked || isPostUnlocked(post.id);
+  const isLocked = post.exclusivo && !isOwnPost && (
+    post.precoDesbloqueio ? !hasUnlocked : !hasSubscription
+  );
   const feedVideoRef = useRef<HTMLVideoElement>(null);
 
   // For video previews in the feed: play only when card is visible and post is not locked
   useEffect(() => {
-    if (!isVideo || post.exclusivo || !feedVideoRef.current) return;
+    if (!isVideo || isLocked || !feedVideoRef.current) return;
     const video = feedVideoRef.current;
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -54,7 +67,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     );
     observer.observe(video);
     return () => observer.disconnect();
-  }, [isVideo, post.exclusivo]);
+  }, [isVideo, isLocked]);
 
   const handleLikeToggle = () => {
     if (isLiked) {
@@ -132,7 +145,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           className="relative w-full bg-secondary aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer select-none"
           onClick={handleMediaClick}
         >
-          {post.exclusivo ? (
+          {isLocked ? (
             <div
               className="absolute inset-0 backdrop-blur-xl bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center"
               onClick={e => e.stopPropagation()}
@@ -148,7 +161,10 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                   <span className="text-[10px] font-bold tracking-widest text-amber-400 uppercase mb-1">Conteúdo Premium</span>
                   <h3 className="text-lg font-bold text-white mb-1">Acesso único</h3>
                   <p className="text-sm text-white/60 mb-5 max-w-[200px]">Desbloqueia apenas este post por um pagamento único.</p>
-                  <button className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(245,158,11,0.35)] text-sm">
+                  <button
+                    onClick={() => setUnlockOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(245,158,11,0.35)] text-sm"
+                  >
                     Desbloquear · {Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz
                   </button>
                 </>
@@ -163,7 +179,10 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                   <span className="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Exclusivo para assinantes</span>
                   <h3 className="text-lg font-bold text-white mb-1">Conteúdo bloqueado</h3>
                   <p className="text-sm text-white/60 mb-5 max-w-[200px]">Subscreve {post.autor.username} para teres acesso a todo o conteúdo exclusivo.</p>
-                  <button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(255,62,114,0.35)] text-sm">
+                  <button
+                    onClick={() => setSubscribeOpen(true)}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(255,62,114,0.35)] text-sm"
+                  >
                     Subscrever
                   </button>
                 </>
@@ -294,10 +313,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
       {/* Tip Modal */}
       <TipModal
         open={tipOpen}
-        onClose={() => {
-          setTipOpen(false);
-          // check if tip was sent by listening to saldo change — handled in TipModal via onClose after success
-        }}
+        onClose={() => setTipOpen(false)}
         creator={{
           username: post.autor.username,
           nomeExibicao: post.autor.nomeExibicao || null,
@@ -307,6 +323,33 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         postId={post.id}
         onTipSent={handleTipSuccess}
       />
+
+      {/* Unlock Modal (pay-per-view) */}
+      {post.precoDesbloqueio && (
+        <UnlockPostModal
+          open={unlockOpen}
+          onClose={() => setUnlockOpen(false)}
+          postId={post.id}
+          creatorUsername={post.autor.username}
+          creatorNome={post.autor.nomeExibicao || post.autor.username}
+          preco={Number(post.precoDesbloqueio)}
+          onUnlocked={() => setLocalUnlocked(true)}
+        />
+      )}
+
+      {/* Subscribe Modal */}
+      {!post.precoDesbloqueio && (
+        <SubscribeModal
+          open={subscribeOpen}
+          onClose={() => setSubscribeOpen(false)}
+          creatorUsername={post.autor.username}
+          creatorNome={post.autor.nomeExibicao || post.autor.username}
+          creatorAvatar={post.autor.avatarUrl || null}
+          creatorVerificado={post.autor.verificado ?? false}
+          preco={4990}
+          onSubscribed={() => setLocalSubscribed(true)}
+        />
+      )}
     </>
   );
 }

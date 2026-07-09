@@ -23,6 +23,7 @@ import Settings from '@/pages/settings';
 import Monetization from '@/pages/monetization';
 import Onboarding from '@/pages/onboarding';
 import KYCPage from '@/pages/kyc';
+import Carteira from '@/pages/carteira';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,6 +107,7 @@ function Router() {
       <Route path="/perfil/:username">{(params) => <ProtectedRoute component={Profile} path="/perfil/:username" />}</Route>
       <Route path="/definicoes">{(params) => <ProtectedRoute component={Settings} path="/definicoes" />}</Route>
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
+      <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
       
       <Route component={NotFound} />
     </Switch>

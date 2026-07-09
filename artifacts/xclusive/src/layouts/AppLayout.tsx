@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet
+  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -10,11 +10,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { ReactNode, useState } from 'react';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
+import { TopUpModal } from '@/components/wallet/TopUpModal';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, logout, saldo } = useAuth();
   const [createPostOpen, setCreatePostOpen] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   const navItems = [
     { name: 'Início', path: '/home', icon: Home },
@@ -107,13 +109,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="p-3 lg:p-4 mt-auto flex flex-col gap-2">
           {/* Carteira / Saldo */}
           {saldo !== null && (
-            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50 border border-border/50">
-              <Wallet className="w-5 h-5 text-yellow-500 stroke-[1.5px] shrink-0" />
-              <div className="hidden lg:flex flex-col leading-tight">
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Carteira</span>
-                <span className="text-sm font-bold">{saldo.toLocaleString('pt-PT')} Kz</span>
+            <Link href="/carteira">
+              <div className="group flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50 border border-border/50 hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-all cursor-pointer">
+                <Wallet className="w-5 h-5 text-yellow-500 stroke-[1.5px] shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="hidden lg:flex flex-col leading-tight flex-1 min-w-0">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Carteira</span>
+                  <span className="text-sm font-bold">{saldo.toLocaleString('pt-PT')} Kz</span>
+                </div>
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTopUpOpen(true); }}
+                  className="hidden lg:flex w-6 h-6 rounded-full bg-yellow-500/20 hover:bg-yellow-500/40 items-center justify-center transition-colors shrink-0"
+                  title="Carregar carteira"
+                >
+                  <Plus className="w-3.5 h-3.5 text-yellow-500" />
+                </button>
               </div>
-            </div>
+            </Link>
           )}
           <Popover>
             <PopoverTrigger asChild>
@@ -145,6 +156,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </main>
 
       <CreatePostModal open={createPostOpen} onClose={() => setCreatePostOpen(false)} />
+      <TopUpModal open={topUpOpen} onClose={() => setTopUpOpen(false)} />
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-2">
