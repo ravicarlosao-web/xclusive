@@ -7,15 +7,21 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
+import { MOCK_FEED_POSTS } from '@/data/mockPosts';
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, isMockMode } = useAuth();
 
   // Queries
   const { data: feedData, isLoading: isLoadingFeed } = useGetFeed(
     { page: 1, limit: 10 },
     { query: { queryKey: ['/api/feed', 1] } }
   );
+
+  // Em modo mock sem DB, usa posts demonstrativos
+  const posts = isMockMode && !feedData?.posts?.length
+    ? MOCK_FEED_POSTS
+    : (feedData?.posts ?? []);
 
   const { data: storiesData, isLoading: isLoadingStories } = useGetStoriesFeed({
     query: { queryKey: ['/api/stories/feed'] }
@@ -60,10 +66,10 @@ export default function Home() {
 
         {/* Posts Feed */}
         <div className="flex flex-col">
-          {isLoadingFeed ? (
+          {isLoadingFeed && !isMockMode ? (
             Array(3).fill(0).map((_, i) => <PostSkeleton key={i} />)
-          ) : feedData?.posts && feedData.posts.length > 0 ? (
-            feedData.posts.map((post) => (
+          ) : posts.length > 0 ? (
+            posts.map((post) => (
               <PostCard 
                 key={post.id} 
                 post={post}
