@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
-import { CommentsModal } from './CommentsModal';
+import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
 
@@ -163,7 +163,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
               <button onClick={handleLikeToggle} className="group">
                 <Heart className={cn("w-7 h-7 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} />
               </button>
-              <button onClick={() => setCommentsOpen(true)} className="group">
+              <button onClick={() => setCommentsOpen(v => !v)} className="group">
                 <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
               </button>
               <button className="group">
@@ -211,8 +211,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
 
           {/* Comments link */}
           {commentsCount > 0 && (
-            <button onClick={() => setCommentsOpen(true)} className="text-sm text-muted-foreground mb-1 hover:text-foreground">
-              Ver todos os {commentsCount} comentários
+            <button onClick={() => setCommentsOpen(v => !v)} className="text-sm text-muted-foreground mb-1 hover:text-foreground">
+              {commentsOpen ? 'Ocultar comentários' : `Ver todos os ${commentsCount} comentários`}
             </button>
           )}
 
@@ -220,6 +220,15 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             {new Date(post.criadoEm).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
           </div>
         </div>
+
+        {/* Inline comments, embutidas no próprio card (não é um pop-up) */}
+        <CommentsSection
+          open={commentsOpen}
+          postId={post.id}
+          postAuthorUsername={post.autor.username}
+          seedComments={MOCK_COMMENTS[post.id] || []}
+          onCommentAdded={() => setCommentsCount(c => c + 1)}
+        />
       </article>
 
       {/* Tip Modal */}
@@ -237,16 +246,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         }}
         postId={post.id}
         onTipSent={handleTipSuccess}
-      />
-
-      {/* Comments Modal */}
-      <CommentsModal
-        open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
-        postId={post.id}
-        postAuthorUsername={post.autor.username}
-        seedComments={MOCK_COMMENTS[post.id] || []}
-        onCommentAdded={() => setCommentsCount(c => c + 1)}
       />
     </>
   );
