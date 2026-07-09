@@ -128,12 +128,12 @@ export const MOCK_FEED_POSTS: Post[] = [
     },
     legenda: 'Look do dia ✨ Pano africano com toque contemporâneo. A moda africana está a conquistar o mundo e eu não podia estar mais orgulhosa 🌍\n\n#AfroFashion #AngolanDesigner',
     localizacao: 'Talatona, Luanda',
-    tipo: 'imagem',
+    tipo: 'video',
     media: [
       {
         id: 5,
-        url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&h=600&fit=crop',
-        tipo: 'imagem',
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+        tipo: 'video',
         ordem: 0,
       },
     ],
