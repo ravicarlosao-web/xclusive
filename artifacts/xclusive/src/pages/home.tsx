@@ -1,6 +1,8 @@
-import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions } from '@workspace/api-client-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, StoryGroup } from '@workspace/api-client-react';
 import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
+import { StoryViewer } from '@/components/shared/StoryViewer';
 import { PostSkeleton, StorySkeleton, SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -8,9 +10,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { MOCK_FEED_POSTS } from '@/data/mockPosts';
+import { MOCK_STORY_GROUPS } from '@/data/mockStories';
+import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToStory, markStoryViewed } from '@/lib/localStories';
+import { toast } from 'sonner';
+
+const MAX_STORY_SIZE_MB = 50;
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewerGroupIndex, setViewerGroupIndex] = useState<number | null>(null);
+  // Bumps whenever local stories change, to force re-reading localStorage
+  const [localStoriesVersion, setLocalStoriesVersion] = useState(0);
 
   // Queries
   const { data: feedData, isLoading: isLoadingFeed } = useGetFeed(
@@ -31,6 +42,55 @@ export default function Home() {
     query: { queryKey: ['/api/users/suggestions'] }
   });
 
+  // Em modo mock sem DB, usa stories demonstrativos de outros utilizadores
+  const otherGroups: StoryGroup[] = isMockMode && !storiesData?.length
+    ? MOCK_STORY_GROUPS
+    : (storiesData ?? []);
+
+  // O meu grupo de stories: combina stories locais (adicionadas nesta sessão)
+  const myStories = useMemo(
+    () => (user ? getLocalStoriesForUser(user.id).map(s => localStoryToStory(s, user)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, localStoriesVersion]
+  );
+  const myGroup: StoryGroup | null = user
+    ? { utilizador: user, stories: myStories, hasNaoVisto: false }
+    : null;
+
+  // Lista usada pelo viewer: apenas grupos com pelo menos 1 story (eu primeiro, se tiver)
+  const viewableGroups: StoryGroup[] = [
+    ...(myGroup && myGroup.stories.length > 0 ? [myGroup] : []),
+    ...otherGroups.filter(g => g.stories.length > 0),
+  ];
+
+  const handleAddStoryClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      toast.error('Usa uma imagem ou vídeo para o teu story.');
+      return;
+    }
+    if (file.size > MAX_STORY_SIZE_MB * 1024 * 1024) {
+      toast.error(`Ficheiro demasiado grande. Máximo ${MAX_STORY_SIZE_MB}MB.`);
+      return;
+    }
+    const tipo = file.type.startsWith('video/') ? 'video' : 'imagem';
+    addLocalStory(user.id, URL.createObjectURL(file), tipo);
+    setLocalStoriesVersion(v => v + 1);
+    toast.success('Story adicionado! Visível apenas nesta sessão.');
+  }
+
+  function handleDeleteStory(userId: number, storyId: number) {
+    deleteLocalStory(storyId);
+    setLocalStoriesVersion(v => v + 1);
+    setViewerGroupIndex(null);
+  }
+
   return (
     <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-8 pt-4 sm:pt-8 px-0 sm:px-4">
       {/* Main Feed Column */}
@@ -38,31 +98,57 @@ export default function Home() {
         
         {/* Stories Section */}
         <div className="mb-8">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={handleStoryFileSelected}
+          />
           <ScrollArea className="w-full whitespace-nowrap bg-background sm:bg-card sm:border sm:border-border sm:rounded-xl p-3 sm:p-4">
             <div className="flex w-max space-x-4">
-              {/* My Story (Mock) */}
-              {user && (
-                <StoryCircle 
-                  group={{
-                    utilizador: user,
-                    stories: [],
-                    hasNaoVisto: false
-                  }} 
-                  isMe 
+              {/* My Story */}
+              {myGroup && (
+                <StoryCircle
+                  group={myGroup}
+                  isMe
+                  onView={() => {
+                    const idx = viewableGroups.findIndex(g => g.utilizador.id === myGroup.utilizador.id);
+                    if (idx >= 0) setViewerGroupIndex(idx);
+                  }}
+                  onAdd={handleAddStoryClick}
                 />
               )}
 
               {isLoadingStories ? (
                 Array(5).fill(0).map((_, i) => <StorySkeleton key={i} />)
               ) : (
-                storiesData?.map(group => (
-                  <StoryCircle key={group.utilizador.id} group={group} />
+                otherGroups.map((group) => (
+                  <StoryCircle
+                    key={group.utilizador.id}
+                    group={group}
+                    onView={() => {
+                      const idx = viewableGroups.findIndex(g => g.utilizador.id === group.utilizador.id);
+                      if (idx >= 0) setViewerGroupIndex(idx);
+                    }}
+                  />
                 ))
               )}
             </div>
             <ScrollBar orientation="horizontal" className="hidden" />
           </ScrollArea>
         </div>
+
+        {viewerGroupIndex !== null && (
+          <StoryViewer
+            groups={viewableGroups}
+            initialGroupIndex={viewerGroupIndex}
+            onClose={() => setViewerGroupIndex(null)}
+            onStoryViewed={(_, storyId) => markStoryViewed(storyId)}
+            onDeleteStory={handleDeleteStory}
+            currentUserId={user?.id}
+          />
+        )}
 
         {/* Posts Feed */}
         <div className="flex flex-col">
