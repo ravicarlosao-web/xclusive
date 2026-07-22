@@ -95,7 +95,7 @@ export default function UserDetail() {
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Data de Registo</h3>
-                <p className="text-lg">{format(new Date(user.joinedAt), 'dd MMM yyyy, HH:mm')}</p>
+                <p className="text-lg">{format(new Date(user.criadoEm), 'dd MMM yyyy, HH:mm')}</p>
               </div>
             </div>
           </TabsContent>
@@ -114,7 +114,7 @@ export default function UserDetail() {
                     <CardTitle className="text-sm">Saldo Atual</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-primary">{user.balance?.toLocaleString()} MZN</p>
+                    <p className="text-3xl font-bold text-primary">{user.saldo?.toLocaleString()} MZN</p>
                   </CardContent>
                 </Card>
               </div>

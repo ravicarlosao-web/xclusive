@@ -22,16 +22,20 @@ export default function Settings() {
   useEffect(() => {
     if (settings && !formData) {
       setFormData({
-        ...settings,
-        allowedCountries: settings.allowedCountries.join(', ')
+        commissionRate: (settings as any).commission_rate?.value ?? 20,
+        minWithdrawalAmount: (settings as any).min_withdrawal_amount?.value ?? 5000,
+        maintenanceMode: (settings as any).maintenance_mode?.enabled ?? false,
+        allowedCountries: ((settings as any).allowed_countries?.list ?? []).join(', '),
       });
     }
   }, [settings, formData]);
 
   const updateSettings = useMutation({
     mutationFn: (data: any) => adminApi.updateSettings({
-      ...data,
-      allowedCountries: data.allowedCountries.split(',').map((s: string) => s.trim())
+      commission_rate: { value: data.commissionRate },
+      min_withdrawal_amount: { value: data.minWithdrawalAmount },
+      maintenance_mode: { enabled: data.maintenanceMode },
+      allowed_countries: { list: data.allowedCountries.split(',').map((s: string) => s.trim()) },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });

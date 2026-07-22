@@ -27,12 +27,12 @@ export default function Creators() {
     { header: 'Username', accessorKey: 'username', className: 'font-medium text-primary' },
     { header: 'País', accessorKey: 'pais' },
     { 
-      header: 'Subscritores', 
-      cell: (item) => <span className="font-mono">{item.subscribers}</span>
+      header: 'Ganhos', 
+      cell: (item) => <span className="font-mono">{item.ganhos?.toLocaleString()} MZN</span>
     },
     { 
       header: 'Saldo', 
-      cell: (item) => <span className="font-mono font-medium">{item.balance?.toLocaleString()} MZN</span>
+      cell: (item) => <span className="font-mono font-medium">{item.saldo?.toLocaleString()} MZN</span>
     },
     { 
       header: 'Estado', 

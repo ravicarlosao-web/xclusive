@@ -29,23 +29,23 @@ export default function Withdrawals() {
 
   const columns: Column<any>[] = [
     { header: 'ID', accessorKey: 'id', className: 'w-16 font-mono text-muted-foreground' },
-    { header: 'Criador', accessorKey: 'creator', className: 'font-medium text-primary' },
+    { header: 'Criador', accessorKey: 'creatorUsername', className: 'font-medium text-primary' },
     { 
       header: 'Valor', 
-      cell: (item) => <span className="font-bold font-mono">{item.amount.toLocaleString()} {item.currency}</span>
+      cell: (item) => <span className="font-bold font-mono">{(item.amount / 100).toLocaleString()} MZN</span>
     },
     { 
       header: 'Método / Conta', 
       cell: (item) => (
         <div className="flex flex-col">
           <span className="text-sm">{item.method}</span>
-          <span className="text-xs text-muted-foreground font-mono">{item.account}</span>
+          <span className="text-xs text-muted-foreground font-mono">{item.destinationDetails?.iban ?? '—'}</span>
         </div>
       )
     },
     { 
       header: 'Data do Pedido', 
-      cell: (item) => <span className="text-muted-foreground text-sm">{format(new Date(item.requestedAt), 'dd MMM yyyy')}</span>
+      cell: (item) => <span className="text-muted-foreground text-sm">{format(new Date(item.criadoEm), 'dd MMM yyyy')}</span>
     },
     { 
       header: 'Estado', 
@@ -108,7 +108,7 @@ export default function Withdrawals() {
 
       <DataTable 
         columns={columns} 
-        data={withdrawals || []} 
+        data={(withdrawals as any)?.data ?? withdrawals ?? []} 
         isLoading={isLoading}
       />
     </div>

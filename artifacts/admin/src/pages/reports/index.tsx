@@ -46,7 +46,7 @@ export default function Reports() {
     { header: 'Motivo', accessorKey: 'reason', className: 'max-w-xs truncate' },
     { 
       header: 'Data', 
-      cell: (item) => <span className="text-muted-foreground text-sm">{format(new Date(item.createdAt), 'dd MMM, HH:mm')}</span>
+      cell: (item) => <span className="text-muted-foreground text-sm">{format(new Date(item.criadoEm), 'dd MMM, HH:mm')}</span>
     },
     { 
       header: 'Estado', 
@@ -100,7 +100,7 @@ export default function Reports() {
 
       <DataTable 
         columns={columns} 
-        data={reports || []} 
+        data={(reports as any)?.data ?? reports ?? []} 
         isLoading={isLoading}
       />
     </div>

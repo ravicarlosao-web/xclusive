@@ -34,8 +34,8 @@ export default function Content() {
 
   const postList: any[] = posts?.data ?? posts ?? [];
   const filteredPosts = postList.filter((p: any) => 
-    p.content?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.creatorName?.toLowerCase().includes(searchTerm.toLowerCase())
+    p.legenda?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.autorUsername?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -63,7 +63,7 @@ export default function Content() {
           {filteredPosts.map((post: any) => (
             <Card key={post.id} className="border-border bg-card overflow-hidden flex flex-col">
               <div className="relative aspect-square bg-muted flex items-center justify-center">
-                {post.mediaType === 'video' ? (
+                {post.tipo === 'video' ? (
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                     <Play className="h-12 w-12 text-white opacity-70" />
                   </div>
@@ -72,19 +72,19 @@ export default function Content() {
                 )}
                 {/* Fallback mock image placeholder text */}
                 <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold">
-                  {post.mediaType}
+                  {post.tipo}
                 </div>
               </div>
               <CardContent className="p-4 flex-1">
                 <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium text-primary text-sm">@{post.creatorName}</span>
-                  <span className="text-xs text-muted-foreground">{format(new Date(post.createdAt), 'dd MMM')}</span>
+                  <span className="font-medium text-primary text-sm">@{post.autorUsername}</span>
+                  <span className="text-xs text-muted-foreground">{format(new Date(post.criadoEm), 'dd MMM')}</span>
                 </div>
-                <p className="text-sm line-clamp-3 text-foreground/90">{post.content}</p>
+                <p className="text-sm line-clamp-3 text-foreground/90">{post.legenda}</p>
               </CardContent>
               <CardFooter className="p-3 bg-muted/20 border-t border-border flex justify-between items-center">
                 <div className="flex gap-3 text-muted-foreground text-xs font-mono">
-                  <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {post.likes}</span>
+                  <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {post.totalCurtidas}</span>
                   <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> --</span>
                 </div>
                 <Button 

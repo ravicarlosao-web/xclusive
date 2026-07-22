@@ -14,7 +14,7 @@ export default function AuditLog() {
 
   const logList: any[] = logs?.data ?? logs ?? [];
   const filteredLogs = logList.filter((l: any) => 
-    l.admin?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    l.adminUsername?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     l.action?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -22,9 +22,9 @@ export default function AuditLog() {
     { header: 'ID', accessorKey: 'id', className: 'w-16 font-mono text-muted-foreground' },
     { 
       header: 'Data/Hora', 
-      cell: (item) => <span className="text-muted-foreground text-sm whitespace-nowrap">{format(new Date(item.timestamp), 'dd MMM yyyy, HH:mm:ss')}</span>
+      cell: (item) => <span className="text-muted-foreground text-sm whitespace-nowrap">{format(new Date(item.criadoEm), 'dd MMM yyyy, HH:mm:ss')}</span>
     },
-    { header: 'Administrador', accessorKey: 'admin', className: 'font-mono text-sm' },
+    { header: 'Administrador', accessorKey: 'adminUsername', className: 'font-mono text-sm' },
     { 
       header: 'Ação', 
       cell: (item) => <span className="uppercase text-xs tracking-wider bg-muted px-2 py-1 rounded text-primary">{item.action}</span>

@@ -59,14 +59,14 @@ export default function KycQueue() {
                   <span className="text-primary">{req.username}</span>
                   <span className="text-xs text-muted-foreground font-mono">#{req.id}</span>
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Submetido: {format(new Date(req.submittedAt), 'dd MMM yyyy, HH:mm')}</p>
+                <p className="text-xs text-muted-foreground">Submetido: {req.kycSubmissao?.submissaoEm ? format(new Date(req.kycSubmissao.submissaoEm), 'dd MMM yyyy, HH:mm') : '—'}</p>
               </CardHeader>
               <CardContent className="flex-1">
                 <div className="grid grid-cols-2 gap-2">
-                  {req.documents.map((doc: string, i: number) => (
+                  {Object.entries(req.kycSubmissao || {}).filter(([k, v]) => k !== 'submissaoEm' && v).map(([k, v], i) => (
                     <div key={i} className="aspect-video bg-muted rounded-md border border-border flex flex-col items-center justify-center group relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
                       <FileImage className="h-6 w-6 text-muted-foreground mb-1 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] text-muted-foreground">Doc {i+1}</span>
+                      <span className="text-[10px] text-muted-foreground capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
                       <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <ExternalLink className="h-4 w-4 text-foreground" />
                       </div>

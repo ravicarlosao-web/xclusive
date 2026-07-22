@@ -39,27 +39,27 @@ export default function Finance() {
       header: 'Tipo', 
       cell: (item) => (
         <div className="flex items-center gap-2">
-          {item.type === 'subscription' ? (
+          {item.tipo === 'subscricao' ? (
             <ArrowDownRight className="h-4 w-4 text-green-500" />
           ) : (
             <ArrowUpRight className="h-4 w-4 text-orange-500" />
           )}
-          <span className="capitalize">{item.type}</span>
+          <span className="capitalize">{item.tipo}</span>
         </div>
       )
     },
     { 
       header: 'Valor', 
       cell: (item) => (
-        <span className={`font-bold font-mono ${item.type === 'subscription' ? 'text-green-500' : ''}`}>
-          {item.type === 'subscription' ? '+' : '-'}{item.amount.toLocaleString()} {item.currency}
+        <span className={`font-bold font-mono ${item.tipo === 'subscricao' ? 'text-green-500' : ''}`}>
+          {item.tipo === 'subscricao' ? '+' : ''}{item.valor?.toLocaleString()} MZN
         </span>
       )
     },
-    { header: 'Utilizador/Criador', accessorKey: 'user', className: 'text-primary' },
+    { header: 'Pagador', accessorKey: 'pagadorUsername', className: 'text-primary' },
     { 
       header: 'Data', 
-      cell: (item) => <span className="text-muted-foreground">{format(new Date(item.date), 'dd MMM yyyy, HH:mm')}</span>
+      cell: (item) => <span className="text-muted-foreground">{format(new Date(item.criadoEm), 'dd MMM yyyy, HH:mm')}</span>
     },
     { 
       header: 'Estado', 
@@ -87,7 +87,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {isLoadingKpis ? '...' : `${kpis?.totalProcessed.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.receitaTotal?.toLocaleString()} MZN`}
             </div>
           </CardContent>
         </Card>
@@ -99,7 +99,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-primary">
-              {isLoadingKpis ? '...' : `${kpis?.platformFees.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.comissaoRetida?.toLocaleString()} MZN`}
             </div>
           </CardContent>
         </Card>
@@ -111,7 +111,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {isLoadingKpis ? '...' : `${kpis?.payoutsCompleted.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.pagoCriadores?.toLocaleString()} MZN`}
             </div>
           </CardContent>
         </Card>
@@ -123,7 +123,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-orange-500">
-              {isLoadingKpis ? '...' : `${kpis?.payoutsPending.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.receitaMes?.toLocaleString()} MZN`}
             </div>
           </CardContent>
         </Card>
@@ -133,7 +133,7 @@ export default function Finance() {
         <h2 className="text-xl font-bold mb-4">Registo de Transações</h2>
         <DataTable 
           columns={columns} 
-          data={transactions || []} 
+          data={(transactions as any)?.data ?? transactions ?? []} 
           isLoading={isLoadingTx}
         />
       </div>

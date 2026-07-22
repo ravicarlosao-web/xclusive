@@ -24,13 +24,13 @@ export default function Dashboard() {
   });
 
   const kpiCards = [
-    { title: 'Total Users', value: kpis?.totalUsers, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { title: 'Active Creators', value: kpis?.totalCreators, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-    { title: 'Monthly Revenue', value: `${kpis?.monthlyRevenue?.toLocaleString()} MZN`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
-    { title: 'Active Subs', value: kpis?.activeSubscriptions, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-    { title: 'KYC Pending', value: kpis?.kycPending, icon: ShieldAlert, color: 'text-orange-500', bg: 'bg-orange-500/10', alert: (kpis?.kycPending || 0) > 10 },
-    { title: 'Reports', value: kpis?.reportsPending, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', alert: (kpis?.reportsPending || 0) > 20 },
-    { title: 'Withdrawals', value: kpis?.withdrawalsPending, icon: CreditCard, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+    { title: 'Total Utilizadores', value: kpis?.totalUtilizadores, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { title: 'Criadores Ativos', value: kpis?.totalCriadores, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+    { title: 'Receita Total', value: `${kpis?.receitaTotal?.toLocaleString()} MZN`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { title: 'Posts Hoje', value: kpis?.postsHoje, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    { title: 'Novos Hoje', value: kpis?.novosHoje, icon: ShieldAlert, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+    { title: 'Denúncias', value: kpis?.denunciasPendentes, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', alert: (kpis?.denunciasPendentes || 0) > 5 },
+    { title: 'Levantamentos', value: kpis?.levantamentosPendentes, icon: CreditCard, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
   ];
 
   return (
@@ -68,11 +68,11 @@ export default function Dashboard() {
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">A carregar gráfico...</div>
             ) : (
               <BarChart 
-                data={charts?.userGrowthData || []} 
-                xAxisKey="name"
+                data={charts?.dias30 || []} 
+                xAxisKey="data"
                 bars={[
-                  { dataKey: 'users', color: 'hsl(var(--primary))', name: 'Users' },
-                  { dataKey: 'creators', color: 'hsl(var(--primary)/0.3)', name: 'Creators' }
+                  { dataKey: 'novosUtilizadores', color: 'hsl(var(--primary))', name: 'Novos Users' },
+                  { dataKey: 'subscricoes', color: 'hsl(var(--primary)/0.3)', name: 'Subscrições' }
                 ]}
               />
             )}
@@ -88,10 +88,10 @@ export default function Dashboard() {
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">A carregar gráfico...</div>
             ) : (
               <LineChart 
-                data={charts?.revenueData || []} 
-                xAxisKey="name"
+                data={charts?.dias30 || []} 
+                xAxisKey="data"
                 lines={[
-                  { dataKey: 'value', color: 'hsl(var(--chart-4))', name: 'Revenue' }
+                  { dataKey: 'gorjetas', color: 'hsl(var(--chart-4))', name: 'Gorjetas' }
                 ]}
               />
             )}
@@ -118,12 +118,12 @@ export default function Dashboard() {
                 </div>
               ))
             ) : (
-              feed?.map((item: any) => (
-                <div key={item.id} className="flex items-start gap-4 text-sm group">
+              (feed as any[])?.map((item: any, i: number) => (
+                <div key={i} className="flex items-start gap-4 text-sm group">
                   <div className="mt-1.5 h-2 w-2 rounded-full bg-primary ring-4 ring-primary/20 group-hover:ring-primary/40 transition-all" />
                   <div className="flex-1 space-y-1">
-                    <p className="font-medium leading-none">{item.message}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{item.timestamp}</p>
+                    <p className="font-medium leading-none">{item.mensagem}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{item.criadoEm}</p>
                   </div>
                 </div>
               ))
