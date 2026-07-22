@@ -24,31 +24,32 @@ import AuditLog from '@/pages/audit-log/index';
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
-  const { isAuthenticated } = useAdminAuth();
+  const { isAuthenticated, isInitialized } = useAdminAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isInitialized && !isAuthenticated) {
       setLocation('/login');
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, isInitialized, setLocation]);
 
+  if (!isInitialized) return null;
   if (!isAuthenticated) return null;
 
   return <Component {...rest} />;
+}
+
+function RootRedirect() {
+  const [, setLocation] = useLocation();
+  useEffect(() => { setLocation('/dashboard'); }, [setLocation]);
+  return null;
 }
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      <Route path="/">
-        {() => {
-          const [, setLocation] = useLocation();
-          useEffect(() => { setLocation('/dashboard'); }, []);
-          return null;
-        }}
-      </Route>
+      <Route path="/" component={RootRedirect} />
       <Route>
         <AdminLayout>
           <Switch>

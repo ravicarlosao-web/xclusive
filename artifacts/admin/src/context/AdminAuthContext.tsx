@@ -10,6 +10,7 @@ interface AdminUser {
 
 interface AdminAuthContextType {
   isAuthenticated: boolean;
+  isInitialized: boolean;
   user: AdminUser | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -19,6 +20,7 @@ const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefin
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         logout();
       }
     }
+    setIsInitialized(true);
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -60,7 +63,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AdminAuthContext.Provider value={{ isAuthenticated, isInitialized, user, login, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

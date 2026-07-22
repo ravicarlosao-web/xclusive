@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAdminAuth } from '@/context/AdminAuthContext';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,7 @@ const DEMO_FEATURES = [
 export default function Login() {
   const { login } = useAdminAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +38,7 @@ export default function Login() {
   const doLogin = async (e: string, p: string) => {
     try {
       await login(e, p);
+      setLocation('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Erro de Autenticação',
