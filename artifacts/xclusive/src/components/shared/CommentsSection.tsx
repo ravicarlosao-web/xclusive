@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Comment, UserSummary } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -39,6 +39,13 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
   const { toast } = useToast();
   const [texto, setTexto] = useState('');
   const [localComments, setLocalComments] = useState<Comment[]>(() => getLocalCommentsForPost(postId));
+
+  // Sincroniza com localStorage sempre que a secção abre (garante persistência entre refresh)
+  useEffect(() => {
+    if (open) {
+      setLocalComments(getLocalCommentsForPost(postId));
+    }
+  }, [open, postId]);
   // Tracks likes toggled *away from* their initial `curtido` state (seed data doesn't
   // persist likes back, so we only need to know what the user flipped this session).
   const [toggledIds, setToggledIds] = useState<Set<number>>(new Set());

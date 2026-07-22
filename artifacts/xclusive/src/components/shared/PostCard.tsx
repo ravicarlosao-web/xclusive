@@ -1,6 +1,7 @@
 import { Post } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,7 +24,22 @@ interface PostCardProps {
 
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
   const { user, isSubscribed, isPostUnlocked } = useAuth();
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/perfil/${post.autor.username}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.autor.nomeExibicao || post.autor.username, url });
+      } catch {
+        // utilizador cancelou — sem ação
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copiado!', description: 'O link do perfil foi copiado para a área de transferência.' });
+    }
+  };
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
   const [isSaved, setIsSaved] = useState(post.guardado);
@@ -245,7 +261,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
               <button onClick={() => setCommentsOpen(v => !v)} className="group">
                 <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
               </button>
-              <button className="group">
+              <button className="group" onClick={handleShare} title="Partilhar">
                 <Send className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
               </button>
 

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { SubscribeModal } from '@/components/wallet/SubscribeModal';
 import { PostDetailModal } from '@/components/shared/PostDetailModal';
+import { FollowListModal } from '@/components/shared/FollowListModal';
 import type { Post } from '@workspace/api-client-react';
 
 export default function Profile() {
@@ -33,6 +34,7 @@ export default function Profile() {
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [followModal, setFollowModal] = useState<{ type: 'followers' | 'following' } | null>(null);
   const [, setLocation] = useLocation();
 
   // Derive final following state
@@ -166,14 +168,20 @@ export default function Profile() {
               <span className="font-bold text-lg sm:text-base">{profile.totalPublicacoes}</span>
               <span className="text-muted-foreground">publicações</span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left cursor-pointer hover:opacity-80 transition-opacity">
+            <button
+              onClick={() => setFollowModal({ type: 'followers' })}
+              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left hover:opacity-70 transition-opacity"
+            >
               <span className="font-bold text-lg sm:text-base">{profile.totalSeguidores}</span>
               <span className="text-muted-foreground">fãs</span>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left cursor-pointer hover:opacity-80 transition-opacity">
+            </button>
+            <button
+              onClick={() => setFollowModal({ type: 'following' })}
+              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left hover:opacity-70 transition-opacity"
+            >
               <span className="font-bold text-lg sm:text-base">{profile.totalSeguindo}</span>
               <span className="text-muted-foreground">a seguir</span>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -322,6 +330,17 @@ export default function Profile() {
 
       {/* Post detail modal */}
       <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+
+      {/* Follow list modal */}
+      {followModal && (
+        <FollowListModal
+          open={!!followModal}
+          onClose={() => setFollowModal(null)}
+          username={username}
+          type={followModal.type}
+          total={followModal.type === 'followers' ? profile.totalSeguidores : profile.totalSeguindo}
+        />
+      )}
 
       {/* Subscribe modal */}
       {profile && (

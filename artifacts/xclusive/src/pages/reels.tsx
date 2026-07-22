@@ -6,6 +6,7 @@ import { type Post } from '@workspace/api-client-react';
 import { Link, useSearch } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { MOCK_FEED_POSTS } from '@/data/mockPosts';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Reels() {
   const search = useSearch();
@@ -79,6 +80,21 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
   const [isFollowing, setIsFollowing] = useState(false);
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
+  const { toast } = useToast();
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/reels?id=${post.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Reel de ${post.autor.username}`, url });
+      } catch {
+        // utilizador cancelou
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copiado!', description: 'O link do reel foi copiado para a área de transferência.' });
+    }
+  };
 
   const handleFollowToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -239,7 +255,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
           </span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 group">
+        <button className="flex flex-col items-center gap-1 group" onClick={handleShare}>
           <div className="w-11 h-11 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:bg-black/60 transition-colors">
             <Share2 className="w-6 h-6 text-white transition-transform group-active:scale-90" />
           </div>
