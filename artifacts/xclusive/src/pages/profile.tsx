@@ -245,14 +245,56 @@ export default function Profile() {
             )}
           </TabsContent>
 
-          <TabsContent value="reels" className="mt-6">
-            <div className="text-center py-20">
-              <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mx-auto mb-6">
-                <PlaySquare className="w-10 h-10 text-muted-foreground" />
+          <TabsContent value="reels" className="mt-6 focus-visible:outline-none">
+            {isLoadingPosts ? (
+              <div className="grid grid-cols-3 gap-1 sm:gap-4">
+                {Array(6).fill(0).map((_, i) => (
+                  <Skeleton key={i} className="aspect-square w-full rounded-md sm:rounded-xl" />
+                ))}
               </div>
-              <h3 className="text-xl font-bold mb-2">Reels</h3>
-              <p className="text-muted-foreground">Funcionalidade em breve.</p>
-            </div>
+            ) : (() => {
+              const reelPosts = postsData?.posts?.filter(
+                p => p.tipo === 'video' || p.media?.[0]?.tipo === 'video'
+              ) ?? [];
+              return reelPosts.length > 0 ? (
+                <div className="grid grid-cols-3 gap-1 sm:gap-4">
+                  {reelPosts.map((post) => (
+                    <Link
+                      key={post.id}
+                      href={`/reels?id=${post.id}`}
+                      className="relative aspect-square bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl block"
+                    >
+                      <video
+                        src={post.media?.[0]?.url}
+                        className="w-full h-full object-cover"
+                        muted
+                        preload="metadata"
+                      />
+                      {/* Play icon overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
+                          <PlaySquare className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-bold text-sm">
+                        <div className="flex items-center gap-1">
+                          <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                          {post.totalCurtidas}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mx-auto mb-6">
+                    <PlaySquare className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Ainda sem Reels</h3>
+                  <p className="text-muted-foreground">Os vídeos que {profile.username} partilhar aparecerão aqui.</p>
+                </div>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="exclusive" className="mt-6">

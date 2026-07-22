@@ -4,14 +4,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useGetFeed, useFollowUser, useUnfollowUser } from '@workspace/api-client-react';
 import { type Post } from '@workspace/api-client-react';
 import { Link, useSearch } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { MOCK_FEED_POSTS } from '@/data/mockPosts';
 
 export default function Reels() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const initialId = params.get('id') ? Number(params.get('id')) : null;
+  const { isMockMode } = useAuth();
 
   const { data, isLoading } = useGetFeed({ page: 1, limit: 20 });
-  const allPosts = data?.posts ?? [];
+  const allPosts = isMockMode && !data?.posts?.length
+    ? MOCK_FEED_POSTS
+    : (data?.posts ?? []);
 
   // Only show video posts
   const posts = allPosts.filter(
