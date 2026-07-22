@@ -17,10 +17,11 @@ export default function Users() {
     queryFn: () => adminApi.getUsers(roleFilter !== 'all' ? { role: roleFilter } : undefined)
   });
 
-  const filteredUsers = users?.filter((u: any) => 
-    u.username.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const userList: any[] = users?.data ?? users ?? [];
+  const filteredUsers = userList.filter((u: any) => 
+    u.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const columns: Column<any>[] = [
     { header: 'ID', accessorKey: 'id', className: 'w-16 font-mono text-muted-foreground' },
@@ -42,7 +43,7 @@ export default function Users() {
     },
     { 
       header: 'Registado em', 
-      cell: (item) => <span className="text-muted-foreground">{format(new Date(item.joinedAt), 'dd MMM yyyy')}</span>
+      cell: (item) => <span className="text-muted-foreground">{format(new Date(item.criadoEm ?? item.joinedAt), 'dd MMM yyyy')}</span>
     }
   ];
 
