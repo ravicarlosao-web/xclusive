@@ -24,6 +24,7 @@ import Monetization from '@/pages/monetization';
 import Onboarding from '@/pages/onboarding';
 import KYCPage from '@/pages/kyc';
 import Carteira from '@/pages/carteira';
+import EsquecestePassword from '@/pages/esqueceste-password';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +34,12 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function RedirectTo({ to }: { to: string }) {
+  const [, setLocation] = useLocation();
+  useEffect(() => { setLocation(to); }, [to, setLocation]);
+  return null;
+}
 
 // Full-screen protected route — no AppLayout sidebar (used for immersive flows like KYC)
 function FullscreenProtectedRoute({ component: Component, path }: { component: any, path: string }) {
@@ -94,6 +101,7 @@ function Router() {
       <Route path="/">{(params) => <PublicOnlyRoute component={Landing} path="/" />}</Route>
       <Route path="/login">{(params) => <PublicOnlyRoute component={Login} path="/login" />}</Route>
       <Route path="/registo">{(params) => <PublicOnlyRoute component={Register} path="/registo" />}</Route>
+      <Route path="/esqueceste-password">{() => <PublicOnlyRoute component={EsquecestePassword} path="/esqueceste-password" />}</Route>
       
       {/* Protected Routes */}
       <Route path="/onboarding">{(params) => <ProtectedRoute component={Onboarding} path="/onboarding" />}</Route>
@@ -108,7 +116,10 @@ function Router() {
       <Route path="/definicoes">{(params) => <ProtectedRoute component={Settings} path="/definicoes" />}</Route>
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
       <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
-      
+
+      {/* Redirects */}
+      <Route path="/feed">{() => <RedirectTo to="/home" />}</Route>
+
       <Route component={NotFound} />
     </Switch>
   );
