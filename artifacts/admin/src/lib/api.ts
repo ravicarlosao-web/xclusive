@@ -25,7 +25,7 @@ async function adminFetch(path: string, options?: RequestInit) {
     if (pathname === '/admin/auth/login') {
       const body = JSON.parse(options?.body as string || '{}');
       if (body.email === 'admin@xclusive.com' && body.password === 'admin123') {
-        return { token: 'mock-admin-token-123', user: { id: 1, name: 'Admin', email: body.email } };
+        return { token: 'mock-admin-token', user: { id: 1, name: 'Admin', email: body.email } };
       }
       throw new Error('Invalid credentials');
     }

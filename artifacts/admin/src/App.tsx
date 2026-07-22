@@ -49,27 +49,29 @@ function Router() {
           return null;
         }}
       </Route>
-      <AdminLayout>
-        <Switch>
-          <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
-          <Route path="/users"><ProtectedRoute component={Users} /></Route>
-          <Route path="/users/:id"><ProtectedRoute component={UserDetail} /></Route>
-          <Route path="/creators"><ProtectedRoute component={Creators} /></Route>
-          <Route path="/creators/kyc"><ProtectedRoute component={KycQueue} /></Route>
-          <Route path="/content"><ProtectedRoute component={Content} /></Route>
-          <Route path="/reports"><ProtectedRoute component={Reports} /></Route>
-          <Route path="/finance"><ProtectedRoute component={Finance} /></Route>
-          <Route path="/withdrawals"><ProtectedRoute component={Withdrawals} /></Route>
-          <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
-          <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
-          <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
-          <Route>
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              Page not found
-            </div>
-          </Route>
-        </Switch>
-      </AdminLayout>
+      <Route>
+        <AdminLayout>
+          <Switch>
+            <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
+            <Route path="/users"><ProtectedRoute component={Users} /></Route>
+            <Route path="/users/:id"><ProtectedRoute component={UserDetail} /></Route>
+            <Route path="/creators"><ProtectedRoute component={Creators} /></Route>
+            <Route path="/creators/kyc"><ProtectedRoute component={KycQueue} /></Route>
+            <Route path="/content"><ProtectedRoute component={Content} /></Route>
+            <Route path="/reports"><ProtectedRoute component={Reports} /></Route>
+            <Route path="/finance"><ProtectedRoute component={Finance} /></Route>
+            <Route path="/withdrawals"><ProtectedRoute component={Withdrawals} /></Route>
+            <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
+            <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
+            <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
+            <Route>
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                Page not found
+              </div>
+            </Route>
+          </Switch>
+        </AdminLayout>
+      </Route>
     </Switch>
   );
 }

@@ -34,6 +34,29 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   next();
 }
 
+// ── Login (public — must be before requireAdmin middleware) ──────────────────
+router.post("/admin/auth/login", (req, res) => {
+  const { email, password } = req.body ?? {};
+
+  // Mock: accept any admin@xclusive.com / admin123
+  if (email === "admin@xclusive.com" && password === "admin123") {
+    return res.json({
+      token: "mock-admin-token",
+      user: {
+        id: 1,
+        username: "admin",
+        nomeExibicao: "Administrador",
+        email: "admin@xclusive.com",
+        role: "admin",
+        avatarUrl: null,
+      },
+      expiresIn: 14400, // 4h
+    });
+  }
+
+  return res.status(401).json({ error: "Credenciais inválidas" });
+});
+
 router.use("/admin", rateLimit, requireAdmin);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -152,31 +175,6 @@ function paginate<T>(items: T[], page = 1, limit = 10) {
   };
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// AUTH
-// ────────────────────────────────────────────────────────────────────────────
-
-router.post("/admin/auth/login", (req, res) => {
-  const { email, password } = req.body ?? {};
-
-  // Mock: accept any admin@xclusive.com / admin123
-  if (email === "admin@xclusive.com" && password === "admin123") {
-    return res.json({
-      token: "mock-admin-token",
-      admin: {
-        id: 1,
-        username: "admin",
-        nomeExibicao: "Administrador",
-        email: "admin@xclusive.com",
-        role: "admin",
-        avatarUrl: null,
-      },
-      expiresIn: 14400, // 4h
-    });
-  }
-
-  return res.status(401).json({ error: "Credenciais inválidas" });
-});
 
 // ────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
