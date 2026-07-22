@@ -4,6 +4,9 @@ import { z } from "zod/v4";
 
 export const tipoContaEnum = pgEnum("tipo_conta", ["pessoal", "criador"]);
 
+// Roles: 'user' | 'creator' | 'admin' | 'superadmin'
+// Added via: ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user';
+
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   username: varchar("username", { length: 50 }).notNull().unique(),
@@ -19,6 +22,7 @@ export const usersTable = pgTable("users", {
   privado: boolean("privado").notNull().default(false),
   dataNascimento: text("data_nascimento"),
   ativo: boolean("ativo").notNull().default(true),
+  role: varchar("role", { length: 20 }).notNull().default("user"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 

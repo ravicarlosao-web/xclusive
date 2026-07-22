@@ -1,0 +1,359 @@
+# PROMPT — Painel de Administração Xclusive
+
+Cola este documento inteiro no Replit AI Agent. Contém tudo o que é necessário para construir o painel admin sem tocar na app principal.
+
+---
+
+## 0. CONTEXTO DO PROJECTO (não alterar nada disto, só ler)
+
+O Xclusive é uma plataforma de conteúdo por subscrição/gorjetas (estilo OnlyFans) já em produção com:
+
+**Stack:**
+- Frontend utilizador: React + TypeScript
+- Backend: Express + Drizzle ORM
+- Base de dados: Postgres (via Drizzle)
+- Monorepo com pasta `artifacts/`
+
+**Já existe e funciona (NÃO MEXER):**
+- 14 páginas frontend: landing, registo (2 passos), onboarding, feed, explorar, reels, mensagens, notificações, perfil, carteira, KYC (6 passos com câmara), monetização, definições
+- +35 endpoints API: auth, users, posts, stories, reels, comments, tips, subscriptions, creator plans, messages, notifications
+- Tabelas Drizzle existentes: `users`, `posts`, `post_media`, `likes`, `comments`, `saved_posts`, `subscription_plans`, `subscriptions`, `purchases`, `stories`, `conversations`, `conversation_participants`, `messages`
+- Sistema de monetização: gorjetas (com guard anti-self-tip), PPV por post, planos de subscrição por criador, carteira interna (saldo + ganhos separados)
+- Modo mock: todas as páginas do utilizador funcionam sem DB usando dados fictícios
+
+**Objectivo desta tarefa:** construir um painel de administração NOVO, isolado, sem alterar nenhuma rota, página ou comportamento já existente da app do utilizador.
+
+---
+
+## 1. ESTRUTURA DE FICHEIROS A CRIAR
+
+```
+artifacts/admin/
+├── src/
+│   ├── pages/
+│   │   ├── Login.tsx
+│   │   ├── Dashboard.tsx
+│   │   ├── Users.tsx
+│   │   ├── UserDetail.tsx
+│   │   ├── Creators.tsx
+│   │   ├── CreatorKycQueue.tsx
+│   │   ├── Content.tsx
+│   │   ├── Reports.tsx
+│   │   ├── Finance.tsx
+│   │   ├── Withdrawals.tsx
+│   │   ├── Broadcast.tsx
+│   │   ├── Settings.tsx
+│   │   └── AuditLog.tsx
+│   ├── components/
+│   │   ├── layout/Sidebar.tsx
+│   │   ├── layout/Topbar.tsx
+│   │   ├── layout/AdminLayout.tsx
+│   │   ├── charts/ (componentes Recharts reutilizáveis)
+│   │   ├── badges/StatusBadge.tsx
+│   │   └── tables/DataTable.tsx (tabela genérica com filtros/paginação)
+│   ├── context/AdminAuthContext.tsx
+│   ├── lib/mockAdminData.ts
+│   ├── lib/api.ts
+│   └── App.tsx
+├── package.json
+└── vite.config.ts
+
+artifacts/api-server/src/routes/admin.ts   ← novas rotas admin
+artifacts/api-server/src/middleware/requireAdmin.ts
+```
+
+---
+
+## 2. ALTERAÇÕES AO SCHEMA (migrations Drizzle)
+
+### 2.1 Adicionar coluna `role` a `users`
+
+```sql
+ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user';
+-- valores possíveis: 'user', 'creator', 'admin', 'superadmin'
+```
+
+### 2.2 Nova tabela `reports`
+
+```sql
+CREATE TABLE reports (
+  id SERIAL PRIMARY KEY,
+  reporter_id INTEGER REFERENCES users(id),
+  target_type VARCHAR(20) NOT NULL, -- 'post', 'comment', 'user', 'message'
+  target_id INTEGER NOT NULL,
+  reason VARCHAR(50) NOT NULL, -- 'nudity_minor', 'spam', 'harassment', 'copyright', 'other'
+  description TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'reviewing', 'resolved', 'dismissed'
+  resolved_by INTEGER REFERENCES users(id),
+  resolved_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 2.3 Nova tabela `withdrawal_requests`
+
+```sql
+CREATE TABLE withdrawal_requests (
+  id SERIAL PRIMARY KEY,
+  creator_id INTEGER REFERENCES users(id) NOT NULL,
+  amount NUMERIC(12,2) NOT NULL,
+  method VARCHAR(30) NOT NULL, -- 'bank_transfer', 'multicaixa_express', etc.
+  destination_details JSONB,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'paid'
+  processed_by INTEGER REFERENCES users(id),
+  processed_at TIMESTAMP,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 2.4 Nova tabela `audit_log`
+
+```sql
+CREATE TABLE audit_log (
+  id SERIAL PRIMARY KEY,
+  admin_id INTEGER REFERENCES users(id) NOT NULL,
+  action VARCHAR(60) NOT NULL, -- 'user_suspend', 'user_delete', 'withdrawal_approve', etc.
+  target_type VARCHAR(30),
+  target_id INTEGER,
+  details JSONB,
+  ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 2.5 Nova tabela `platform_settings`
+
+```sql
+CREATE TABLE platform_settings (
+  key VARCHAR(60) PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- seed inicial:
+-- 'commission_rate' -> {"value": 20} (percentagem retida pela plataforma)
+-- 'maintenance_mode' -> {"enabled": false}
+-- 'allowed_countries' -> {"list": ["AO", "PT", "BR", ...]}
+-- 'min_withdrawal_amount' -> {"value": 5000}
+```
+
+---
+
+## 3. AUTENTICAÇÃO ADMIN
+
+- Criar seed que promove um utilizador existente a `role='admin'` via script `seed-admin.ts` (recebe email por argumento).
+- Rota `POST /api/admin/auth/login` — mesmo mecanismo de sessão/JWT já usado na app, mas valida `role IN ('admin','superadmin')` antes de emitir o token.
+- Middleware `requireAdmin.ts`: rejeita com 403 qualquer request a `/api/admin/*` cujo utilizador não tenha `role` admin/superadmin.
+- `AdminAuthContext.tsx`: mesmo padrão de Context API que a app principal já usa para auth, mas separado (sessão/token diferente da app do utilizador, para não misturar sessões).
+- TTL de sessão admin mais curto que o da app normal (ex: 4h) por segurança.
+
+---
+
+## 4. DASHBOARD PRINCIPAL (`Dashboard.tsx`)
+
+### 8 KPIs no topo (cards)
+1. Total de utilizadores — `SELECT COUNT(*) FROM users`
+2. Total de criadores — `SELECT COUNT(*) FROM users WHERE role='creator'`
+3. Novos registos hoje — `SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE`
+4. Receita total (gorjetas + subscrições + PPV) — soma de `purchases` + `subscriptions` no período
+5. Comissão da plataforma no mês — receita total × `commission_rate`
+6. Posts publicados hoje — `SELECT COUNT(*) FROM posts WHERE created_at >= CURRENT_DATE`
+7. Denúncias pendentes — `SELECT COUNT(*) FROM reports WHERE status='pending'`
+8. Levantamentos pendentes — `SELECT COUNT(*) FROM withdrawal_requests WHERE status='pending'`
+
+### 4 Gráficos (Recharts)
+1. **Crescimento de utilizadores** — LineChart, eixo X = últimos 30 dias, eixo Y = novos registos/dia
+2. **Receita por dia** — BarChart, últimos 30 dias, empilhado por tipo (gorjetas / subscrições / PPV)
+3. **Top 10 criadores por ganhos** — BarChart horizontal, período seleccionável (7/30/90 dias)
+4. **Distribuição de utilizadores por país** — PieChart ou BarChart
+
+### Feed de actividade em tempo real
+Lista das últimas 20 acções relevantes (novo registo, nova denúncia, novo levantamento pedido, KYC submetido) — polling a cada 15s ou websocket se já existir infraestrutura.
+
+---
+
+## 5. GESTÃO DE UTILIZADORES (`Users.tsx` + `UserDetail.tsx`)
+
+**Tabela principal:**
+- Colunas: avatar, nome, username, email, role, país, estado (activo/suspenso), data de registo
+- Filtros: por role, por país, por estado, por data de registo, pesquisa por nome/email/username
+- Paginação server-side
+
+**Página de detalhe com 4 abas:**
+1. **Perfil** — dados pessoais, editar inline (nome, bio, país)
+2. **Actividade** — posts, comentários, histórico de login
+3. **Financeiro** — saldo, ganhos, histórico de transacções, subscrições activas
+4. **Moderação** — denúncias recebidas, denúncias feitas, histórico de suspensões
+
+**Acções:**
+- Suspender/reactivar conta (`PATCH /api/admin/users/:id/status`)
+- Eliminar conta (soft delete, `DELETE /api/admin/users/:id`)
+- Editar dados inline (`PATCH /api/admin/users/:id`)
+- Alterar role (`PATCH /api/admin/users/:id/role`)
+
+Todas as acções destrutivas/sensíveis gravam entrada em `audit_log`.
+
+---
+
+## 6. GESTÃO DE CRIADORES (`Creators.tsx` + `CreatorKycQueue.tsx`)
+
+- **Fila de aprovação KYC**: lista de submissões pendentes com as imagens dos 6 passos do KYC (documento frente/verso, selfie, prova de morada, etc. — usar exactamente os campos que já existem no fluxo de KYC de 6 passos da app do utilizador)
+- Visualização em lightbox das imagens submetidas
+- Acções: aprovar / rejeitar (com motivo obrigatório) → `PATCH /api/admin/creators/:id/kyc`
+- Gestão de planos de subscrição do criador (ver/editar/desactivar planos)
+- Ajuste manual de saldo (para correcções, com motivo obrigatório e registo em `audit_log`) → `POST /api/admin/creators/:id/balance-adjustment`
+
+---
+
+## 7. MODERAÇÃO DE CONTEÚDO (`Content.tsx` + `Reports.tsx`)
+
+- Lista de posts recentes com lightbox para preview de media
+- Acção de remover post (`DELETE /api/admin/posts/:id`) com motivo obrigatório
+- **Sistema de denúncias:**
+  - Lista filtrável por `target_type`, `status`, `reason`
+  - Ver o conteúdo denunciado directamente
+  - Acções: resolver (com acção tomada) / dispensar
+  - `PATCH /api/admin/reports/:id`
+
+---
+
+## 8. PAINEL FINANCEIRO (`Finance.tsx` + `Withdrawals.tsx`)
+
+- KPIs: receita total, comissão retida, valor pago a criadores, ticket médio
+- Gráficos por período seleccionável (7/30/90/365 dias)
+- Tabela de transacções (gorjetas, subscrições, PPV) — filtrável e **exportável para CSV**
+- **Gestão de levantamentos** (`withdrawal_requests`):
+  - Lista com filtro por estado
+  - Acções: aprovar / rejeitar / marcar como pago
+  - `PATCH /api/admin/withdrawals/:id`
+
+---
+
+## 9. NOTIFICAÇÕES BROADCAST (`Broadcast.tsx`)
+
+- Formulário: título, mensagem, segmento alvo (todos / só criadores / só utilizadores / por país)
+- `POST /api/admin/broadcast`
+- Histórico de envios com taxa de leitura (lidas/total)
+
+---
+
+## 10. DEFINIÇÕES DA PLATAFORMA (`Settings.tsx`)
+
+4 grupos, todos gravados em `platform_settings`:
+1. **Comissão** — percentagem retida pela plataforma
+2. **Modo manutenção** — toggle on/off (bloqueia a app do utilizador quando activo)
+3. **Países permitidos** — lista editável de países onde o registo é permitido
+4. **Valor mínimo de levantamento**
+
+`GET/PATCH /api/admin/settings`
+
+---
+
+## 11. AUDIT LOG (`AuditLog.tsx`)
+
+- Tabela de `audit_log` com filtros: por admin, por tipo de acção, por período
+- Cada linha mostra: quem, o quê, quando, detalhes (JSON expandível)
+
+---
+
+## 12. DESIGN E LAYOUT
+
+- Sidebar colapsável à esquerda com ícones + labels (usar mesma paleta de cores da app do utilizador — reutilizar as CSS vars já definidas, não inventar novas cores)
+- Topbar com nome do admin, notificações de sistema, logout
+- **5 badges de estado** (usar classes Tailwind consistentes):
+  - Activo → verde
+  - Suspenso → amarelo
+  - Eliminado → vermelho
+  - Pendente → cinzento
+  - Aprovado → azul
+- Responsivo em 3 breakpoints: mobile (sidebar colapsa para menu hambúrguer), tablet, desktop
+
+---
+
+## 13. MODO MOCK
+
+Criar `lib/mockAdminData.ts` com dados fictícios realistas para todas as secções acima (utilizadores, denúncias, levantamentos, transacções, KPIs) seguindo o mesmo padrão de mock que já existe na app do utilizador — o painel admin deve ser 100% navegável e demonstrável sem base de dados ligada.
+
+---
+
+## 14. SEGURANÇA
+
+- Rate limiting nas rotas `/api/admin/*` (ex: 100 req/min por IP)
+- Todas as rotas admin passam por `requireAdmin` middleware
+- Validação de todos os inputs com Zod antes de tocar na base de dados
+- Sessão admin com TTL curto (4h) e renovação explícita
+- Toda acção destrutiva (eliminar, suspender, ajustar saldo, aprovar levantamento) grava em `audit_log`
+
+---
+
+## 15. LISTA CONSOLIDADA DE ENDPOINTS A CRIAR
+
+```
+POST   /api/admin/auth/login
+GET    /api/admin/dashboard/kpis
+GET    /api/admin/dashboard/charts
+GET    /api/admin/dashboard/activity-feed
+
+GET    /api/admin/users
+GET    /api/admin/users/:id
+PATCH  /api/admin/users/:id
+PATCH  /api/admin/users/:id/status
+PATCH  /api/admin/users/:id/role
+DELETE /api/admin/users/:id
+
+GET    /api/admin/creators
+GET    /api/admin/creators/kyc-queue
+PATCH  /api/admin/creators/:id/kyc
+GET    /api/admin/creators/:id/plans
+PATCH  /api/admin/creators/:id/plans/:planId
+POST   /api/admin/creators/:id/balance-adjustment
+
+GET    /api/admin/posts
+DELETE /api/admin/posts/:id
+GET    /api/admin/reports
+PATCH  /api/admin/reports/:id
+
+GET    /api/admin/finance/kpis
+GET    /api/admin/finance/transactions
+GET    /api/admin/finance/transactions/export
+GET    /api/admin/withdrawals
+PATCH  /api/admin/withdrawals/:id
+
+POST   /api/admin/broadcast
+GET    /api/admin/broadcast/history
+
+GET    /api/admin/settings
+PATCH  /api/admin/settings
+
+GET    /api/admin/audit-log
+```
+
+---
+
+## 16. O QUE NÃO FAZER (guardrails)
+
+- NÃO alterar nenhuma rota existente em `/api/*` fora de `/api/admin/*`
+- NÃO alterar nenhuma página do frontend da app do utilizador
+- NÃO alterar a estrutura das tabelas existentes além de adicionar a coluna `role` (não remover nem renomear campos)
+- NÃO reutilizar o Context de auth da app do utilizador — o admin tem o seu próprio
+- NÃO expor nenhuma rota `/api/admin/*` sem o middleware `requireAdmin`
+- NÃO fazer deploy do artefacto admin no mesmo domínio público sem autenticação — deve ficar num path/subdomínio próprio
+
+---
+
+## 17. DELIVERABLES (checklist final)
+
+- [ ] Migrations aplicadas (role, reports, withdrawal_requests, audit_log, platform_settings)
+- [ ] Middleware `requireAdmin` funcional
+- [ ] Artefacto `artifacts/admin` completo com as 13 páginas
+- [ ] Todas as 35+ rotas `/api/admin/*` implementadas
+- [ ] Modo mock funcional em todas as páginas admin
+- [ ] Design consistente com paleta e badges definidos
+- [ ] Audit log a gravar todas as acções sensíveis
+- [ ] Script `seed-admin.ts` para criar o primeiro admin
+
+---
+
+**Instrução final para o agente Replit:** implementa isto de forma incremental — começa pela migration + middleware + auth admin, depois o Dashboard, depois as restantes páginas por ordem de secção acima. Confirma comigo antes de fazer qualquer alteração a ficheiros fora de `artifacts/admin/` e `artifacts/api-server/src/routes/admin.ts`.
