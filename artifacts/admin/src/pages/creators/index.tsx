@@ -16,10 +16,11 @@ export default function Creators() {
     queryFn: () => adminApi.getCreators()
   });
 
-  const filteredCreators = creators?.filter((c: any) => 
-    c.username.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.email.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const creatorList: any[] = creators?.data ?? creators ?? [];
+  const filteredCreators = creatorList.filter((c: any) => 
+    c.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    c.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const columns: Column<any>[] = [
     { header: 'ID', accessorKey: 'id', className: 'w-16 font-mono text-muted-foreground' },

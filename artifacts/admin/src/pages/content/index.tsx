@@ -32,10 +32,11 @@ export default function Content() {
     deletePost.mutate({ id, motivo });
   };
 
-  const filteredPosts = posts?.filter((p: any) => 
-    p.content.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.creatorName.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const postList: any[] = posts?.data ?? posts ?? [];
+  const filteredPosts = postList.filter((p: any) => 
+    p.content?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.creatorName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">

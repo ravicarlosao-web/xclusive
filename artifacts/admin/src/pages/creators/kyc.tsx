@@ -33,6 +33,8 @@ export default function KycQueue() {
     resolveKyc.mutate({ id, status: action, reason });
   };
 
+  const queueList: any[] = (queue as any)?.data ?? queue ?? [];
+
   if (isLoading) return <div>A carregar fila KYC...</div>;
 
   return (
@@ -42,7 +44,7 @@ export default function KycQueue() {
         <p className="text-muted-foreground">Análise de documentos de identidade para aprovação de criadores.</p>
       </div>
 
-      {(!queue || queue.length === 0) ? (
+      {queueList.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 border border-dashed border-border rounded-lg bg-card text-muted-foreground">
           <CheckCircle2 className="h-12 w-12 mb-4 text-green-500/50" />
           <h3 className="text-xl font-medium">Fila Limpa</h3>
@@ -50,7 +52,7 @@ export default function KycQueue() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {queue.map((req: any) => (
+          {queueList.map((req: any) => (
             <Card key={req.id} className="border-border bg-card/50 flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="flex justify-between items-center text-lg">

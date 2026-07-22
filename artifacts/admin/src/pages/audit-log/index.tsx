@@ -12,10 +12,11 @@ export default function AuditLog() {
     queryFn: () => adminApi.getAuditLog()
   });
 
-  const filteredLogs = logs?.filter((l: any) => 
-    l.admin.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    l.action.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const logList: any[] = logs?.data ?? logs ?? [];
+  const filteredLogs = logList.filter((l: any) => 
+    l.admin?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    l.action?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const columns: Column<any>[] = [
     { header: 'ID', accessorKey: 'id', className: 'w-16 font-mono text-muted-foreground' },
