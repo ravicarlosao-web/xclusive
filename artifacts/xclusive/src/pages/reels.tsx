@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Music, Play, Volume2, VolumeX } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useGetFeed } from '@workspace/api-client-react';
+import { useGetFeed, useFollowUser, useUnfollowUser } from '@workspace/api-client-react';
 import { type Post } from '@workspace/api-client-react';
 import { Link, useSearch } from 'wouter';
 
@@ -71,6 +71,20 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
   const [isMuted, setIsMuted] = useState(true);
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const followMutation = useFollowUser();
+  const unfollowMutation = useUnfollowUser();
+
+  const handleFollowToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isFollowing) {
+      setIsFollowing(false);
+      unfollowMutation.mutate({ username: post.autor.username });
+    } else {
+      setIsFollowing(true);
+      followMutation.mutate({ username: post.autor.username });
+    }
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
   const divRef = useRef<HTMLDivElement>(null);
 
@@ -174,8 +188,15 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
           <span className="font-bold text-white text-sm hover:underline">
             {post.autor.username}
           </span>
-          <button className="px-3 py-1 bg-transparent border border-white text-white rounded-full text-xs font-bold hover:bg-white/20 pointer-events-auto">
-            Seguir
+          <button
+            onClick={handleFollowToggle}
+            className={`px-3 py-1 rounded-full text-xs font-bold pointer-events-auto transition-colors ${
+              isFollowing
+                ? 'bg-white/20 border border-white/40 text-white/70'
+                : 'bg-transparent border border-white text-white hover:bg-white/20'
+            }`}
+          >
+            {isFollowing ? 'A seguir' : 'Seguir'}
           </button>
         </Link>
 

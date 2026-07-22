@@ -7,7 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Grid, PlaySquare, Lock, Settings } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { SubscribeModal } from '@/components/wallet/SubscribeModal';
+import { PostDetailModal } from '@/components/shared/PostDetailModal';
+import type { Post } from '@workspace/api-client-react';
 
 export default function Profile() {
   const [, params] = useRoute('/perfil/:username');
@@ -28,6 +31,9 @@ export default function Profile() {
   const unfollowMutation = useUnfollowUser();
 
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [, setLocation] = useLocation();
 
   // Derive final following state
   const isFollowing = isFollowingLocally !== undefined ? isFollowingLocally : profile?.estaASeguir;
@@ -122,7 +128,11 @@ export default function Profile() {
                 >
                   {isFollowing ? 'A seguir' : 'Seguir'}
                 </Button>
-                <Button variant="secondary" className="font-semibold flex-1 sm:flex-none">
+                <Button
+                  variant="secondary"
+                  className="font-semibold flex-1 sm:flex-none"
+                  onClick={() => setLocation('/mensagens')}
+                >
                   Mensagem
                 </Button>
               </>
@@ -196,7 +206,7 @@ export default function Profile() {
             ) : postsData?.posts && postsData.posts.length > 0 ? (
               <div className="grid grid-cols-3 gap-1 sm:gap-4">
                 {postsData.posts.map((post) => (
-                  <div key={post.id} className="relative aspect-square bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl">
+                  <div key={post.id} className="relative aspect-square bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl" onClick={() => setSelectedPost(post)}>
                     {post.media && post.media.length > 0 ? (
                       post.media[0].tipo === 'imagem' ? (
                         <img src={post.media[0].url} alt="" className="w-full h-full object-cover" />
@@ -257,13 +267,33 @@ export default function Profile() {
               <p className="text-muted-foreground mb-8">
                 Desbloqueia conteúdos privados, bastidores e interação direta com {profile.nomeExibicao}.
               </p>
-              <Button className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 shadow-[0_0_20px_rgba(255,62,114,0.3)]">
+              <Button
+                className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 shadow-[0_0_20px_rgba(255,62,114,0.3)]"
+                onClick={() => setSubscribeOpen(true)}
+              >
                 Subscrever por 4.990 Kz / mês
               </Button>
             </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Post detail modal */}
+      <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+
+      {/* Subscribe modal */}
+      {profile && (
+        <SubscribeModal
+          open={subscribeOpen}
+          onClose={() => setSubscribeOpen(false)}
+          creatorUsername={profile.username}
+          creatorNome={profile.nomeExibicao}
+          creatorAvatar={profile.avatarUrl ?? null}
+          creatorVerificado={profile.verificado}
+          preco={4990}
+          onSubscribed={() => setSubscribeOpen(false)}
+        />
+      )}
     </div>
   );
 }

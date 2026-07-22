@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { useRoute, Link } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Phone, Video, Info, Image as ImageIcon, Heart, Smile, Send } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Info, Image as ImageIcon, Heart } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
+type Message = { id: number; sender: string; text?: string; imageUrl?: string; time: string };
+
 // Mock messages
-const MOCK_MESSAGES = [
+const MOCK_MESSAGES: Message[] = [
   { id: 1, sender: 'them', text: 'Olá! Viste o meu último post?', time: '10:00' },
   { id: 2, sender: 'me', text: 'Sim, está brutal! Adorei a edição 🔥', time: '10:05' },
   { id: 3, sender: 'them', text: 'Obrigada! Demorou imenso a fazer.', time: '10:06' },
@@ -16,9 +18,23 @@ const MOCK_MESSAGES = [
 export default function MessageThread() {
   const [, params] = useRoute('/mensagens/:id');
   const { user } = useAuth();
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [inputText, setInputText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      sender: 'me',
+      imageUrl: url,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
+  };
 
   // Mock user data for header
   const partnerUser = { username: 'sofiacosta', avatar: 'https://i.pravatar.cc/150?u=1', name: 'Sofia Costa' };
@@ -90,6 +106,11 @@ export default function MessageThread() {
                   </Avatar>
                 )}
                 <div className={`group relative flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
+                  {msg.imageUrl ? (
+                    <div className="rounded-2xl overflow-hidden border border-border shadow-md max-w-[220px]">
+                      <img src={msg.imageUrl} alt="imagem" className="w-full object-cover" />
+                    </div>
+                  ) : (
                   <div className={`px-4 py-2.5 rounded-2xl text-[15px] ${
                     isMe 
                       ? 'bg-primary text-white rounded-br-sm shadow-[0_4px_10px_rgba(255,62,114,0.15)]' 
@@ -97,6 +118,7 @@ export default function MessageThread() {
                   }`}>
                     {msg.text}
                   </div>
+                  )}
                   <span className={`text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute ${isMe ? 'right-0 -bottom-4' : 'left-0 -bottom-4'}`}>
                     {msg.time}
                   </span>
@@ -111,7 +133,12 @@ export default function MessageThread() {
       {/* Input Area */}
       <div className="p-4 border-t border-border bg-card">
         <div className="flex items-center gap-2 bg-secondary rounded-full px-4 py-2 border border-transparent focus-within:border-border">
-          <button className="text-muted-foreground hover:text-primary transition-colors bg-primary/10 p-1.5 rounded-full">
+          <input ref={imageInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleImageAttach} />
+          <button
+            className="text-muted-foreground hover:text-primary transition-colors bg-primary/10 p-1.5 rounded-full"
+            onClick={() => imageInputRef.current?.click()}
+            type="button"
+          >
             <ImageIcon className="w-5 h-5 text-primary" />
           </button>
           <Input 

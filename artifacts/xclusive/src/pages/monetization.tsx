@@ -1,6 +1,7 @@
 import { useAuth, DadosBancarios } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
+import { PlanDialog } from '@/components/monetization/PlanDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,10 @@ export default function Monetization() {
   const [bankForm, setBankForm] = useState<DadosBancarios>({ iban: '', nomeTitular: '', banco: '' });
   const [bankSaved, setBankSaved] = useState(false);
   const [bankError, setBankError] = useState('');
+
+  // Plan dialogs
+  const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
 
   // Withdrawal
   const [withdrawing, setWithdrawing] = useState(false);
@@ -196,7 +201,7 @@ export default function Monetization() {
         <Card className="bg-card border-border flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Os Meus Planos</CardTitle>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-full">
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-full" onClick={() => setNewPlanOpen(true)}>
               <Plus className="w-5 h-5" />
             </Button>
           </CardHeader>
@@ -210,15 +215,31 @@ export default function Monetization() {
               <p className="text-sm text-muted-foreground mb-4">Acesso a todo o conteúdo exclusivo, chat direto e lives privadas.</p>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-white font-semibold">245 subscritores</span>
-                <Button variant="outline" size="sm" className="h-8 bg-secondary/50">Editar</Button>
+                <Button variant="outline" size="sm" className="h-8 bg-secondary/50" onClick={() => setEditPlanOpen(true)}>Editar</Button>
               </div>
             </div>
-            <div className="border border-border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center text-muted-foreground h-full min-h-[120px] hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer">
+            <div
+              className="border border-border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center text-muted-foreground h-full min-h-[120px] hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+              onClick={() => setNewPlanOpen(true)}
+            >
               <Plus className="w-6 h-6 mb-2" />
               <p className="text-sm font-medium">Criar novo nível de subscrição</p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Plan dialogs */}
+        <PlanDialog
+          open={editPlanOpen}
+          onClose={() => setEditPlanOpen(false)}
+          mode="edit"
+          initial={{ nome: 'VIP Club', preco: '4990', descricao: 'Acesso a todo o conteúdo exclusivo, chat direto e lives privadas.' }}
+        />
+        <PlanDialog
+          open={newPlanOpen}
+          onClose={() => setNewPlanOpen(false)}
+          mode="create"
+        />
       </div>
 
       {/* ── Levantamento + Dados Bancários ─────────────────────────────────── */}

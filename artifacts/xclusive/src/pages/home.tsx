@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, StoryGroup } from '@workspace/api-client-react';
+import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, StoryGroup } from '@workspace/api-client-react';
 import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
 import { StoryViewer } from '@/components/shared/StoryViewer';
@@ -18,6 +18,19 @@ const MAX_STORY_SIZE_MB = 50;
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
+  const [followingMap, setFollowingMap] = useState<Record<number, boolean>>({});
+  const followMutation = useFollowUser();
+  const unfollowMutation = useUnfollowUser();
+
+  const handleSuggestionFollow = (id: number, username: string) => {
+    const isNowFollowing = !followingMap[id];
+    setFollowingMap(prev => ({ ...prev, [id]: isNowFollowing }));
+    if (isNowFollowing) {
+      followMutation.mutate({ username });
+    } else {
+      unfollowMutation.mutate({ username });
+    }
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewerGroupIndex, setViewerGroupIndex] = useState<number | null>(null);
   // Bumps whenever local stories change, to force re-reading localStorage
@@ -227,8 +240,13 @@ export default function Home() {
                     </span>
                   </div>
                 </Link>
-                <Button variant="ghost" size="sm" className="text-primary font-bold text-xs h-8 hover:text-white hover:bg-primary/20">
-                  Seguir
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`font-bold text-xs h-8 transition-colors ${followingMap[suggestion.id] ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:text-white hover:bg-primary/20'}`}
+                  onClick={() => handleSuggestionFollow(suggestion.id, suggestion.username)}
+                >
+                  {followingMap[suggestion.id] ? 'A seguir' : 'Seguir'}
                 </Button>
               </div>
             ))

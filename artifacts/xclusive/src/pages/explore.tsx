@@ -95,9 +95,10 @@ export default function Explore() {
               ))
             ) : (
               exploreData?.posts?.map((post, i) => (
-                <div 
-                  key={post.id} 
-                  className={`relative bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl
+                <Link
+                  key={post.id}
+                  href={`/perfil/${post.autor.username}`}
+                  className={`relative bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl block
                     ${i % 7 === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`}
                 >
                   {post.media && post.media.length > 0 ? (
@@ -118,7 +119,7 @@ export default function Explore() {
                       {post.totalComentarios}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
             )}
           </div>
