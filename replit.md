@@ -96,7 +96,7 @@ Toda a plataforma usa **Kwanza angolano (Kz / AOA)**:
 
 ## User preferences
 
-_Preenche aqui quando o utilizador der instruções para manter entre sessões._
+- Responder sempre em português.
 
 ## Gotchas
 
