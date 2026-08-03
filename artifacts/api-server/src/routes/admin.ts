@@ -13,6 +13,7 @@
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
+import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 
 const router = Router();
 
@@ -33,6 +34,19 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   }
   next();
 }
+
+// ── Signed media proxy — valida assinatura HMAC + TTL antes de redirecionar ──
+// Registado antes do router.use("/admin", requireAdmin) para poder aplicar
+// requireAdmin explicitamente (o URL gerado por signMediaUrl já inclui /api/admin/media)
+router.get("/admin/media", requireAdmin, (req: AdminRequest, res) => {
+  const { url, exp, sig } = req.query as Record<string, string>;
+  const rawUrl = verifyMediaUrl(url, exp, sig);
+  if (!rawUrl) {
+    return res.status(403).json({ error: "URL de media inválido ou expirado." });
+  }
+  // Redirecionar para o recurso real; o browser/cliente carrega directamente do CDN
+  res.redirect(302, rawUrl);
+});
 
 // ── Login (public — must be before requireAdmin middleware) ──────────────────
 router.post("/admin/auth/login", (req, res) => {
@@ -343,11 +357,14 @@ router.get("/admin/creators/kyc-queue", (req, res) => {
   const queue = mockUsers.filter(u => u.tipoConta === "criador" && !u.verificado).map(u => ({
     ...u,
     kycSubmissao: {
-      documentoFrente: `https://picsum.photos/seed/doc-f-${u.id}/600/400`,
-      documentoVerso: `https://picsum.photos/seed/doc-v-${u.id}/600/400`,
-      selfie: `https://picsum.photos/seed/selfie-${u.id}/600/400`,
-      provaDeMorada: `https://picsum.photos/seed/morada-${u.id}/600/400`,
-      selfieComDocumento: `https://picsum.photos/seed/selfie-doc-${u.id}/600/400`,
+      // URLs assinados com TTL de 15 min — apenas acessíveis via GET /api/admin/media
+      // com token admin válido. Substituir os strings Picsum pelas URLs reais do
+      // object-storage quando o upload KYC for implementado.
+      documentoFrente: signMediaUrl(`https://picsum.photos/seed/doc-f-${u.id}/600/400`),
+      documentoVerso: signMediaUrl(`https://picsum.photos/seed/doc-v-${u.id}/600/400`),
+      selfie: signMediaUrl(`https://picsum.photos/seed/selfie-${u.id}/600/400`),
+      provaDeMorada: signMediaUrl(`https://picsum.photos/seed/morada-${u.id}/600/400`),
+      selfieComDocumento: signMediaUrl(`https://picsum.photos/seed/selfie-doc-${u.id}/600/400`),
       videoVerificacao: null,
       submissaoEm: new Date(Date.now() - u.id * 2 * 60 * 60 * 1000).toISOString(),
     },

@@ -1,0 +1,71 @@
+1. AUTENTICAÇÃO
+🔴 CRÍTICO — Backdoor de admin permanente em produção
+Ficheiro: artifacts/api-server/src/middlewares/requireAdmin.ts linhas 33–38
+
+Problema:
+
+if (token === "mock-admin-token") {
+  req.adminId = 1;
+  req.adminUsername = "admin";
+  req.adminRole = "admin";
+  next();  // ← acesso total sem verificação
+  return;
+}
+
+Este bloco não tem qualquer guarda de NODE_ENV. Em produção, qualquer pessoa que envie Authorization: Bearer mock-admin-token obtém acesso de admin completo a todos os endpoints /api/admin/* — suspender utilizadores, aprovar KYC, ajustar saldos, alterar roles, exportar transações, enviar broadcasts.
+
+Exploit:
+
+curl -X GET https://app.com/api/admin/dashboard/kpis \
+  -H "Authorization: Bearer mock-admin-token"
+# HTTP 200 — acesso total de admin
+
+Correção:
+
+// requireAdmin.ts
+if (process.env.NODE_ENV !== "production" && token === "mock-admin-token") {
+  // apenas em dev
+}
+
+Em produção, remover completamente este bloco e migrar para JWT real com role no payload.
+
+🔴 CRÍTICO — requireAuth silencioso quando DB está indisponível
+Ficheiro: artifacts/api-server/src/lib/auth.ts linhas 92–95
+
+Problema:
+
+} catch {
+  // DB indisponível: JWT já verificado criptograficamente — permitir passagem
+}
+
+Se a base de dados estiver inacessível (sobrecarga, falha de rede, ataque DoS ao DB), o middleware requireAuth ignora a verificação de revogação de token e o estado da conta. Um utilizador suspenso ou com token explicitamente revogado (logout) continua a aceder à API normalmente.
+
+Cenário de exploit: Um atacante que obteve um token JWT válido (roubo de sessão), mesmo após o utilizador fazer logout (token revogado na DB), pode voltar a aceder se conseguir saturar temporariamente a ligação ao Postgres.
+
+Correção:
+
+} catch (err) {
+  req.log?.warn({ err }, "DB unavailable during auth check — denying request");
+  res.status(503).json({ error: "Serviço temporariamente indisponível." });
+  return;  // ← fail-closed, não fail-open
+}
+
+🔴 CRÍTICO — Passwords em plaintext no localStorage
+Ficheiro: artifacts/xclusive/src/contexts/AuthContext.tsx linhas 34–36, 95–100
+
+Problema:
+
+interface MockUser {
+  _devPassword: string;  // ← password em texto claro
+}
+// Seed users:
+{ email: 'demo@xclusive.pt', _devPassword: 'password123' }
+
+O sistema mock armazena passwords em plaintext em localStorage sob a chave xclusive_mock_users. Qualquer extensão de browser maliciosa, XSS ou acesso físico ao browser extrai imediatamente todas as credenciais.
+
+Risco adicional: O makeMockToken gera tokens não criptográficos (mock_token_${userId}_${Date.now()}). Qualquer pessoa com acesso ao localStorage pode forjar sessões mock.
+
+Correção antes do deploy: O sistema mock não deve existir em builds de produção. Usar variáveis de ambiente para o desativar completamente:
+
+// Vite build — só incluir mock em dev
+if (import.meta.env.DEV) { /* mock code */ }

@@ -11,8 +11,21 @@ const updateProfileSchema = z.object({
   link: z.union([z.url().max(500), z.literal("")]).optional(),
   avatarUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
   capaUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
-  tipoConta: z.enum(["pessoal", "criador"]).optional(),
+  // tipoConta é intencionalmente excluído — a mudança pessoal→criador requer KYC
+  // via POST /users/me/tornar-criador
   privado: z.boolean().optional(),
+});
+
+const kycSubmissionSchema = z.object({
+  nomeCompleto: z.string().min(3).max(150),
+  dataNascimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD"),
+  tipoDocumento: z.enum(["bi", "passaporte", "carta"]),
+  numeroDocumento: z.string().min(3).max(50),
+  paisEmissao: z.string().min(1).max(100),
+  // Fotos chegam como base64 ou URL (na versão sem object-storage)
+  documentoFoto: z.string().min(1),
+  selfieFoto: z.string().min(1),
+  livenessFoto: z.string().min(1),
 });
 
 const router = Router();
@@ -54,7 +67,8 @@ router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Pr
 // Atualizar perfil
 router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const { nomeExibicao, bio, link, avatarUrl, capaUrl, tipoConta, privado } = req.body;
+  // tipoConta foi removido intencionalmente — use POST /users/me/tornar-criador
+  const { nomeExibicao, bio, link, avatarUrl, capaUrl, privado } = req.body;
 
   const updates: Record<string, any> = {};
   if (nomeExibicao !== undefined) updates.nomeExibicao = nomeExibicao;
@@ -62,7 +76,6 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
   if (link !== undefined) updates.link = link;
   if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
   if (capaUrl !== undefined) updates.capaUrl = capaUrl;
-  if (tipoConta !== undefined) updates.tipoConta = tipoConta;
   if (privado !== undefined) updates.privado = privado;
 
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, userId)).returning();
@@ -88,6 +101,54 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     estaASeguir: false,
     segueVoce: false,
     criadoEm: user.criadoEm.toISOString(),
+  });
+});
+
+/**
+ * POST /api/users/me/tornar-criador
+ * Submete pedido KYC e promove a conta para "criador" (verificado=false, pendente revisão admin).
+ * É a ÚNICA forma válida de alterar tipoConta pessoal→criador no backend.
+ */
+router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchema), async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId!;
+
+  // Verificar se já é criador
+  const [current] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId));
+
+  if (!current) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+  if (current.tipoConta === "criador") {
+    res.status(409).json({ error: "A conta já é do tipo criador." });
+    return;
+  }
+
+  const { dataNascimento } = req.body;
+
+  // Verificar idade mínima de 18 anos
+  const hoje = new Date();
+  const nascimento = new Date(dataNascimento);
+  const idadeAnos = hoje.getFullYear() - nascimento.getFullYear()
+    - (hoje < new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate()) ? 1 : 0);
+  if (idadeAnos < 18) {
+    res.status(400).json({ error: "Tens de ter pelo menos 18 anos para te tornares criador." });
+    return;
+  }
+
+  // Promover a criador — verificado=false até o admin aprovar o KYC
+  const [user] = await db.update(usersTable)
+    .set({ tipoConta: "criador", verificado: false })
+    .where(eq(usersTable.id, userId))
+    .returning();
+
+  // TODO: persistir documentos KYC no object storage e registar submissão numa tabela kycSubmissions
+  // Por agora os dados são recebidos e validados mas não armazenados (sem object storage)
+
+  res.status(201).json({
+    ok: true,
+    tipoConta: user.tipoConta,
+    verificado: user.verificado,
+    mensagem: "Pedido de verificação submetido. A tua conta foi promovida a criador e ficará pendente de revisão.",
   });
 });
 

@@ -12,6 +12,9 @@ const createPlanSchema = z.object({
   ativo: z.boolean().optional(),
 });
 
+// Todos os campos tornam-se opcionais no PATCH, mas as restrições mantêm-se
+const updatePlanSchema = createPlanSchema.partial();
+
 const gorjetaSchema = z.object({
   valor: z
     .number({ error: "Valor deve ser um número" })
@@ -111,11 +114,12 @@ router.post("/creator/plans", requireAuth, validate(createPlanSchema), async (re
 });
 
 // Atualizar plano
-router.patch("/creator/plans/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.patch("/creator/plans/:id", requireAuth, validate(updatePlanSchema), async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   if (!plan || plan.criadorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
 
+  // req.body já foi validado pelo updatePlanSchema — tipos e limites garantidos
   const { nome, preco, beneficios, ativo } = req.body;
   const updates: Record<string, any> = {};
   if (nome !== undefined) updates.nome = nome;

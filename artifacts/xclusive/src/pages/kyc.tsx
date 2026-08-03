@@ -195,33 +195,46 @@ export default function KYCPage() {
     }
     setSubmitting(true);
     try {
-      // Store KYC submission in localStorage
-      const submission = {
-        userId: user?.id,
-        username: user?.username,
-        ...data,
-        documentoFoto: '[captured]',
-        selfieFoto: '[captured]',
-        livenessFoto: '[captured]',
-        submittedAt: new Date().toISOString(),
-        status: 'pending',
-      };
-      const existing = JSON.parse(localStorage.getItem('xclusive_kyc_submissions') || '[]');
-      localStorage.setItem('xclusive_kyc_submissions', JSON.stringify([submission, ...existing]));
-
-      // Mock/offline mode: immediate approval (no real backend)
-      // In production with a real API, the backend would review the submission and call updateTipoConta on webhook
       if (isMockMode) {
-        await new Promise(r => setTimeout(r, 2200)); // simulate processing
+        // Dev/demo: simular processamento e promover localmente
+        await new Promise(r => setTimeout(r, 2200));
         updateTipoConta('criador');
       } else {
-        // Real mode: submission is queued for manual/automated review — don't auto-promote
-        await new Promise(r => setTimeout(r, 1500));
+        // Modo real: chamar o backend — única via para promover a criador
+        const token = localStorage.getItem('xclusive_token');
+        const res = await fetch(`${import.meta.env.BASE_URL}api/users/me/tornar-criador`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            nomeCompleto: data.nomeCompleto,
+            dataNascimento: data.dataNascimento,
+            tipoDocumento: data.tipoDocumento,
+            numeroDocumento: data.numeroDocumento,
+            paisEmissao: data.paisEmissao,
+            // Fotos: enviar '[captured]' enquanto object-storage não está implementado
+            documentoFoto: data.documentoFoto ?? '[captured]',
+            selfieFoto: data.selfieFoto ?? '[captured]',
+            livenessFoto: data.livenessFoto ?? '[captured]',
+          }),
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          const msg = body?.error ?? 'Erro ao submeter. Tenta novamente.';
+          toast({ variant: 'destructive', title: 'Erro na verificação', description: msg });
+          return;
+        }
+
+        // Atualizar o contexto local para refletir tipoConta=criador sem precisar de re-login
+        updateTipoConta('criador');
       }
 
       goTo('success');
     } catch {
-      toast({ variant: 'destructive', title: 'Erro ao enviar', description: 'Tenta novamente.' });
+      toast({ variant: 'destructive', title: 'Erro ao enviar', description: 'Verifica a tua ligação e tenta novamente.' });
     } finally {
       setSubmitting(false);
     }
