@@ -1,0 +1,70 @@
+Quero que actues como um auditor de segurança ofensivo (pentester) e defensivo, tratando esta aplicação como se estivesse prestes a ir para produção com dados reais de usuários e criadores. Assume o pior cenário possível: qualquer falha encontrada será explorada por um atacante motivado. Não me digas apenas "está seguro" sem teres verificado o código-fonte real de cada camada.
+
+Não te preocupes com contas de teste, seeds ou dados fictícios — foca-te exclusivamente em identificar vulnerabilidades reais no código e na arquitectura.
+
+Escopo da auditoria
+
+Analisa o projecto por completo (frontend, backend, API, base de dados, infraestrutura) e produz um relatório estruturado cobrindo:
+
+1. Autenticação
+Força das políticas de password (hashing usado — bcrypt/argon2/scrypt —, salt, custo computacional)
+Proteção contra brute-force e credential stuffing (rate limiting, lockout, captcha)
+Gestão de tokens JWT/sessão: expiração, rotação, revogação, algoritmo de assinatura (verificar se aceita "alg: none")
+Fluxo de recuperação de password e verificação de email (tokens previsíveis? expiram?)
+Autenticação multifator (existe? é sugerida para admin/criador?)
+2. Autorização e controlo de acesso
+IDOR (Insecure Direct Object Reference) — testar se um usuário consegue aceder a dados/conteúdo de outro apenas trocando IDs na URL ou payload
+Escalonamento de privilégios: um usuário comum consegue chamar endpoints de admin ou de criador?
+Verificação de que TODAS as rotas sensíveis validam permissão no backend (não só esconder botões no frontend)
+Separação real entre os três perfis: administrador, criador, usuário/assinante
+3. Segurança de frontend (client-side)
+XSS (Cross-Site Scripting): refletido, armazenado e baseado em DOM — verificar todos os pontos onde input do usuário é renderizado (bio, comentários, nomes, mensagens)
+CSRF: existem tokens anti-CSRF em ações sensíveis (pagamento, alteração de dados, exclusão de conteúdo)?
+Exposição de dados sensíveis no client-side: chaves de API, segredos, tokens ou lógica de negócio crítica visíveis no bundle JS ou no localStorage/sessionStorage
+Clickjacking (headers X-Frame-Options / CSP frame-ancestors)
+Validação client-side sem validação equivalente no backend (nunca confiar só no frontend)
+Manipulação de preços/planos no frontend antes de enviar ao backend
+Content Security Policy configurada corretamente
+4. API e backend
+Validação e sanitização de input em todos os endpoints (SQL Injection, NoSQL Injection, Command Injection)
+Rate limiting por IP/usuário em endpoints críticos (login, upload, pagamento, mensagens)
+Exposição excessiva de dados nas respostas da API (retornar campos internos desnecessários, ex: hash de password, dados de outros usuários)
+Mass assignment (usuário conseguir alterar campos que não devia, ex: role, saldo, status de assinatura)
+Versionamento e documentação de API exposta publicamente sem necessidade
+5. Upload e gestão de mídia
+Validação real de tipo de ficheiro (não confiar apenas na extensão)
+Verificação de tamanho, malware/scripts embutidos em imagens/vídeos
+Acesso não autorizado a conteúdo pago (bypass de paywall via URL direta do CDN/storage)
+URLs assinadas com expiração para conteúdo exclusivo
+Watermarking ou proteção contra download não autorizado do conteúdo pago
+6. Pagamentos e dados financeiros
+Validação de valores no backend (nunca confiar em preço/valor vindo do frontend)
+Proteção contra replay attacks em transações
+Armazenamento seguro (ou ausência de armazenamento) de dados de pagamento
+Logs de transação e reconciliação para detectar fraude
+Segurança do fluxo de comissões e repasses aos criadores
+7. Privacidade e proteção de dados pessoais
+Dados pessoais de criadores e usuários (documentos de verificação, dados bancários) armazenados com encriptação adequada
+Minimização de dados expostos entre perfis (usuário não deve ver dados pessoais reais de criador, e vice-versa, além do necessário)
+Conformidade com boas práticas de proteção de dados (LGPD/GDPR como referência, mesmo sem obrigação legal directa em Angola)
+8. Infraestrutura e configuração
+Headers de segurança HTTP (HSTS, X-Content-Type-Options, CSP, Referrer-Policy)
+Variáveis de ambiente e segredos fora do código-fonte e do repositório git
+HTTPS forçado em toda a aplicação
+Dependências desactualizadas com CVEs conhecidas (correr auditoria de pacotes)
+Logs de erro não devem expor stack traces ou dados sensíveis ao cliente final
+9. Comunicação e mensagens (se aplicável)
+Sanitização de conteúdo em chats entre criador e assinante
+Proteção contra spam/phishing dentro do sistema de mensagens
+Formato do relatório que preciso
+
+Para cada vulnerabilidade encontrada, apresenta:
+
+Severidade (Crítica / Alta / Média / Baixa)
+Localização (ficheiro/endpoint/componente exacto)
+Descrição do problema e como pode ser explorado
+Correção recomendada com exemplo de código quando possível
+
+No final, quero um resumo executivo com a prioridade de correção (o que deve ser corrigido antes de qualquer lançamento público).
+
+Sê rigoroso e cético — parte do princípio de que existem falhas até prova em contrário no código.
