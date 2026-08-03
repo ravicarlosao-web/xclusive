@@ -3,9 +3,10 @@ import { DataTable, Column } from '@/components/tables/DataTable';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { CheckCircle2, XCircle, Wallet, Clock, TrendingUp, Ban } from 'lucide-react';
+import { CheckCircle2, XCircle, Wallet, Clock, TrendingUp, Ban, FileText, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ─── Shared localStorage keys (same as Xclusive frontend) ───────────────────
@@ -48,9 +49,54 @@ function saveUsers(users: MockUser[]) {
   localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
 }
 
+function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; onClose: () => void }) {
+  if (!request?.comprovantivoBase64) return null;
+
+  function openInNewTab() {
+    const win = window.open();
+    if (win) {
+      win.document.write(
+        `<html><head><title>${request.comprovantivoNome ?? 'Comprovativo'}</title></head>` +
+        `<body style="margin:0"><embed src="${request.comprovantivoBase64}" type="application/pdf" width="100%" height="100%" /></body></html>`
+      );
+    }
+  }
+
+  return (
+    <Dialog open={!!request} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl w-full h-[82vh] flex flex-col p-0 gap-0 bg-card border-border">
+        <DialogHeader className="px-5 py-4 border-b border-border shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-base font-semibold">Comprovativo</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <span className="font-mono text-primary">{request.reference}</span>
+                {' · '}@{request.username}
+                {' · '}
+                <span className="font-bold">{request.amount.toLocaleString('pt-PT')} Kz</span>
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={openInNewTab} className="gap-2 text-xs">
+              <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
+            </Button>
+          </div>
+        </DialogHeader>
+        <div className="flex-1 overflow-hidden">
+          <iframe
+            src={request.comprovantivoBase64}
+            title="Comprovativo PDF"
+            className="w-full h-full border-0"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TopUps() {
   const [requests, setRequests] = useState<TopUpRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState('pendente');
+  const [pdfPreview, setPdfPreview] = useState<TopUpRequest | null>(null);
   const { toast } = useToast();
 
   const refresh = useCallback(() => {
@@ -150,6 +196,22 @@ export default function TopUps() {
     {
       header: 'Estado',
       cell: (item) => <StatusBadge status={item.status} />,
+    },
+    {
+      header: 'Comprovativo',
+      cell: (item) => item.comprovantivoBase64 ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 gap-1.5 text-xs border-border text-muted-foreground hover:text-foreground"
+          onClick={() => setPdfPreview(item)}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {item.comprovantivoNome ?? 'comprovativo.pdf'}
+        </Button>
+      ) : (
+        <span className="text-muted-foreground/40 text-xs">Sem anexo</span>
+      ),
     },
     {
       header: 'Nota Admin',
@@ -269,6 +331,8 @@ export default function TopUps() {
         data={filtered}
         isLoading={false}
       />
+
+      <PdfViewerDialog request={pdfPreview} onClose={() => setPdfPreview(null)} />
     </div>
   );
 }

@@ -77,6 +77,10 @@ export interface TopUpRequest {
   status: 'pendente' | 'aprovado' | 'rejeitado';
   processadoEm?: string;
   adminNota?: string;
+  /** Comprovativo PDF em base64 (data URI) */
+  comprovantivoBase64?: string;
+  /** Nome original do ficheiro PDF */
+  comprovantivoNome?: string;
 }
 
 export function getTopUpRequests(): TopUpRequest[] {
@@ -250,7 +254,7 @@ interface AuthContextType {
   /** Envia gorjeta ao criador. Lança erro se saldo insuficiente. */
   sendTip: (creatorUsername: string, amount: number, postId?: number) => Promise<void>;
   /** Submete pedido de carregamento (fica pendente até aprovação do admin) */
-  topUp: (amount: number, ibanConfirm: string, reference: string) => Promise<void>;
+  topUp: (amount: number, ibanConfirm: string, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
   unlockPost: (postId: number, creatorUsername: string, preco: number) => Promise<void>;
   /** Subscreve a um criador. Lança erro se saldo insuficiente. */
@@ -424,7 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSaldo(freshUsers[freshSenderIdx].saldo);
   }, []);
 
-  const topUp = useCallback(async (amount: number, ibanConfirm: string, reference: string) => {
+  const topUp = useCallback(async (amount: number, ibanConfirm: string, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => {
     if (!Number.isFinite(amount) || amount < 500) {
       throw new Error('Valor mínimo de carregamento: 500 Kz.');
     }
@@ -452,6 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reference,
       criadoEm: new Date().toISOString(),
       status: 'pendente',
+      ...(comprovantivoBase64 ? { comprovantivoBase64, comprovantivoNome: comprovantivoNome ?? 'comprovativo.pdf' } : {}),
     };
     reqs.push(newReq);
     saveTopUpRequests(reqs);

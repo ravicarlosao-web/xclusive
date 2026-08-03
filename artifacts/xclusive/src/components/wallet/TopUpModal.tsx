@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth, XCLUSIVE_IBAN } from '@/contexts/AuthContext';
-import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TopUpModalProps {
@@ -29,6 +29,9 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     const rand = Math.floor(100000 + Math.random() * 900000);
     return `XCL-${rand}`;
   });
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfName, setPdfName] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedAmount = amount !== '' ? amount : (customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0);
 
@@ -39,6 +42,26 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setIbanInput('');
     setError('');
     setLoading(false);
+    setPdfBase64(null);
+    setPdfName('');
+  }
+
+  function handlePdfSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      setError('Só são aceites ficheiros PDF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('O PDF não pode ter mais de 5 MB.');
+      return;
+    }
+    setError('');
+    setPdfName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => setPdfBase64(reader.result as string);
+    reader.readAsDataURL(file);
   }
 
   function handleClose() {
@@ -47,10 +70,14 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   }
 
   async function handleConfirm() {
+    if (!pdfBase64) {
+      setError('Anexa o comprovativo em PDF antes de continuar.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      await topUp(selectedAmount, ibanInput, reference);
+      await topUp(selectedAmount, ibanInput, reference, pdfBase64, pdfName);
       setStep('success');
     } catch (e: any) {
       setError(e.message || 'Erro ao processar pedido.');
@@ -200,17 +227,18 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           </div>
         )}
 
-        {/* ── Step: Confirm IBAN ── */}
+        {/* ── Step: Confirm IBAN + PDF ── */}
         {step === 'confirm' && (
           <div className="p-6">
             <DialogHeader className="mb-5">
               <DialogTitle className="text-xl font-bold">Confirmar Transferência</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Para confirmar o carregamento de <span className="font-bold text-foreground">{selectedAmount.toLocaleString('pt-PT')} Kz</span>, introduz o IBAN da Xclusive:
+                Introduz o IBAN da Xclusive e anexa o comprovativo em PDF.
               </p>
             </DialogHeader>
 
-            <div className="mb-2">
+            {/* IBAN */}
+            <div className="mb-4">
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">IBAN da Xclusive</label>
               <Input
                 placeholder="AO06 0040 0000 1234 5678 9012 3"
@@ -220,18 +248,51 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               />
             </div>
 
+            {/* PDF upload */}
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">
+                Comprovativo de transferência <span className="text-destructive">*</span>
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfSelect}
+              />
+              {!pdfBase64 ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/40 hover:bg-secondary/70 hover:border-yellow-500/50 transition-all py-6 text-muted-foreground"
+                >
+                  <Upload className="w-6 h-6" />
+                  <span className="text-sm font-medium">Clica para anexar o PDF</span>
+                  <span className="text-xs">Máximo 5 MB</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/8 px-4 py-3">
+                  <FileText className="w-5 h-5 text-green-400 shrink-0" />
+                  <span className="flex-1 text-sm font-medium truncate text-green-300">{pdfName}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setPdfBase64(null); setPdfName(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
             {error && (
-              <div className="flex items-center gap-2 text-destructive text-xs mt-2 mb-3 bg-destructive/10 p-2.5 rounded-lg">
+              <div className="flex items-center gap-2 text-destructive text-xs mb-3 bg-destructive/10 p-2.5 rounded-lg">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {error}
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground mb-5 mt-3">
-              Este passo verifica que fizeste a transferência para a conta correta.
-            </p>
-
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-5">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep('transfer')}>
                 Voltar
               </Button>
@@ -240,7 +301,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 disabled={!ibanInput.trim() || loading}
                 onClick={handleConfirm}
               >
-                {loading ? 'A verificar...' : 'Confirmar'}
+                {loading ? 'A enviar...' : 'Submeter pedido'}
               </Button>
             </div>
           </div>
