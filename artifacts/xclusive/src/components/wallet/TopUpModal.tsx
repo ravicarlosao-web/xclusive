@@ -50,10 +50,10 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setError('');
     setLoading(true);
     try {
-      await topUp(selectedAmount, ibanInput);
+      await topUp(selectedAmount, ibanInput, reference);
       setStep('success');
     } catch (e: any) {
-      setError(e.message || 'Erro ao processar carregamento.');
+      setError(e.message || 'Erro ao processar pedido.');
     } finally {
       setLoading(false);
     }
@@ -249,18 +249,22 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         {/* ── Step: Success ── */}
         {step === 'success' && (
           <div className="p-8 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
-              <CheckCircle2 className="w-10 h-10 text-green-400" />
+            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
+              <CheckCircle2 className="w-10 h-10 text-yellow-400" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Carteira carregada!</h2>
-            <p className="text-muted-foreground mb-2">
-              <span className="font-bold text-foreground">{selectedAmount.toLocaleString('pt-PT')} Kz</span> foram adicionados à tua carteira.
+            <h2 className="text-2xl font-bold mb-2">Pedido enviado!</h2>
+            <p className="text-muted-foreground mb-4">
+              O teu pedido de carregamento de{' '}
+              <span className="font-bold text-foreground">{selectedAmount.toLocaleString('pt-PT')} Kz</span>{' '}
+              foi registado com a referência{' '}
+              <span className="font-bold font-mono text-primary">{reference}</span>.
             </p>
-            {saldo !== null && (
-              <p className="text-sm text-muted-foreground mb-6">
-                Novo saldo: <span className="font-bold text-yellow-400 text-base">{saldo.toLocaleString('pt-PT')} Kz</span>
+            <div className="w-full bg-secondary/60 border border-border rounded-xl p-3 mb-6 text-left">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">O que acontece a seguir:</span><br />
+                A nossa equipa vai verificar a transferência bancária e aprovar o carregamento manualmente. O saldo aparece na tua carteira assim que for confirmado, normalmente em alguns minutos a horas úteis.
               </p>
-            )}
+            </div>
             <Button
               className="w-full h-12 font-bold rounded-xl"
               onClick={handleClose}

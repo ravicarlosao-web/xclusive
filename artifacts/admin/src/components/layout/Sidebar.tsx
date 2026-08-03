@@ -2,10 +2,29 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, 
   Flag, TrendingUp, Wallet, Bell, Settings, ClipboardList,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, ArrowDownToLine
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
+
+const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
+
+function usePendingTopUps() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    function update() {
+      try {
+        const reqs = JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]');
+        setCount(reqs.filter((r: any) => r.status === 'pendente').length);
+      } catch { setCount(0); }
+    }
+    update();
+    const iv = setInterval(update, 3000);
+    return () => clearInterval(iv);
+  }, []);
+  return count;
+}
 
 interface SidebarProps {
   collapsed: boolean;
@@ -15,6 +34,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps) {
   const [location] = useLocation();
+  const pendingTopUps = usePendingTopUps();
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,6 +44,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/content', label: 'Conteúdo', icon: ImageIcon },
     { href: '/reports', label: 'Denúncias', icon: Flag, badge: 28 },
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
+    { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine, badge: pendingTopUps || undefined },
     { href: '/withdrawals', label: 'Levantamentos', icon: Wallet, badge: 5 },
     { href: '/broadcast', label: 'Broadcast', icon: Bell },
     { href: '/settings', label: 'Definições', icon: Settings },

@@ -62,6 +62,29 @@ interface MockUser {
 export type TransactionTipo = 'gorjeta' | 'carregamento' | 'desbloqueio' | 'subscricao' | 'levantamento';
 
 const MOCK_TRANSACTIONS_KEY = 'xclusive_mock_transactions';
+
+// ─── Top-up requests (shared with admin via localStorage) ────────────────────
+export const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
+
+export interface TopUpRequest {
+  id: string;
+  userId: number;
+  username: string;
+  nomeCompleto: string;
+  amount: number;
+  reference: string;
+  criadoEm: string;
+  status: 'pendente' | 'aprovado' | 'rejeitado';
+  processadoEm?: string;
+  adminNota?: string;
+}
+
+export function getTopUpRequests(): TopUpRequest[] {
+  try { return JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]'); } catch { return []; }
+}
+export function saveTopUpRequests(reqs: TopUpRequest[]) {
+  localStorage.setItem(MOCK_TOPUP_KEY, JSON.stringify(reqs));
+}
 export interface MockTransaction {
   id: number;
   fromUserId: number;
@@ -226,8 +249,8 @@ interface AuthContextType {
   updateTipoConta: (tipo: 'pessoal' | 'criador') => void;
   /** Envia gorjeta ao criador. Lança erro se saldo insuficiente. */
   sendTip: (creatorUsername: string, amount: number, postId?: number) => Promise<void>;
-  /** Carrega a carteira após confirmar transferência bancária */
-  topUp: (amount: number, ibanConfirm: string) => Promise<void>;
+  /** Submete pedido de carregamento (fica pendente até aprovação do admin) */
+  topUp: (amount: number, ibanConfirm: string, reference: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
   unlockPost: (postId: number, creatorUsername: string, preco: number) => Promise<void>;
   /** Subscreve a um criador. Lança erro se saldo insuficiente. */
@@ -401,11 +424,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSaldo(freshUsers[freshSenderIdx].saldo);
   }, []);
 
-  const topUp = useCallback(async (amount: number, ibanConfirm: string) => {
+  const topUp = useCallback(async (amount: number, ibanConfirm: string, reference: string) => {
     if (!Number.isFinite(amount) || amount < 500) {
       throw new Error('Valor mínimo de carregamento: 500 Kz.');
     }
-    // Normalize IBAN: remove spaces, case-insensitive
     const normalizeIban = (s: string) => s.replace(/\s/g, '').toUpperCase();
     if (normalizeIban(ibanConfirm) !== normalizeIban(XCLUSIVE_IBAN)) {
       throw new Error('IBAN incorreto. Confirma o IBAN da Xclusive e tenta de novo.');
@@ -413,22 +435,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
-    const idx = freshUsers.findIndex(u => u.id === session.userId);
-    if (idx === -1) throw new Error('Utilizador não encontrado.');
-    freshUsers[idx].saldo = (freshUsers[idx].saldo ?? 0) + amount;
-    saveMockUsers(freshUsers);
-    const txs = getTransactions();
-    txs.push({
-      id: Date.now(),
-      fromUserId: session.userId,
-      toUsername: freshUsers[idx].username,
+    const user = freshUsers.find(u => u.id === session.userId);
+    if (!user) throw new Error('Utilizador não encontrado.');
+    // Regista o pedido como pendente — o admin aprova manualmente
+    const reqs = getTopUpRequests();
+    // Evita pedidos duplicados com a mesma referência
+    if (reqs.some(r => r.reference === reference)) {
+      throw new Error('Este pedido já foi submetido.');
+    }
+    const newReq: TopUpRequest = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      userId: session.userId,
+      username: user.username,
+      nomeCompleto: user.nomeCompleto,
       amount,
-      tipo: 'carregamento',
-      descricao: `Carregamento de ${amount.toLocaleString('pt-PT')} Kz`,
+      reference,
       criadoEm: new Date().toISOString(),
-    });
-    saveTransactions(txs);
-    setSaldo(freshUsers[idx].saldo);
+      status: 'pendente',
+    };
+    reqs.push(newReq);
+    saveTopUpRequests(reqs);
+    // Não adiciona saldo agora — só após aprovação do admin
   }, []);
 
   const unlockPost = useCallback(async (postId: number, creatorUsername: string, preco: number) => {

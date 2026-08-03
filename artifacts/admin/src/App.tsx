@@ -20,6 +20,7 @@ import Withdrawals from '@/pages/withdrawals/index';
 import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
 import AuditLog from '@/pages/audit-log/index';
+import TopUps from '@/pages/topups/index';
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ function Router() {
             <Route path="/content"><ProtectedRoute component={Content} /></Route>
             <Route path="/reports"><ProtectedRoute component={Reports} /></Route>
             <Route path="/finance"><ProtectedRoute component={Finance} /></Route>
+            <Route path="/topups"><ProtectedRoute component={TopUps} /></Route>
             <Route path="/withdrawals"><ProtectedRoute component={Withdrawals} /></Route>
             <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
             <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
