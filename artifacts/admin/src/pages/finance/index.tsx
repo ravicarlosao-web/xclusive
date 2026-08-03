@@ -52,7 +52,7 @@ export default function Finance() {
       header: 'Valor', 
       cell: (item) => (
         <span className={`font-bold font-mono ${item.tipo === 'subscricao' ? 'text-green-500' : ''}`}>
-          {item.tipo === 'subscricao' ? '+' : ''}{item.valor?.toLocaleString()} MZN
+          {item.tipo === 'subscricao' ? '+' : ''}{item.valor?.toLocaleString()} Kz
         </span>
       )
     },
@@ -87,7 +87,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {isLoadingKpis ? '...' : `${kpis?.receitaTotal?.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.receitaTotal?.toLocaleString()} Kz`}
             </div>
           </CardContent>
         </Card>
@@ -99,7 +99,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-primary">
-              {isLoadingKpis ? '...' : `${kpis?.comissaoRetida?.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.comissaoRetida?.toLocaleString()} Kz`}
             </div>
           </CardContent>
         </Card>
@@ -111,7 +111,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {isLoadingKpis ? '...' : `${kpis?.pagoCriadores?.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.pagoCriadores?.toLocaleString()} Kz`}
             </div>
           </CardContent>
         </Card>
@@ -123,7 +123,7 @@ export default function Finance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-orange-500">
-              {isLoadingKpis ? '...' : `${kpis?.receitaMes?.toLocaleString()} MZN`}
+              {isLoadingKpis ? '...' : `${kpis?.receitaMes?.toLocaleString()} Kz`}
             </div>
           </CardContent>
         </Card>

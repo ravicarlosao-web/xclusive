@@ -32,7 +32,7 @@ export const activityFeed = [
   { id: 1, type: 'user_registered', message: 'Novo utilizador registado: joaopedro99', timestamp: '2 mins ago' },
   { id: 2, type: 'kyc_submitted', message: 'Criador submeteu KYC: anasilva', timestamp: '15 mins ago' },
   { id: 3, type: 'report_created', message: 'Nova denúncia de conteúdo (ID: 4582)', timestamp: '1 hour ago' },
-  { id: 4, type: 'withdrawal_requested', message: 'Pedido de levantamento: 50,000 MZN', timestamp: '2 hours ago' },
+  { id: 4, type: 'withdrawal_requested', message: 'Pedido de levantamento: 50.000 Kz', timestamp: '2 hours ago' },
   { id: 5, type: 'subscription_purchased', message: 'Nova subscrição VIP - Carlos M.', timestamp: '3 hours ago' },
 ];
 
@@ -84,14 +84,14 @@ export const transactions = Array.from({ length: 30 }).map((_, i) => ({
   id: `TRX-${1000 + i}`,
   type: i % 3 === 0 ? 'withdrawal' : 'subscription',
   amount: Math.floor(Math.random() * 5000) + 500,
-  currency: 'MZN',
+  currency: 'AOA',
   user: `user_${Math.floor(Math.random() * 50) + 1}`,
   status: i % 5 === 0 ? 'pendente' : 'pago',
   date: new Date(Date.now() - Math.random() * 50000000).toISOString()
 }));
 
 export const withdrawals = [
-  { id: 1, creator: 'creator_1', amount: 25000, currency: 'MZN', method: 'M-Pesa', account: '+258840000000', status: 'pendente', requestedAt: new Date().toISOString() },
+  { id: 1, creator: 'creator_1', amount: 25000, currency: 'AOA', method: 'Multicaixa Express', account: '+244923000000', status: 'pendente', requestedAt: new Date().toISOString() },
   { id: 2, creator: 'creator_2', amount: 100000, currency: 'AOA', method: 'Bank Transfer', account: 'AO06...', status: 'aprovado', requestedAt: new Date(Date.now() - 86400000).toISOString() }
 ];
 

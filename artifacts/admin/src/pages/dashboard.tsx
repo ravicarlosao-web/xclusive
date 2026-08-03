@@ -26,7 +26,7 @@ export default function Dashboard() {
   const kpiCards = [
     { title: 'Total Utilizadores', value: kpis?.totalUtilizadores, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { title: 'Criadores Ativos', value: kpis?.totalCriadores, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-    { title: 'Receita Total', value: `${kpis?.receitaTotal?.toLocaleString()} MZN`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { title: 'Receita Total', value: `${kpis?.receitaTotal?.toLocaleString()} Kz`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
     { title: 'Posts Hoje', value: kpis?.postsHoje, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-500/10' },
     { title: 'Novos Hoje', value: kpis?.novosHoje, icon: ShieldAlert, color: 'text-orange-500', bg: 'bg-orange-500/10' },
     { title: 'Denúncias', value: kpis?.denunciasPendentes, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', alert: (kpis?.denunciasPendentes || 0) > 5 },
@@ -81,7 +81,7 @@ export default function Dashboard() {
 
         <Card className="col-span-3 border-border">
           <CardHeader>
-            <CardTitle>Receita Mensal (MZN)</CardTitle>
+            <CardTitle>Receita Mensal (Kz)</CardTitle>
           </CardHeader>
           <CardContent className="pl-0">
             {isLoadingCharts ? (

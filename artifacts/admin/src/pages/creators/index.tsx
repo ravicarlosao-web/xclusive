@@ -28,11 +28,11 @@ export default function Creators() {
     { header: 'País', accessorKey: 'pais' },
     { 
       header: 'Ganhos', 
-      cell: (item) => <span className="font-mono">{item.ganhos?.toLocaleString()} MZN</span>
+      cell: (item) => <span className="font-mono">{item.ganhos?.toLocaleString()} Kz</span>
     },
     { 
       header: 'Saldo', 
-      cell: (item) => <span className="font-mono font-medium">{item.saldo?.toLocaleString()} MZN</span>
+      cell: (item) => <span className="font-mono font-medium">{item.saldo?.toLocaleString()} Kz</span>
     },
     { 
       header: 'Estado', 

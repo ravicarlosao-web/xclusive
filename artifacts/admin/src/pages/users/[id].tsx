@@ -114,7 +114,7 @@ export default function UserDetail() {
                     <CardTitle className="text-sm">Saldo Atual</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-3xl font-bold text-primary">{user.saldo?.toLocaleString()} MZN</p>
+                    <p className="text-3xl font-bold text-primary">{user.saldo?.toLocaleString()} Kz</p>
                   </CardContent>
                 </Card>
               </div>

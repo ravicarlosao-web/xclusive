@@ -32,7 +32,7 @@ export default function Withdrawals() {
     { header: 'Criador', accessorKey: 'creatorUsername', className: 'font-medium text-primary' },
     { 
       header: 'Valor', 
-      cell: (item) => <span className="font-bold font-mono">{(item.amount / 100).toLocaleString()} MZN</span>
+      cell: (item) => <span className="font-bold font-mono">{(item.amount / 100).toLocaleString()} Kz</span>
     },
     { 
       header: 'Método / Conta', 
