@@ -267,8 +267,16 @@ router.get("/admin/users/:id", (req, res) => {
 router.patch("/admin/users/:id", requireAdmin, (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
-  Object.assign(user, req.body);
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_edit", targetType: "user", targetId: user.id, details: req.body, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+
+  // Allowlist explícita — bloqueia alteração de id, role, saldo, passwordHash, etc.
+  const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "estado", "verificado"] as const;
+  const updates: Record<string, unknown> = {};
+  for (const campo of CAMPOS_PERMITIDOS) {
+    if (req.body[campo] !== undefined) updates[campo] = req.body[campo];
+  }
+  Object.assign(user, updates);
+
+  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_edit", targetType: "user", targetId: user.id, details: updates, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
   res.json(user);
 });
 
@@ -284,8 +292,32 @@ router.patch("/admin/users/:id/status", requireAdmin, (req: AdminRequest, res) =
 router.patch("/admin/users/:id/role", requireAdmin, (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
-  user.role = req.body.role;
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_role_change", targetType: "user", targetId: user.id, details: { role: req.body.role }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+
+  const novoRole: string = req.body.role;
+
+  // Apenas roles válidas são aceites
+  const ROLES_VALIDAS = ["user", "creator", "admin", "superadmin"] as const;
+  if (!ROLES_VALIDAS.includes(novoRole as any)) {
+    return res.status(400).json({ error: `Role inválida. Valores permitidos: ${ROLES_VALIDAS.join(", ")}` });
+  }
+
+  // Apenas superadmin pode promover para admin ou superadmin
+  if ((novoRole === "admin" || novoRole === "superadmin") && req.adminRole !== "superadmin") {
+    return res.status(403).json({ error: "Apenas superadmin pode atribuir roles de administrador" });
+  }
+
+  // Ninguém pode rebaixar outro superadmin
+  if (user.role === "superadmin" && req.adminRole !== "superadmin") {
+    return res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
+  }
+
+  // Bloquear auto-promoção para superadmin
+  if (user.id === req.adminId && novoRole === "superadmin" && req.adminRole !== "superadmin") {
+    return res.status(403).json({ error: "Não podes promover-te a superadmin" });
+  }
+
+  user.role = novoRole;
+  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_role_change", targetType: "user", targetId: user.id, details: { roleAnterior: user.role, novoRole }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
   res.json(user);
 });
 
@@ -381,8 +413,19 @@ router.get("/admin/reports", (req, res) => {
 router.patch("/admin/reports/:id", requireAdmin, (req: AdminRequest, res) => {
   const report = mockReports.find(r => r.id === Number(req.params.id));
   if (!report) return res.status(404).json({ error: "Denúncia não encontrada" });
-  Object.assign(report, req.body, { resolvedBy: req.adminId, resolvedAt: new Date().toISOString() });
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "report_resolve", targetType: "report", targetId: report.id, details: req.body, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+
+  // Allowlist: apenas status e notas são modificáveis
+  const STATUS_VALIDOS = ["pending", "reviewing", "resolved", "dismissed"] as const;
+  if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
+    return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+  }
+
+  if (req.body.status !== undefined) report.status = req.body.status;
+  if (typeof req.body.description === "string") report.description = req.body.description.slice(0, 1000);
+  report.resolvedBy = req.adminId ?? null;
+  report.resolvedAt = new Date().toISOString();
+
+  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "report_resolve", targetType: "report", targetId: report.id, details: { status: report.status }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
   res.json(report);
 });
 
@@ -429,9 +472,23 @@ router.get("/admin/withdrawals", (req, res) => {
 router.patch("/admin/withdrawals/:id", requireAdmin, (req: AdminRequest, res) => {
   const withdrawal = mockWithdrawals.find(w => w.id === Number(req.params.id));
   if (!withdrawal) return res.status(404).json({ error: "Pedido não encontrado" });
-  Object.assign(withdrawal, req.body, { processedBy: req.adminId, processedAt: new Date().toISOString() });
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: `withdrawal_${req.body.status}`, targetType: "withdrawal", targetId: withdrawal.id, details: req.body, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
-  res.json(withdrawal);
+
+  // Allowlist: apenas status e notas são modificáveis — nunca amount, creatorId ou IBAN
+  const STATUS_VALIDOS = ["pending", "approved", "rejected", "paid"] as const;
+  if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
+    return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+  }
+
+  if (req.body.status !== undefined) withdrawal.status = req.body.status;
+  if (typeof req.body.notes === "string") withdrawal.notes = req.body.notes.slice(0, 500);
+  withdrawal.processedBy = req.adminId ?? null;
+  withdrawal.processedAt = new Date().toISOString();
+
+  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: `withdrawal_${withdrawal.status}`, targetType: "withdrawal", targetId: withdrawal.id, details: { status: withdrawal.status, notes: withdrawal.notes }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+
+  // Remover destinationDetails (IBAN) da resposta — dados bancários sensíveis
+  const { destinationDetails: _stripped, ...safeWithdrawal } = withdrawal as any;
+  res.json(safeWithdrawal);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -468,8 +525,41 @@ router.get("/admin/settings", (req, res) => {
 });
 
 router.patch("/admin/settings", requireAdmin, (req: AdminRequest, res) => {
-  Object.assign(mockSettings, req.body);
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "settings_update", targetType: "platform", targetId: 0, details: req.body, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  // Apenas superadmin pode alterar as definições da plataforma
+  if (req.adminRole !== "superadmin") {
+    return res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
+  }
+
+  const updates: Partial<typeof mockSettings> = {};
+  const erros: string[] = [];
+
+  if (req.body.commission_rate !== undefined) {
+    const val = Number(req.body.commission_rate?.value);
+    if (!Number.isFinite(val) || val < 0 || val > 100) erros.push("commission_rate.value deve estar entre 0 e 100");
+    else updates.commission_rate = { value: val };
+  }
+  if (req.body.maintenance_mode !== undefined) {
+    if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
+    else updates.maintenance_mode = { enabled: req.body.maintenance_mode.enabled };
+  }
+  if (req.body.allowed_countries !== undefined) {
+    const list = req.body.allowed_countries?.list;
+    if (!Array.isArray(list) || list.some((c: unknown) => typeof c !== "string" || c.length > 5)) {
+      erros.push("allowed_countries.list deve ser um array de códigos de país");
+    } else {
+      updates.allowed_countries = { list };
+    }
+  }
+  if (req.body.min_withdrawal_amount !== undefined) {
+    const val = Number(req.body.min_withdrawal_amount?.value);
+    if (!Number.isFinite(val) || val < 0) erros.push("min_withdrawal_amount.value deve ser um número positivo");
+    else updates.min_withdrawal_amount = { value: val };
+  }
+
+  if (erros.length > 0) return res.status(400).json({ error: "Dados inválidos", details: erros });
+
+  Object.assign(mockSettings, updates);
+  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "settings_update", targetType: "platform", targetId: 0, details: updates, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
   res.json(mockSettings);
 });
 

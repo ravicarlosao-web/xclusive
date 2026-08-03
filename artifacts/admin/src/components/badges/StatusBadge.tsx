@@ -9,6 +9,7 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
+  if (!status) return null;
   const normalizedStatus = status.toLowerCase();
   
   let variantClass = "bg-gray-500/20 text-gray-400 border-gray-500/30"; // default
