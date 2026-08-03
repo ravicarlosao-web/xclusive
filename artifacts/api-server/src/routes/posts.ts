@@ -1,7 +1,26 @@
 import { Router } from "express";
-import { db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable } from "@workspace/db";
+import { db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable, subscriptionsTable, purchasesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
+
+const createPostSchema = z.object({
+  legenda: z.string().max(2200).optional(),
+  localizacao: z.string().max(100).optional(),
+  tipo: z.enum(["imagem", "video", "carrossel"]).optional(),
+  media: z
+    .array(z.object({ url: z.url(), tipo: z.enum(["imagem", "video"]).optional() }))
+    .max(10)
+    .optional(),
+  exclusivo: z.boolean().optional(),
+  precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
+});
+
+const createCommentSchema = z.object({
+  texto: z.string().min(1, "Texto é obrigatório").max(2200),
+  comentarioPaiId: z.number().int().positive().optional(),
+});
 
 const router = Router();
 
@@ -21,7 +40,7 @@ router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> =
 });
 
 // Criar post
-router.post("/posts", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
 
@@ -130,11 +149,9 @@ router.get("/posts/:id/comments", optionalAuth, async (req: AuthRequest, res): P
   res.json({ comments: result, total: result.length, page: 1, hasMore: false });
 });
 
-router.post("/posts/:id/comments", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const { texto, comentarioPaiId } = req.body;
-
-  if (!texto) { res.status(400).json({ error: "Texto é obrigatório" }); return; }
 
   const [comment] = await db.insert(commentsTable).values({
     postId: id,
@@ -165,6 +182,35 @@ router.delete("/comments/:id", requireAuth, async (req: AuthRequest, res): Promi
   res.sendStatus(204);
 });
 
+/** Verifica se um utilizador tem acesso a conteúdo exclusivo de um criador */
+async function temAcessoExclusivo(userId: number | undefined, autorId: number, postId: number): Promise<boolean> {
+  // Autor sempre tem acesso ao próprio conteúdo
+  if (userId === autorId) return true;
+  // Sem sessão → sem acesso
+  if (!userId) return false;
+  // Subscrição ativa ao criador
+  const [sub] = await db.select({ id: subscriptionsTable.id })
+    .from(subscriptionsTable)
+    .where(and(
+      eq(subscriptionsTable.subscriitorId, userId),
+      eq(subscriptionsTable.criadorId, autorId),
+      eq(subscriptionsTable.estado, "ativa"),
+    ))
+    .limit(1);
+  if (sub) return true;
+  // Compra PPV deste post específico
+  const [ppv] = await db.select({ id: purchasesTable.id })
+    .from(purchasesTable)
+    .where(and(
+      eq(purchasesTable.compradorId, userId),
+      eq(purchasesTable.vendedorId, autorId),
+      eq(purchasesTable.tipo, "ppv"),
+      eq(purchasesTable.conteudoId, postId),
+    ))
+    .limit(1);
+  return !!ppv;
+}
+
 async function formatPost(post: any, userId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, post.autorId));
   const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, post.id)).orderBy(postMediaTable.ordem);
@@ -180,6 +226,12 @@ async function formatPost(post: any, userId?: number) {
     guardado = !!saved;
   }
 
+  // Conteúdo exclusivo: ocultar media se utilizador não tem acesso
+  const acesso = post.exclusivo ? await temAcessoExclusivo(userId, post.autorId, post.id) : true;
+  const mediaSegura = acesso
+    ? media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }))
+    : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
+
   return {
     id: post.id,
     autor: user ? {
@@ -190,8 +242,9 @@ async function formatPost(post: any, userId?: number) {
     legenda: post.legenda,
     localizacao: post.localizacao,
     tipo: post.tipo,
-    media: media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem })),
+    media: mediaSegura,
     exclusivo: post.exclusivo,
+    bloqueado: post.exclusivo && !acesso,
     precoDesbloqueio: post.precoDesbloqueio ? parseFloat(post.precoDesbloqueio) : null,
     totalCurtidas: likes || 0,
     totalComentarios: comments || 0,

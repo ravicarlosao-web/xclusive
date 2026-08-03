@@ -1,7 +1,19 @@
 import { Router } from "express";
 import { db, usersTable, followsTable, postsTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
+
+const updateProfileSchema = z.object({
+  nomeExibicao: z.string().min(1).max(100).optional(),
+  bio: z.string().max(500).optional(),
+  link: z.union([z.url().max(500), z.literal("")]).optional(),
+  avatarUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
+  capaUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
+  tipoConta: z.enum(["pessoal", "criador"]).optional(),
+  privado: z.boolean().optional(),
+});
 
 const router = Router();
 
@@ -40,7 +52,7 @@ router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Pr
 });
 
 // Atualizar perfil
-router.patch("/users/me", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const { nomeExibicao, bio, link, avatarUrl, capaUrl, tipoConta, privado } = req.body;
 

@@ -114,9 +114,28 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
   });
 });
 
+/** Verifica se o utilizador é participante da conversa */
+async function verificarParticipante(conversationId: number, userId: number): Promise<boolean> {
+  const [p] = await db.select({ id: conversationParticipantsTable.conversationId })
+    .from(conversationParticipantsTable)
+    .where(and(
+      eq(conversationParticipantsTable.conversationId, conversationId),
+      eq(conversationParticipantsTable.utilizadorId, userId),
+    ))
+    .limit(1);
+  return !!p;
+}
+
 // Mensagens de uma conversa
 router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  // IDOR: verificar que o utilizador é participante desta conversa
+  if (!(await verificarParticipante(id, req.userId!))) {
+    res.status(403).json({ error: "Sem acesso a esta conversa" });
+    return;
+  }
 
   const messages = await db.select({ m: messagesTable, u: usersTable })
     .from(messagesTable)
@@ -144,6 +163,14 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
 // Enviar mensagem
 router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  // IDOR: verificar que o utilizador é participante desta conversa
+  if (!(await verificarParticipante(id, req.userId!))) {
+    res.status(403).json({ error: "Sem acesso a esta conversa" });
+    return;
+  }
+
   const { tipo, conteudo } = req.body;
 
   const [msg] = await db.insert(messagesTable).values({

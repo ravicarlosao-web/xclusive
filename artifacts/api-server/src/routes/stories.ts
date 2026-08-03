@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable } from "@workspace/db";
+import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable, subscriptionsTable } from "@workspace/db";
 import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 
@@ -17,9 +17,27 @@ router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise
     if (!authorIds.includes(userId)) authorIds.push(userId);
   }
 
-  const stories = authorIds.length > 0
+  const allStories = authorIds.length > 0
     ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds))).orderBy(desc(storiesTable.criadoEm))
     : await db.select().from(storiesTable).where(gt(storiesTable.expiraEm, now)).orderBy(desc(storiesTable.criadoEm)).limit(20);
+
+  // Filtrar stories de audiência restrita: "subscritores" só visível com subscrição ativa
+  const stories: typeof allStories = [];
+  for (const s of allStories) {
+    if (s.audiencia === "subscritores" && s.autorId !== userId) {
+      if (!userId) continue; // sem sessão → ignorar
+      const [sub] = await db.select({ id: subscriptionsTable.id })
+        .from(subscriptionsTable)
+        .where(and(
+          eq(subscriptionsTable.subscriitorId, userId),
+          eq(subscriptionsTable.criadorId, s.autorId),
+          eq(subscriptionsTable.estado, "ativa"),
+        ))
+        .limit(1);
+      if (!sub) continue; // sem subscrição → ignorar
+    }
+    stories.push(s);
+  }
 
   // Agrupar por utilizador
   const byUser = new Map<number, any[]>();
@@ -87,9 +105,15 @@ router.post("/stories/:id/view", optionalAuth, async (req: AuthRequest, res): Pr
   res.json({ ok: true });
 });
 
-// Views da story
+// Views da story (só o autor pode ver quem visualizou)
 router.get("/stories/:id/views", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  const [story] = await db.select({ autorId: storiesTable.autorId }).from(storiesTable).where(eq(storiesTable.id, id)).limit(1);
+  if (!story) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (story.autorId !== req.userId) { res.status(403).json({ error: "Só o autor pode ver as visualizações" }); return; }
+
   const views = await db.select({ v: storyViewsTable, u: usersTable })
     .from(storyViewsTable)
     .innerJoin(usersTable, eq(storyViewsTable.utilizadorId, usersTable.id))
@@ -115,6 +139,12 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
 
   if (storyIds && Array.isArray(storyIds)) {
     for (const storyId of storyIds) {
+      // Validar que a story pertence ao utilizador autenticado antes de adicionar ao highlight
+      const [story] = await db.select({ autorId: storiesTable.autorId })
+        .from(storiesTable)
+        .where(and(eq(storiesTable.id, storyId), eq(storiesTable.autorId, req.userId!)))
+        .limit(1);
+      if (!story) continue; // ignorar stories de outros utilizadores
       await db.insert(highlightStoriesTable).values({ highlightId: highlight.id, storyId });
     }
   }

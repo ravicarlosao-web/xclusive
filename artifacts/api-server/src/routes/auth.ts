@@ -1,17 +1,34 @@
 import { Router } from "express";
 import { db, usersTable, followsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { signToken, hashPassword, comparePassword, requireAuth, type AuthRequest } from "../lib/auth";
+import { z } from "zod/v4";
+import { signToken, hashPassword, comparePassword, requireAuth, revokeToken, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
 
 const router = Router();
 
-router.post("/auth/register", async (req, res): Promise<void> => {
-  const { nomeCompleto, email, username, password, dataNascimento, tipoConta } = req.body;
+const registerSchema = z.object({
+  nomeCompleto: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
+  email: z.email("Email inválido").max(255),
+  username: z
+    .string()
+    .min(3, "Username deve ter pelo menos 3 caracteres")
+    .max(50)
+    .regex(/^[a-zA-Z0-9_]+$/, "Username só pode conter letras, números e _"),
+  password: z.string().min(8, "Password deve ter pelo menos 8 caracteres").max(128),
+  dataNascimento: z.string().max(20).optional(),
+  tipoConta: z.enum(["pessoal", "criador"]).optional(),
+  pais: z.string().max(10).optional(),
+  telefone: z.string().max(20).optional(),
+});
 
-  if (!nomeCompleto || !email || !username || !password) {
-    res.status(400).json({ error: "Campos obrigatórios em falta" });
-    return;
-  }
+const loginSchema = z.object({
+  email: z.string().min(1, "Email ou username é obrigatório").max(255),
+  password: z.string().min(1, "Password é obrigatória").max(128),
+});
+
+router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
+  const { nomeCompleto, email, username, password, dataNascimento, tipoConta } = req.body;
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -44,13 +61,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/auth/login", async (req, res): Promise<void> => {
+router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void> => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    res.status(400).json({ error: "Email e password são obrigatórios" });
-    return;
-  }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase()));
   if (!user) {
@@ -82,7 +94,16 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   res.json({ token, user: formatUser(user, posts || 0, seguidores || 0, seguindo || 0) });
 });
 
-router.post("/auth/logout", (_req, res): void => {
+router.post("/auth/logout", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const expiresAt = req.tokenExp
+      ? new Date(req.tokenExp * 1000)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await revokeToken(req.tokenJti!, req.userId!, expiresAt);
+  } catch (err) {
+    // Falha silenciosa — o token expira naturalmente ao fim de 7 dias
+    (req as any).log?.warn({ err }, "Logout: falha ao revogar token");
+  }
   res.json({ ok: true });
 });
 

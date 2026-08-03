@@ -1,24 +1,29 @@
 import { Router } from "express";
 import { db, purchasesTable, usersTable, postsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
 
 const router = Router();
+
+const gorjetaSchema = z.object({
+  valor: z
+    .number({ error: "Valor deve ser um número" })
+    .positive("Valor deve ser positivo")
+    .finite()
+    .max(10_000_000, "Valor demasiado elevado"),
+});
 
 /**
  * POST /api/posts/:postId/gorjeta
  * Body: { valor: number }
  * Sends a tip from the authenticated user to the post's author.
  */
-router.post("/posts/:postId/gorjeta", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), async (req: AuthRequest, res): Promise<void> => {
   const postId = parseInt(req.params['postId'] as string, 10);
-  const { valor } = req.body as { valor?: number };
+  const { valor } = req.body as { valor: number };
   const senderId = req.userId!;
-
-  if (!valor || valor <= 0 || !Number.isFinite(valor)) {
-    res.status(400).json({ error: "Valor de gorjeta inválido." });
-    return;
-  }
 
   try {
     const [post] = await db
@@ -51,12 +56,14 @@ router.post("/posts/:postId/gorjeta", requireAuth, async (req: AuthRequest, res)
 
 /**
  * GET /api/users/:username/gorjetas
- * Returns the total tips received by a creator.
+ * Criador autenticado: recebe histórico completo (sem dados do comprador).
+ * Outros utilizadores autenticados: recebe apenas total agregado.
+ * Sem autenticação: 401.
  */
-router.get("/users/:username/gorjetas", async (req, res): Promise<void> => {
+router.get("/users/:username/gorjetas", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   try {
     const [creator] = await db
-      .select({ id: usersTable.id })
+      .select({ id: usersTable.id, username: usersTable.username })
       .from(usersTable)
       .where(eq(usersTable.username, req.params.username))
       .limit(1);
@@ -64,13 +71,25 @@ router.get("/users/:username/gorjetas", async (req, res): Promise<void> => {
     if (!creator) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
 
     const gorjetas = await db
-      .select()
+      .select({
+        id: purchasesTable.id,
+        valor: purchasesTable.valor,
+        conteudoId: purchasesTable.conteudoId,
+        descricao: purchasesTable.descricao,
+        criadoEm: purchasesTable.criadoEm,
+      })
       .from(purchasesTable)
       .where(and(eq(purchasesTable.vendedorId, creator.id), eq(purchasesTable.tipo, "gorjeta")))
       .orderBy(purchasesTable.criadoEm);
 
     const total = gorjetas.reduce((sum: number, g) => sum + Number(g.valor), 0);
-    res.json({ gorjetas, total, count: gorjetas.length });
+
+    // Apenas o próprio criador vê o histórico detalhado; outros só veem o agregado
+    if (req.userId === creator.id) {
+      res.json({ gorjetas, total, count: gorjetas.length });
+    } else {
+      res.json({ total, count: gorjetas.length });
+    }
   } catch (err) {
     req.log.error({ err }, "Get gorjetas error");
     res.status(500).json({ error: "Erro interno." });

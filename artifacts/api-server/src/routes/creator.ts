@@ -1,7 +1,24 @@
 import { Router } from "express";
 import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, reelsTable, followsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
+
+const createPlanSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório").max(100),
+  preco: z.number().min(0, "Preço não pode ser negativo").max(10_000_000),
+  beneficios: z.string().max(1000).optional(),
+  ativo: z.boolean().optional(),
+});
+
+const gorjetaSchema = z.object({
+  valor: z
+    .number({ error: "Valor deve ser um número" })
+    .positive("Valor deve ser positivo")
+    .finite()
+    .max(10_000_000),
+});
 
 const router = Router();
 
@@ -71,9 +88,8 @@ router.get("/creator/plans", requireAuth, async (req: AuthRequest, res): Promise
 });
 
 // Criar plano
-router.post("/creator/plans", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.post("/creator/plans", requireAuth, validate(createPlanSchema), async (req: AuthRequest, res): Promise<void> => {
   const { nome, preco, beneficios, ativo } = req.body;
-  if (!nome || !preco) { res.status(400).json({ error: "Nome e preço são obrigatórios" }); return; }
 
   const [plan] = await db.insert(subscriptionPlansTable).values({
     criadorId: req.userId!,
