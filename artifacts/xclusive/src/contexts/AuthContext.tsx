@@ -64,31 +64,8 @@ export type TransactionTipo = 'gorjeta' | 'carregamento' | 'desbloqueio' | 'subs
 const MOCK_TRANSACTIONS_KEY = 'xclusive_mock_transactions';
 
 // ─── Top-up requests (shared with admin via localStorage) ────────────────────
-export const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
-
-export interface TopUpRequest {
-  id: string;
-  userId: number;
-  username: string;
-  nomeCompleto: string;
-  amount: number;
-  reference: string;
-  criadoEm: string;
-  status: 'pendente' | 'aprovado' | 'rejeitado';
-  processadoEm?: string;
-  adminNota?: string;
-  /** Comprovativo PDF em base64 (data URI) */
-  comprovantivoBase64?: string;
-  /** Nome original do ficheiro PDF */
-  comprovantivoNome?: string;
-}
-
-export function getTopUpRequests(): TopUpRequest[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]'); } catch { return []; }
-}
-export function saveTopUpRequests(reqs: TopUpRequest[]) {
-  localStorage.setItem(MOCK_TOPUP_KEY, JSON.stringify(reqs));
-}
+import { getTopUpRequests as _getTopUpRequests, saveTopUpRequests as _saveTopUpRequests } from '@/lib/topupStorage';
+import type { TopUpRequest as _TopUpRequest } from '@/lib/topupStorage';
 export interface MockTransaction {
   id: number;
   fromUserId: number;
@@ -254,7 +231,7 @@ interface AuthContextType {
   /** Envia gorjeta ao criador. Lança erro se saldo insuficiente. */
   sendTip: (creatorUsername: string, amount: number, postId?: number) => Promise<void>;
   /** Submete pedido de carregamento (fica pendente até aprovação do admin) */
-  topUp: (amount: number, ibanConfirm: string, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
+  topUp: (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
   unlockPost: (postId: number, creatorUsername: string, preco: number) => Promise<void>;
   /** Subscreve a um criador. Lança erro se saldo insuficiente. */
@@ -428,13 +405,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSaldo(freshUsers[freshSenderIdx].saldo);
   }, []);
 
-  const topUp = useCallback(async (amount: number, ibanConfirm: string, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => {
+  const topUp = useCallback(async (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => {
     if (!Number.isFinite(amount) || amount < 500) {
       throw new Error('Valor mínimo de carregamento: 500 Kz.');
-    }
-    const normalizeIban = (s: string) => s.replace(/\s/g, '').toUpperCase();
-    if (normalizeIban(ibanConfirm) !== normalizeIban(XCLUSIVE_IBAN)) {
-      throw new Error('IBAN incorreto. Confirma o IBAN da Xclusive e tenta de novo.');
     }
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
@@ -442,12 +415,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = freshUsers.find(u => u.id === session.userId);
     if (!user) throw new Error('Utilizador não encontrado.');
     // Regista o pedido como pendente — o admin aprova manualmente
-    const reqs = getTopUpRequests();
+    const reqs = _getTopUpRequests();
     // Evita pedidos duplicados com a mesma referência
     if (reqs.some(r => r.reference === reference)) {
       throw new Error('Este pedido já foi submetido.');
     }
-    const newReq: TopUpRequest = {
+    const newReq: _TopUpRequest = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       userId: session.userId,
       username: user.username,
@@ -459,7 +432,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(comprovantivoBase64 ? { comprovantivoBase64, comprovantivoNome: comprovantivoNome ?? 'comprovativo.pdf' } : {}),
     };
     reqs.push(newReq);
-    saveTopUpRequests(reqs);
+    _saveTopUpRequests(reqs);
     // Não adiciona saldo agora — só após aprovação do admin
   }, []);
 

@@ -20,7 +20,6 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState<number | ''>('');
   const [customAmount, setCustomAmount] = useState('');
-  const [ibanInput, setIbanInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copiedIban, setCopiedIban] = useState(false);
@@ -39,7 +38,6 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setStep('amount');
     setAmount('');
     setCustomAmount('');
-    setIbanInput('');
     setError('');
     setLoading(false);
     setPdfBase64(null);
@@ -77,7 +75,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setError('');
     setLoading(true);
     try {
-      await topUp(selectedAmount, ibanInput, reference, pdfBase64, pdfName);
+      await topUp(selectedAmount, reference, pdfBase64, pdfName);
       setStep('success');
     } catch (e: any) {
       setError(e.message || 'Erro ao processar pedido.');
@@ -227,26 +225,15 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           </div>
         )}
 
-        {/* ── Step: Confirm IBAN + PDF ── */}
+        {/* ── Step: PDF upload ── */}
         {step === 'confirm' && (
           <div className="p-6">
             <DialogHeader className="mb-5">
-              <DialogTitle className="text-xl font-bold">Confirmar Transferência</DialogTitle>
+              <DialogTitle className="text-xl font-bold">Anexar Comprovativo</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Introduz o IBAN da Xclusive e anexa o comprovativo em PDF.
+                Anexa o comprovativo da transferência em PDF para verificação.
               </p>
             </DialogHeader>
-
-            {/* IBAN */}
-            <div className="mb-4">
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">IBAN da Xclusive</label>
-              <Input
-                placeholder="AO06 0040 0000 1234 5678 9012 3"
-                value={ibanInput}
-                onChange={(e) => { setIbanInput(e.target.value); setError(''); }}
-                className="bg-secondary border-border font-mono tracking-wider"
-              />
-            </div>
 
             {/* PDF upload */}
             <div className="mb-4">
@@ -298,7 +285,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </Button>
               <Button
                 className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
-                disabled={!ibanInput.trim() || loading}
+                disabled={loading}
                 onClick={handleConfirm}
               >
                 {loading ? 'A enviar...' : 'Submeter pedido'}
