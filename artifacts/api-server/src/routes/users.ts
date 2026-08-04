@@ -30,6 +30,28 @@ const kycSubmissionSchema = z.object({
 
 const router = Router();
 
+/**
+ * Verifica se o viewer tem acesso ao conteúdo de uma conta privada.
+ * Retorna true se: conta é pública, viewer é o dono, ou viewer segue a conta.
+ * Nota: estaASeguir já calculado na rota de perfil — passa-o directamente.
+ * Para rotas que ainda não calcularam, usa checkFollow=true para fazer a query.
+ */
+async function canViewPrivateContent(
+  user: { id: number; privado: boolean | null },
+  viewerId: number | undefined,
+  estaASeguirPrecomputed?: boolean,
+): Promise<boolean> {
+  if (!user.privado) return true;
+  if (viewerId === user.id) return true;
+  if (estaASeguirPrecomputed !== undefined) return estaASeguirPrecomputed;
+  if (!viewerId) return false;
+  const [follow] = await db
+    .select()
+    .from(followsTable)
+    .where(and(eq(followsTable.seguidorId, viewerId), eq(followsTable.seguidoId, user.id)));
+  return !!follow;
+}
+
 // Sugestões de utilizadores para seguir
 router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId;
@@ -174,6 +196,8 @@ router.get("/users/:username", optionalAuth, async (req: AuthRequest, res): Prom
     segueVoce = !!fBack;
   }
 
+  const podeVerConteudo = await canViewPrivateContent(user, viewerId, estaASeguir);
+
   res.json({
     id: user.id,
     username: user.username,
@@ -185,9 +209,10 @@ router.get("/users/:username", optionalAuth, async (req: AuthRequest, res): Prom
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,
-    totalSeguidores: seguidores || 0,
-    totalSeguindo: seguindo || 0,
-    totalPublicacoes: posts || 0,
+    // Contagens ocultadas para contas privadas a não-seguidores
+    totalSeguidores: podeVerConteudo ? (seguidores || 0) : null,
+    totalSeguindo: podeVerConteudo ? (seguindo || 0) : null,
+    totalPublicacoes: podeVerConteudo ? (posts || 0) : null,
     estaASeguir,
     segueVoce,
     criadoEm: user.criadoEm.toISOString(),
@@ -225,6 +250,10 @@ router.get("/users/:username/followers", optionalAuth, async (req: AuthRequest, 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
 
+  if (!await canViewPrivateContent(user, req.userId)) {
+    res.status(403).json({ error: "Esta conta é privada." }); return;
+  }
+
   const followers = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidorId, usersTable.id)).where(eq(followsTable.seguidoId, user.id)).limit(50);
   const users = followers.map(f => ({
     id: f.u.id,
@@ -246,6 +275,10 @@ router.get("/users/:username/following", optionalAuth, async (req: AuthRequest, 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
 
+  if (!await canViewPrivateContent(user, req.userId)) {
+    res.status(403).json({ error: "Esta conta é privada." }); return;
+  }
+
   const following = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidoId, usersTable.id)).where(eq(followsTable.seguidorId, user.id)).limit(50);
   const users = following.map(f => ({
     id: f.u.id,
@@ -266,6 +299,10 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+
+  if (!await canViewPrivateContent(user, req.userId)) {
+    res.status(403).json({ error: "Esta conta é privada." }); return;
+  }
 
   const posts = await db.select().from(postsTable).where(eq(postsTable.autorId, user.id)).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
 
@@ -293,6 +330,10 @@ router.get("/users/:username/reels", optionalAuth, async (req: AuthRequest, res)
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+
+  if (!await canViewPrivateContent(user, req.userId)) {
+    res.status(403).json({ error: "Esta conta é privada." }); return;
+  }
 
   res.json({ reels: [], page: 1, hasMore: false });
 });

@@ -35,17 +35,43 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   next();
 }
 
-// ── Signed media proxy — valida assinatura HMAC + TTL antes de redirecionar ──
+// ── Signed media proxy — valida assinatura HMAC + TTL e faz proxy do conteúdo ─
 // Registado antes do router.use("/admin", requireAdmin) para poder aplicar
-// requireAdmin explicitamente (o URL gerado por signMediaUrl já inclui /api/admin/media)
-router.get("/admin/media", requireAdmin, (req: AdminRequest, res) => {
+// requireAdmin explicitamente (o URL gerado por signMediaUrl já inclui /api/admin/media).
+//
+// Segurança: faz fetch server-side e pipe do conteúdo — o URL real do storage
+// nunca chega ao cliente. Um redirect 302 exporia o rawUrl no Network tab do browser.
+router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
   const { url, exp, sig } = req.query as Record<string, string>;
   const rawUrl = verifyMediaUrl(url, exp, sig);
   if (!rawUrl) {
     return res.status(403).json({ error: "URL de media inválido ou expirado." });
   }
-  // Redirecionar para o recurso real; o browser/cliente carrega directamente do CDN
-  res.redirect(302, rawUrl);
+
+  try {
+    const upstream = await fetch(rawUrl);
+    if (!upstream.ok) {
+      return res.status(502).json({ error: "Não foi possível obter o recurso." });
+    }
+    const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+    const contentLength = upstream.headers.get("content-length");
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "no-store"); // documentos sensíveis não devem ser cacheados
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    // Pipe do body sem expor o rawUrl ao cliente
+    const reader = upstream.body?.getReader();
+    if (!reader) return res.status(502).end();
+    const pump = async (): Promise<void> => {
+      const { done, value } = await reader.read();
+      if (done) { res.end(); return; }
+      res.write(value);
+      return pump();
+    };
+    await pump();
+  } catch {
+    if (!res.headersSent) res.status(502).json({ error: "Erro ao obter o recurso." });
+  }
 });
 
 // ── Login (public — must be before requireAdmin middleware) ──────────────────
@@ -353,7 +379,7 @@ router.get("/admin/creators", (req, res) => {
   res.json(paginate(creators, Number(page), Number(limit)));
 });
 
-router.get("/admin/creators/kyc-queue", (req, res) => {
+router.get("/admin/creators/kyc-queue", requireAdmin, (req: AdminRequest, res) => {
   const queue = mockUsers.filter(u => u.tipoConta === "criador" && !u.verificado).map(u => ({
     ...u,
     kycSubmissao: {

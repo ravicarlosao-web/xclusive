@@ -12,14 +12,37 @@ const app: Express = express();
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }, // necessário para media URLs
+
+    // HSTS — plataforma financeira requer 1 ano, subdomínios e preload
+    //   • maxAge 31 536 000 s = 1 ano (mínimo exigido pelos browsers para preload)
+    //   • includeSubDomains: protege api.xclusive.ao, cdn.xclusive.ao, etc.
+    //   • preload: elegível para lista HSTS hardcoded do Chrome/Firefox/Safari
+    //     (submeter em https://hstspreload.org após deploy em produção)
+    strictTransportSecurity: {
+      maxAge: 31_536_000,
+      includeSubDomains: true,
+      preload: true,
+    },
+
+    // CSP — este servidor devolve apenas JSON; directivas defensivas para
+    // o caso de alguma resposta ser interpretada como HTML por um cliente:
+    //   • sem 'unsafe-inline' em styleSrc
+    //   • objectSrc 'none'  — bloqueia plugins legados (Flash, Silverlight)
+    //   • baseUri 'self'    — previne ataques de injecção via <base href>
+    //   • frameAncestors 'none' — equivalente a X-Frame-Options: DENY
+    //   • upgradeInsecureRequests — força HTTPS em recursos mistos
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'"],
         frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: [],
       },
     },
   }),
@@ -35,8 +58,10 @@ app.use(
     origin: (origin, callback) => {
       // Pedidos sem origin (curl, apps mobile, SSR) são sempre permitidos
       if (!origin) return callback(null, true);
-      // Em desenvolvimento: permitir localhost e domínios Replit
-      if (process.env.NODE_ENV !== "production") {
+      // Em desenvolvimento: permitir localhost e domínios Replit.
+      // Opt-in explícito em NODE_ENV=development — qualquer outro valor
+      // (incluindo undefined) aplica a lista branca de produção.
+      if (process.env.NODE_ENV === "development") {
         if (
           origin.includes("localhost") ||
           origin.includes("127.0.0.1") ||

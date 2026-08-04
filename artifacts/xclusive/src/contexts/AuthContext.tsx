@@ -83,11 +83,48 @@ function saveTransactions(txs: MockTransaction[]) {
   localStorage.setItem(MOCK_TRANSACTIONS_KEY, JSON.stringify(txs));
 }
 
+/**
+ * Obfusca dadosBancarios antes de guardar em localStorage.
+ * ⚠️ NOTA: Base64 NÃO é encriptação — é apenas obfuscação para o sistema mock.
+ * Em produção, dados bancários devem ser guardados exclusivamente no servidor,
+ * encriptados em repouso com chave de servidor, e nunca transmitidos ao cliente.
+ */
+function encodeDadosBancarios(dados: DadosBancarios): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(dados))));
+}
+function decodeDadosBancarios(enc: string): DadosBancarios | null {
+  try { return JSON.parse(decodeURIComponent(escape(atob(enc)))); } catch { return null; }
+}
+
 function getMockUsers(): MockUser[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_KEY) || '[]'); } catch { return []; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(MOCK_KEY) || '[]') as Array<Record<string, unknown>>;
+    return raw.map(u => {
+      // Suporte a dados legados em plaintext: migra na leitura
+      if (u._dadosBancariosEnc && typeof u._dadosBancariosEnc === 'string') {
+        const { _dadosBancariosEnc, ...rest } = u;
+        const dadosBancarios = decodeDadosBancarios(_dadosBancariosEnc);
+        return dadosBancarios ? { ...rest, dadosBancarios } as unknown as MockUser : rest as unknown as MockUser;
+      }
+      // Migração de dados em plaintext deixados por versões anteriores
+      if (u.dadosBancarios) {
+        const enc = encodeDadosBancarios(u.dadosBancarios as DadosBancarios);
+        const { dadosBancarios: _plain, ...rest } = u;
+        void _plain;
+        return { ...rest, dadosBancarios: decodeDadosBancarios(enc) } as unknown as MockUser;
+      }
+      return u as unknown as MockUser;
+    });
+  } catch { return []; }
 }
 function saveMockUsers(users: MockUser[]) {
-  localStorage.setItem(MOCK_KEY, JSON.stringify(users));
+  const serialized = users.map(u => {
+    if (!u.dadosBancarios) return u;
+    const { dadosBancarios, ...rest } = u;
+    // Guarda dados bancários obfuscados — nunca em plaintext
+    return { ...rest, _dadosBancariosEnc: encodeDadosBancarios(dadosBancarios) };
+  });
+  localStorage.setItem(MOCK_KEY, JSON.stringify(serialized));
 }
 
 // Pre-seed test accounts so they work even without a real DB
