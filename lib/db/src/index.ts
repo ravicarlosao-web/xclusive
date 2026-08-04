@@ -4,13 +4,30 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+// SUPABASE_DATABASE_URL tem prioridade sobre DATABASE_URL (gerida pelo Replit).
+// Isto permite apontar para Supabase (ou qualquer Postgres externo) sem
+// sobrescrever a variável runtime-managed do Replit.
+const connectionString = process.env.SUPABASE_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!connectionString) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// SSL: activado sempre que a connection string não seja localhost/127.0.0.1.
+// Supabase exige SSL; a DB interna do Replit não precisa.
+// rejectUnauthorized: false aceita o certificado auto-assinado do pgbouncer
+// do Supabase sem precisar de instalar o certificado CA manualmente.
+const isLocal =
+  connectionString.includes("localhost") ||
+  connectionString.includes("127.0.0.1");
+
+export const pool = new Pool({
+  connectionString,
+  ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
