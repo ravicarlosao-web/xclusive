@@ -189,7 +189,7 @@ router.get("/creator/earnings", requireAuth, requireCreator, async (req: AuthReq
 // Transações
 router.get("/creator/transactions", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const page = Math.max(1, parseInt(String(req.query.page || "1")));
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1"))));
   const limit = 20;
   const offset = (page - 1) * limit;
 
@@ -215,31 +215,48 @@ router.get("/creator/transactions", requireAuth, requireCreator, async (req: Aut
   });
 });
 
-// Subscrever
-router.post("/subscriptions", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const { planoId } = req.body;
-  if (!planoId) { res.status(400).json({ error: "planoId é obrigatório" }); return; }
+const subscribeSchema = z.object({
+  planoId: z.number().int().positive(),
+  precoEsperado: z.number().positive("precoEsperado deve ser positivo").finite(),
+});
 
-  // Leitura do plano fora da transação — não precisa de lock (só leitura).
-  const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planoId));
-  if (!plan) { res.status(404).json({ error: "Plano não encontrado" }); return; }
-  if (!plan.ativo) { res.status(400).json({ error: "Este plano não está disponível." }); return; }
-  if (plan.criadorId === req.userId) { res.status(400).json({ error: "Não podes subscrever o teu próprio plano." }); return; }
+// Subscrever
+router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req: AuthRequest, res): Promise<void> => {
+  const { planoId, precoEsperado } = req.body as { planoId: number; precoEsperado: number };
 
   try {
     const sub = await db.transaction(async (tx) => {
       // 1. Bloquear linha do subscritor (FOR UPDATE) para serializar pedidos concorrentes
       //    do mesmo utilizador — evita double-spend e subscrições duplicadas.
-      const [subscriber] = await tx
-        .select({ saldo: usersTable.saldo })
-        .from(usersTable)
-        .where(eq(usersTable.id, req.userId!))
-        .for("update");
+      //    Bloquear o plano (FOR SHARE) em paralelo: impede que o criador altere o
+      //    preço enquanto esta transação está em curso (race condition de preço).
+      const [[subscriber], [plan]] = await Promise.all([
+        tx.select({ saldo: usersTable.saldo })
+          .from(usersTable)
+          .where(eq(usersTable.id, req.userId!))
+          .for("update"),
+        tx.select()
+          .from(subscriptionPlansTable)
+          .where(eq(subscriptionPlansTable.id, planoId))
+          .for("share"),
+      ]);
 
       if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
+      if (!plan) throw new PaymentError("Plano não encontrado.", 404);
+      if (!plan.ativo) throw new PaymentError("Este plano não está disponível.", 400);
+      if (plan.criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
 
-      const preco = Number(plan.preco);
-      if (Number(subscriber.saldo) < preco) {
+      // 2. Validar que o preço não mudou desde que o utilizador o viu no UI.
+      //    Comparação com tolerância de 0.01 Kz para arredondamentos de ponto flutuante.
+      const precoReal = Number(plan.preco);
+      if (Math.abs(precoReal - precoEsperado) > 0.01) {
+        throw new PaymentError(
+          `O preço deste plano foi alterado para ${precoReal.toLocaleString("pt-PT")} Kz. Confirma o novo valor antes de subscrever.`,
+          409,
+        );
+      }
+
+      if (Number(subscriber.saldo) < precoReal) {
         throw new PaymentError("Saldo insuficiente para activar esta subscrição.", 402);
       }
 
@@ -260,13 +277,13 @@ router.post("/subscriptions", requireAuth, async (req: AuthRequest, res): Promis
       // 3. Debitar saldo do subscritor.
       await tx
         .update(usersTable)
-        .set({ saldo: sql`${usersTable.saldo} - ${preco}` })
+        .set({ saldo: sql`${usersTable.saldo} - ${precoReal}` })
         .where(eq(usersTable.id, req.userId!));
 
       // 4. Creditar ganhos do criador.
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${preco}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${precoReal}` })
         .where(eq(usersTable.id, plan.criadorId));
 
       // 5. Criar subscrição.
@@ -291,19 +308,19 @@ router.post("/subscriptions", requireAuth, async (req: AuthRequest, res): Promis
         descricao: `Subscrição: ${plan.nome}`,
       });
 
-      return newSub;
+      return { newSub, plan };
     });
 
     res.status(201).json({
-      id: sub.id,
+      id: sub.newSub.id,
       plano: {
-        id: plan.id, nome: plan.nome, preco: parseFloat(String(plan.preco)),
-        beneficios: plan.beneficios, ativo: plan.ativo, totalSubscritores: 0, criadoEm: plan.criadoEm.toISOString(),
+        id: sub.plan.id, nome: sub.plan.nome, preco: parseFloat(String(sub.plan.preco)),
+        beneficios: sub.plan.beneficios, ativo: sub.plan.ativo, totalSubscritores: 0, criadoEm: sub.plan.criadoEm.toISOString(),
       },
       criador: null,
-      estado: sub.estado,
-      inicioEm: sub.inicioEm.toISOString(),
-      renovacaoEm: sub.renovacaoEm?.toISOString() || null,
+      estado: sub.newSub.estado,
+      inicioEm: sub.newSub.inicioEm.toISOString(),
+      renovacaoEm: sub.newSub.renovacaoEm?.toISOString() || null,
     });
   } catch (err) {
     if (err instanceof PaymentError) {

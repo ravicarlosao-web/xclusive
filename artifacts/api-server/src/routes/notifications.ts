@@ -7,7 +7,7 @@ const router = Router();
 
 router.get("/notifications", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const page = Math.max(1, parseInt(String(req.query.page || "1")));
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1"))));
   const limit = 20;
   const offset = (page - 1) * limit;
 

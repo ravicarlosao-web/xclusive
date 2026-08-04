@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, purchasesTable, usersTable, postsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
@@ -101,13 +101,21 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
   }
 });
 
+const GORJETAS_MAX_LIMIT = 50;
+
 /**
- * GET /api/users/:username/gorjetas
- * Criador autenticado: recebe histórico completo (sem dados do comprador).
- * Outros utilizadores autenticados: recebe apenas total agregado.
+ * GET /api/users/:username/gorjetas?page=1&limit=20
+ * Criador autenticado: recebe histórico paginado + agregado (total Kz, count total).
+ * Outros utilizadores autenticados: recebe apenas agregado.
  * Sem autenticação: 401.
+ *
+ * Usa o índice purchases_vendedor_tipo_criado_em_idx para evitar full-scans.
  */
 router.get("/users/:username/gorjetas", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(GORJETAS_MAX_LIMIT, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+  const offset = (page - 1) * limit;
+
   try {
     const [creator] = await db
       .select({ id: usersTable.id, username: usersTable.username })
@@ -117,25 +125,45 @@ router.get("/users/:username/gorjetas", requireAuth, async (req: AuthRequest, re
 
     if (!creator) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
 
-    const gorjetas = await db
+    const whereClause = and(eq(purchasesTable.vendedorId, creator.id), eq(purchasesTable.tipo, "gorjeta"));
+
+    // Agregado (total Kz e contagem) — sempre necessário, independente do role
+    const [agg] = await db
       .select({
-        id: purchasesTable.id,
-        valor: purchasesTable.valor,
-        conteudoId: purchasesTable.conteudoId,
-        descricao: purchasesTable.descricao,
-        criadoEm: purchasesTable.criadoEm,
+        totalValor: sql<string>`coalesce(sum(${purchasesTable.valor}), 0)`,
+        totalCount: sql<number>`count(*)::int`,
       })
       .from(purchasesTable)
-      .where(and(eq(purchasesTable.vendedorId, creator.id), eq(purchasesTable.tipo, "gorjeta")))
-      .orderBy(purchasesTable.criadoEm);
+      .where(whereClause);
 
-    const total = gorjetas.reduce((sum: number, g) => sum + Number(g.valor), 0);
+    const total = Number(agg?.totalValor ?? 0);
+    const count = agg?.totalCount ?? 0;
 
-    // Apenas o próprio criador vê o histórico detalhado; outros só veem o agregado
+    // Apenas o próprio criador vê o histórico detalhado paginado
     if (req.userId === creator.id) {
-      res.json({ gorjetas, total, count: gorjetas.length });
+      const gorjetas = await db
+        .select({
+          id: purchasesTable.id,
+          valor: purchasesTable.valor,
+          conteudoId: purchasesTable.conteudoId,
+          descricao: purchasesTable.descricao,
+          criadoEm: purchasesTable.criadoEm,
+        })
+        .from(purchasesTable)
+        .where(whereClause)
+        .orderBy(desc(purchasesTable.criadoEm))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({
+        gorjetas,
+        total,
+        count,
+        page,
+        hasMore: offset + gorjetas.length < count,
+      });
     } else {
-      res.json({ total, count: gorjetas.length });
+      res.json({ total, count });
     }
   } catch (err) {
     req.log.error({ err }, "Get gorjetas error");

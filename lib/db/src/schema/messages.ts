@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const conversationTipoEnum = pgEnum("conversation_tipo", ["privada", "grupo"]);
@@ -13,7 +13,10 @@ export const conversationsTable = pgTable("conversations", {
 export const conversationParticipantsTable = pgTable("conversation_participants", {
   conversationId: integer("conversation_id").notNull().references(() => conversationsTable.id, { onDelete: "cascade" }),
   utilizadorId: integer("utilizador_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-});
+}, (t) => [
+  // Suporta GET /api/conversations — filtra participações por utilizador sem full-scan
+  index("conv_participants_utilizador_id_idx").on(t.utilizadorId),
+]);
 
 export const messagesTable = pgTable("messages", {
   id: serial("id").primaryKey(),

@@ -1742,7 +1742,13 @@ components:
 
     SubscriptionInput:
       type: object
-      required: [planoId]
+      required: [planoId, precoEsperado]
       properties:
         planoId:
           type: integer
+        precoEsperado:
+          type: number
+          description: >
+            Preço que o utilizador viu no UI antes de confirmar. O servidor
+            rejeita o pedido (409) se o preço do plano tiver sido alterado
+            entretanto, evitando débitos silenciosos por race condition.

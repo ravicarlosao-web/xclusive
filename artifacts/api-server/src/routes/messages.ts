@@ -11,13 +11,20 @@ const sendMessageSchema = z.object({
 
 const router = Router();
 
-// Lista de conversas
+const CONVERSATIONS_MAX_LIMIT = 50;
+
+// Lista de conversas (paginada)
 router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(CONVERSATIONS_MAX_LIMIT, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+  const offset = (page - 1) * limit;
 
   const participations = await db.select({ conversationId: conversationParticipantsTable.conversationId })
     .from(conversationParticipantsTable)
-    .where(eq(conversationParticipantsTable.utilizadorId, userId));
+    .where(eq(conversationParticipantsTable.utilizadorId, userId))
+    .limit(limit)
+    .offset(offset);
 
   const conversationIds = participations.map(p => p.conversationId);
 

@@ -27,7 +27,7 @@ const router = Router();
 // Feed
 router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId;
-  const page = Math.max(1, parseInt(String(req.query.page || "1")));
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1"))));
   const limit = Math.min(20, parseInt(String(req.query.limit || "12")));
   const offset = (page - 1) * limit;
 

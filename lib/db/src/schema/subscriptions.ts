@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const subscriptionEstadoEnum = pgEnum("subscription_estado", ["ativa", "cancelada"]);
@@ -34,7 +34,10 @@ export const purchasesTable = pgTable("purchases", {
   conteudoId: integer("conteudo_id"),
   descricao: text("descricao"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
-});
+}, (t) => [
+  // Suporta GET /users/:username/gorjetas com ORDER BY criado_em DESC e LIMIT/OFFSET
+  index("purchases_vendedor_tipo_criado_em_idx").on(t.vendedorId, t.tipo, t.criadoEm),
+]);
 
 export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
 export type Subscription = typeof subscriptionsTable.$inferSelect;
