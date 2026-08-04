@@ -2,6 +2,12 @@ import { Router } from "express";
 import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { z } from "zod";
+
+const sendMessageSchema = z.object({
+  tipo: z.enum(["texto", "imagem", "video"]).default("texto"),
+  conteudo: z.string().max(4000).optional(),
+});
 
 const router = Router();
 
@@ -171,13 +177,18 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     return;
   }
 
-  const { tipo, conteudo } = req.body;
+  const parsed = sendMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Input inválido", detalhes: parsed.error.flatten().fieldErrors });
+    return;
+  }
+  const { tipo, conteudo } = parsed.data;
 
   const [msg] = await db.insert(messagesTable).values({
     conversationId: id,
     autorId: req.userId!,
-    tipo: tipo || "texto",
-    conteudo: conteudo || null,
+    tipo,
+    conteudo: conteudo ?? null,
   }).returning();
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
