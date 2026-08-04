@@ -1,0 +1,44 @@
+# Configurar Base de Dados via Supabase (Postgres) — Fase de Testes
+
+## Contexto
+Vamos usar o Postgres gerido pelo Supabase apenas como banco de dados de testes/desenvolvimento antes de migrarmos para um Postgres self-hosted num VPS. Isto é só para termos um banco real (em vez de mock/localStorage) enquanto validamos os fluxos, especialmente os que envolvem transacções e saldo.
+
+**Regra fundamental: usar o Supabase apenas como Postgres puro, através da connection string.** Não usar o SDK do Supabase (`@supabase/supabase-js`), não usar Supabase Auth, não usar Row Level Security (RLS), não usar o Storage API do Supabase. O Drizzle ORM continua a ser a única camada de acesso à base de dados, exactamente como já está implementado — só muda o destino da ligação.
+
+Isto é importante para não criar dependência do Supabase e garantir que a migração futura para o VPS seja apenas trocar a `DATABASE_URL`.
+
+## O que preciso que faças
+
+### 1. Configuração da ligação
+- Actualizar a variável de ambiente `DATABASE_URL` (ou equivalente já usada no projecto) para apontar para a connection string do Postgres do Supabase que vou fornecer
+- Confirmar que o Drizzle continua a usar exactamente a mesma configuração de driver que já tinha (`drizzle-orm/postgres-js`, `node-postgres`, ou o que já estiver em uso) — não trocar de driver
+- Usar a connection string em modo **pooled** (porta 6543, com pgbouncer) para a aplicação, se o Supabase disponibilizar essa opção, para evitar esgotar o limite de ligações simultâneas do tier gratuito. Confirmar se o driver actual do Drizzle é compatível com pgbouncer em modo transaction (algumas features como prepared statements podem precisar de ser desactivadas — `{ prepare: false }` no `postgres-js`, por exemplo)
+
+### 2. Migrações
+- Correr as migrações existentes do Drizzle (`drizzle-kit push` ou `migrate`, conforme já configurado no projecto) contra a nova base de dados do Supabase
+- Confirmar que todas as tabelas, constraints (incluindo o `CHECK (saldo >= 0)` se já tiver sido implementado na fase anterior) e índices foram criados correctamente
+- Não usar a interface do Supabase (Table Editor) para criar ou alterar schema manualmente — todo o schema deve continuar a vir do Drizzle, para manter uma única fonte de verdade
+
+### 3. Segurança da ligação
+- Confirmar que a connection string (com password) está apenas em variável de ambiente (`.env`, ou nos secrets do Replit) — nunca hardcoded no código nem commitada
+- Confirmar que a ligação usa SSL (`sslmode=require` ou equivalente) — o Supabase costuma exigir isto por defeito, mas confirmar que o driver do Drizzle está configurado para aceitar
+
+### 4. Verificação de RLS
+- Confirmar explicitamente que o Row Level Security está **desactivado** em todas as tabelas (o Supabase por vezes activa por defeito em novos projectos via a interface, mas como estamos a criar o schema via Drizzle directamente, verificar se isso não aplica RLS automaticamente)
+- Se o Supabase tiver activado RLS nalguma tabela por defeito e isso bloquear os pedidos do Drizzle, desactivar explicitamente (`ALTER TABLE nome_tabela DISABLE ROW LEVEL SECURITY;`) — não criar policies, porque não estamos a usar a Auth do Supabase
+
+### 5. Teste de fumo (smoke test)
+Depois de ligado, corre um teste simples para confirmar que está tudo a funcionar:
+- Criar um utilizador de teste via a rota de registo normal da aplicação
+- Fazer login e confirmar que o JWT é emitido correctamente
+- Testar uma rota que use transacção (ex: a rota de gorjeta já corrigida) para confirmar que `db.transaction()` e o lock de linha funcionam correctamente no Postgres real do Supabase (isto é importante — o comportamento de lock pode diferir ligeiramente dependendo da versão do Postgres)
+
+## O que NÃO fazer
+- Não instalar `@supabase/supabase-js` nem qualquer pacote do ecossistema Supabase
+- Não usar Supabase Auth para autenticação — o sistema de JWT próprio continua a ser usado
+- Não usar o Supabase Storage para uploads — isso é uma decisão separada para mais tarde
+- Não criar policies de RLS
+- Não subir dados reais de utilizadores, documentos KYC reais ou dados bancários reais para este banco — é ambiente de teste, usar sempre dados fictícios
+
+## Resposta que preciso
+Confirma passo a passo o que foi feito, mostra a configuração final da connection string (com a password ocultada/mascarada no output), e reporta o resultado do teste de fumo. Se algo não funcionar como esperado (ex: incompatibilidade do driver com pgbouncer), explica exactamente o erro e a alternativa proposta antes de aplicar.
