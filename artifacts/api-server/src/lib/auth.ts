@@ -51,14 +51,28 @@ export async function comparePassword(password: string, hash: string): Promise<b
 }
 
 /**
- * Revoga um token pelo jti. Limpa tokens expirados ~1% das vezes.
+ * Revoga um token pelo jti de forma atómica (INSERT … ON CONFLICT DO NOTHING).
+ *
+ * Retorna:
+ *   true  — token revogado agora (primeira vez que este jti é revogado).
+ *   false — JTI já estava na tabela; indica replay de um token já consumido.
+ *
+ * Lança em caso de falha de DB — o chamador deve tratar como falha fechada (fail-closed).
+ * Limpa tokens expirados ~1% das vezes como side-effect.
  */
-export async function revokeToken(jti: string, userId: number, expiresAt: Date): Promise<void> {
-  await db.insert(revokedTokensTable).values({ jti, userId, expiresAt });
-  // Limpeza periódica de tokens expirados
+export async function revokeToken(jti: string, userId: number, expiresAt: Date): Promise<boolean> {
+  const inserted = await db
+    .insert(revokedTokensTable)
+    .values({ jti, userId, expiresAt })
+    .onConflictDoNothing()
+    .returning({ jti: revokedTokensTable.jti });
+
+  // Limpeza periódica de tokens expirados (não afecta o resultado)
   if (Math.random() < 0.01) {
     await db.delete(revokedTokensTable).where(lt(revokedTokensTable.expiresAt, new Date()));
   }
+
+  return inserted.length === 1; // true = revogado agora; false = já existia (possível replay)
 }
 
 export interface AuthRequest extends Request {

@@ -172,31 +172,31 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     return;
   }
 
-  // Verificar revogação — fail-closed se DB indisponível
-  try {
-    const [revoked] = await db.select({ jti: revokedTokensTable.jti })
-      .from(revokedTokensTable)
-      .where(eq(revokedTokensTable.jti, payload.jti))
-      .limit(1);
-    if (revoked) {
-      clearRefreshCookie(res);
-      res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
-      return;
-    }
-  } catch (err) {
-    (req as any).log?.warn({ err }, "DB indisponível durante refresh — a negar (fail-closed)");
-    res.status(503).json({ error: "Serviço temporariamente indisponível." });
-    return;
-  }
-
-  // Rotação: revogar refresh token antigo, emitir novo par
+  // Rotação atómica: INSERT … ON CONFLICT DO NOTHING elimina a race condition.
+  //
+  // Dois pedidos simultâneos com o mesmo refresh token competem pelo mesmo JTI:
+  //   • o Postgres garante que só um INSERT tem sucesso (constraint única em jti)
+  //   • quem ganhou (inserted.length === 1) → revokeToken retorna true → emite novos tokens
+  //   • quem perdeu (conflito)              → revokeToken retorna false → rejeitado com 401
+  //
+  // Qualquer falha de DB aborta o pedido — nunca emitir tokens sem revogar (fail-closed).
+  let wasRevoked: boolean;
   try {
     const expiresAt = payload.exp
       ? new Date(payload.exp * 1000)
       : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await revokeToken(payload.jti, payload.userId, expiresAt);
+    wasRevoked = await revokeToken(payload.jti, payload.userId, expiresAt);
   } catch (err) {
-    (req as any).log?.warn({ err }, "Refresh: falha ao revogar token antigo (continuando)");
+    (req as any).log?.warn({ err }, "Refresh: falha de DB ao revogar token — a negar (fail-closed)");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
+    return;
+  }
+
+  if (!wasRevoked) {
+    // JTI já estava na tabela: token já foi consumido → possível replay
+    clearRefreshCookie(res);
+    res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
+    return;
   }
 
   const newAccessToken = signAccessToken({ userId: payload.userId, username: payload.username!, role: payload.role });
