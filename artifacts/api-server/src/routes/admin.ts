@@ -445,17 +445,23 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
   res.json({ success: true, user });
 });
 
+// Planos mock em memória — partilhados entre GET e PATCH para permitir snapshot before/after
+const mockPlans = [
+  { id: 1, nome: "Básico", preco: 999, beneficios: "Acesso a conteúdo exclusivo", ativo: true, totalSubscritores: 12 },
+  { id: 2, nome: "Premium", preco: 2499, beneficios: "Acesso total + mensagens diretas", ativo: true, totalSubscritores: 5 },
+];
+
 router.get("/admin/creators/:id/plans", (req, res) => {
-  res.json([
-    { id: 1, nome: "Básico", preco: 999, beneficios: "Acesso a conteúdo exclusivo", ativo: true, totalSubscritores: 12 },
-    { id: 2, nome: "Premium", preco: 2499, beneficios: "Acesso total + mensagens diretas", ativo: true, totalSubscritores: 5 },
-  ]);
+  res.json(mockPlans);
 });
 
 router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res) => {
   const planId = Number(req.params.planId);
-  await logAudit(req, "plan_edit", "plan", planId, { after: req.body });
-  res.json({ success: true, ...req.body });
+  const plan = mockPlans.find(p => p.id === planId);
+  const before = plan ? { ...plan } : null;
+  if (plan) Object.assign(plan, req.body);
+  await logAudit(req, "plan_edit", "plan", planId, { before, after: plan ?? req.body });
+  res.json({ success: true, ...(plan ?? req.body) });
 });
 
 router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res) => {

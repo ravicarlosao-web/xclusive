@@ -5,14 +5,19 @@ import { z } from "zod/v4";
 import {
   signAccessToken, signRefreshToken, verifyToken,
   hashPassword, comparePassword, requireAuth, revokeToken,
+  createSession, deleteSession, deleteAllUserSessions,
   REFRESH_COOKIE, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
 import { validate } from "../lib/validate";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
+// Activar Secure em qualquer ambiente que não seja desenvolvimento local.
+// NODE_ENV=development → HTTP localhost → sem Secure (necessário para o browser aceitar o cookie).
+// NODE_ENV=production | staging | qualquer outro valor → HTTPS → Secure obrigatório.
+// Isto cobre o caso de staging correr em HTTPS com NODE_ENV != "production".
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: process.env.NODE_ENV !== "development",
   sameSite: "strict" as const,
   path: "/api/auth",
   maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -76,8 +81,14 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
     }).returning();
 
     const accessToken = signAccessToken({ userId: user.id, username: user.username, role: user.role });
-    const { token: refreshToken } = signRefreshToken(user.id, user.username, user.role);
+    const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id, user.username, user.role);
     setRefreshCookie(res, refreshToken);
+
+    const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await createSession(user.id, refreshJti, sessionExpiresAt,
+      req.headers["user-agent"],
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? undefined,
+    );
 
     res.status(201).json({
       token: accessToken,
@@ -89,25 +100,30 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
   }
 });
 
+// Hash dummy usado para normalizar o tempo de resposta quando a conta não existe.
+// bcrypt.compare corre sempre o mesmo trabalho independentemente do hash —
+// elimina o timing oracle entre "conta inexistente" e "password errada".
+const DUMMY_HASH = "$2b$12$invalidhashusedfortimingprotectionXXXXXXXXXXXXXXXXXXX";
+
 router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void> => {
   const { email, password } = req.body;
 
   try {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase()));
+    // Queries por email e username em paralelo — evita que a segunda query
+    // sequencial produza uma diferença de latência observável (timing oracle).
+    const [[byEmail], [byUsername]] = await Promise.all([
+      db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase())),
+      db.select().from(usersTable).where(eq(usersTable.username, email.toLowerCase())),
+    ]);
+
+    const user = byEmail ?? byUsername ?? null;
+
     if (!user) {
-      const [byUsername] = await db.select().from(usersTable).where(eq(usersTable.username, email.toLowerCase()));
-      if (!byUsername) {
-        res.status(401).json({ error: "Credenciais inválidas" });
-        return;
-      }
-      const valid = await comparePassword(password, byUsername.passwordHash);
-      if (!valid) { res.status(401).json({ error: "Credenciais inválidas" }); return; }
-      const accessToken = signAccessToken({ userId: byUsername.id, username: byUsername.username, role: byUsername.role });
-      const { token: refreshToken } = signRefreshToken(byUsername.id, byUsername.username, byUsername.role);
-      setRefreshCookie(res, refreshToken);
-      const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, byUsername.id));
-      const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, byUsername.id));
-      res.json({ token: accessToken, user: formatUser(byUsername, 0, seguidores || 0, seguindo || 0) });
+      // Conta inexistente: correr bcrypt contra hash dummy para igualar a
+      // latência ao caminho de "password errada" (onde comparePassword é sempre
+      // invocado). Sem isto, a ausência do compare seria detectável por timing.
+      await comparePassword(password, DUMMY_HASH);
+      res.status(401).json({ error: "Credenciais inválidas" });
       return;
     }
 
@@ -118,8 +134,15 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
     }
 
     const accessToken = signAccessToken({ userId: user.id, username: user.username, role: user.role });
-    const { token: refreshToken } = signRefreshToken(user.id, user.username, user.role);
+    const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id, user.username, user.role);
     setRefreshCookie(res, refreshToken);
+
+    const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await createSession(user.id, refreshJti, sessionExpiresAt,
+      req.headers["user-agent"],
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? undefined,
+    );
+
     const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
     const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
     const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(usersTable).where(eq(usersTable.id, user.id));
@@ -163,6 +186,7 @@ router.post("/auth/logout", async (req: AuthRequest, res): Promise<void> => {
           ? new Date(payload.exp * 1000)
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         await revokeToken(payload.jti, payload.userId, expiresAt);
+        await deleteSession(payload.jti);
       }
     } catch (err) {
       (req as any).log?.warn({ err }, "Logout: falha ao revogar refresh token");
@@ -171,6 +195,32 @@ router.post("/auth/logout", async (req: AuthRequest, res): Promise<void> => {
 
   clearRefreshCookie(res);
   res.json({ ok: true });
+});
+
+// Revogar todas as sessões activas do utilizador ("logout de todos os dispositivos").
+// Revoga cada refresh JTI em revoked_tokens e limpa a tabela active_sessions.
+router.delete("/auth/sessions", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const sessions = await deleteAllUserSessions(userId);
+
+    if (sessions.length > 0) {
+      await Promise.all(
+        sessions.map(({ jti, expiresAt }) => revokeToken(jti, userId, expiresAt)),
+      );
+    }
+
+    // Revogar também o access token actual para forçar re-autenticação imediata
+    if (req.tokenJti && req.tokenExp) {
+      await revokeToken(req.tokenJti, userId, new Date(req.tokenExp * 1000));
+    }
+
+    clearRefreshCookie(res);
+    res.json({ ok: true, sessionsRevoked: sessions.length });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Sessions: erro ao revogar todas as sessões");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.post("/auth/refresh", async (req, res): Promise<void> => {
@@ -223,8 +273,19 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
   }
 
   const newAccessToken = signAccessToken({ userId: payload.userId, username: payload.username!, role: payload.role });
-  const { token: newRefreshToken } = signRefreshToken(payload.userId, payload.username!, payload.role);
+  const { token: newRefreshToken, jti: newRefreshJti } = signRefreshToken(payload.userId, payload.username!, payload.role);
   setRefreshCookie(res, newRefreshToken);
+
+  // Rodar sessão: substituir o JTI antigo pelo novo
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await Promise.all([
+    deleteSession(payload.jti),
+    createSession(payload.userId, newRefreshJti, sessionExpiresAt,
+      req.headers["user-agent"],
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? (req as any).ip ?? undefined,
+    ),
+  ]);
+
   res.json({ token: newAccessToken });
 });
 

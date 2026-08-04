@@ -2,8 +2,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { db, revokedTokensTable, usersTable } from "@workspace/db";
-import { eq, lt } from "drizzle-orm";
+import { db, revokedTokensTable, usersTable, activeSessionsTable } from "@workspace/db";
+import { eq, lt, asc, inArray } from "drizzle-orm";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -48,6 +48,72 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
+}
+
+// ── Gestão de sessões activas ─────────────────────────────────────────────────
+
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS_PER_USER ?? "10", 10);
+
+/**
+ * Regista uma nova sessão activa e aplica o limite por utilizador.
+ * Se o número de sessões ultrapassar MAX_SESSIONS, as mais antigas são
+ * eliminadas (política LRU por data de criação).
+ */
+export async function createSession(
+  userId: number,
+  refreshJti: string,
+  expiresAt: Date,
+  userAgent?: string,
+  ip?: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(activeSessionsTable).values({
+      userId,
+      refreshJti,
+      expiresAt,
+      userAgent: userAgent ?? null,
+      ip: ip ?? null,
+    });
+
+    if (MAX_SESSIONS > 0) {
+      const sessions = await tx
+        .select({ id: activeSessionsTable.id })
+        .from(activeSessionsTable)
+        .where(eq(activeSessionsTable.userId, userId))
+        .orderBy(asc(activeSessionsTable.criadaEm));
+
+      if (sessions.length > MAX_SESSIONS) {
+        const toEvict = sessions.slice(0, sessions.length - MAX_SESSIONS);
+        await tx
+          .delete(activeSessionsTable)
+          .where(inArray(activeSessionsTable.id, toEvict.map((s) => s.id)));
+      }
+    }
+  });
+}
+
+/** Remove a sessão associada a um refresh JTI (logout de um dispositivo). */
+export async function deleteSession(refreshJti: string): Promise<void> {
+  await db.delete(activeSessionsTable).where(eq(activeSessionsTable.refreshJti, refreshJti));
+}
+
+/**
+ * Remove todas as sessões do utilizador e devolve os JTIs + expiresAt de cada
+ * uma para que o chamador os possa inserir em revoked_tokens.
+ */
+export async function deleteAllUserSessions(
+  userId: number,
+): Promise<{ jti: string; expiresAt: Date }[]> {
+  const sessions = await db
+    .select({ jti: activeSessionsTable.refreshJti, expiresAt: activeSessionsTable.expiresAt })
+    .from(activeSessionsTable)
+    .where(eq(activeSessionsTable.userId, userId));
+
+  if (sessions.length > 0) {
+    await db.delete(activeSessionsTable).where(eq(activeSessionsTable.userId, userId));
+  }
+
+  return sessions;
 }
 
 /**

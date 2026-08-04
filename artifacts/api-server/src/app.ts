@@ -46,6 +46,20 @@ app.use(
         upgradeInsecureRequests: [],
       },
     },
+
+    // Permissions-Policy — declara explicitamente quais APIs do browser são
+    // permitidas. Câmara é necessária para o fluxo KYC (/tornar-criador);
+    // microfone e geolocalização não são usados na plataforma.
+    permissionsPolicy: {
+      features: {
+        camera: ["self"],        // KYC: captura de documento e selfie
+        microphone: [],          // não utilizado
+        geolocation: [],         // não utilizado
+        payment: [],             // pagamentos geridos pelo backend, não pela Payment Request API
+        usb: [],
+        fullscreen: ["self"],    // player de vídeo no feed
+      },
+    },
   }),
 );
 
