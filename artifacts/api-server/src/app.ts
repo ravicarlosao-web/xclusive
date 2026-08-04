@@ -108,10 +108,38 @@ const refreshLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter por userId para operações financeiras (gorjetas).
+// Usa o userId extraído do Bearer token como chave — impede que um token
+// comprometido seja usado para bombardear a DB com transações.
+const gorjetaLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 10,
+  message: { error: "Demasiadas gorjetas num curto espaço de tempo. Tenta novamente dentro de 1 minuto." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Extrair userId do JWT sem verificar assinatura (só para chave do limiter).
+    // A verificação real acontece em requireAuth — aqui basta isolar o utilizador.
+    const auth = req.headers.authorization;
+    if (auth?.startsWith("Bearer ")) {
+      try {
+        const payload = JSON.parse(
+          Buffer.from(auth.slice(7).split(".")[1]!, "base64url").toString()
+        );
+        if (payload?.userId) return `user:${payload.userId}`;
+      } catch {
+        // fallback para IP se o token for malformado
+      }
+    }
+    return req.ip ?? "unknown";
+  },
+});
+
 // Aplicar antes do router principal
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth/refresh", refreshLimiter);
+app.use("/api/posts", gorjetaLimiter);
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 app.use(

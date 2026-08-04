@@ -54,13 +54,13 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
   try {
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     if (existing) {
-      res.status(400).json({ error: "Email já em uso" });
+      res.status(400).json({ error: "Email ou username já em uso" });
       return;
     }
 
     const [existingUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username));
     if (existingUsername) {
-      res.status(400).json({ error: "Username já em uso" });
+      res.status(400).json({ error: "Email ou username já em uso" });
       return;
     }
 
