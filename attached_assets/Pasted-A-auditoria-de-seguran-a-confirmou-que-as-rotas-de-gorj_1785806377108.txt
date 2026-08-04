@@ -1,0 +1,38 @@
+A auditoria de segurança confirmou que as rotas de gorjeta e subscrição criam registos de transação (`purchasesTable`) e, no caso das subscrições, activam o acesso (`subscriptionsTable`), mas em nenhum dos dois casos existe verificação ou débito real do saldo (`saldo`) do utilizador. Isto significa que, neste momento, qualquer utilizador autenticado pode subscrever qualquer criador e enviar qualquer gorjeta indefinidamente sem ter saldo algum.
+
+Este é o único problema que quero resolver agora — não alteres nada fora do escopo abaixo, não "aproveites" para melhorar outras rotas, não mexas nas credenciais de admin (isso fica para depois).
+
+## Modelo assumido
+O utilizador tem um saldo pré-carregado na conta (campo `saldo` na tabela de utilizadores). Gorjetas e subscrições são debitadas directamente desse saldo no momento da acção — não é uma cobrança externa a um gateway de pagamento neste passo. Se o schema actual não suportar isto correctamente (ex: `saldo` não é decimal/numeric, ou não existe constraint de não-negativo), sinaliza antes de implementar.
+
+## O que precisa de ser corrigido
+
+### 1. Rota de gorjeta (`gorjeta.ts`)
+- Antes de inserir em `purchasesTable`, verificar se o utilizador (`senderId`) tem saldo (`saldo`) suficiente para o valor da gorjeta.
+- Se o saldo for insuficiente, devolver erro claro (`402 Payment Required` ou `400` com mensagem explícita) e não criar nenhum registo.
+- Se o saldo for suficiente, debitar o valor do `saldo` do remetente e (se aplicável) creditar ao `ganhos` do criador — tudo dentro da mesma transacção que o insert em `purchasesTable`.
+- Usar `db.transaction()` do Drizzle, com `SELECT ... FOR UPDATE` (ou equivalente do Drizzle/Postgres) na linha do utilizador antes de verificar o saldo, para impedir que dois pedidos simultâneos leiam o mesmo saldo antes de qualquer um debitar.
+
+### 2. Rota de subscrição (`creator.ts`)
+- Mesma lógica: verificar saldo suficiente para `plan.preco` antes de criar a subscrição.
+- Envolver a criação de `subscriptionsTable` + `purchasesTable` + débito de saldo + crédito ao criador na mesma transacção atómica.
+- Lock de linha na conta do utilizador antes da verificação de saldo, pelo mesmo motivo do ponto acima.
+- Confirmar que não é possível criar duas subscrições activas para o mesmo par utilizador/criador em pedidos simultâneos (verificar se já existe subscrição activa dentro da mesma transacção, não antes dela).
+
+### 3. Consistência
+- Usa o mesmo padrão de transacção nas duas rotas — não implementes duas abordagens diferentes para o mesmo problema.
+- Garante que o saldo nunca fica negativo (constraint na base de dados como defesa adicional, não só verificação na aplicação — ex: `CHECK (saldo >= 0)` na coluna, se ainda não existir).
+- Se a transacção falhar por qualquer motivo (erro de DB, timeout), nenhuma alteração parcial deve ficar persistida — nem o insert da compra, nem o débito, nem a subscrição.
+
+## Cenários que preciso que testes mentalmente e confirmes na resposta
+
+1. Utilizador com saldo 0 tenta enviar gorjeta de 100 Kz → deve falhar sem criar nada.
+2. Utilizador com saldo 100 Kz dispara duas gorjetas de 100 Kz em simultâneo (ex: duplo clique, ou requisições concorrentes) → só uma deve ser bem-sucedida, a outra deve falhar por saldo insuficiente.
+3. Utilizador com saldo suficiente subscreve um plano com sucesso → saldo é debitado, subscrição fica activa, criador recebe o crédito correspondente (menos comissão da plataforma, se essa lógica já existir — não a implementes agora se não existir, só não a quebres se já existir).
+4. Erro de rede/timeout a meio da transacção → nada fica em estado inconsistente (sem subscrição "fantasma" sem débito correspondente, ou vice-versa).
+
+## Formato de resposta que preciso
+
+Para cada uma das duas rotas, mostra o código antes/depois relevante e explica como o lock/transacção resolve a condição de corrida. No final, confirma explicitamente se os 4 cenários acima passam, e se há alguma limitação conhecida que eu deva saber (ex: comportamento sob volume muito alto, ou algo que dependa de infraestrutura que ainda não temos).
+
+Não mexas em nada relacionado com autenticação, CORS, CSP, KYC ou credenciais — isso já foi tratado ou fica para outra fase.

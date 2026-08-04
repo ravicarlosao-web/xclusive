@@ -1,4 +1,5 @@
-import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -24,7 +25,18 @@ export const usersTable = pgTable("users", {
   ativo: boolean("ativo").notNull().default(true),
   role: varchar("role", { length: 20 }).notNull().default("user"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
-});
+  /**
+   * Saldo pré-carregado disponível para gorjetas e subscrições.
+   * Nunca pode ser negativo — garantido por constraint na DB e verificação na aplicação.
+   */
+  saldo: numeric("saldo", { precision: 12, scale: 2 }).notNull().default("0"),
+  /**
+   * Ganhos acumulados do criador (créditos recebidos de gorjetas e subscrições).
+   */
+  ganhos: numeric("ganhos", { precision: 12, scale: 2 }).notNull().default("0"),
+}, (table) => [
+  check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
+]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, criadoEm: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;

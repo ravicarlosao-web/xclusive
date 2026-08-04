@@ -25,6 +25,14 @@ const gorjetaSchema = z.object({
 
 const router = Router();
 
+/** Erros de pagamento lançados dentro de transações — capturados no handler externo. */
+class PaymentError extends Error {
+  constructor(msg: string, public readonly httpStatus: number) {
+    super(msg);
+    this.name = "PaymentError";
+  }
+}
+
 // Estatísticas do criador
 router.get("/creator/stats", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
@@ -212,41 +220,99 @@ router.post("/subscriptions", requireAuth, async (req: AuthRequest, res): Promis
   const { planoId } = req.body;
   if (!planoId) { res.status(400).json({ error: "planoId é obrigatório" }); return; }
 
+  // Leitura do plano fora da transação — não precisa de lock (só leitura).
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planoId));
   if (!plan) { res.status(404).json({ error: "Plano não encontrado" }); return; }
+  if (!plan.ativo) { res.status(400).json({ error: "Este plano não está disponível." }); return; }
+  if (plan.criadorId === req.userId) { res.status(400).json({ error: "Não podes subscrever o teu próprio plano." }); return; }
 
-  const renewAt = new Date();
-  renewAt.setMonth(renewAt.getMonth() + 1);
+  try {
+    const sub = await db.transaction(async (tx) => {
+      // 1. Bloquear linha do subscritor (FOR UPDATE) para serializar pedidos concorrentes
+      //    do mesmo utilizador — evita double-spend e subscrições duplicadas.
+      const [subscriber] = await tx
+        .select({ saldo: usersTable.saldo })
+        .from(usersTable)
+        .where(eq(usersTable.id, req.userId!))
+        .for("update");
 
-  const [sub] = await db.insert(subscriptionsTable).values({
-    subscriitorId: req.userId!,
-    criadorId: plan.criadorId,
-    planoId: plan.id,
-    estado: "ativa",
-    renovacaoEm: renewAt,
-  }).returning();
+      if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
 
-  // Registar transação
-  await db.insert(purchasesTable).values({
-    compradorId: req.userId!,
-    vendedorId: plan.criadorId,
-    tipo: "subscricao",
-    valor: plan.preco,
-    conteudoId: plan.id,
-    descricao: `Subscrição: ${plan.nome}`,
-  });
+      const preco = Number(plan.preco);
+      if (Number(subscriber.saldo) < preco) {
+        throw new PaymentError("Saldo insuficiente para activar esta subscrição.", 402);
+      }
 
-  res.status(201).json({
-    id: sub.id,
-    plano: {
-      id: plan.id, nome: plan.nome, preco: parseFloat(String(plan.preco)),
-      beneficios: plan.beneficios, ativo: plan.ativo, totalSubscritores: 0, criadoEm: plan.criadoEm.toISOString(),
-    },
-    criador: null,
-    estado: sub.estado,
-    inicioEm: sub.inicioEm.toISOString(),
-    renovacaoEm: sub.renovacaoEm?.toISOString() || null,
-  });
+      // 2. Verificar subscrição activa existente dentro da transação (após o lock),
+      //    para que pedidos simultâneos não criem duplicados.
+      const [existing] = await tx
+        .select({ id: subscriptionsTable.id })
+        .from(subscriptionsTable)
+        .where(and(
+          eq(subscriptionsTable.subscriitorId, req.userId!),
+          eq(subscriptionsTable.criadorId, plan.criadorId),
+          eq(subscriptionsTable.estado, "ativa"),
+        ))
+        .limit(1);
+
+      if (existing) throw new PaymentError("Já tens uma subscrição activa para este criador.", 409);
+
+      // 3. Debitar saldo do subscritor.
+      await tx
+        .update(usersTable)
+        .set({ saldo: sql`${usersTable.saldo} - ${preco}` })
+        .where(eq(usersTable.id, req.userId!));
+
+      // 4. Creditar ganhos do criador.
+      await tx
+        .update(usersTable)
+        .set({ ganhos: sql`${usersTable.ganhos} + ${preco}` })
+        .where(eq(usersTable.id, plan.criadorId));
+
+      // 5. Criar subscrição.
+      const renewAt = new Date();
+      renewAt.setMonth(renewAt.getMonth() + 1);
+
+      const [newSub] = await tx.insert(subscriptionsTable).values({
+        subscriitorId: req.userId!,
+        criadorId: plan.criadorId,
+        planoId: plan.id,
+        estado: "ativa",
+        renovacaoEm: renewAt,
+      }).returning();
+
+      // 6. Registar transação de compra.
+      await tx.insert(purchasesTable).values({
+        compradorId: req.userId!,
+        vendedorId: plan.criadorId,
+        tipo: "subscricao",
+        valor: plan.preco,
+        conteudoId: plan.id,
+        descricao: `Subscrição: ${plan.nome}`,
+      });
+
+      return newSub;
+    });
+
+    res.status(201).json({
+      id: sub.id,
+      plano: {
+        id: plan.id, nome: plan.nome, preco: parseFloat(String(plan.preco)),
+        beneficios: plan.beneficios, ativo: plan.ativo, totalSubscritores: 0, criadoEm: plan.criadoEm.toISOString(),
+      },
+      criador: null,
+      estado: sub.estado,
+      inicioEm: sub.inicioEm.toISOString(),
+      renovacaoEm: sub.renovacaoEm?.toISOString() || null,
+    });
+  } catch (err) {
+    if (err instanceof PaymentError) {
+      res.status(err.httpStatus).json({ error: err.message });
+      return;
+    }
+    req.log.error({ err }, "Subscription error");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // Cancelar subscrição

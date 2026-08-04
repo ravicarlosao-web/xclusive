@@ -1,0 +1,87 @@
+# Fase 2 — Auditoria Profunda e Correção de Segurança (Xclusive)
+
+## Contexto
+Já foram corrigidos os problemas críticos da primeira ronda (backdoor de admin, fail-open de autenticação, `role` ausente no JWT, débito de saldo transacional). Isso não significa que a aplicação está segura — significa apenas que os buracos óbvios foram fechados.
+
+Quero agora uma segunda fase, mais profunda e mais minuciosa do que a primeira. Não repitas o que já foi verificado (auth básica, IDOR em posts/mensagens, backdoor, saldo) — foca-te em tudo o que ainda não foi analisado ao detalhe. Trata este código como se fosse ser atacado por alguém experiente, não só por scanners automáticos. Quando encontrares um problema, corrige-o directamente (não fiques só no relatório) e depois explica o que mudaste e porquê.
+
+## Áreas a investigar em profundidade
+
+### 1. Gestão de sessão e cookies
+- Se algum token/sessão usar cookies, confirmar flags `httpOnly`, `secure`, `sameSite=strict` ou `lax`
+- Verificar se existe logout real em todos os dispositivos (revogação de todos os JTIs de um utilizador, não só o actual)
+- Verificar se há limite de sessões simultâneas ou detecção de múltiplos logins suspeitos
+- Verificar comportamento do refresh token: pode ser reutilizado depois de já ter sido trocado por um novo (replay de refresh token)?
+
+### 2. Enumeração de contas e informação vazada em erros
+- Testar se as mensagens de erro em registo, login, recuperação de password ou verificação de username revelam se um email/username já existe
+- Verificar se respostas de erro do servidor (500) alguma vez vazam stack traces, nomes de ficheiros, queries SQL ou versões de pacotes para o cliente
+- Verificar headers de resposta que exponham tecnologia (ex: `X-Powered-By`)
+
+### 3. Lógica de negócio e abuso de fluxo
+- Percorrer todos os fluxos de estado (ex: pedido de subscrição, cancelamento, reembolso, aprovação KYC, denúncias/moderação) à procura de passos que podem ser saltados ou repetidos fora de ordem
+- Verificar se é possível cancelar uma subscrição e continuar a aceder a conteúdo exclusivo por manipulação de estado no cliente
+- Verificar se há limite/validação para acções em massa (ex: seguir milhares de contas em segundos, denunciar em massa, criar dezenas de posts por segundo)
+- Verificar se um criador pode manipular preços de forma a lesar utilizadores (ex: alterar preço de um plano depois de o utilizador já ter iniciado o checkout, mas antes de confirmar)
+
+### 4. WebSockets / tempo real (se existir chat ou notificações ao vivo)
+- Verificar se a ligação WebSocket exige autenticação válida antes de aceitar mensagens
+- Verificar se um cliente consegue subscrever-se a canais/salas de outros utilizadores (ex: sala de chat que não lhe pertence)
+- Verificar rate limiting em mensagens enviadas via WebSocket (este canal costuma escapar ao rate limiting da API REST)
+
+### 5. Armazenamento e infraestrutura de ficheiros
+- Verificar permissões do bucket/storage de media: está público por definição ou exige assinatura?
+- Verificar se nomes de ficheiros são gerados de forma imprevisível (UUID) e não sequenciais ou baseados em dados do utilizador
+- Verificar se há limite de tamanho de upload aplicado no servidor (não só no frontend)
+- Verificar se há protecção contra "zip bomb" ou ficheiros multimédia manipulados para consumir recursos excessivos no processamento (ex: geração de thumbnails)
+
+### 6. Segredos, variáveis de ambiente e supply chain
+- Confirmar que não há nenhuma chave, token ou segredo hardcoded em qualquer ficheiro do repositório (procurar padrões tipo `sk_`, `AKIA`, `Bearer `, strings longas suspeitas)
+- Verificar `.gitignore` para garantir que `.env` e ficheiros de credenciais nunca foram commitados (incluindo no histórico do git, não só no estado actual)
+- Verificar se alguma dependência tem risco de "dependency confusion" (pacotes internos com nomes que podem colidir com pacotes públicos)
+- Correr novamente auditoria de dependências e resolver o que for razoável actualizar sem quebrar o build
+
+### 7. Rate limiting e negação de serviço
+- Mapear todos os endpoints que ainda não têm rate limiting (não só login/registo) — especialmente pesquisa, feed, upload, envio de mensagens, criação de posts
+- Verificar se existe protecção contra paginação abusiva (ex: `?limit=999999` a forçar o servidor a devolver toda a tabela)
+- Verificar se queries à base de dados têm limites e índices adequados para os campos mais usados em filtros (evitar que um endpoint legítimo se torne vector de DoS por lentidão)
+
+### 8. Validação e integridade de dados mais profunda
+- Verificar todos os endpoints que aceitam `req.body` diretamente sem schema Zod (procurar padrão `const { ... } = req.body` sem `validate()` antes)
+- Verificar consistência de tipos entre o schema da base de dados (Drizzle) e a validação Zod (campos numéricos aceitos como string em excesso, datas mal validadas, etc.)
+- Verificar se existe validação de tamanho máximo em todos os campos de texto livre (bios, mensagens, descrições, comentários)
+
+### 9. Auditoria e rastreabilidade
+- Verificar se acções administrativas sensíveis (suspender conta, aprovar KYC, ajustar saldo manualmente, eliminar conteúdo) ficam registadas com quem fez, quando, e o valor anterior/novo (audit log)
+- Se não existir, implementar uma tabela simples de audit log para acções de admin — isto é essencial para investigar disputas e fraudes depois
+
+### 10. Cabeçalhos e configuração de rede
+- Confirmar HSTS com `maxAge` de 1 ano, `includeSubDomains`, `preload`
+- Verificar `Referrer-Policy`, `X-Content-Type-Options: nosniff`, `Permissions-Policy`
+- Confirmar que a Content-Security-Policy (já activada na fase anterior) está a bloquear efectivamente inline scripts não confiáveis e não tem `unsafe-eval`
+
+## Regras para esta análise
+
+**Importante: esta é apenas a fase de LEVANTAMENTO. Não corrijas nada ainda.**
+
+Percorre todas as áreas acima, investiga a fundo, e produz uma lista completa de problemas encontrados. Não implementes nenhuma correcção nesta etapa — nem as simples. Quero primeiro ver o mapa completo do que está errado antes de mexer em qualquer código.
+
+Para cada problema encontrado, apresenta:
+- **Número de ordem** (para eu poder referenciar depois, ex: "resolve o #4")
+- **Severidade** (Crítica / Alta / Média / Baixa)
+- **Ficheiro e localização exacta**
+- **Descrição do problema** e como pode ser explorado
+- **Correcção proposta** (descrita, sem implementar ainda)
+- **Se depende de decisão de arquitectura/infraestrutura que ainda não temos** (sim/não, e qual)
+
+Ordena a lista final por severidade (Crítica primeiro).
+
+Não alteres nada relacionado com as credenciais hardcoded de admin — isso fica propositadamente para quando tivermos o VPS em configuração final. Podes listá-las como já identificadas, mas não como novo item de acção.
+
+## O que acontece a seguir
+Depois de teres a lista completa, vou escolher os itens um a um pela ordem de severidade e pedir a correcção individualmente, para conseguir validar cada mudança isoladamente antes de avançar para a próxima. Não avances para correcções nesta resposta — só entrega o levantamento completo.
+
+## Resposta final que preciso
+Fecha com:
+1. **Lista numerada de problemas encontrados**, ordenada por severidade, no formato acima
+2. **Resumo de áreas verificadas sem problemas** (para eu saber o que já foi coberto e não precisa de nova análise)
