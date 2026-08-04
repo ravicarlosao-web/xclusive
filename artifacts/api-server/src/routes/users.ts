@@ -157,20 +157,16 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     return;
   }
 
-  // Promover a criador — verificado=false até o admin aprovar o KYC
-  const [user] = await db.update(usersTable)
-    .set({ tipoConta: "criador", verificado: false })
-    .where(eq(usersTable.id, userId))
-    .returning();
-
+  // NÃO promover a conta imediatamente — tipoConta só muda para 'criador'
+  // após revisão e aprovação explícita por um admin.
   // TODO: persistir documentos KYC no object storage e registar submissão numa tabela kycSubmissions
   // Por agora os dados são recebidos e validados mas não armazenados (sem object storage)
 
-  res.status(201).json({
+  res.status(202).json({
     ok: true,
-    tipoConta: user.tipoConta,
-    verificado: user.verificado,
-    mensagem: "Pedido de verificação submetido. A tua conta foi promovida a criador e ficará pendente de revisão.",
+    tipoConta: current.tipoConta,
+    verificado: false,
+    mensagem: "Pedido de verificação submetido com sucesso. A tua conta ficará pendente de revisão — serás notificado quando for aprovada.",
   });
 });
 

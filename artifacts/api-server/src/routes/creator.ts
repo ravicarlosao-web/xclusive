@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, reelsTable, followsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
-import { requireAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 
 const createPlanSchema = z.object({
@@ -34,7 +34,7 @@ class PaymentError extends Error {
 }
 
 // Estatísticas do criador
-router.get("/creator/stats", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -77,7 +77,7 @@ router.get("/creator/stats", requireAuth, async (req: AuthRequest, res): Promise
 });
 
 // Planos de subscrição
-router.get("/creator/plans", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/creator/plans", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const plans = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.criadorId, req.userId!)).orderBy(subscriptionPlansTable.preco);
 
   const result = await Promise.all(plans.map(async (p) => {
@@ -99,7 +99,7 @@ router.get("/creator/plans", requireAuth, async (req: AuthRequest, res): Promise
 });
 
 // Criar plano
-router.post("/creator/plans", requireAuth, validate(createPlanSchema), async (req: AuthRequest, res): Promise<void> => {
+router.post("/creator/plans", requireAuth, requireCreator, validate(createPlanSchema), async (req: AuthRequest, res): Promise<void> => {
   const { nome, preco, beneficios, ativo } = req.body;
 
   const [plan] = await db.insert(subscriptionPlansTable).values({
@@ -122,7 +122,7 @@ router.post("/creator/plans", requireAuth, validate(createPlanSchema), async (re
 });
 
 // Atualizar plano
-router.patch("/creator/plans/:id", requireAuth, validate(updatePlanSchema), async (req: AuthRequest, res): Promise<void> => {
+router.patch("/creator/plans/:id", requireAuth, requireCreator, validate(updatePlanSchema), async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   if (!plan || plan.criadorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
@@ -149,7 +149,7 @@ router.patch("/creator/plans/:id", requireAuth, validate(updatePlanSchema), asyn
 });
 
 // Eliminar plano
-router.delete("/creator/plans/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.delete("/creator/plans/:id", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   if (!plan || plan.criadorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
@@ -158,7 +158,7 @@ router.delete("/creator/plans/:id", requireAuth, async (req: AuthRequest, res): 
 });
 
 // Ganhos ao longo do tempo
-router.get("/creator/earnings", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/creator/earnings", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const period = String(req.query.period || "30d");
 
@@ -187,7 +187,7 @@ router.get("/creator/earnings", requireAuth, async (req: AuthRequest, res): Prom
 });
 
 // Transações
-router.get("/creator/transactions", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/creator/transactions", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const page = Math.max(1, parseInt(String(req.query.page || "1")));
   const limit = 20;

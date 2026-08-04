@@ -136,4 +136,17 @@ app.use(cookieParser());
 // ─── Rotas ────────────────────────────────────────────────────────────────────
 app.use("/api", router);
 
+// ─── Error handler global ─────────────────────────────────────────────────────
+// Deve ser o último middleware. Captura erros não tratados propagados via next(err)
+// ou lançados em handlers async (Express 5 propaga automaticamente).
+// Nunca expõe stack traces ao cliente — apenas loga internamente.
+import type { ErrorRequestHandler } from "express";
+const globalErrorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  (req as any).log?.error({ err }, "Erro não tratado");
+  if (!res.headersSent) {
+    res.status(500).json({ error: "Erro interno." });
+  }
+};
+app.use(globalErrorHandler);
+
 export default app;

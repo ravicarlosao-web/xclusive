@@ -15,6 +15,27 @@ import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
 import { signToken } from "../lib/auth.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
+import { db, auditLogTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
+
+/** Insere um registo no audit_log da DB.
+ * Erros são logados mas nunca propagados — uma falha de auditoria
+ * não deve bloquear a acção administrativa que a gerou.
+ */
+async function logAudit(req: AdminRequest, action: string, targetType: string | null, targetId: number | null, details: Record<string, unknown>): Promise<void> {
+  try {
+    await db.insert(auditLogTable).values({
+      adminId: req.adminId!,
+      action,
+      targetType: targetType ?? undefined,
+      targetId: targetId ?? undefined,
+      details,
+      ipAddress: req.ip ?? null,
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, `logAudit falhou: ${action}`);
+  }
+}
 
 const router = Router();
 
@@ -167,17 +188,6 @@ const mockWithdrawals = Array.from({ length: 14 }, (_, i) => ({
   criadoEm: new Date(Date.now() - i * 6 * 60 * 60 * 1000).toISOString(),
 }));
 
-const mockAuditLog = Array.from({ length: 30 }, (_, i) => ({
-  id: i + 1,
-  adminId: 1,
-  adminUsername: "admin",
-  action: ["user_suspend", "user_delete", "withdrawal_approve", "withdrawal_reject", "report_resolve", "kyc_approve", "kyc_reject", "balance_adjustment", "settings_update", "broadcast_send"][i % 10],
-  targetType: ["user", "user", "withdrawal", "withdrawal", "report", "user", "user", "user", "platform", "notification"][i % 10],
-  targetId: (i % 20) + 1,
-  details: { motivo: "Ação administrativa de rotina." },
-  ipAddress: `192.168.1.${(i % 50) + 1}`,
-  criadoEm: new Date(Date.now() - i * 2 * 60 * 60 * 1000).toISOString(),
-}));
 
 const mockPosts = Array.from({ length: 20 }, (_, i) => ({
   id: i + 1,
@@ -324,32 +334,37 @@ router.get("/admin/users/:id", (req, res) => {
   });
 });
 
-router.patch("/admin/users/:id", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
 
   // Allowlist explícita — bloqueia alteração de id, role, saldo, passwordHash, etc.
   const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "estado", "verificado"] as const;
+  const before: Record<string, unknown> = {};
   const updates: Record<string, unknown> = {};
   for (const campo of CAMPOS_PERMITIDOS) {
-    if (req.body[campo] !== undefined) updates[campo] = req.body[campo];
+    if (req.body[campo] !== undefined) {
+      before[campo] = (user as any)[campo];
+      updates[campo] = req.body[campo];
+    }
   }
   Object.assign(user, updates);
 
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_edit", targetType: "user", targetId: user.id, details: updates, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "user_edit", "user", user.id, { before, after: updates });
   res.json(user);
 });
 
-router.patch("/admin/users/:id/status", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
   const { estado } = req.body;
+  const estadoAnterior = user.estado;
   user.estado = estado;
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: estado === "suspenso" ? "user_suspend" : "user_reactivate", targetType: "user", targetId: user.id, details: { estado }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, estado === "suspenso" ? "user_suspend" : "user_reactivate", "user", user.id, { before: { estado: estadoAnterior }, after: { estado } });
   res.json(user);
 });
 
-router.patch("/admin/users/:id/role", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
 
@@ -376,16 +391,18 @@ router.patch("/admin/users/:id/role", requireAdmin, (req: AdminRequest, res) => 
     return res.status(403).json({ error: "Não podes promover-te a superadmin" });
   }
 
+  const roleAnterior = user.role; // capturar ANTES da mutação
   user.role = novoRole;
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_role_change", targetType: "user", targetId: user.id, details: { roleAnterior: user.role, novoRole }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "user_role_change", "user", user.id, { before: { role: roleAnterior }, after: { role: novoRole } });
   res.json(user);
 });
 
-router.delete("/admin/users/:id", requireAdmin, (req: AdminRequest, res) => {
+router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
   const idx = mockUsers.findIndex(u => u.id === Number(req.params.id));
   if (idx < 0) return res.status(404).json({ error: "Utilizador não encontrado" });
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "user_delete", targetType: "user", targetId: Number(req.params.id), details: {}, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  const targetId = Number(req.params.id);
   mockUsers[idx].estado = "eliminado";
+  await logAudit(req, "user_delete", "user", targetId, { before: { estado: "ativo" }, after: { estado: "eliminado" } });
   res.json({ success: true });
 });
 
@@ -418,12 +435,13 @@ router.get("/admin/creators/kyc-queue", requireAdmin, (req: AdminRequest, res) =
   res.json(queue);
 });
 
-router.patch("/admin/creators/:id/kyc", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Criador não encontrado" });
   const { acao, motivo } = req.body;
+  const verificadoAnterior = user.verificado;
   if (acao === "aprovar") user.verificado = true;
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: `kyc_${acao}`, targetType: "user", targetId: user.id, details: { motivo }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, `kyc_${acao}`, "user", user.id, { before: { verificado: verificadoAnterior }, after: { verificado: user.verificado }, motivo: motivo ?? null });
   res.json({ success: true, user });
 });
 
@@ -434,16 +452,19 @@ router.get("/admin/creators/:id/plans", (req, res) => {
   ]);
 });
 
-router.patch("/admin/creators/:id/plans/:planId", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res) => {
+  const planId = Number(req.params.planId);
+  await logAudit(req, "plan_edit", "plan", planId, { after: req.body });
   res.json({ success: true, ...req.body });
 });
 
-router.post("/admin/creators/:id/balance-adjustment", requireAdmin, (req: AdminRequest, res) => {
+router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res) => {
   const user = mockUsers.find(u => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Criador não encontrado" });
   const { valor, motivo } = req.body;
+  const saldoAnterior = user.saldo;
   user.saldo += valor;
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "balance_adjustment", targetType: "user", targetId: user.id, details: { valor, motivo }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "balance_adjustment", "user", user.id, { before: { saldo: saldoAnterior }, after: { saldo: user.saldo }, valor, motivo: motivo ?? null });
   res.json({ success: true, novoSaldo: user.saldo });
 });
 
@@ -456,11 +477,12 @@ router.get("/admin/posts", (req, res) => {
   res.json(paginate(mockPosts, Number(page), Number(limit)));
 });
 
-router.delete("/admin/posts/:id", requireAdmin, (req: AdminRequest, res) => {
+router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res) => {
   const idx = mockPosts.findIndex(p => p.id === Number(req.params.id));
   if (idx < 0) return res.status(404).json({ error: "Post não encontrado" });
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "post_delete", targetType: "post", targetId: Number(req.params.id), details: { motivo: req.body?.motivo }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  const targetId = Number(req.params.id);
   mockPosts.splice(idx, 1);
+  await logAudit(req, "post_delete", "post", targetId, { motivo: req.body?.motivo ?? null });
   res.json({ success: true });
 });
 
@@ -473,7 +495,7 @@ router.get("/admin/reports", (req, res) => {
   res.json(paginate(filtered, Number(page), Number(limit)));
 });
 
-router.patch("/admin/reports/:id", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res) => {
   const report = mockReports.find(r => r.id === Number(req.params.id));
   if (!report) return res.status(404).json({ error: "Denúncia não encontrada" });
 
@@ -483,12 +505,13 @@ router.patch("/admin/reports/:id", requireAdmin, (req: AdminRequest, res) => {
     return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
   }
 
+  const statusAnterior = report.status;
   if (req.body.status !== undefined) report.status = req.body.status;
   if (typeof req.body.description === "string") report.description = req.body.description.slice(0, 1000);
   report.resolvedBy = req.adminId ?? null;
   report.resolvedAt = new Date().toISOString();
 
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "report_resolve", targetType: "report", targetId: report.id, details: { status: report.status }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "report_resolve", "report", report.id, { before: { status: statusAnterior }, after: { status: report.status } });
   res.json(report);
 });
 
@@ -532,7 +555,7 @@ router.get("/admin/withdrawals", (req, res) => {
   res.json(paginate(filtered, Number(page), Number(limit)));
 });
 
-router.patch("/admin/withdrawals/:id", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res) => {
   const withdrawal = mockWithdrawals.find(w => w.id === Number(req.params.id));
   if (!withdrawal) return res.status(404).json({ error: "Pedido não encontrado" });
 
@@ -542,12 +565,13 @@ router.patch("/admin/withdrawals/:id", requireAdmin, (req: AdminRequest, res) =>
     return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
   }
 
+  const statusAnterior = withdrawal.status;
   if (req.body.status !== undefined) withdrawal.status = req.body.status;
   if (typeof req.body.notes === "string") withdrawal.notes = req.body.notes.slice(0, 500);
   withdrawal.processedBy = req.adminId ?? null;
   withdrawal.processedAt = new Date().toISOString();
 
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: `withdrawal_${withdrawal.status}`, targetType: "withdrawal", targetId: withdrawal.id, details: { status: withdrawal.status, notes: withdrawal.notes }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, `withdrawal_${withdrawal.status}`, "withdrawal", withdrawal.id, { before: { status: statusAnterior }, after: { status: withdrawal.status, notes: withdrawal.notes } });
 
   // Remover destinationDetails (IBAN) da resposta — dados bancários sensíveis
   const { destinationDetails: _stripped, ...safeWithdrawal } = withdrawal as any;
@@ -558,7 +582,7 @@ router.patch("/admin/withdrawals/:id", requireAdmin, (req: AdminRequest, res) =>
 // BROADCAST
 // ────────────────────────────────────────────────────────────────────────────
 
-router.post("/admin/broadcast", requireAdmin, (req: AdminRequest, res) => {
+router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res) => {
   const { titulo, mensagem, segmento } = req.body;
   const novo = {
     id: mockBroadcastHistory.length + 1,
@@ -571,7 +595,7 @@ router.post("/admin/broadcast", requireAdmin, (req: AdminRequest, res) => {
     criadoEm: new Date().toISOString(),
   };
   mockBroadcastHistory.unshift(novo);
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "broadcast_send", targetType: "notification", targetId: novo.id, details: { titulo, segmento }, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "broadcast_send", "notification", novo.id, { titulo, segmento: segmento ?? "todos" });
   res.status(201).json(novo);
 });
 
@@ -587,7 +611,7 @@ router.get("/admin/settings", (req, res) => {
   res.json(mockSettings);
 });
 
-router.patch("/admin/settings", requireAdmin, (req: AdminRequest, res) => {
+router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res) => {
   // Apenas superadmin pode alterar as definições da plataforma
   if (req.adminRole !== "superadmin") {
     return res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
@@ -621,8 +645,9 @@ router.patch("/admin/settings", requireAdmin, (req: AdminRequest, res) => {
 
   if (erros.length > 0) return res.status(400).json({ error: "Dados inválidos", details: erros });
 
+  const before = { ...mockSettings };
   Object.assign(mockSettings, updates);
-  mockAuditLog.unshift({ id: mockAuditLog.length + 1, adminId: req.adminId!, adminUsername: req.adminUsername!, action: "settings_update", targetType: "platform", targetId: 0, details: updates, ipAddress: req.ip ?? "", criadoEm: new Date().toISOString() });
+  await logAudit(req, "settings_update", "platform", 0, { before, after: updates });
   res.json(mockSettings);
 });
 
@@ -630,12 +655,39 @@ router.patch("/admin/settings", requireAdmin, (req: AdminRequest, res) => {
 // AUDIT LOG
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/audit-log", (req, res) => {
+router.get("/admin/audit-log", async (req, res) => {
   const { page = "1", limit = "10", adminId, action } = req.query as Record<string, string>;
-  let filtered = [...mockAuditLog];
-  if (adminId) filtered = filtered.filter(l => l.adminId === Number(adminId));
-  if (action) filtered = filtered.filter(l => l.action === action);
-  res.json(paginate(filtered, Number(page), Number(limit)));
+  const pageNum = Math.max(1, Number(page));
+  const limitNum = Math.min(100, Math.max(1, Number(limit)));
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    const conditions = [];
+    if (adminId) conditions.push(eq(auditLogTable.adminId, Number(adminId)));
+    if (action) conditions.push(eq(auditLogTable.action, action));
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select().from(auditLogTable)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(auditLogTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: db.$count(auditLogTable, conditions.length > 0 ? and(...conditions) : undefined) })
+        .from(auditLogTable),
+    ]);
+
+    res.json({
+      data: rows,
+      total: Number(total),
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(Number(total) / limitNum),
+      hasMore: offset + limitNum < Number(total),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao ler audit log");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 export default router;

@@ -137,6 +137,30 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   next();
 }
 
+/**
+ * Middleware que verifica se o utilizador autenticado tem tipoConta === 'criador'.
+ * Deve ser usado DEPOIS de requireAuth (assume req.userId já definido).
+ * Retorna 403 para qualquer utilizador que não seja criador.
+ */
+export async function requireCreator(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const [user] = await db.select({ tipoConta: usersTable.tipoConta })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.userId!))
+      .limit(1);
+
+    if (!user || user.tipoConta !== "criador") {
+      res.status(403).json({ error: "Acesso reservado a criadores." });
+      return;
+    }
+  } catch (err) {
+    req.log?.warn({ err }, "DB indisponível durante verificação de requireCreator — a negar pedido (fail-closed)");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
+    return;
+  }
+  next();
+}
+
 export async function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
