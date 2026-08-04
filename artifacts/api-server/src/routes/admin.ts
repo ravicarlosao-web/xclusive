@@ -13,6 +13,7 @@
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
+import { signToken } from "../lib/auth.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 
 const router = Router();
@@ -31,6 +32,24 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   entry.count++;
   if (entry.count > 100) {
     return res.status(429).json({ error: "Demasiadas requisições. Tente novamente em 1 minuto." });
+  }
+  next();
+}
+
+// Limiter estrito para o endpoint de login: 5 tentativas por 15 min por IP
+const loginCounts = new Map<string, { count: number; resetAt: number }>();
+function loginLimiter(req: AdminRequest, res: any, next: any) {
+  const ip = req.ip ?? "unknown";
+  const now = Date.now();
+  const entry = loginCounts.get(ip);
+
+  if (!entry || entry.resetAt < now) {
+    loginCounts.set(ip, { count: 1, resetAt: now + 15 * 60_000 });
+    return next();
+  }
+  entry.count++;
+  if (entry.count > 5) {
+    return res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente em 15 minutos." });
   }
   next();
 }
@@ -75,13 +94,14 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
 });
 
 // ── Login (public — must be before requireAdmin middleware) ──────────────────
-router.post("/admin/auth/login", (req, res) => {
+router.post("/admin/auth/login", loginLimiter, (req, res) => {
   const { email, password } = req.body ?? {};
 
   // Mock: accept any admin@xclusive.com / admin123
   if (email === "admin@xclusive.com" && password === "admin123") {
+    const token = signToken({ userId: 1, username: "admin", role: "admin" });
     return res.json({
-      token: "mock-admin-token",
+      token,
       user: {
         id: 1,
         username: "admin",

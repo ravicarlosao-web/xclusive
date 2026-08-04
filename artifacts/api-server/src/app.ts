@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -99,9 +100,18 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Demasiadas tentativas de renovação de sessão. Tenta novamente em 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Aplicar antes do router principal
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/register", registerLimiter);
+app.use("/api/auth/refresh", refreshLimiter);
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 app.use(
@@ -121,6 +131,7 @@ app.use(
 // ─── Body parsers (com limite explícito) ──────────────────────────────────────
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
+app.use(cookieParser());
 
 // ─── Rotas ────────────────────────────────────────────────────────────────────
 app.use("/api", router);

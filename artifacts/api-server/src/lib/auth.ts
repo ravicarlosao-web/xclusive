@@ -11,24 +11,39 @@ if (!JWT_SECRET) {
 }
 const SECRET: string = JWT_SECRET;
 
+export const REFRESH_COOKIE = "xclusive_refresh";
+
 export interface JwtPayload {
   userId: number;
   username: string;
+  role?: string;
+  type?: "access" | "refresh";
   jti: string;
   iat?: number;
   exp?: number;
 }
 
-export function signToken(payload: Omit<JwtPayload, "jti">): string {
-  return jwt.sign({ ...payload, jti: randomUUID() }, SECRET, { expiresIn: "7d" });
+/** Access token — curta duração (15 min). */
+export function signAccessToken(payload: Omit<JwtPayload, "jti" | "type">): string {
+  return jwt.sign({ ...payload, type: "access", jti: randomUUID() }, SECRET, { expiresIn: "15m" });
 }
+
+/** Refresh token — longa duração (7 dias), armazenado em httpOnly cookie. */
+export function signRefreshToken(userId: number, username: string, role?: string): { token: string; jti: string } {
+  const jti = randomUUID();
+  const token = jwt.sign({ userId, username, role, type: "refresh", jti }, SECRET, { expiresIn: "7d" });
+  return { token, jti };
+}
+
+/** @deprecated Usar signAccessToken. Mantido para compatibilidade. */
+export const signToken = signAccessToken;
 
 export function verifyToken(token: string): JwtPayload {
   return jwt.verify(token, SECRET) as JwtPayload;
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 12);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
@@ -64,6 +79,12 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   try {
     payload = verifyToken(token);
   } catch {
+    res.status(401).json({ error: "Token inválido" });
+    return;
+  }
+
+  // Rejeitar refresh tokens usados como access tokens
+  if (payload.type === "refresh") {
     res.status(401).json({ error: "Token inválido" });
     return;
   }

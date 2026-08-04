@@ -7,6 +7,16 @@ import { useQueryClient } from '@tanstack/react-query';
 // Wire the API client to always send the stored JWT token
 setAuthTokenGetter(() => localStorage.getItem('xclusive_token'));
 
+/** Lê o campo `exp` de um JWT sem verificar a assinatura (payload é público). */
+function parseTokenExp(token: string): number | null {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const payload = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch { return null; }
+}
+
 // ─── Mock store helpers (DB-less mode) ───────────────────────────────────────
 const MOCK_KEY = 'xclusive_mock_users';
 const MOCK_SESSION_KEY = 'xclusive_mock_session';
@@ -341,15 +351,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Auto logout only on explicit 401/403 — not on transient network/5xx errors
+  /** Tenta renovar o access token via refresh cookie httpOnly.
+   *  Devolve true se bem-sucedido, false se a sessão expirou. */
+  const tryRefreshToken = useCallback(async (): Promise<boolean> => {
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/auth/refresh`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data?.token) { setToken(data.token); return true; }
+      return false;
+    } catch { return false; }
+  }, [setToken]);
+
+  // Renovação proativa: agenda refresh ~1 min antes do access token expirar
+  useEffect(() => {
+    if (!token || isMockToken) return;
+    const exp = parseTokenExp(token);
+    if (!exp) return;
+    const msUntilRefresh = (exp * 1000) - Date.now() - 60_000;
+    if (msUntilRefresh <= 0) { tryRefreshToken(); return; }
+    const timer = setTimeout(() => { tryRefreshToken(); }, msUntilRefresh);
+    return () => clearTimeout(timer);
+  }, [token, isMockToken, tryRefreshToken]);
+
+  // Em 401/403: tenta refresh antes de fazer logout
   useEffect(() => {
     if (error && !isMockToken) {
       const status = (error as any)?.response?.status;
       if (status === 401 || status === 403) {
-        setToken(null);
+        tryRefreshToken().then(refreshed => {
+          if (refreshed) {
+            queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+          } else {
+            setToken(null);
+          }
+        });
       }
     }
-  }, [error, setToken, isMockToken]);
+  }, [error, setToken, isMockToken, tryRefreshToken, queryClient]);
 
   const refreshSaldo = useCallback(() => {
     setSaldo(getMockSaldo());
