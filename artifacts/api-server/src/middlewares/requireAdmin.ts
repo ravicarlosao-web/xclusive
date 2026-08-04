@@ -29,8 +29,8 @@ export function requireAdmin(
 
   const token = authHeader.slice(7);
 
-  // ── Mock mode: accept a well-known mock token ──────────────────────────────
-  if (token === "mock-admin-token") {
+  // ── Mock mode: accept a well-known mock token (desenvolvimento apenas) ────────
+  if (process.env.NODE_ENV !== "production" && token === "mock-admin-token") {
     req.adminId = 1;
     req.adminUsername = "admin";
     req.adminRole = "admin";
