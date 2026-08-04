@@ -89,9 +89,10 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       res.status(401).json({ error: "Conta suspensa ou não encontrada." });
       return;
     }
-  } catch {
-    // DB indisponível: JWT já verificado criptograficamente — permitir passagem
-    // e registar o aviso nos logs da request
+  } catch (err) {
+    req.log?.warn({ err }, "DB indisponível durante verificação de auth — a negar pedido (fail-closed)");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
+    return;
   }
 
   req.userId = payload.userId;
