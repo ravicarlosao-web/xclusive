@@ -1,0 +1,51 @@
+# Verificação de Correções — Segurança Crítica Xclusive
+
+## Contexto
+Foi pedido anteriormente para corrigir um conjunto de vulnerabilidades críticas encontradas numa auditoria de segurança. Antes de avançar para qualquer outra funcionalidade, preciso que verifiques — com base no código actual, não na memória do que foi pedido — se cada correção foi realmente aplicada, aplicada por completo, e se não introduziu nenhuma regressão ou novo problema.
+
+Não assumas que algo está corrigido só porque foi pedido. Vai ao ficheiro, lê o código actual linha a linha, e confirma.
+
+## Itens a verificar
+
+### 1. Backdoor de admin (`mock-admin-token`)
+Ficheiro: `artifacts/api-server/src/middlewares/requireAdmin.ts`
+- O bloco que aceita `mock-admin-token` foi removido por completo, ou está protegido por `process.env.NODE_ENV !== "production"`?
+- Confirma que não existe NENHUM outro token, string ou valor hardcoded em qualquer middleware de auth que conceda acesso sem passar por verificação real de JWT.
+- Testa mentalmente: se eu enviar `Authorization: Bearer mock-admin-token` em produção agora, o que acontece?
+
+### 2. Fail-open no `requireAuth` quando a DB falha
+Ficheiro: `artifacts/api-server/src/lib/auth.ts`
+- O `catch` que antes deixava passar o pedido quando a base de dados estava indisponível agora bloqueia o pedido (fail-closed) com status 503 ou 401?
+- Verifica se este mesmo padrão (fail-open em catch de DB) não se repete em outro middleware do projecto (ex: `requireAdmin`, verificação de conta suspensa, verificação de subscrição activa).
+
+### 3. `role` ausente no JWT
+Ficheiro: `artifacts/api-server/src/lib/auth.ts` e rota de login
+- O `signToken` agora inclui `role` no payload no momento do login?
+- A interface `JwtPayload` foi actualizada para incluir `role`?
+- **Ponto crítico de regressão**: tokens JWT emitidos ANTES desta correção não têm `role` no payload — o que acontece a um utilizador com token antigo ainda válido (7 dias) quando tenta aceder a uma rota de admin agora? Confirma se isto falha de forma segura (nega acesso) e não de forma insegura.
+- Verifica se `requireAdmin` continua a validar `role` correctamente contra o novo payload.
+
+### 4. Login de admin sem rate limiting
+Ficheiro: `artifacts/api-server/src/routes/admin.ts`
+- O endpoint `/admin/auth/login` agora está sujeito a rate limiting real antes de qualquer tentativa de autenticação, e não apenas depois na cadeia de middlewares?
+- A password hardcoded `admin123` ainda existe em algum lugar do código?
+
+### 5. Subscrições e gorjetas sem débito de saldo
+Ficheiro: `artifacts/api-server/src/routes/creator.ts` (subscriptions) e rota de gorjeta
+- Existe agora uma transação atómica (`db.transaction`) que verifica saldo suficiente ANTES de criar a subscrição/registar a gorjeta?
+- O que acontece se o saldo for insuficiente — a rota devolve erro claro (ex: 402) sem criar a subscrição parcialmente?
+- Confirma que não há condição de corrida: dois pedidos simultâneos do mesmo utilizador não podem gastar o mesmo saldo duas vezes (testar se a query usa `SELECT ... FOR UPDATE` ou equivalente, ou se depende apenas de verificação em memória).
+- O mesmo padrão foi aplicado tanto a subscrições como a gorjetas, ou só a uma das duas rotas?
+
+## O que preciso como resposta
+
+Para cada um dos 5 pontos acima, responde no formato:
+
+- **Item:** [nome]
+- **Estado:** ✅ Corrigido / ⚠️ Parcialmente corrigido / ❌ Não corrigido
+- **Evidência:** cita o trecho actual do código que confirma o estado
+- **Problema residual ou novo (se houver):** descreve exactamente o que falta ou o que a correção pode ter quebrado
+
+No final, dá-me uma resposta directa e sem rodeios: **é seguro avançar para os problemas de severidade "Alta" agora, ou ainda há algo crítico em aberto?**
+
+Não corrijas nada automaticamente nesta análise — só verifica e reporta. Se encontrares um problema, descreve-o para eu decidir o próximo passo.
