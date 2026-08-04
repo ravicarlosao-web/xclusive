@@ -12,7 +12,16 @@ const app: Express = express();
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }, // necessário para media URLs
-    contentSecurityPolicy: false, // gerido pelo frontend (Vite)
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
   }),
 );
 
