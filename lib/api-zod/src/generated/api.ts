@@ -1012,6 +1012,14 @@ export const CreateConversationResponse = zod.object({
 
 
 /**
+ * @summary Contagem de mensagens não lidas
+ */
+export const GetUnreadConversationsCountResponse = zod.object({
+  "count": zod.int()
+})
+
+
+/**
  * @summary Mensagens de uma conversa
  */
 export const GetMessagesParams = zod.object({

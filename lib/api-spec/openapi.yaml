@@ -717,6 +717,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Conversation"
 
+  /conversations/unread-count:
+    get:
+      operationId: getUnreadConversationsCount
+      tags: [messages]
+      summary: Contagem de mensagens não lidas
+      responses:
+        "200":
+          description: Contagem
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+
   /conversations/{id}/messages:
     get:
       operationId: getMessages

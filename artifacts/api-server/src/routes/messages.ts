@@ -127,6 +127,23 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
   });
 });
 
+// Contagem de conversas com mensagens não lidas (enviadas por outros)
+router.get("/conversations/unread-count", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId!;
+
+  // Contar mensagens não lidas enviadas por outros utilizadores, em conversas onde o user participa
+  const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(messagesTable)
+    .innerJoin(conversationParticipantsTable, eq(messagesTable.conversationId, conversationParticipantsTable.conversationId))
+    .where(and(
+      eq(conversationParticipantsTable.utilizadorId, userId),
+      eq(messagesTable.lido, false),
+      sql`${messagesTable.autorId} != ${userId}`,
+    ));
+
+  res.json({ count: count || 0 });
+});
+
 /** Verifica se o utilizador é participante da conversa */
 async function verificarParticipante(conversationId: number, userId: number): Promise<boolean> {
   const [p] = await db.select({ id: conversationParticipantsTable.conversationId })

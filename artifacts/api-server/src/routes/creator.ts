@@ -63,8 +63,11 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
   const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(eq(postsTable.autorId, userId));
   const [{ reels }] = await db.select({ reels: sql<number>`count(*)::int` }).from(reelsTable).where(eq(reelsTable.autorId, userId));
 
-  // Taxa de retenção (simulada)
-  const taxaRetencao = totalSubscritores > 0 ? Math.min(100, Math.round(85 + Math.random() * 10)) : 0;
+  // Taxa de retenção real: subscritores ativos / total histórico de subscritores
+  const [{ totalHistorico }] = await db.select({ totalHistorico: sql<number>`count(*)::int` })
+    .from(subscriptionsTable)
+    .where(eq(subscriptionsTable.criadorId, userId));
+  const taxaRetencao = totalHistorico > 0 ? Math.min(100, Math.round((totalSubscritores / totalHistorico) * 100)) : 0;
 
   res.json({
     ganhosMes: parseFloat(String(ganhosMes)) || 0,

@@ -11,19 +11,32 @@ import { cn } from '@/lib/utils';
 import { ReactNode, useState } from 'react';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
+import { useGetUnreadConversationsCount, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { user, logout, saldo } = useAuth();
+  const { user, logout, saldo, isMockMode } = useAuth();
   const [createPostOpen, setCreatePostOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
+
+  const queryEnabled = !!user && !isMockMode;
+
+  const { data: unreadMsgs } = useGetUnreadConversationsCount({
+    query: { enabled: queryEnabled, refetchInterval: 30_000 },
+  });
+  const { data: unreadNotifs } = useGetUnreadNotificationsCount({
+    query: { enabled: queryEnabled, refetchInterval: 30_000 },
+  });
+
+  const msgBadge = (unreadMsgs?.count ?? 0) > 0 ? unreadMsgs!.count : undefined;
+  const notifBadge = (unreadNotifs?.count ?? 0) > 0 ? unreadNotifs!.count : undefined;
 
   const navItems = [
     { name: 'Início', path: '/home', icon: Home },
     { name: 'Explorar', path: '/explorar', icon: Compass },
     { name: 'Reels', path: '/reels', icon: Play },
-    { name: 'Mensagens', path: '/mensagens', icon: Mail, badge: 2 }, // mocked badge
-    { name: 'Notificações', path: '/notificacoes', icon: Heart, badge: 5 }, // mocked badge
+    { name: 'Mensagens', path: '/mensagens', icon: Mail, badge: msgBadge },
+    { name: 'Notificações', path: '/notificacoes', icon: Heart, badge: notifBadge },
   ];
 
   return (

@@ -3001,6 +3001,83 @@ export const useCreateConversation = <TError = ErrorType<unknown>,
       return useMutation(getCreateConversationMutationOptions(options));
     }
 
+export const getGetUnreadConversationsCountUrl = () => {
+
+
+
+
+  return `/api/conversations/unread-count`
+}
+
+/**
+ * @summary Contagem de mensagens não lidas
+ */
+export const getUnreadConversationsCount = async ( options?: Parameters<typeof customFetch>[1]): Promise<UnreadCount> => {
+
+  return customFetch<UnreadCount>(getGetUnreadConversationsCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUnreadConversationsCountQueryKey = () => {
+    return [
+    `/api/conversations/unread-count`
+    ] as const;
+    }
+
+
+export const getGetUnreadConversationsCountQueryOptions = <TData = Awaited<ReturnType<typeof getUnreadConversationsCount>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUnreadConversationsCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUnreadConversationsCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUnreadConversationsCount>>> = ({ signal }) => getUnreadConversationsCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUnreadConversationsCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUnreadConversationsCountQueryResult = NonNullable<Awaited<ReturnType<typeof getUnreadConversationsCount>>>
+export type GetUnreadConversationsCountQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Contagem de mensagens não lidas
+ */
+
+export function useGetUnreadConversationsCount<TData = Awaited<ReturnType<typeof getUnreadConversationsCount>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUnreadConversationsCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUnreadConversationsCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetMessagesUrl = (id: number,) => {
 
 
