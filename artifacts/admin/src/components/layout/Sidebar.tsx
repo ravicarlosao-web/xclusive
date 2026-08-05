@@ -6,25 +6,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
-
-const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
-
-function usePendingTopUps() {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    function update() {
-      try {
-        const reqs = JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]');
-        setCount(reqs.filter((r: any) => r.status === 'pendente').length);
-      } catch { setCount(0); }
-    }
-    update();
-    const iv = setInterval(update, 3000);
-    return () => clearInterval(iv);
-  }, []);
-  return count;
-}
+import { useQuery } from '@tanstack/react-query';
+import { adminApi } from '@/lib/api';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -34,18 +17,24 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps) {
   const [location] = useLocation();
-  const pendingTopUps = usePendingTopUps();
+
+  const { data: kpis } = useQuery({
+    queryKey: ['dashboard', 'kpis'],
+    queryFn: adminApi.getDashboardKpis,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/users', label: 'Utilizadores', icon: Users },
     { href: '/creators', label: 'Criadores', icon: Star },
-    { href: '/creators/kyc', label: 'Fila KYC', icon: ShieldCheck, badge: 12 },
+    { href: '/creators/kyc', label: 'Fila KYC', icon: ShieldCheck, badge: kpis?.kycPendente || undefined },
     { href: '/content', label: 'Conteúdo', icon: ImageIcon },
-    { href: '/reports', label: 'Denúncias', icon: Flag, badge: 28 },
+    { href: '/reports', label: 'Denúncias', icon: Flag, badge: kpis?.denunciasPendentes || undefined },
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
-    { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine, badge: pendingTopUps || undefined },
-    { href: '/withdrawals', label: 'Levantamentos', icon: Wallet, badge: 5 },
+    { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine },
+    { href: '/withdrawals', label: 'Levantamentos', icon: Wallet, badge: kpis?.levantamentosPendentes || undefined },
     { href: '/broadcast', label: 'Broadcast', icon: Bell },
     { href: '/settings', label: 'Definições', icon: Settings },
     { href: '/audit-log', label: 'Audit Log', icon: ClipboardList },
@@ -85,14 +74,14 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
                   <item.icon className={cn("h-5 w-5", !collapsed && "mr-3", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                   {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
                   
-                  {!collapsed && item.badge && (
-                    <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary border border-primary/30">
+                  {!collapsed && item.badge ? (
+                    <span className="ml-auto flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary border border-primary/30">
                       {item.badge}
                     </span>
-                  )}
-                  {collapsed && item.badge && (
+                  ) : null}
+                  {collapsed && item.badge ? (
                     <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary"></span>
-                  )}
+                  ) : null}
                 </div>
               </Link>
             );

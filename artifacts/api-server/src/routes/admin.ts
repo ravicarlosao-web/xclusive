@@ -1,29 +1,56 @@
 /**
  * Admin API routes — /api/admin/*
  *
- * All routes are currently wired to mock data.
- * Schema is fully defined in lib/db/src/schema/admin.ts and lib/db/src/schema/users.ts.
- * Connect to the real DB by replacing the mock helpers with actual Drizzle queries.
+ * Todas as rotas lêem/escrevem na base de dados real via Drizzle ORM.
  *
- * Security:
- *   - All routes require the requireAdmin middleware (role: admin | superadmin).
- *   - Rate limiting is applied at the router level (100 req/min per IP).
- *   - All destructive actions write to the audit log mock.
+ * Segurança:
+ *   - Todas as rotas (exceto /admin/auth/login) exigem requireAdmin (role: admin | superadmin).
+ *   - Rate limiting aplicado ao nível do router (100 req/min por IP, 5/15min no login).
+ *   - Todas as acções destrutivas escrevem no audit_log.
  */
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
 import { signToken } from "../lib/auth.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
-import { db, auditLogTable, usersTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import {
+  db,
+  auditLogTable,
+  usersTable,
+  postsTable,
+  postMediaTable,
+  reportsTable,
+  withdrawalRequestsTable,
+  platformSettingsTable,
+  subscriptionPlansTable,
+  purchasesTable,
+  followsTable,
+  subscriptionsTable,
+} from "@workspace/db";
+import {
+  eq,
+  and,
+  desc,
+  asc,
+  or,
+  ilike,
+  sql,
+  gte,
+  count,
+  sum,
+  isNotNull,
+} from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
-/** Insere um registo no audit_log da DB.
- * Erros são logados mas nunca propagados — uma falha de auditoria
- * não deve bloquear a acção administrativa que a gerou.
- */
-async function logAudit(req: AdminRequest, action: string, targetType: string | null, targetId: number | null, details: Record<string, unknown>): Promise<void> {
+// ── Audit log helper ─────────────────────────────────────────────────────────
+
+async function logAudit(
+  req: AdminRequest,
+  action: string,
+  targetType: string | null,
+  targetId: number | null,
+  details: Record<string, unknown>
+): Promise<void> {
   try {
     await db.insert(auditLogTable).values({
       adminId: req.adminId!,
@@ -38,15 +65,54 @@ async function logAudit(req: AdminRequest, action: string, targetType: string | 
   }
 }
 
+// ── Paginação helper ──────────────────────────────────────────────────────────
+
+function paginate<T>(items: T[], total: number, page: number, limit: number) {
+  return {
+    data: items,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    hasMore: (page - 1) * limit + items.length < total,
+  };
+}
+
+// ── Mapeamento ativo boolean → estado string ──────────────────────────────────
+
+function mapEstado(ativo: boolean): string {
+  return ativo ? "ativo" : "suspenso";
+}
+
+function mapUser(u: typeof usersTable.$inferSelect) {
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    nomeExibicao: u.nomeExibicao,
+    bio: u.bio ?? null,
+    avatarUrl: u.avatarUrl ?? null,
+    capaUrl: u.capaUrl ?? null,
+    tipoConta: u.tipoConta,
+    verificado: u.verificado,
+    privado: u.privado,
+    role: u.role,
+    estado: mapEstado(u.ativo),
+    saldo: Number(u.saldo),
+    ganhos: Number(u.ganhos),
+    criadoEm: u.criadoEm,
+  };
+}
+
 const router = Router();
 
-// ── Rate limiting (simple in-memory, swap for express-rate-limit in prod) ────
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(req: AdminRequest, res: any, next: any) {
   const ip = req.ip ?? "unknown";
   const now = Date.now();
   const entry = requestCounts.get(ip);
-
   if (!entry || entry.resetAt < now) {
     requestCounts.set(ip, { count: 1, resetAt: now + 60_000 });
     return next();
@@ -58,13 +124,11 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   next();
 }
 
-// Limiter estrito para o endpoint de login: 5 tentativas por 15 min por IP
 const loginCounts = new Map<string, { count: number; resetAt: number }>();
 function loginLimiter(req: AdminRequest, res: any, next: any) {
   const ip = req.ip ?? "unknown";
   const now = Date.now();
   const entry = loginCounts.get(ip);
-
   if (!entry || entry.resetAt < now) {
     loginCounts.set(ip, { count: 1, resetAt: now + 15 * 60_000 });
     return next();
@@ -76,31 +140,22 @@ function loginLimiter(req: AdminRequest, res: any, next: any) {
   next();
 }
 
-// ── Signed media proxy — valida assinatura HMAC + TTL e faz proxy do conteúdo ─
-// Registado antes do router.use("/admin", requireAdmin) para poder aplicar
-// requireAdmin explicitamente (o URL gerado por signMediaUrl já inclui /api/admin/media).
-//
-// Segurança: faz fetch server-side e pipe do conteúdo — o URL real do storage
-// nunca chega ao cliente. Um redirect 302 exporia o rawUrl no Network tab do browser.
+// ── Signed media proxy ───────────────────────────────────────────────────────
+
 router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
   const { url, exp, sig } = req.query as Record<string, string>;
   const rawUrl = verifyMediaUrl(url, exp, sig);
   if (!rawUrl) {
     return res.status(403).json({ error: "URL de media inválido ou expirado." });
   }
-
   try {
     const upstream = await fetch(rawUrl);
-    if (!upstream.ok) {
-      return res.status(502).json({ error: "Não foi possível obter o recurso." });
-    }
+    if (!upstream.ok) return res.status(502).json({ error: "Não foi possível obter o recurso." });
     const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
     const contentLength = upstream.headers.get("content-length");
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Cache-Control", "no-store"); // documentos sensíveis não devem ser cacheados
+    res.setHeader("Cache-Control", "no-store");
     if (contentLength) res.setHeader("Content-Length", contentLength);
-
-    // Pipe do body sem expor o rawUrl ao cliente
     const reader = upstream.body?.getReader();
     if (!reader) return res.status(502).end();
     const pump = async (): Promise<void> => {
@@ -115,16 +170,14 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
   }
 });
 
-// ── Login (public — must be before requireAdmin middleware) ──────────────────
+// ── Login ────────────────────────────────────────────────────────────────────
+
 router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const { email, password } = req.body ?? {};
-
   if (!email || !password) {
     res.status(400).json({ error: "Email e password são obrigatórios" });
     return;
   }
-
-  // Lookup real da DB — apenas utilizadores com role admin ou superadmin
   const [user] = await db
     .select()
     .from(usersTable)
@@ -135,13 +188,11 @@ router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> =
     res.status(401).json({ error: "Credenciais inválidas" });
     return;
   }
-
   const passwordOk = await bcrypt.compare(password, user.passwordHash);
   if (!passwordOk) {
     res.status(401).json({ error: "Credenciais inválidas" });
     return;
   }
-
   const token = signToken({ userId: user.id, username: user.username, role: user.role });
   res.json({
     token,
@@ -153,454 +204,879 @@ router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> =
       role: user.role,
       avatarUrl: user.avatarUrl ?? null,
     },
-    expiresIn: 14400, // 4h
+    expiresIn: 14400,
   });
 });
 
 router.use("/admin", rateLimit, requireAdmin);
 
 // ────────────────────────────────────────────────────────────────────────────
-// MOCK DATA HELPERS
-// ────────────────────────────────────────────────────────────────────────────
-
-const mockUsers = Array.from({ length: 48 }, (_, i) => ({
-  id: i + 1,
-  username: `utilizador${i + 1}`,
-  nomeExibicao: ["Ana Silva", "Pedro Costa", "Maria Santos", "João Ferreira", "Carla Mendes", "Lucas Oliveira", "Sofia Rodrigues", "Miguel Alves", "Beatriz Lopes", "Rui Martins"][i % 10] + (i >= 10 ? ` ${Math.floor(i / 10) + 1}` : ""),
-  email: `user${i + 1}@exemplo.com`,
-  role: i === 0 ? "admin" : i < 15 ? "creator" : "user",
-  tipoConta: i < 15 ? "criador" : "pessoal",
-  pais: ["AO", "PT", "BR", "MZ", "ZA"][i % 5],
-  estado: i % 7 === 0 ? "suspenso" : "ativo",
-  avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`,
-  verificado: i < 8,
-  saldo: Math.floor(Math.random() * 50000),
-  ganhos: Math.floor(Math.random() * 200000),
-  criadoEm: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
-}));
-
-const mockReports = Array.from({ length: 22 }, (_, i) => ({
-  id: i + 1,
-  reporterId: (i % 10) + 2,
-  reporterUsername: `utilizador${(i % 10) + 2}`,
-  targetType: ["post", "comment", "user", "message"][i % 4],
-  targetId: i + 10,
-  reason: ["spam", "harassment", "nudity_minor", "copyright", "other"][i % 5],
-  description: "Conteúdo inadequado reportado pelo utilizador.",
-  status: ["pending", "reviewing", "resolved", "dismissed"][i % 4],
-  resolvedBy: i % 4 >= 2 ? 1 : null,
-  resolvedAt: i % 4 >= 2 ? new Date(Date.now() - i * 60 * 60 * 1000).toISOString() : null,
-  criadoEm: new Date(Date.now() - i * 3 * 60 * 60 * 1000).toISOString(),
-}));
-
-const mockWithdrawals = Array.from({ length: 14 }, (_, i) => ({
-  id: i + 1,
-  creatorId: i + 2,
-  creatorUsername: `utilizador${i + 2}`,
-  amount: (Math.floor(Math.random() * 900) + 100) * 100,
-  method: ["bank_transfer", "multicaixa_express", "paypal"][i % 3],
-  destinationDetails: { iban: `AO06 0006 0000 00000${i + 1} 1${i + 1}1 4` },
-  status: ["pending", "approved", "rejected", "paid"][i % 4],
-  processedBy: i % 4 >= 1 ? 1 : null,
-  processedAt: i % 4 >= 1 ? new Date(Date.now() - i * 12 * 60 * 60 * 1000).toISOString() : null,
-  notes: i % 4 === 2 ? "Documentação insuficiente." : null,
-  criadoEm: new Date(Date.now() - i * 6 * 60 * 60 * 1000).toISOString(),
-}));
-
-
-const mockPosts = Array.from({ length: 20 }, (_, i) => ({
-  id: i + 1,
-  autorId: (i % 15) + 1,
-  autorUsername: `utilizador${(i % 15) + 1}`,
-  autorAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${i % 15}`,
-  legenda: `Post de exemplo número ${i + 1}`,
-  tipo: ["imagem", "video", "carrossel"][i % 3],
-  mediaUrls: [`https://picsum.photos/seed/${i}/400/400`],
-  exclusivo: i % 3 === 0,
-  totalCurtidas: Math.floor(Math.random() * 500),
-  totalComentarios: Math.floor(Math.random() * 50),
-  criadoEm: new Date(Date.now() - i * 4 * 60 * 60 * 1000).toISOString(),
-}));
-
-const mockTransactions = Array.from({ length: 40 }, (_, i) => ({
-  id: i + 1,
-  tipo: ["gorjeta", "subscricao", "ppv"][i % 3],
-  valor: ([500, 1000, 2000, 5000][i % 4]),
-  pagadorId: (i % 10) + 5,
-  pagadorUsername: `utilizador${(i % 10) + 5}`,
-  recetorId: (i % 8) + 2,
-  recetorUsername: `utilizador${(i % 8) + 2}`,
-  comissao: ([500, 1000, 2000, 5000][i % 4]) * 0.2,
-  criadoEm: new Date(Date.now() - i * 3 * 60 * 60 * 1000).toISOString(),
-}));
-
-const mockSettings = {
-  commission_rate: { value: 20 },
-  maintenance_mode: { enabled: false },
-  allowed_countries: { list: ["AO", "PT", "BR", "MZ", "ZA", "FR", "GB", "US"] },
-  min_withdrawal_amount: { value: 5000 },
-};
-
-const mockBroadcastHistory = Array.from({ length: 6 }, (_, i) => ({
-  id: i + 1,
-  titulo: `Comunicado ${i + 1}`,
-  mensagem: `Mensagem de broadcast número ${i + 1} enviada a todos os utilizadores da plataforma.`,
-  segmento: ["todos", "criadores", "utilizadores", "pais:AO"][i % 4],
-  totalEnviados: Math.floor(Math.random() * 1000) + 200,
-  totalLidos: Math.floor(Math.random() * 500) + 50,
-  enviadoPor: 1,
-  criadoEm: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
-}));
-
-function paginate<T>(items: T[], page = 1, limit = 10) {
-  const offset = (page - 1) * limit;
-  return {
-    data: items.slice(offset, offset + limit),
-    total: items.length,
-    page,
-    limit,
-    totalPages: Math.ceil(items.length / limit),
-    hasMore: offset + limit < items.length,
-  };
-}
-
-
-// ────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/dashboard/kpis", (req, res) => {
-  res.json({
-    totalUtilizadores: 48,
-    totalCriadores: 15,
-    novosHoje: 3,
-    receitaTotal: 1_250_000,
-    comissaoMes: 85_000,
-    postsHoje: 12,
-    denunciasPendentes: mockReports.filter(r => r.status === "pending").length,
-    levantamentosPendentes: mockWithdrawals.filter(w => w.status === "pending").length,
-  });
+router.get("/admin/dashboard/kpis", async (req, res) => {
+  try {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const [
+      [{ totalUtilizadores }],
+      [{ totalCriadores }],
+      [{ novosHoje }],
+      [{ postsHoje }],
+      [{ denunciasPendentes }],
+      [{ levantamentosPendentes }],
+      [{ receitaTotal }],
+      [{ comissaoMes }],
+    ] = await Promise.all([
+      db.select({ totalUtilizadores: count() }).from(usersTable),
+      db.select({ totalCriadores: count() }).from(usersTable)
+        .where(eq(usersTable.tipoConta, "criador")),
+      db.select({ novosHoje: count() }).from(usersTable)
+        .where(gte(usersTable.criadoEm, hoje)),
+      db.select({ postsHoje: count() }).from(postsTable)
+        .where(gte(postsTable.criadoEm, hoje)),
+      db.select({ denunciasPendentes: count() }).from(reportsTable)
+        .where(eq(reportsTable.status, "pending")),
+      db.select({ levantamentosPendentes: count() }).from(withdrawalRequestsTable)
+        .where(eq(withdrawalRequestsTable.status, "pending")),
+      db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
+      db.select({ comissaoMes: sum(purchasesTable.valor) }).from(purchasesTable)
+        .where(gte(purchasesTable.criadoEm, new Date(hoje.getFullYear(), hoje.getMonth(), 1))),
+    ]);
+
+    const receitaTotalNum = Number(receitaTotal ?? 0);
+    const comissaoMesNum = Number(comissaoMes ?? 0) * 0.2; // 20% comissão
+
+    res.json({
+      totalUtilizadores: Number(totalUtilizadores),
+      totalCriadores: Number(totalCriadores),
+      novosHoje: Number(novosHoje),
+      receitaTotal: receitaTotalNum,
+      comissaoMes: comissaoMesNum,
+      postsHoje: Number(postsHoje),
+      denunciasPendentes: Number(denunciasPendentes),
+      levantamentosPendentes: Number(levantamentosPendentes),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter KPIs");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/dashboard/charts", (req, res) => {
-  const today = new Date();
-  const days30 = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - (29 - i));
-    return {
-      data: d.toISOString().split("T")[0],
-      novosUtilizadores: Math.floor(Math.random() * 8) + 1,
-      gorjetas: Math.floor(Math.random() * 30000) + 5000,
-      subscricoes: Math.floor(Math.random() * 50000) + 10000,
-      ppv: Math.floor(Math.random() * 20000) + 2000,
-    };
-  });
+router.get("/admin/dashboard/charts", async (req, res) => {
+  try {
+    // Últimos 30 dias — novos utilizadores por dia
+    const dias30 = await db.execute(sql`
+      SELECT
+        DATE(criado_em)::text AS data,
+        COUNT(*)::int AS "novosUtilizadores"
+      FROM users
+      WHERE criado_em >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(criado_em)
+      ORDER BY data ASC
+    `);
 
-  const top10Criadores = mockUsers
-    .filter(u => u.tipoConta === "criador")
-    .slice(0, 10)
-    .map(u => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, ganhos: u.ganhos, avatarUrl: u.avatarUrl }))
-    .sort((a, b) => b.ganhos - a.ganhos);
+    // Receita por dia (purchases)
+    const receitaDias = await db.execute(sql`
+      SELECT
+        DATE(criado_em)::text AS data,
+        COALESCE(SUM(CASE WHEN tipo = 'gorjeta' THEN valor ELSE 0 END), 0)::numeric AS gorjetas,
+        COALESCE(SUM(CASE WHEN tipo = 'subscricao' THEN valor ELSE 0 END), 0)::numeric AS subscricoes,
+        COALESCE(SUM(CASE WHEN tipo = 'ppv' THEN valor ELSE 0 END), 0)::numeric AS ppv
+      FROM purchases
+      WHERE criado_em >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(criado_em)
+      ORDER BY data ASC
+    `);
 
-  const distribuicaoPaises = ["AO", "PT", "BR", "MZ", "ZA"].map(p => ({
-    pais: p,
-    total: mockUsers.filter(u => u.pais === p).length,
-  }));
+    // Mapa de receita por data
+    const receitaMap = new Map<string, any>();
+    for (const r of (receitaDias as any).rows ?? []) {
+      receitaMap.set(r.data, r);
+    }
 
-  res.json({ dias30: days30, top10Criadores, distribuicaoPaises });
+    // Juntar os dois arrays por data, preenchendo zeros onde não há dados
+    const dias30Rows = (dias30 as any).rows ?? [];
+    const chartDias = dias30Rows.map((d: any) => ({
+      data: d.data,
+      novosUtilizadores: d.novosUtilizadores,
+      gorjetas: Number(receitaMap.get(d.data)?.gorjetas ?? 0),
+      subscricoes: Number(receitaMap.get(d.data)?.subscricoes ?? 0),
+      ppv: Number(receitaMap.get(d.data)?.ppv ?? 0),
+    }));
+
+    // Top 10 criadores por ganhos
+    const top10 = await db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        nomeExibicao: usersTable.nomeExibicao,
+        ganhos: usersTable.ganhos,
+        avatarUrl: usersTable.avatarUrl,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.tipoConta, "criador"))
+      .orderBy(desc(usersTable.ganhos))
+      .limit(10);
+
+    res.json({
+      dias30: chartDias,
+      top10Criadores: top10.map(u => ({ ...u, ganhos: Number(u.ganhos) })),
+      distribuicaoPaises: [], // campo não existe na DB actual
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter charts");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/dashboard/activity-feed", (req, res) => {
-  const feed = [
-    { tipo: "novo_registo", mensagem: "Sofia Rodrigues registou-se", criadoEm: new Date(Date.now() - 5 * 60 * 1000).toISOString() },
-    { tipo: "nova_denuncia", mensagem: "Denúncia de spam recebida (post #14)", criadoEm: new Date(Date.now() - 18 * 60 * 1000).toISOString() },
-    { tipo: "novo_levantamento", mensagem: "Pedido de levantamento de 5.000 AOA", criadoEm: new Date(Date.now() - 35 * 60 * 1000).toISOString() },
-    { tipo: "kyc_submetido", mensagem: "Pedro Costa submeteu KYC para aprovação", criadoEm: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() },
-    { tipo: "novo_registo", mensagem: "Lucas Oliveira registou-se", criadoEm: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-    { tipo: "nova_denuncia", mensagem: "Denúncia de assédio recebida (user #7)", criadoEm: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
-  ];
-  res.json(feed);
+router.get("/admin/dashboard/activity-feed", async (req, res) => {
+  try {
+    // Últimas entradas do audit_log com info do admin
+    const logs = await db
+      .select({
+        id: auditLogTable.id,
+        action: auditLogTable.action,
+        targetType: auditLogTable.targetType,
+        targetId: auditLogTable.targetId,
+        details: auditLogTable.details,
+        criadoEm: auditLogTable.criadoEm,
+        adminUsername: usersTable.username,
+      })
+      .from(auditLogTable)
+      .leftJoin(usersTable, eq(auditLogTable.adminId, usersTable.id))
+      .orderBy(desc(auditLogTable.criadoEm))
+      .limit(20);
+
+    // Novos utilizadores recentes (últimas 24h)
+    const novosUsers = await db
+      .select({ id: usersTable.id, username: usersTable.username, criadoEm: usersTable.criadoEm })
+      .from(usersTable)
+      .where(gte(usersTable.criadoEm, new Date(Date.now() - 24 * 60 * 60 * 1000)))
+      .orderBy(desc(usersTable.criadoEm))
+      .limit(5);
+
+    const feedFromAudit = logs.map(l => ({
+      id: l.id,
+      tipo: l.action,
+      mensagem: formatAuditMessage(l.action, l.adminUsername ?? "admin", l.targetType, l.targetId, l.details as any),
+      criadoEm: l.criadoEm,
+    }));
+
+    const feedFromUsers = novosUsers.map(u => ({
+      id: `user-${u.id}`,
+      tipo: "novo_registo",
+      mensagem: `${u.username} registou-se na plataforma`,
+      criadoEm: u.criadoEm,
+    }));
+
+    const feed = [...feedFromAudit, ...feedFromUsers]
+      .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+      .slice(0, 15);
+
+    res.json(feed);
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter activity feed");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
+
+function formatAuditMessage(action: string, admin: string, targetType: string | null, targetId: number | null, details: any): string {
+  const target = targetId ? ` #${targetId}` : "";
+  switch (action) {
+    case "user_suspend": return `${admin} suspendeu utilizador${target}`;
+    case "user_reactivate": return `${admin} reactivou utilizador${target}`;
+    case "user_delete": return `${admin} eliminou utilizador${target}`;
+    case "user_role_change": return `${admin} alterou role do utilizador${target}`;
+    case "user_edit": return `${admin} editou utilizador${target}`;
+    case "kyc_aprovar": return `${admin} aprovou KYC do criador${target}`;
+    case "kyc_rejeitar": return `${admin} rejeitou KYC do criador${target}`;
+    case "post_delete": return `${admin} eliminou post${target}`;
+    case "report_resolve": return `${admin} resolveu denúncia${target}`;
+    case "withdrawal_approved": return `${admin} aprovou levantamento${target}`;
+    case "withdrawal_rejected": return `${admin} rejeitou levantamento${target}`;
+    case "withdrawal_paid": return `${admin} marcou levantamento${target} como pago`;
+    case "settings_update": return `${admin} actualizou definições da plataforma`;
+    case "broadcast_send": return `${admin} enviou comunicado: ${details?.titulo ?? ""}`;
+    case "balance_adjustment": return `${admin} ajustou saldo do criador${target}`;
+    default: return `${admin} executou ${action}${target}`;
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // USERS
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/users", (req, res) => {
-  const { page = "1", limit = "10", role, pais, estado, search } = req.query as Record<string, string>;
-  let filtered = [...mockUsers];
-  if (role) filtered = filtered.filter(u => u.role === role);
-  if (pais) filtered = filtered.filter(u => u.pais === pais);
-  if (estado) filtered = filtered.filter(u => u.estado === estado);
-  if (search) filtered = filtered.filter(u =>
-    u.username.includes(search) || u.email.includes(search) || u.nomeExibicao.toLowerCase().includes(search.toLowerCase())
-  );
-  res.json(paginate(filtered, Number(page), Number(limit)));
+router.get("/admin/users", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", role, estado, search } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [];
+    if (role) conditions.push(eq(usersTable.role, role));
+    if (estado === "suspenso") conditions.push(eq(usersTable.ativo, false));
+    if (estado === "ativo") conditions.push(eq(usersTable.ativo, true));
+    if (search) {
+      conditions.push(or(
+        ilike(usersTable.username, `%${search}%`),
+        ilike(usersTable.email, `%${search}%`),
+        ilike(usersTable.nomeExibicao, `%${search}%`),
+      ));
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select().from(usersTable)
+        .where(where)
+        .orderBy(desc(usersTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(usersTable).where(where),
+    ]);
+
+    res.json(paginate(rows.map(mapUser), Number(total), pageNum, limitNum));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar utilizadores");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/users/:id", (req, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
-  res.json({
-    ...user,
-    totalPosts: Math.floor(Math.random() * 50),
-    totalComentarios: Math.floor(Math.random() * 200),
-    totalSeguidores: Math.floor(Math.random() * 1000),
-    totalSeguindo: Math.floor(Math.random() * 500),
-    ultimoLogin: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-    denunciasRecebidas: mockReports.filter(r => r.targetType === "user" && r.targetId === Number(req.params.id)),
-    historicoTransacoes: mockTransactions.filter(t => t.recetorId === Number(req.params.id)).slice(0, 5),
-  });
+router.get("/admin/users/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+
+    const [[{ totalPosts }], [{ totalSeguidores }], [{ totalSeguindo }]] = await Promise.all([
+      db.select({ totalPosts: count() }).from(postsTable).where(eq(postsTable.autorId, id)),
+      db.select({ totalSeguidores: count() }).from(followsTable).where(eq(followsTable.seguidoId, id)),
+      db.select({ totalSeguindo: count() }).from(followsTable).where(eq(followsTable.seguidorId, id)),
+    ]);
+
+    res.json({
+      ...mapUser(user),
+      totalPosts: Number(totalPosts),
+      totalSeguidores: Number(totalSeguidores),
+      totalSeguindo: Number(totalSeguindo),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
 
-  // Allowlist explícita — bloqueia alteração de id, role, saldo, passwordHash, etc.
-  const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "estado", "verificado"] as const;
-  const before: Record<string, unknown> = {};
-  const updates: Record<string, unknown> = {};
-  for (const campo of CAMPOS_PERMITIDOS) {
-    if (req.body[campo] !== undefined) {
-      before[campo] = (user as any)[campo];
-      updates[campo] = req.body[campo];
+    const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "verificado"] as const;
+    const before: Record<string, unknown> = {};
+    const updates: Record<string, unknown> = {};
+    for (const campo of CAMPOS_PERMITIDOS) {
+      if (req.body[campo] !== undefined) {
+        before[campo] = user[campo];
+        updates[campo] = req.body[campo];
+      }
     }
-  }
-  Object.assign(user, updates);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nenhum campo válido para actualizar." });
+    }
 
-  await logAudit(req, "user_edit", "user", user.id, { before, after: updates });
-  res.json(user);
+    const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
+    await logAudit(req, "user_edit", "user", id, { before, after: updates });
+    res.json(mapUser(updated));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao editar utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
-  const { estado } = req.body;
-  const estadoAnterior = user.estado;
-  user.estado = estado;
-  await logAudit(req, estado === "suspenso" ? "user_suspend" : "user_reactivate", "user", user.id, { before: { estado: estadoAnterior }, after: { estado } });
-  res.json(user);
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+
+    const { estado } = req.body;
+    if (!["ativo", "suspenso"].includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
+    }
+    const novoAtivo = estado === "ativo";
+    const estadoAnterior = mapEstado(user.ativo);
+
+    const [updated] = await db.update(usersTable).set({ ativo: novoAtivo }).where(eq(usersTable.id, id)).returning();
+    await logAudit(req, novoAtivo ? "user_reactivate" : "user_suspend", "user", id, {
+      before: { estado: estadoAnterior }, after: { estado },
+    });
+    res.json(mapUser(updated));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao alterar estado do utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
 
-  const novoRole: string = req.body.role;
+    const novoRole: string = req.body.role;
+    const ROLES_VALIDAS = ["user", "creator", "admin", "superadmin"] as const;
+    if (!ROLES_VALIDAS.includes(novoRole as any)) {
+      return res.status(400).json({ error: `Role inválida. Valores permitidos: ${ROLES_VALIDAS.join(", ")}` });
+    }
+    if ((novoRole === "admin" || novoRole === "superadmin") && req.adminRole !== "superadmin") {
+      return res.status(403).json({ error: "Apenas superadmin pode atribuir roles de administrador" });
+    }
+    if (user.role === "superadmin" && req.adminRole !== "superadmin") {
+      return res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
+    }
+    if (user.id === req.adminId && novoRole === "superadmin" && req.adminRole !== "superadmin") {
+      return res.status(403).json({ error: "Não podes promover-te a superadmin" });
+    }
 
-  // Apenas roles válidas são aceites
-  const ROLES_VALIDAS = ["user", "creator", "admin", "superadmin"] as const;
-  if (!ROLES_VALIDAS.includes(novoRole as any)) {
-    return res.status(400).json({ error: `Role inválida. Valores permitidos: ${ROLES_VALIDAS.join(", ")}` });
+    const roleAnterior = user.role;
+    const [updated] = await db.update(usersTable).set({ role: novoRole }).where(eq(usersTable.id, id)).returning();
+    await logAudit(req, "user_role_change", "user", id, { before: { role: roleAnterior }, after: { role: novoRole } });
+    res.json(mapUser(updated));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao alterar role");
+    res.status(500).json({ error: "Erro interno." });
   }
-
-  // Apenas superadmin pode promover para admin ou superadmin
-  if ((novoRole === "admin" || novoRole === "superadmin") && req.adminRole !== "superadmin") {
-    return res.status(403).json({ error: "Apenas superadmin pode atribuir roles de administrador" });
-  }
-
-  // Ninguém pode rebaixar outro superadmin
-  if (user.role === "superadmin" && req.adminRole !== "superadmin") {
-    return res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
-  }
-
-  // Bloquear auto-promoção para superadmin
-  if (user.id === req.adminId && novoRole === "superadmin" && req.adminRole !== "superadmin") {
-    return res.status(403).json({ error: "Não podes promover-te a superadmin" });
-  }
-
-  const roleAnterior = user.role; // capturar ANTES da mutação
-  user.role = novoRole;
-  await logAudit(req, "user_role_change", "user", user.id, { before: { role: roleAnterior }, after: { role: novoRole } });
-  res.json(user);
 });
 
 router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
-  const idx = mockUsers.findIndex(u => u.id === Number(req.params.id));
-  if (idx < 0) return res.status(404).json({ error: "Utilizador não encontrado" });
-  const targetId = Number(req.params.id);
-  mockUsers[idx].estado = "eliminado";
-  await logAudit(req, "user_delete", "user", targetId, { before: { estado: "ativo" }, after: { estado: "eliminado" } });
-  res.json({ success: true });
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+
+    // Soft delete — desactiva a conta sem eliminar os dados
+    await db.update(usersTable).set({ ativo: false }).where(eq(usersTable.id, id));
+    await logAudit(req, "user_delete", "user", id, { before: { ativo: user.ativo }, after: { ativo: false } });
+    res.json({ success: true });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao eliminar utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // CREATORS
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/creators", (req, res) => {
-  const { page = "1", limit = "10" } = req.query as Record<string, string>;
-  const creators = mockUsers.filter(u => u.tipoConta === "criador");
-  res.json(paginate(creators, Number(page), Number(limit)));
+router.get("/admin/creators", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", search } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [eq(usersTable.tipoConta, "criador")];
+    if (search) {
+      conditions.push(or(
+        ilike(usersTable.username, `%${search}%`),
+        ilike(usersTable.nomeExibicao, `%${search}%`),
+      ));
+    }
+    const where = and(...conditions);
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select().from(usersTable).where(where).orderBy(desc(usersTable.ganhos)).limit(limitNum).offset(offset),
+      db.select({ total: count() }).from(usersTable).where(where),
+    ]);
+
+    // Contar subscritores por criador
+    const ids = rows.map(r => r.id);
+    const subsCounts = ids.length > 0
+      ? await db.execute(sql`
+          SELECT criador_id, COUNT(*)::int AS total
+          FROM subscriptions
+          WHERE criador_id = ANY(${sql.raw(`ARRAY[${ids.join(",")}]`)})
+            AND estado = 'ativa'
+          GROUP BY criador_id
+        `)
+      : { rows: [] };
+
+    const subsMap = new Map<number, number>();
+    for (const r of (subsCounts as any).rows ?? []) {
+      subsMap.set(r.criador_id, r.total);
+    }
+
+    res.json(paginate(
+      rows.map(u => ({ ...mapUser(u), subscribers: subsMap.get(u.id) ?? 0 })),
+      Number(total), pageNum, limitNum
+    ));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar criadores");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/creators/kyc-queue", requireAdmin, (req: AdminRequest, res) => {
-  const queue = mockUsers.filter(u => u.tipoConta === "criador" && !u.verificado).map(u => ({
-    ...u,
-    kycSubmissao: {
-      // URLs assinados com TTL de 15 min — apenas acessíveis via GET /api/admin/media
-      // com token admin válido. Substituir os strings Picsum pelas URLs reais do
-      // object-storage quando o upload KYC for implementado.
-      documentoFrente: signMediaUrl(`https://picsum.photos/seed/doc-f-${u.id}/600/400`),
-      documentoVerso: signMediaUrl(`https://picsum.photos/seed/doc-v-${u.id}/600/400`),
-      selfie: signMediaUrl(`https://picsum.photos/seed/selfie-${u.id}/600/400`),
-      provaDeMorada: signMediaUrl(`https://picsum.photos/seed/morada-${u.id}/600/400`),
-      selfieComDocumento: signMediaUrl(`https://picsum.photos/seed/selfie-doc-${u.id}/600/400`),
-      videoVerificacao: null,
-      submissaoEm: new Date(Date.now() - u.id * 2 * 60 * 60 * 1000).toISOString(),
-    },
-  }));
-  res.json(queue);
+router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, res) => {
+  try {
+    const queue = await db
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.tipoConta, "criador"), eq(usersTable.verificado, false), eq(usersTable.ativo, true)))
+      .orderBy(asc(usersTable.criadoEm));
+
+    res.json(queue.map(u => ({
+      ...mapUser(u),
+      kycSubmissao: {
+        // URLs dos documentos KYC — substituir por URLs reais do object-storage quando implementado
+        documentoFrente: signMediaUrl(`https://picsum.photos/seed/doc-f-${u.id}/600/400`),
+        documentoVerso: signMediaUrl(`https://picsum.photos/seed/doc-v-${u.id}/600/400`),
+        selfie: signMediaUrl(`https://picsum.photos/seed/selfie-${u.id}/600/400`),
+        provaDeMorada: signMediaUrl(`https://picsum.photos/seed/morada-${u.id}/600/400`),
+        selfieComDocumento: signMediaUrl(`https://picsum.photos/seed/selfie-doc-${u.id}/600/400`),
+        videoVerificacao: null,
+        submissaoEm: u.criadoEm,
+      },
+    })));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter fila KYC");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Criador não encontrado" });
-  const { acao, motivo } = req.body;
-  const verificadoAnterior = user.verificado;
-  if (acao === "aprovar") user.verificado = true;
-  await logAudit(req, `kyc_${acao}`, "user", user.id, { before: { verificado: verificadoAnterior }, after: { verificado: user.verificado }, motivo: motivo ?? null });
-  res.json({ success: true, user });
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
+    if (!user) return res.status(404).json({ error: "Criador não encontrado" });
+
+    const { acao, motivo } = req.body;
+    if (!["aprovar", "rejeitar"].includes(acao)) {
+      return res.status(400).json({ error: "Acção inválida. Use 'aprovar' ou 'rejeitar'." });
+    }
+
+    const verificadoAnterior = user.verificado;
+    const [updated] = await db.update(usersTable)
+      .set({ verificado: acao === "aprovar" })
+      .where(eq(usersTable.id, id))
+      .returning();
+
+    await logAudit(req, `kyc_${acao}`, "user", id, {
+      before: { verificado: verificadoAnterior },
+      after: { verificado: updated.verificado },
+      motivo: motivo ?? null,
+    });
+    res.json({ success: true, user: mapUser(updated) });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao processar KYC");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-// Planos mock em memória — partilhados entre GET e PATCH para permitir snapshot before/after
-const mockPlans = [
-  { id: 1, nome: "Básico", preco: 999, beneficios: "Acesso a conteúdo exclusivo", ativo: true, totalSubscritores: 12 },
-  { id: 2, nome: "Premium", preco: 2499, beneficios: "Acesso total + mensagens diretas", ativo: true, totalSubscritores: 5 },
-];
+router.get("/admin/creators/:id/plans", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const plans = await db.select().from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.criadorId, id))
+      .orderBy(asc(subscriptionPlansTable.preco));
 
-router.get("/admin/creators/:id/plans", (req, res) => {
-  res.json(mockPlans);
+    // Contar subscritores activos por plano
+    const planIds = plans.map(p => p.id);
+    const subsCount = planIds.length > 0
+      ? await db.execute(sql`
+          SELECT plano_id, COUNT(*)::int AS total
+          FROM subscriptions
+          WHERE plano_id = ANY(${sql.raw(`ARRAY[${planIds.join(",")}]`)})
+            AND estado = 'ativa'
+          GROUP BY plano_id
+        `)
+      : { rows: [] };
+
+    const subsMap = new Map<number, number>();
+    for (const r of (subsCount as any).rows ?? []) {
+      subsMap.set(r.plano_id, r.total);
+    }
+
+    res.json(plans.map(p => ({
+      ...p,
+      preco: Number(p.preco),
+      totalSubscritores: subsMap.get(p.id) ?? 0,
+    })));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar planos do criador");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res) => {
-  const planId = Number(req.params.planId);
-  const plan = mockPlans.find(p => p.id === planId);
-  const before = plan ? { ...plan } : null;
-  if (plan) Object.assign(plan, req.body);
-  await logAudit(req, "plan_edit", "plan", planId, { before, after: plan ?? req.body });
-  res.json({ success: true, ...(plan ?? req.body) });
+  try {
+    const planId = Number(req.params.planId);
+    const [plan] = await db.select().from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.id, planId)).limit(1);
+    if (!plan) return res.status(404).json({ error: "Plano não encontrado" });
+
+    const before = { ...plan };
+    const updates: Partial<typeof subscriptionPlansTable.$inferInsert> = {};
+    if (req.body.nome !== undefined) updates.nome = String(req.body.nome);
+    if (req.body.preco !== undefined) updates.preco = String(Number(req.body.preco));
+    if (req.body.beneficios !== undefined) updates.beneficios = String(req.body.beneficios);
+    if (req.body.ativo !== undefined) updates.ativo = Boolean(req.body.ativo);
+
+    const [updated] = await db.update(subscriptionPlansTable).set(updates)
+      .where(eq(subscriptionPlansTable.id, planId)).returning();
+    await logAudit(req, "plan_edit", "plan", planId, { before, after: updates });
+    res.json({ success: true, ...updated, preco: Number(updated.preco) });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao editar plano");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res) => {
-  const user = mockUsers.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: "Criador não encontrado" });
-  const { valor, motivo } = req.body;
-  const saldoAnterior = user.saldo;
-  user.saldo += valor;
-  await logAudit(req, "balance_adjustment", "user", user.id, { before: { saldo: saldoAnterior }, after: { saldo: user.saldo }, valor, motivo: motivo ?? null });
-  res.json({ success: true, novoSaldo: user.saldo });
+  try {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
+    if (!user) return res.status(404).json({ error: "Criador não encontrado" });
+
+    const { valor, motivo } = req.body;
+    const valorNum = Number(valor);
+    if (!Number.isFinite(valorNum)) {
+      return res.status(400).json({ error: "Valor inválido." });
+    }
+
+    const saldoAnterior = Number(user.saldo);
+    const novoSaldo = saldoAnterior + valorNum;
+
+    await db.update(usersTable)
+      .set({ saldo: String(novoSaldo) })
+      .where(eq(usersTable.id, id));
+
+    await logAudit(req, "balance_adjustment", "user", id, {
+      before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor: valorNum, motivo: motivo ?? null,
+    });
+    res.json({ success: true, novoSaldo });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao ajustar saldo");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // CONTENT & REPORTS
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/posts", (req, res) => {
-  const { page = "1", limit = "10" } = req.query as Record<string, string>;
-  res.json(paginate(mockPosts, Number(page), Number(limit)));
+router.get("/admin/posts", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", search } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [];
+    if (search) conditions.push(ilike(postsTable.legenda, `%${search}%`));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id: postsTable.id,
+        autorId: postsTable.autorId,
+        autorUsername: usersTable.username,
+        autorAvatar: usersTable.avatarUrl,
+        legenda: postsTable.legenda,
+        tipo: postsTable.tipo,
+        exclusivo: postsTable.exclusivo,
+        criadoEm: postsTable.criadoEm,
+      })
+        .from(postsTable)
+        .leftJoin(usersTable, eq(postsTable.autorId, usersTable.id))
+        .where(where)
+        .orderBy(desc(postsTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(postsTable).where(where),
+    ]);
+
+    res.json(paginate(rows, Number(total), pageNum, limitNum));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar posts");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res) => {
-  const idx = mockPosts.findIndex(p => p.id === Number(req.params.id));
-  if (idx < 0) return res.status(404).json({ error: "Post não encontrado" });
-  const targetId = Number(req.params.id);
-  mockPosts.splice(idx, 1);
-  await logAudit(req, "post_delete", "post", targetId, { motivo: req.body?.motivo ?? null });
-  res.json({ success: true });
+  try {
+    const id = Number(req.params.id);
+    const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+    await db.delete(postsTable).where(eq(postsTable.id, id));
+    await logAudit(req, "post_delete", "post", id, { motivo: req.body?.motivo ?? null });
+    res.json({ success: true });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao eliminar post");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/reports", (req, res) => {
-  const { page = "1", limit = "10", targetType, status, reason } = req.query as Record<string, string>;
-  let filtered = [...mockReports];
-  if (targetType) filtered = filtered.filter(r => r.targetType === targetType);
-  if (status) filtered = filtered.filter(r => r.status === status);
-  if (reason) filtered = filtered.filter(r => r.reason === reason);
-  res.json(paginate(filtered, Number(page), Number(limit)));
+router.get("/admin/reports", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", targetType, status, reason } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [];
+    if (targetType) conditions.push(eq(reportsTable.targetType, targetType));
+    if (status) conditions.push(eq(reportsTable.status, status));
+    if (reason) conditions.push(eq(reportsTable.reason, reason));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id: reportsTable.id,
+        reporterId: reportsTable.reporterId,
+        reporterUsername: usersTable.username,
+        targetType: reportsTable.targetType,
+        targetId: reportsTable.targetId,
+        reason: reportsTable.reason,
+        description: reportsTable.description,
+        status: reportsTable.status,
+        resolvedBy: reportsTable.resolvedBy,
+        resolvedAt: reportsTable.resolvedAt,
+        criadoEm: reportsTable.criadoEm,
+      })
+        .from(reportsTable)
+        .leftJoin(usersTable, eq(reportsTable.reporterId, usersTable.id))
+        .where(where)
+        .orderBy(desc(reportsTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(reportsTable).where(where),
+    ]);
+
+    res.json(paginate(rows, Number(total), pageNum, limitNum));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar denúncias");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res) => {
-  const report = mockReports.find(r => r.id === Number(req.params.id));
-  if (!report) return res.status(404).json({ error: "Denúncia não encontrada" });
+  try {
+    const id = Number(req.params.id);
+    const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
+    if (!report) return res.status(404).json({ error: "Denúncia não encontrada" });
 
-  // Allowlist: apenas status e notas são modificáveis
-  const STATUS_VALIDOS = ["pending", "reviewing", "resolved", "dismissed"] as const;
-  if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-    return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    const STATUS_VALIDOS = ["pending", "reviewing", "resolved", "dismissed"] as const;
+    if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
+      return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    }
+
+    const statusAnterior = report.status;
+    const updates: Partial<typeof reportsTable.$inferInsert> = {
+      resolvedBy: req.adminId ?? undefined,
+      resolvedAt: new Date(),
+    };
+    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (typeof req.body.description === "string") updates.description = req.body.description.slice(0, 1000);
+
+    const [updated] = await db.update(reportsTable).set(updates).where(eq(reportsTable.id, id)).returning();
+    await logAudit(req, "report_resolve", "report", id, {
+      before: { status: statusAnterior }, after: { status: updated.status },
+    });
+    res.json(updated);
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao resolver denúncia");
+    res.status(500).json({ error: "Erro interno." });
   }
-
-  const statusAnterior = report.status;
-  if (req.body.status !== undefined) report.status = req.body.status;
-  if (typeof req.body.description === "string") report.description = req.body.description.slice(0, 1000);
-  report.resolvedBy = req.adminId ?? null;
-  report.resolvedAt = new Date().toISOString();
-
-  await logAudit(req, "report_resolve", "report", report.id, { before: { status: statusAnterior }, after: { status: report.status } });
-  res.json(report);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // FINANCE
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/finance/kpis", (req, res) => {
-  res.json({
-    receitaTotal: 4_250_000,
-    comissaoRetida: 850_000,
-    pagoCriadores: 3_400_000,
-    ticketMedio: 1_250,
-    receitaMes: 425_000,
-    crescimentoMes: 12.5,
-  });
+router.get("/admin/finance/kpis", async (req, res) => {
+  try {
+    const inicioMes = new Date();
+    inicioMes.setDate(1);
+    inicioMes.setHours(0, 0, 0, 0);
+
+    const [
+      [{ receitaTotal }],
+      [{ receitaMes }],
+      [{ totalTransacoes }],
+    ] = await Promise.all([
+      db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
+      db.select({ receitaMes: sum(purchasesTable.valor) }).from(purchasesTable)
+        .where(gte(purchasesTable.criadoEm, inicioMes)),
+      db.select({ totalTransacoes: count() }).from(purchasesTable),
+    ]);
+
+    const total = Number(receitaTotal ?? 0);
+    const mes = Number(receitaMes ?? 0);
+    const txCount = Number(totalTransacoes);
+    const COMISSAO = 0.20;
+
+    res.json({
+      receitaTotal: total,
+      comissaoRetida: total * COMISSAO,
+      pagoCriadores: total * (1 - COMISSAO),
+      ticketMedio: txCount > 0 ? Math.round(total / txCount) : 0,
+      receitaMes: mes,
+      crescimentoMes: 0, // requereria dados do mês anterior
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter KPIs financeiros");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/finance/transactions", (req, res) => {
-  const { page = "1", limit = "10", tipo } = req.query as Record<string, string>;
-  let filtered = [...mockTransactions];
-  if (tipo) filtered = filtered.filter(t => t.tipo === tipo);
-  res.json(paginate(filtered, Number(page), Number(limit)));
+router.get("/admin/finance/transactions", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", tipo } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [];
+    if (tipo) conditions.push(eq(purchasesTable.tipo, tipo as any));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const compradorAlias = sql`pagador`;
+    const vendedorAlias = sql`recetor`;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id: purchasesTable.id,
+        tipo: purchasesTable.tipo,
+        valor: purchasesTable.valor,
+        compradorId: purchasesTable.compradorId,
+        vendedorId: purchasesTable.vendedorId,
+        descricao: purchasesTable.descricao,
+        criadoEm: purchasesTable.criadoEm,
+      })
+        .from(purchasesTable)
+        .where(where)
+        .orderBy(desc(purchasesTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(purchasesTable).where(where),
+    ]);
+
+    res.json(paginate(
+      rows.map(r => ({ ...r, valor: Number(r.valor), comissao: Number(r.valor) * 0.20 })),
+      Number(total), pageNum, limitNum
+    ));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar transacções");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/finance/transactions/export", (req, res) => {
-  const headers = ["id", "tipo", "valor", "pagador", "recetor", "comissao", "criadoEm"];
-  const rows = mockTransactions.map(t =>
-    [t.id, t.tipo, t.valor, t.pagadorUsername, t.recetorUsername, t.comissao, t.criadoEm].join(",")
-  );
-  const csv = [headers.join(","), ...rows].join("\n");
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", "attachment; filename=transacoes.csv");
-  res.send(csv);
+router.get("/admin/finance/transactions/export", async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(purchasesTable)
+      .orderBy(desc(purchasesTable.criadoEm))
+      .limit(10000);
+
+    const headers = ["id", "tipo", "valor", "compradorId", "vendedorId", "descricao", "criadoEm"];
+    const csvRows = rows.map(r =>
+      [r.id, r.tipo, r.valor, r.compradorId, r.vendedorId, r.descricao ?? "", r.criadoEm.toISOString()].join(",")
+    );
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=transacoes.csv");
+    res.send([headers.join(","), ...csvRows].join("\n"));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao exportar transacções");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/withdrawals", (req, res) => {
-  const { page = "1", limit = "10", status } = req.query as Record<string, string>;
-  let filtered = [...mockWithdrawals];
-  if (status) filtered = filtered.filter(w => w.status === status);
-  res.json(paginate(filtered, Number(page), Number(limit)));
+router.get("/admin/withdrawals", async (req, res) => {
+  try {
+    const { page = "1", limit = "10", status } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: any[] = [];
+    if (status) conditions.push(eq(withdrawalRequestsTable.status, status));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id: withdrawalRequestsTable.id,
+        creatorId: withdrawalRequestsTable.creatorId,
+        creatorUsername: usersTable.username,
+        amount: withdrawalRequestsTable.amount,
+        method: withdrawalRequestsTable.method,
+        status: withdrawalRequestsTable.status,
+        processedBy: withdrawalRequestsTable.processedBy,
+        processedAt: withdrawalRequestsTable.processedAt,
+        notes: withdrawalRequestsTable.notes,
+        criadoEm: withdrawalRequestsTable.criadoEm,
+        // destinationDetails intencionalmente omitido da listagem (dados bancários sensíveis)
+      })
+        .from(withdrawalRequestsTable)
+        .leftJoin(usersTable, eq(withdrawalRequestsTable.creatorId, usersTable.id))
+        .where(where)
+        .orderBy(desc(withdrawalRequestsTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(withdrawalRequestsTable).where(where),
+    ]);
+
+    res.json(paginate(
+      rows.map(r => ({ ...r, amount: Number(r.amount) })),
+      Number(total), pageNum, limitNum
+    ));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar levantamentos");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res) => {
-  const withdrawal = mockWithdrawals.find(w => w.id === Number(req.params.id));
-  if (!withdrawal) return res.status(404).json({ error: "Pedido não encontrado" });
+  try {
+    const id = Number(req.params.id);
+    const [withdrawal] = await db.select().from(withdrawalRequestsTable)
+      .where(eq(withdrawalRequestsTable.id, id)).limit(1);
+    if (!withdrawal) return res.status(404).json({ error: "Pedido não encontrado" });
 
-  // Allowlist: apenas status e notas são modificáveis — nunca amount, creatorId ou IBAN
-  const STATUS_VALIDOS = ["pending", "approved", "rejected", "paid"] as const;
-  if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-    return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    const STATUS_VALIDOS = ["pending", "approved", "rejected", "paid"] as const;
+    if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
+      return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    }
+
+    const statusAnterior = withdrawal.status;
+    const updates: Partial<typeof withdrawalRequestsTable.$inferInsert> = {
+      processedBy: req.adminId ?? undefined,
+      processedAt: new Date(),
+    };
+    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (typeof req.body.notes === "string") updates.notes = req.body.notes.slice(0, 500);
+
+    const [updated] = await db.update(withdrawalRequestsTable).set(updates)
+      .where(eq(withdrawalRequestsTable.id, id)).returning();
+
+    await logAudit(req, `withdrawal_${updated.status}`, "withdrawal", id, {
+      before: { status: statusAnterior }, after: { status: updated.status, notes: updated.notes },
+    });
+
+    // Remover destinationDetails (IBAN) da resposta
+    const { destinationDetails: _stripped, ...safeWithdrawal } = updated as any;
+    res.json({ ...safeWithdrawal, amount: Number(safeWithdrawal.amount) });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao processar levantamento");
+    res.status(500).json({ error: "Erro interno." });
   }
-
-  const statusAnterior = withdrawal.status;
-  if (req.body.status !== undefined) withdrawal.status = req.body.status;
-  if (typeof req.body.notes === "string") withdrawal.notes = req.body.notes.slice(0, 500);
-  withdrawal.processedBy = req.adminId ?? null;
-  withdrawal.processedAt = new Date().toISOString();
-
-  await logAudit(req, `withdrawal_${withdrawal.status}`, "withdrawal", withdrawal.id, { before: { status: statusAnterior }, after: { status: withdrawal.status, notes: withdrawal.notes } });
-
-  // Remover destinationDetails (IBAN) da resposta — dados bancários sensíveis
-  const { destinationDetails: _stripped, ...safeWithdrawal } = withdrawal as any;
-  res.json(safeWithdrawal);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -608,72 +1084,146 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
 // ────────────────────────────────────────────────────────────────────────────
 
 router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res) => {
-  const { titulo, mensagem, segmento } = req.body;
-  const novo = {
-    id: mockBroadcastHistory.length + 1,
-    titulo,
-    mensagem,
-    segmento: segmento ?? "todos",
-    totalEnviados: segmento === "criadores" ? 15 : segmento?.startsWith("pais:") ? 10 : 48,
-    totalLidos: 0,
-    enviadoPor: req.adminId!,
-    criadoEm: new Date().toISOString(),
-  };
-  mockBroadcastHistory.unshift(novo);
-  await logAudit(req, "broadcast_send", "notification", novo.id, { titulo, segmento: segmento ?? "todos" });
-  res.status(201).json(novo);
+  try {
+    const { titulo, mensagem, segmento } = req.body;
+    if (!titulo || !mensagem) {
+      return res.status(400).json({ error: "titulo e mensagem são obrigatórios." });
+    }
+
+    // Guardar o broadcast no audit_log como registo
+    await logAudit(req, "broadcast_send", "platform", null, {
+      titulo,
+      mensagem,
+      segmento: segmento ?? "todos",
+    });
+
+    res.status(201).json({
+      success: true,
+      titulo,
+      mensagem,
+      segmento: segmento ?? "todos",
+      criadoEm: new Date().toISOString(),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao enviar broadcast");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
-router.get("/admin/broadcast/history", (req, res) => {
-  res.json(mockBroadcastHistory);
+router.get("/admin/broadcast/history", async (req, res) => {
+  try {
+    // Broadcasts registados no audit_log
+    const rows = await db
+      .select({
+        id: auditLogTable.id,
+        details: auditLogTable.details,
+        criadoEm: auditLogTable.criadoEm,
+        adminUsername: usersTable.username,
+      })
+      .from(auditLogTable)
+      .leftJoin(usersTable, eq(auditLogTable.adminId, usersTable.id))
+      .where(eq(auditLogTable.action, "broadcast_send"))
+      .orderBy(desc(auditLogTable.criadoEm))
+      .limit(50);
+
+    res.json(rows.map(r => ({
+      id: r.id,
+      titulo: (r.details as any)?.titulo ?? "",
+      mensagem: (r.details as any)?.mensagem ?? "",
+      segmento: (r.details as any)?.segmento ?? "todos",
+      enviadoPor: r.adminUsername,
+      criadoEm: r.criadoEm,
+    })));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter histórico de broadcasts");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // SETTINGS
 // ────────────────────────────────────────────────────────────────────────────
 
-router.get("/admin/settings", (req, res) => {
-  res.json(mockSettings);
+// Defaults aplicados quando a tabela está vazia
+const DEFAULT_SETTINGS: Record<string, unknown> = {
+  commission_rate: { value: 20 },
+  maintenance_mode: { enabled: false },
+  allowed_countries: { list: ["AO", "MZ", "ZA", "PT", "BR"] },
+  min_withdrawal_amount: { value: 5000 },
+};
+
+router.get("/admin/settings", async (req, res) => {
+  try {
+    const rows = await db.select().from(platformSettingsTable);
+    const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+    res.json(settings);
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter definições");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res) => {
-  // Apenas superadmin pode alterar as definições da plataforma
   if (req.adminRole !== "superadmin") {
     return res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
   }
 
-  const updates: Partial<typeof mockSettings> = {};
-  const erros: string[] = [];
+  try {
+    const erros: string[] = [];
+    const updates: Array<{ key: string; value: unknown }> = [];
 
-  if (req.body.commission_rate !== undefined) {
-    const val = Number(req.body.commission_rate?.value);
-    if (!Number.isFinite(val) || val < 0 || val > 100) erros.push("commission_rate.value deve estar entre 0 e 100");
-    else updates.commission_rate = { value: val };
-  }
-  if (req.body.maintenance_mode !== undefined) {
-    if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
-    else updates.maintenance_mode = { enabled: req.body.maintenance_mode.enabled };
-  }
-  if (req.body.allowed_countries !== undefined) {
-    const list = req.body.allowed_countries?.list;
-    if (!Array.isArray(list) || list.some((c: unknown) => typeof c !== "string" || c.length > 5)) {
-      erros.push("allowed_countries.list deve ser um array de códigos de país");
-    } else {
-      updates.allowed_countries = { list };
+    if (req.body.commission_rate !== undefined) {
+      const val = Number(req.body.commission_rate?.value);
+      if (!Number.isFinite(val) || val < 0 || val > 100) erros.push("commission_rate.value deve estar entre 0 e 100");
+      else updates.push({ key: "commission_rate", value: { value: val } });
     }
-  }
-  if (req.body.min_withdrawal_amount !== undefined) {
-    const val = Number(req.body.min_withdrawal_amount?.value);
-    if (!Number.isFinite(val) || val < 0) erros.push("min_withdrawal_amount.value deve ser um número positivo");
-    else updates.min_withdrawal_amount = { value: val };
-  }
+    if (req.body.maintenance_mode !== undefined) {
+      if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
+      else updates.push({ key: "maintenance_mode", value: { enabled: req.body.maintenance_mode.enabled } });
+    }
+    if (req.body.allowed_countries !== undefined) {
+      const list = req.body.allowed_countries?.list;
+      if (!Array.isArray(list) || list.some((c: unknown) => typeof c !== "string" || c.length > 5)) {
+        erros.push("allowed_countries.list deve ser um array de códigos de país");
+      } else {
+        updates.push({ key: "allowed_countries", value: { list } });
+      }
+    }
+    if (req.body.min_withdrawal_amount !== undefined) {
+      const val = Number(req.body.min_withdrawal_amount?.value);
+      if (!Number.isFinite(val) || val < 0) erros.push("min_withdrawal_amount.value deve ser um número positivo");
+      else updates.push({ key: "min_withdrawal_amount", value: { value: val } });
+    }
 
-  if (erros.length > 0) return res.status(400).json({ error: "Dados inválidos", details: erros });
+    if (erros.length > 0) return res.status(400).json({ error: "Dados inválidos", details: erros });
 
-  const before = { ...mockSettings };
-  Object.assign(mockSettings, updates);
-  await logAudit(req, "settings_update", "platform", 0, { before, after: updates });
-  res.json(mockSettings);
+    const beforeRows = await db.select().from(platformSettingsTable);
+    const before: Record<string, unknown> = {};
+    for (const r of beforeRows) before[r.key] = r.value;
+
+    // Upsert cada definição
+    for (const upd of updates) {
+      await db.insert(platformSettingsTable)
+        .values({ key: upd.key, value: upd as any, updatedBy: req.adminId ?? undefined })
+        .onConflictDoUpdate({
+          target: platformSettingsTable.key,
+          set: { value: upd.value as any, updatedBy: req.adminId ?? undefined, updatedAt: new Date() },
+        });
+    }
+
+    const afterRows = await db.select().from(platformSettingsTable);
+    const after: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    for (const r of afterRows) after[r.key] = r.value;
+
+    await logAudit(req, "settings_update", "platform", 0, { before, after: Object.fromEntries(updates.map(u => [u.key, u.value])) });
+    res.json(after);
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao actualizar definições");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -690,15 +1240,26 @@ router.get("/admin/audit-log", async (req, res) => {
     const conditions = [];
     if (adminId) conditions.push(eq(auditLogTable.adminId, Number(adminId)));
     if (action) conditions.push(eq(auditLogTable.action, action));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [rows, [{ total }]] = await Promise.all([
-      db.select().from(auditLogTable)
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
+      db.select({
+        id: auditLogTable.id,
+        action: auditLogTable.action,
+        targetType: auditLogTable.targetType,
+        targetId: auditLogTable.targetId,
+        details: auditLogTable.details,
+        ipAddress: auditLogTable.ipAddress,
+        criadoEm: auditLogTable.criadoEm,
+        adminUsername: usersTable.username,
+      })
+        .from(auditLogTable)
+        .leftJoin(usersTable, eq(auditLogTable.adminId, usersTable.id))
+        .where(where)
         .orderBy(desc(auditLogTable.criadoEm))
         .limit(limitNum)
         .offset(offset),
-      db.select({ total: db.$count(auditLogTable, conditions.length > 0 ? and(...conditions) : undefined) })
-        .from(auditLogTable),
+      db.select({ total: count() }).from(auditLogTable).where(where),
     ]);
 
     res.json({
