@@ -65,8 +65,14 @@ router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise
   res.json(result);
 });
 
-// Criar story
+// Criar story (apenas criadores)
 router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  if (!author || author.tipoConta !== 'criador') {
+    res.status(403).json({ error: 'Apenas criadores podem publicar stories.' });
+    return;
+  }
+
   const { mediaUrl, tipo, duracao, audiencia } = req.body;
   if (!mediaUrl) { res.status(400).json({ error: "mediaUrl é obrigatório" }); return; }
 
@@ -126,8 +132,14 @@ router.get("/stories/:id/views", requireAuth, async (req: AuthRequest, res): Pro
   })));
 });
 
-// Highlights
+// Highlights (apenas criadores)
 router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  if (!author || author.tipoConta !== 'criador') {
+    res.status(403).json({ error: 'Apenas criadores podem criar destaques.' });
+    return;
+  }
+
   const { titulo, capaUrl, storyIds } = req.body;
   if (!titulo) { res.status(400).json({ error: "Título é obrigatório" }); return; }
 

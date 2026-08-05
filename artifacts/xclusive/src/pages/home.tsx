@@ -60,13 +60,14 @@ export default function Home() {
     ? MOCK_STORY_GROUPS
     : (storiesData ?? []);
 
-  // O meu grupo de stories: combina stories locais (adicionadas nesta sessão)
+  // O meu grupo de stories: apenas para criadores
+  const isCriador = user?.tipoConta === 'criador';
   const myStories = useMemo(
-    () => (user ? getLocalStoriesForUser(user.id).map(s => localStoryToStory(s, user)) : []),
+    () => (user && isCriador ? getLocalStoriesForUser(user.id).map(s => localStoryToStory(s, user)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, localStoriesVersion]
+    [user, isCriador, localStoriesVersion]
   );
-  const myGroup: StoryGroup | null = user
+  const myGroup: StoryGroup | null = user && isCriador
     ? { utilizador: user, stories: myStories, hasNaoVisto: false }
     : null;
 
