@@ -1,4 +1,4 @@
-import { Post } from '@workspace/api-client-react';
+import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +26,11 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const { user, isSubscribed, isPostUnlocked } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  const { mutate: apiLike } = useLikePost();
+  const { mutate: apiUnlike } = useUnlikePost();
+  const { mutate: apiSave } = useSavePost();
+  const { mutate: apiUnsave } = useUnsavePost();
 
   const handleShare = async () => {
     const url = `${window.location.origin}/perfil/${post.autor.username}`;
@@ -89,10 +94,16 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     if (isLiked) {
       setIsLiked(false);
       setLikesCount(prev => prev - 1);
+      apiUnlike({ id: post.id }, {
+        onError: () => { setIsLiked(true); setLikesCount(prev => prev + 1); },
+      });
       onUnlike?.(post.id);
     } else {
       setIsLiked(true);
       setLikesCount(prev => prev + 1);
+      apiLike({ id: post.id }, {
+        onError: () => { setIsLiked(false); setLikesCount(prev => prev - 1); },
+      });
       onLike?.(post.id);
     }
   };
@@ -100,9 +111,15 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const handleSaveToggle = () => {
     if (isSaved) {
       setIsSaved(false);
+      apiUnsave({ id: post.id }, {
+        onError: () => setIsSaved(true),
+      });
       onUnsave?.(post.id);
     } else {
       setIsSaved(true);
+      apiSave({ id: post.id }, {
+        onError: () => setIsSaved(false),
+      });
       onSave?.(post.id);
     }
   };
@@ -119,6 +136,9 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
       if (!isLiked) {
         setIsLiked(true);
         setLikesCount(prev => prev + 1);
+        apiLike({ id: post.id }, {
+          onError: () => { setIsLiked(false); setLikesCount(prev => prev - 1); },
+        });
         onLike?.(post.id);
       }
       setShowHeartAnimation(true);

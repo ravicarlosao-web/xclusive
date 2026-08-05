@@ -172,10 +172,6 @@ export default function Home() {
               <PostCard 
                 key={post.id} 
                 post={post}
-                onLike={(id) => console.log('Like', id)}
-                onUnlike={(id) => console.log('Unlike', id)}
-                onSave={(id) => console.log('Save', id)}
-                onUnsave={(id) => console.log('Unsave', id)}
               />
             ))
           ) : (
