@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, postsTable, usersTable, hashtagsTable } from "@workspace/db";
-import { like, sql, desc, eq } from "drizzle-orm";
+import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
+import { like, sql, desc, eq, inArray } from "drizzle-orm";
 import { optionalAuth, type AuthRequest } from "../lib/auth";
 
 const router = Router();
@@ -13,8 +13,33 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
 
   const posts = await db.select().from(postsTable).orderBy(desc(postsTable.criadoEm)).limit(limit).offset(offset);
 
-  const result = await Promise.all(posts.map(async (p) => {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, p.autorId));
+  if (posts.length === 0) {
+    res.json({ posts: [], total: 0, page, hasMore: false });
+    return;
+  }
+
+  const postIds = posts.map(p => p.id);
+  const autorIds = [...new Set(posts.map(p => p.autorId))];
+
+  // Fetch users and media in parallel (batch queries, not N+1)
+  const [mediaRows, userRows] = await Promise.all([
+    db.select().from(postMediaTable).where(inArray(postMediaTable.postId, postIds)),
+    db.select().from(usersTable).where(inArray(usersTable.id, autorIds)),
+  ]);
+
+  const mediaByPost = new Map<number, typeof mediaRows>();
+  for (const m of mediaRows) {
+    if (!mediaByPost.has(m.postId)) mediaByPost.set(m.postId, []);
+    mediaByPost.get(m.postId)!.push(m);
+  }
+
+  const usersById = new Map(userRows.map(u => [u.id, u]));
+
+  const result = posts.map(p => {
+    const user = usersById.get(p.autorId);
+    const media = (mediaByPost.get(p.id) ?? [])
+      .sort((a, b) => a.ordem - b.ordem)
+      .map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }));
     return {
       id: p.id,
       autor: user ? {
@@ -25,7 +50,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
       legenda: p.legenda,
       localizacao: p.localizacao,
       tipo: p.tipo,
-      media: [],
+      media,
       exclusivo: p.exclusivo,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: 0,
@@ -34,7 +59,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
       guardado: false,
       criadoEm: p.criadoEm.toISOString(),
     };
-  }));
+  });
 
   res.json({ posts: result, total: result.length, page, hasMore: result.length === limit });
 });
