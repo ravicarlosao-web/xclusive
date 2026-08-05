@@ -67,8 +67,10 @@ export default function Settings() {
         });
         if (!res.ok) throw new Error('Erro no upload');
         const data = await res.json();
-        avatarUrl = data.files?.[0]?.url;
-        if (!avatarUrl) throw new Error('URL não devolvida pelo servidor');
+        const relativeUrl = data.files?.[0]?.url;
+        if (!relativeUrl) throw new Error('URL não devolvida pelo servidor');
+        // O backend valida com z.url() que requer URL absoluto
+        avatarUrl = new URL(relativeUrl, window.location.origin).href;
 
         await updateProfile.mutateAsync({ data: { avatarUrl } });
       }
