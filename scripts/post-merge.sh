@@ -6,7 +6,7 @@ pnpm install --frozen-lockfile
 
 echo ""
 echo "🗄️  A sincronizar schema da base de dados..."
-pnpm --filter db push
+pnpm --filter @workspace/db run push
 
 echo ""
 echo "🌱 A inserir dados de teste..."
