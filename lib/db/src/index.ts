@@ -4,10 +4,13 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-// SUPABASE_DATABASE_URL tem prioridade sobre DATABASE_URL (gerida pelo Replit).
-// Isto permite apontar para Supabase (ou qualquer Postgres externo) sem
-// sobrescrever a variável runtime-managed do Replit.
-const connectionString = process.env.SUPABASE_DATABASE_URL ?? process.env.DATABASE_URL;
+// SUPABASE_DATABASE_URL tem prioridade sobre DATABASE_URL (gerida pelo Replit),
+// mas só se for uma connection string PostgreSQL válida (postgresql:// ou postgres://).
+// Ignora URLs HTTP (ex: URL do projeto Supabase) e faz fallback para DATABASE_URL.
+const rawSupabase = process.env.SUPABASE_DATABASE_URL ?? "";
+const isValidPgUrl =
+  rawSupabase.startsWith("postgresql://") || rawSupabase.startsWith("postgres://");
+const connectionString = (isValidPgUrl ? rawSupabase : null) ?? process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error(
