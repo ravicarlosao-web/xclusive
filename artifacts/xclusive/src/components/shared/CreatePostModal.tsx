@@ -156,18 +156,22 @@ export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
     try {
       const formData = new FormData();
       mediaFiles.forEach(m => formData.append('files', m.file));
-      const uploadRes = await fetch('/api/upload', {
+      const token = localStorage.getItem('xclusive_token');
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const uploadRes = await fetch(`${base}/api/upload`, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
-        credentials: 'include',
       });
-      if (!uploadRes.ok) throw new Error('Upload falhou');
+      if (!uploadRes.ok) throw new Error(`Upload falhou: ${uploadRes.status}`);
       const uploadJson = await uploadRes.json() as { files: { url: string; tipo: string }[] };
+      // Converter URLs relativas em absolutas (o backend valida com z.url())
       uploadedMedia = uploadJson.files.map(f => ({
-        url: f.url,
+        url: new URL(f.url, window.location.origin).href,
         tipo: f.tipo === 'video' ? 'video' : 'imagem',
       }));
-    } catch {
+    } catch (err) {
+      console.error('[CreatePostModal] upload error:', err);
       toast.error('Erro ao enviar ficheiros. Tenta novamente.');
       return;
     }

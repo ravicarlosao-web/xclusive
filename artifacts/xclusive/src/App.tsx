@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -139,6 +140,7 @@ function App() {
           </AuthProvider>
         </WouterRouter>
         <Toaster />
+        <SonnerToaster position="bottom-center" theme="dark" />
       </TooltipProvider>
     </QueryClientProvider>
   );
