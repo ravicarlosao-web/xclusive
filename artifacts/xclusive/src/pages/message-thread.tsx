@@ -41,7 +41,7 @@ export default function MessageThread() {
 
   // Mensagens
   const { data: msgData, isLoading, isError } = useGetMessages(convId, {
-    query: { enabled: convId > 0 },
+    query: { queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0 },
   });
   const messages = msgData?.messages ?? [];
 

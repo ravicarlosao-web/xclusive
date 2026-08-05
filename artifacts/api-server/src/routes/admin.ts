@@ -119,7 +119,7 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   }
   entry.count++;
   if (entry.count > 100) {
-    return res.status(429).json({ error: "Demasiadas requisições. Tente novamente em 1 minuto." });
+    return void res.status(429).json({ error: "Demasiadas requisições. Tente novamente em 1 minuto." });
   }
   next();
 }
@@ -135,29 +135,29 @@ function loginLimiter(req: AdminRequest, res: any, next: any) {
   }
   entry.count++;
   if (entry.count > 5) {
-    return res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente em 15 minutos." });
+    return void res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente em 15 minutos." });
   }
   next();
 }
 
 // ── Signed media proxy ───────────────────────────────────────────────────────
 
-router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
+router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   const { url, exp, sig } = req.query as Record<string, string>;
   const rawUrl = verifyMediaUrl(url, exp, sig);
   if (!rawUrl) {
-    return res.status(403).json({ error: "URL de media inválido ou expirado." });
+    return void res.status(403).json({ error: "URL de media inválido ou expirado." });
   }
   try {
     const upstream = await fetch(rawUrl);
-    if (!upstream.ok) return res.status(502).json({ error: "Não foi possível obter o recurso." });
+    if (!upstream.ok) return void res.status(502).json({ error: "Não foi possível obter o recurso." });
     const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
     const contentLength = upstream.headers.get("content-length");
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "no-store");
     if (contentLength) res.setHeader("Content-Length", contentLength);
     const reader = upstream.body?.getReader();
-    if (!reader) return res.status(502).end();
+    if (!reader) return void res.status(502).end();
     const pump = async (): Promise<void> => {
       const { done, value } = await reader.read();
       if (done) { res.end(); return; }
@@ -445,11 +445,11 @@ router.get("/admin/users", async (req, res) => {
   }
 });
 
-router.get("/admin/users/:id", async (req, res) => {
+router.get("/admin/users/:id", async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     const [[{ totalPosts }], [{ totalSeguidores }], [{ totalSeguindo }]] = await Promise.all([
       db.select({ totalPosts: count() }).from(postsTable).where(eq(postsTable.autorId, id)),
@@ -469,11 +469,11 @@ router.get("/admin/users/:id", async (req, res) => {
   }
 });
 
-router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "verificado"] as const;
     const before: Record<string, unknown> = {};
@@ -485,7 +485,7 @@ router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) =>
       }
     }
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: "Nenhum campo válido para actualizar." });
+      return void res.status(400).json({ error: "Nenhum campo válido para actualizar." });
     }
 
     const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
@@ -497,15 +497,15 @@ router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) =>
   }
 });
 
-router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     const { estado } = req.body;
     if (!["ativo", "suspenso"].includes(estado)) {
-      return res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
+      return void res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
     }
     const novoAtivo = estado === "ativo";
     const estadoAnterior = mapEstado(user.ativo);
@@ -521,25 +521,25 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
   }
 });
 
-router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     const novoRole: string = req.body.role;
     const ROLES_VALIDAS = ["user", "creator", "admin", "superadmin"] as const;
     if (!ROLES_VALIDAS.includes(novoRole as any)) {
-      return res.status(400).json({ error: `Role inválida. Valores permitidos: ${ROLES_VALIDAS.join(", ")}` });
+      return void res.status(400).json({ error: `Role inválida. Valores permitidos: ${ROLES_VALIDAS.join(", ")}` });
     }
     if ((novoRole === "admin" || novoRole === "superadmin") && req.adminRole !== "superadmin") {
-      return res.status(403).json({ error: "Apenas superadmin pode atribuir roles de administrador" });
+      return void res.status(403).json({ error: "Apenas superadmin pode atribuir roles de administrador" });
     }
     if (user.role === "superadmin" && req.adminRole !== "superadmin") {
-      return res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
+      return void res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
     }
     if (user.id === req.adminId && novoRole === "superadmin" && req.adminRole !== "superadmin") {
-      return res.status(403).json({ error: "Não podes promover-te a superadmin" });
+      return void res.status(403).json({ error: "Não podes promover-te a superadmin" });
     }
 
     const roleAnterior = user.role;
@@ -552,11 +552,11 @@ router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, re
   }
 });
 
-router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res) => {
+router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
-    if (!user) return res.status(404).json({ error: "Utilizador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     // Soft delete — desactiva a conta sem eliminar os dados
     await db.update(usersTable).set({ ativo: false }).where(eq(usersTable.id, id));
@@ -647,16 +647,16 @@ router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, 
   }
 });
 
-router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable)
       .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
-    if (!user) return res.status(404).json({ error: "Criador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
 
     const { acao, motivo } = req.body;
     if (!["aprovar", "rejeitar"].includes(acao)) {
-      return res.status(400).json({ error: "Acção inválida. Use 'aprovar' ou 'rejeitar'." });
+      return void res.status(400).json({ error: "Acção inválida. Use 'aprovar' ou 'rejeitar'." });
     }
 
     const verificadoAnterior = user.verificado;
@@ -712,12 +712,12 @@ router.get("/admin/creators/:id/plans", async (req, res) => {
   }
 });
 
-router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const planId = Number(req.params.planId);
     const [plan] = await db.select().from(subscriptionPlansTable)
       .where(eq(subscriptionPlansTable.id, planId)).limit(1);
-    if (!plan) return res.status(404).json({ error: "Plano não encontrado" });
+    if (!plan) return void res.status(404).json({ error: "Plano não encontrado" });
 
     const before = { ...plan };
     const updates: Partial<typeof subscriptionPlansTable.$inferInsert> = {};
@@ -736,17 +736,17 @@ router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: Admi
   }
 });
 
-router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res) => {
+router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [user] = await db.select().from(usersTable)
       .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
-    if (!user) return res.status(404).json({ error: "Criador não encontrado" });
+    if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
 
     const { valor, motivo } = req.body;
     const valorNum = Number(valor);
     if (!Number.isFinite(valorNum)) {
-      return res.status(400).json({ error: "Valor inválido." });
+      return void res.status(400).json({ error: "Valor inválido." });
     }
 
     const saldoAnterior = Number(user.saldo);
@@ -808,11 +808,11 @@ router.get("/admin/posts", async (req, res) => {
   }
 });
 
-router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res) => {
+router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
-    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+    if (!post) return void res.status(404).json({ error: "Post não encontrado" });
 
     await db.delete(postsTable).where(eq(postsTable.id, id));
     await logAudit(req, "post_delete", "post", id, { motivo: req.body?.motivo ?? null });
@@ -866,15 +866,15 @@ router.get("/admin/reports", async (req, res) => {
   }
 });
 
-router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
-    if (!report) return res.status(404).json({ error: "Denúncia não encontrada" });
+    if (!report) return void res.status(404).json({ error: "Denúncia não encontrada" });
 
     const STATUS_VALIDOS = ["pending", "reviewing", "resolved", "dismissed"] as const;
     if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-      return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+      return void res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
     }
 
     const statusAnterior = report.status;
@@ -1043,16 +1043,16 @@ router.get("/admin/withdrawals", async (req, res) => {
   }
 });
 
-router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const [withdrawal] = await db.select().from(withdrawalRequestsTable)
       .where(eq(withdrawalRequestsTable.id, id)).limit(1);
-    if (!withdrawal) return res.status(404).json({ error: "Pedido não encontrado" });
+    if (!withdrawal) return void res.status(404).json({ error: "Pedido não encontrado" });
 
     const STATUS_VALIDOS = ["pending", "approved", "rejected", "paid"] as const;
     if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-      return res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+      return void res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
     }
 
     const statusAnterior = withdrawal.status;
@@ -1083,11 +1083,11 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
 // BROADCAST
 // ────────────────────────────────────────────────────────────────────────────
 
-router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res) => {
+router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const { titulo, mensagem, segmento } = req.body;
     if (!titulo || !mensagem) {
-      return res.status(400).json({ error: "titulo e mensagem são obrigatórios." });
+      return void res.status(400).json({ error: "titulo e mensagem são obrigatórios." });
     }
 
     // Guardar o broadcast no audit_log como registo
@@ -1166,9 +1166,9 @@ router.get("/admin/settings", async (req, res) => {
   }
 });
 
-router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res) => {
+router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   if (req.adminRole !== "superadmin") {
-    return res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
+    return void res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
   }
 
   try {
@@ -1198,7 +1198,7 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res) => 
       else updates.push({ key: "min_withdrawal_amount", value: { value: val } });
     }
 
-    if (erros.length > 0) return res.status(400).json({ error: "Dados inválidos", details: erros });
+    if (erros.length > 0) return void res.status(400).json({ error: "Dados inválidos", details: erros });
 
     const beforeRows = await db.select().from(platformSettingsTable);
     const before: Record<string, unknown> = {};

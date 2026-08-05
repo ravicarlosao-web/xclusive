@@ -24,6 +24,8 @@ interface TopUpRequest {
   status: 'pendente' | 'aprovado' | 'rejeitado';
   processadoEm?: string;
   adminNota?: string;
+  comprovantivoBase64?: string;
+  comprovantivoNome?: string;
 }
 
 interface MockUser {
@@ -53,6 +55,7 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
   if (!request?.comprovantivoBase64) return null;
 
   function openInNewTab() {
+    if (!request) return;
     const win = window.open();
     if (win) {
       win.document.write(

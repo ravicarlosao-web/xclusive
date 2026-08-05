@@ -12,6 +12,9 @@ import {
   useGetCreatorStats,
   useGetSubscriptionPlans,
   useGetCreatorEarnings,
+  getGetCreatorStatsQueryKey,
+  getGetSubscriptionPlansQueryKey,
+  getGetCreatorEarningsQueryKey,
   type SubscriptionPlan,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -63,16 +66,16 @@ export default function Monetization() {
 
   // ── API queries ───────────────────────────────────────────────────────────
   const { data: stats, isLoading: statsLoading } = useGetCreatorStats({
-    query: { enabled: !!user && user.tipoConta === 'criador' },
+    query: { queryKey: getGetCreatorStatsQueryKey(), enabled: !!user && user.tipoConta === 'criador' },
   });
 
   const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlans({
-    query: { enabled: !!user && user.tipoConta === 'criador' },
+    query: { queryKey: getGetSubscriptionPlansQueryKey(), enabled: !!user && user.tipoConta === 'criador' },
   });
 
   const { data: earningsRaw, isLoading: earningsLoading } = useGetCreatorEarnings(
     { period },
-    { query: { enabled: !!user && user.tipoConta === 'criador' } },
+    { query: { queryKey: getGetCreatorEarningsQueryKey({ period }), enabled: !!user && user.tipoConta === 'criador' } },
   );
 
   // Format chart data

@@ -120,7 +120,7 @@ router.get("/users/:username/gorjetas", requireAuth, async (req: AuthRequest, re
     const [creator] = await db
       .select({ id: usersTable.id, username: usersTable.username })
       .from(usersTable)
-      .where(eq(usersTable.username, req.params.username))
+      .where(eq(usersTable.username, req.params['username'] as string))
       .limit(1);
 
     if (!creator) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }

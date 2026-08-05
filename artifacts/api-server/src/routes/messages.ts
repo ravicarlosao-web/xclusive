@@ -5,7 +5,7 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
 
 const sendMessageSchema = z.object({
-  tipo: z.enum(["texto", "imagem", "video"]).default("texto"),
+  tipo: z.enum(["texto", "imagem", "audio", "post_partilhado"]).default("texto"),
   conteudo: z.string().max(4000).optional(),
 });
 
