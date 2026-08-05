@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
 import { UnlockPostModal } from '@/components/wallet/UnlockPostModal';
@@ -27,10 +28,16 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
+  const queryClient = useQueryClient();
   const { mutate: apiLike } = useLikePost();
   const { mutate: apiUnlike } = useUnlikePost();
   const { mutate: apiSave } = useSavePost();
   const { mutate: apiUnsave } = useUnsavePost();
+
+  function invalidateFeed() {
+    queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
+    queryClient.invalidateQueries({ queryKey: [`/api/users/${post.autor.username}/posts`] });
+  }
 
   const handleShare = async () => {
     const url = `${window.location.origin}/perfil/${post.autor.username}`;
@@ -95,6 +102,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
       setIsLiked(false);
       setLikesCount(prev => prev - 1);
       apiUnlike({ id: post.id }, {
+        onSuccess: invalidateFeed,
         onError: () => { setIsLiked(true); setLikesCount(prev => prev + 1); },
       });
       onUnlike?.(post.id);
@@ -102,6 +110,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
       setIsLiked(true);
       setLikesCount(prev => prev + 1);
       apiLike({ id: post.id }, {
+        onSuccess: invalidateFeed,
         onError: () => { setIsLiked(false); setLikesCount(prev => prev - 1); },
       });
       onLike?.(post.id);
@@ -112,12 +121,14 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     if (isSaved) {
       setIsSaved(false);
       apiUnsave({ id: post.id }, {
+        onSuccess: invalidateFeed,
         onError: () => setIsSaved(true),
       });
       onUnsave?.(post.id);
     } else {
       setIsSaved(true);
       apiSave({ id: post.id }, {
+        onSuccess: invalidateFeed,
         onError: () => setIsSaved(false),
       });
       onSave?.(post.id);
@@ -137,6 +148,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         setIsLiked(true);
         setLikesCount(prev => prev + 1);
         apiLike({ id: post.id }, {
+          onSuccess: invalidateFeed,
           onError: () => { setIsLiked(false); setLikesCount(prev => prev - 1); },
         });
         onLike?.(post.id);
