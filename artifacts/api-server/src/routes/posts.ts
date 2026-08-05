@@ -39,9 +39,16 @@ router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> =
   res.json({ posts: result, total: totalCount || 0, page, hasMore: offset + posts.length < (totalCount || 0) });
 });
 
-// Criar post
+// Criar post (apenas criadores)
 router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
+
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, userId));
+  if (!author || author.tipoConta !== 'criador') {
+    res.status(403).json({ error: 'Apenas criadores podem publicar conteúdo.' });
+    return;
+  }
+
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
 
   const [post] = await db.insert(postsTable).values({

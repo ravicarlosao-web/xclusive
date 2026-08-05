@@ -75,13 +75,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
             );
           })}
 
-          <button
-            onClick={() => setCreatePostOpen(true)}
-            className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary text-foreground text-left w-full"
-          >
-            <PlusSquare className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
-            <span className="hidden lg:block text-[15px]">Criar</span>
-          </button>
+          {user?.tipoConta === 'criador' && (
+            <button
+              onClick={() => setCreatePostOpen(true)}
+              className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary text-foreground text-left w-full"
+            >
+              <PlusSquare className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
+              <span className="hidden lg:block text-[15px]">Criar</span>
+            </button>
+          )}
 
           <Link href={user ? `/perfil/${user.username}` : '/login'}>
             <div className={cn(
