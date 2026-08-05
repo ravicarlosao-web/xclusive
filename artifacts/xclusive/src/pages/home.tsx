@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, StoryGroup } from '@workspace/api-client-react';
+import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
 import { StoryViewer } from '@/components/shared/StoryViewer';
@@ -18,6 +19,8 @@ const MAX_STORY_SIZE_MB = 50;
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
+  const queryClient = useQueryClient();
+  const deleteStoryMutation = useDeleteStory();
   const [followingMap, setFollowingMap] = useState<Record<number, boolean>>({});
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
@@ -100,9 +103,24 @@ export default function Home() {
   }
 
   function handleDeleteStory(userId: number, storyId: number) {
-    deleteLocalStory(storyId);
-    setLocalStoriesVersion(v => v + 1);
-    setViewerGroupIndex(null);
+    const localStories = user ? getLocalStoriesForUser(user.id) : [];
+    const isLocal = localStories.some(s => s.id === storyId);
+
+    if (isLocal) {
+      deleteLocalStory(storyId);
+      setLocalStoriesVersion(v => v + 1);
+      setViewerGroupIndex(null);
+    } else {
+      deleteStoryMutation.mutate({ id: storyId }, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['/api/stories/feed'] });
+          setViewerGroupIndex(null);
+        },
+        onError: () => {
+          toast.error('Não foi possível eliminar o story. Tenta novamente.');
+        },
+      });
+    }
   }
 
   return (
