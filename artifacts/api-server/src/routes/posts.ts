@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable, subscriptionsTable, purchasesTable } from "@workspace/db";
+import { db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable, subscriptionsTable, purchasesTable, notificationsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
@@ -95,6 +95,16 @@ router.post("/posts/:id/like", requireAuth, async (req: AuthRequest, res): Promi
   const [existing] = await db.select().from(likesTable).where(and(eq(likesTable.utilizadorId, userId), eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, id)));
   if (!existing) {
     await db.insert(likesTable).values({ utilizadorId: userId, alvoTipo: "post", alvoId: id });
+    // Notificar o autor do post (se não for o próprio)
+    const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id));
+    if (post && post.autorId !== userId) {
+      await db.insert(notificationsTable).values({
+        destinatarioId: post.autorId,
+        tipo: "like_post",
+        atorId: userId,
+        alvoId: id,
+      }).onConflictDoNothing();
+    }
   }
   res.json({ ok: true });
 });
@@ -151,16 +161,28 @@ router.get("/posts/:id/comments", optionalAuth, async (req: AuthRequest, res): P
 
 router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  const userId = req.userId!;
   const { texto, comentarioPaiId } = req.body;
 
   const [comment] = await db.insert(commentsTable).values({
     postId: id,
-    autorId: req.userId!,
+    autorId: userId,
     texto,
     comentarioPaiId: comentarioPaiId || null,
   }).returning();
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+
+  // Notificar o autor do post (se não for o próprio)
+  const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id));
+  if (post && post.autorId !== userId) {
+    await db.insert(notificationsTable).values({
+      destinatarioId: post.autorId,
+      tipo: "comentario",
+      atorId: userId,
+      alvoId: id,
+    }).onConflictDoNothing();
+  }
 
   res.status(201).json({
     id: comment.id,

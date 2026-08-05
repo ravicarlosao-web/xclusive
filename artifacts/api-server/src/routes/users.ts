@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, followsTable, postsTable } from "@workspace/db";
+import { db, usersTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
@@ -225,6 +225,13 @@ router.post("/users/:username/follow", requireAuth, async (req: AuthRequest, res
   const [existing] = await db.select().from(followsTable).where(and(eq(followsTable.seguidorId, userId), eq(followsTable.seguidoId, target.id)));
   if (!existing) {
     await db.insert(followsTable).values({ seguidorId: userId, seguidoId: target.id });
+    // Notificar o utilizador seguido
+    await db.insert(notificationsTable).values({
+      destinatarioId: target.id,
+      tipo: "novo_seguidor",
+      atorId: userId,
+      alvoId: null,
+    }).onConflictDoNothing();
   }
   res.json({ ok: true });
 });
@@ -302,20 +309,25 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
 
   const posts = await db.select().from(postsTable).where(eq(postsTable.autorId, user.id)).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
 
-  const result = posts.map(p => ({
-    id: p.id,
-    autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
-    legenda: p.legenda,
-    localizacao: p.localizacao,
-    tipo: p.tipo,
-    media: [],
-    exclusivo: p.exclusivo,
-    precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
-    totalCurtidas: 0,
-    totalComentarios: 0,
-    curtido: false,
-    guardado: false,
-    criadoEm: p.criadoEm.toISOString(),
+  const result = await Promise.all(posts.map(async (p) => {
+    const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);
+    const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, p.id)));
+    const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(eq(commentsTable.postId, p.id));
+    return {
+      id: p.id,
+      autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+      legenda: p.legenda,
+      localizacao: p.localizacao,
+      tipo: p.tipo,
+      media: media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem })),
+      exclusivo: p.exclusivo,
+      precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
+      totalCurtidas: likes || 0,
+      totalComentarios: comments || 0,
+      curtido: false,
+      guardado: false,
+      criadoEm: p.criadoEm.toISOString(),
+    };
   }));
 
   res.json({ posts: result, total: result.length, page: 1, hasMore: false });
