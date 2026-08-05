@@ -11,8 +11,8 @@ import {
   LayoutDashboard, Wallet, ShieldCheck, Image, Bell, ClipboardList
 } from 'lucide-react';
 
-const DEMO_EMAIL = 'admin@xclusive.com';
-const DEMO_PASSWORD = 'admin123';
+const DEMO_EMAIL = 'admin@xclusive.ao';
+const DEMO_PASSWORD = 'password123';
 
 const DEMO_FEATURES = [
   { icon: LayoutDashboard, label: 'Dashboard com KPIs em tempo real e gráficos de receita' },
@@ -150,7 +150,7 @@ export default function Login() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@xclusive.com"
+                    placeholder="admin@xclusive.ao"
                     required
                     className="bg-background/50 border-border h-11"
                     autoComplete="email"

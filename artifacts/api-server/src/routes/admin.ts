@@ -15,8 +15,9 @@ import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
 import { signToken } from "../lib/auth.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
-import { db, auditLogTable } from "@workspace/db";
+import { db, auditLogTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 /** Insere um registo no audit_log da DB.
  * Erros são logados mas nunca propagados — uma falha de auditoria
@@ -115,27 +116,45 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res) => {
 });
 
 // ── Login (public — must be before requireAdmin middleware) ──────────────────
-router.post("/admin/auth/login", loginLimiter, (req, res) => {
+router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const { email, password } = req.body ?? {};
 
-  // Mock: accept any admin@xclusive.com / admin123
-  if (email === "admin@xclusive.com" && password === "admin123") {
-    const token = signToken({ userId: 1, username: "admin", role: "admin" });
-    return res.json({
-      token,
-      user: {
-        id: 1,
-        username: "admin",
-        nomeExibicao: "Administrador",
-        email: "admin@xclusive.com",
-        role: "admin",
-        avatarUrl: null,
-      },
-      expiresIn: 14400, // 4h
-    });
+  if (!email || !password) {
+    res.status(400).json({ error: "Email e password são obrigatórios" });
+    return;
   }
 
-  return res.status(401).json({ error: "Credenciais inválidas" });
+  // Lookup real da DB — apenas utilizadores com role admin ou superadmin
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+
+  if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
+    res.status(401).json({ error: "Credenciais inválidas" });
+    return;
+  }
+
+  const passwordOk = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordOk) {
+    res.status(401).json({ error: "Credenciais inválidas" });
+    return;
+  }
+
+  const token = signToken({ userId: user.id, username: user.username, role: user.role });
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      nomeExibicao: user.nomeExibicao ?? user.username,
+      email: user.email,
+      role: user.role,
+      avatarUrl: user.avatarUrl ?? null,
+    },
+    expiresIn: 14400, // 4h
+  });
 });
 
 router.use("/admin", rateLimit, requireAdmin);
