@@ -152,8 +152,8 @@ export default function Login() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Utilizador', email: 'demo@xclusive.pt', badge: 'pessoal' },
-                { label: 'Criador', email: 'ana@xclusive.pt', badge: 'criador ✓' },
+                { label: 'Utilizador', email: 'fan@xclusive.ao', badge: 'pessoal' },
+                { label: 'Criador', email: 'criador@xclusive.ao', badge: 'criador ✓' },
               ].map(({ label, email, badge }) => (
                 <button
                   key={email}
