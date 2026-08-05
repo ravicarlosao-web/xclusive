@@ -22,10 +22,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const queryEnabled = !!user && !isMockMode;
 
   const { data: unreadMsgs } = useGetUnreadConversationsCount({
-    query: { enabled: queryEnabled, refetchInterval: 30_000 },
+    query: { queryKey: ['unreadMsgs'], enabled: queryEnabled, refetchInterval: 30_000 },
   });
   const { data: unreadNotifs } = useGetUnreadNotificationsCount({
-    query: { enabled: queryEnabled, refetchInterval: 30_000 },
+    query: { queryKey: ['unreadNotifs'], enabled: queryEnabled, refetchInterval: 30_000 },
   });
 
   const msgBadge = (unreadMsgs?.count ?? 0) > 0 ? unreadMsgs!.count : undefined;
