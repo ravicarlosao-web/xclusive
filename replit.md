@@ -25,10 +25,6 @@ pnpm --filter @workspace/db run push
 pnpm --filter @workspace/scripts run seed
 ```
 
-### Tabelas existentes
-
-`users`, `posts`, `post_media`, `comments`, `likes`, `saved_posts`, `follows`, `stories`, `story_views`, `highlights`, `highlight_stories`, `reels`, `conversations`, `conversation_participants`, `messages`, `notifications`, `subscription_plans`, `subscriptions`, `purchases`, `withdrawal_requests`, `reports`, `hashtags`, `post_hashtags`, `platform_settings`, `admin`, `audit_log`, `active_sessions`, `revoked_tokens`
-
 ### Schema
 
 | Pacote | Ficheiros |
@@ -36,6 +32,132 @@ pnpm --filter @workspace/scripts run seed
 | Schema Drizzle | `lib/db/src/schema/` (um ficheiro por domínio) |
 | Config Drizzle | `lib/db/drizzle.config.ts` |
 | Script de seed | `scripts/src/seed.ts` |
+
+### Tabelas (27 no total)
+
+#### 👤 Utilizadores & Autenticação
+
+**`users`** — conta de utilizador  
+`id`, `username` (único), `email` (único), `password_hash`, `nome_exibicao`, `bio`, `avatar_url`, `capa_url`, `link`, `tipo_conta` (`pessoal`|`criador`), `verificado`, `privado`, `data_nascimento`, `ativo`, `role` (`user`|`admin`|`superadmin`), `saldo` (Kz, ≥ 0), `ganhos` (Kz), `criado_em`
+
+**`active_sessions`** — sessões JWT activas (refresh tokens)  
+`id`, `user_id` → users, `refresh_jti` (único), `user_agent`, `ip`, `criada_em`, `expires_at`  
+> Usado para limitar sessões simultâneas (máx. 10) e "logout de todos os dispositivos"
+
+**`revoked_tokens`** — tokens JWT revogados (logout / conta suspensa)  
+`jti` (PK), `user_id` → users, `expires_at`, `revoked_at`
+
+---
+
+#### 📸 Conteúdo (Posts, Media, Interacções)
+
+**`posts`** — publicações de um criador  
+`id`, `autor_id` → users, `legenda`, `localizacao`, `tipo` (`imagem`|`video`|`carrossel`), `exclusivo` (bool), `preco_desbloqueio` (Kz), `criado_em`
+
+**`post_media`** — ficheiros de cada post (imagens/vídeos)  
+`id`, `post_id` → posts, `url`, `tipo` (`imagem`|`video`), `ordem`
+
+**`comments`** — comentários e respostas  
+`id`, `post_id` → posts, `autor_id` → users, `comentario_pai_id` (para respostas), `texto`, `criado_em`
+
+**`likes`** — curtidas em posts, reels e comentários  
+`id`, `utilizador_id` → users, `alvo_tipo` (`post`|`reel`|`comentario`), `alvo_id`, `criado_em`  
+> Unique constraint em `(utilizador_id, alvo_tipo, alvo_id)` — sem duplicados
+
+**`saved_posts`** — posts guardados pelo utilizador  
+`id`, `utilizador_id` → users, `post_id` → posts, `criado_em`  
+> Unique constraint em `(utilizador_id, post_id)`
+
+**`hashtags`** — hashtags únicas da plataforma  
+`id`, `nome` (único), `total_posts`
+
+**`post_hashtags`** — relação N:N entre posts e hashtags  
+`post_id` → posts, `hashtag_id` → hashtags
+
+---
+
+#### 📖 Stories & Destaques
+
+**`stories`** — stories com expiração de 24 h  
+`id`, `autor_id` → users, `media_url`, `tipo` (`imagem`|`video`), `duracao` (segundos), `audiencia` (`todos`|`seguidores`|`subscritores`), `expira_em`, `criado_em`
+
+**`story_views`** — visualizações únicas de stories  
+`id`, `story_id` → stories, `utilizador_id` → users, `visto_em`  
+> Unique constraint em `(story_id, utilizador_id)`
+
+**`highlights`** — destaques permanentes de stories no perfil  
+`id`, `utilizador_id` → users, `titulo`, `capa_url`, `criado_em`
+
+**`highlight_stories`** — stories incluídos num destaque  
+`highlight_id` → highlights, `story_id` → stories
+
+---
+
+#### 🎬 Reels
+
+**`reels`** — vídeos curtos verticais  
+`id`, `autor_id` → users, `video_url`, `capa_url`, `legenda`, `som_titulo`, `som_artista`, `exclusivo`, `criado_em`
+
+---
+
+#### 👥 Relações Sociais
+
+**`follows`** — relação de seguir entre utilizadores  
+`id`, `seguidor_id` → users, `seguido_id` → users, `estado` (`aceite`|`pendente`), `criado_em`  
+> Unique constraint em `(seguidor_id, seguido_id)`. Estado `pendente` para contas privadas.
+
+---
+
+#### 💬 Mensagens
+
+**`conversations`** — conversa privada ou de grupo  
+`id`, `tipo` (`privada`|`grupo`), `criado_em`
+
+**`conversation_participants`** — participantes de cada conversa  
+`conversation_id` → conversations, `utilizador_id` → users  
+> Índice em `utilizador_id` para pesquisa rápida das conversas do utilizador
+
+**`messages`** — mensagens individuais  
+`id`, `conversation_id` → conversations, `autor_id` → users, `tipo` (`texto`|`imagem`|`audio`|`post_partilhado`), `conteudo`, `media_url`, `lido`, `criado_em`
+
+---
+
+#### 🔔 Notificações
+
+**`notifications`** — notificações em tempo real  
+`id`, `destinatario_id` → users, `tipo` (`novo_seguidor`|`like_post`|`like_reel`|`comentario`|`mencao`|`nova_subscricao`|`pagamento_recebido`), `ator_id` → users, `alvo_id` (id do post/reel/etc.), `post_thumbnail`, `lida`, `criado_em`
+
+> Criadas automaticamente nas rotas de like, comentário, follow e gorjeta.
+
+---
+
+#### 💰 Monetização
+
+**`subscription_plans`** — planos de subscrição criados por um criador  
+`id`, `criador_id` → users, `nome`, `preco` (Kz), `beneficios`, `ativo`, `criado_em`
+
+**`subscriptions`** — subscritores activos ou cancelados  
+`id`, `subscritor_id` → users, `criador_id` → users, `plano_id` → subscription_plans, `estado` (`ativa`|`cancelada`), `inicio_em`, `renovacao_em`, `criado_em`
+
+**`purchases`** — registo de todas as transacções financeiras  
+`id`, `comprador_id` → users, `vendedor_id` → users, `tipo` (`subscricao`|`ppv`|`gorjeta`), `valor` (Kz), `conteudo_id`, `descricao`, `criado_em`  
+> Índice em `(vendedor_id, tipo, criado_em)` para o histórico do painel criador
+
+**`withdrawal_requests`** — pedidos de levantamento de ganhos  
+`id`, `creator_id` → users, `amount` (Kz), `method` (`bank_transfer`|`multicaixa_express`|…), `destination_details` (JSONB), `status` (`pending`|`approved`|`rejected`|`paid`), `processed_by` → users, `processed_at`, `notes`, `criado_em`
+
+---
+
+#### 🛡️ Administração & Segurança
+
+**`reports`** — denúncias de conteúdo ou utilizadores  
+`id`, `reporter_id` → users, `target_type` (`post`|`comment`|`user`|`message`), `target_id`, `reason` (`nudity_minor`|`spam`|`harassment`|`copyright`|`other`), `description`, `status` (`pending`|`reviewing`|`resolved`|`dismissed`), `resolved_by` → users, `resolved_at`, `criado_em`
+
+**`audit_log`** — registo de acções administrativas  
+`id`, `admin_id` → users, `action` (`user_suspend`|`user_delete`|`withdrawal_approve`|…), `target_type`, `target_id`, `details` (JSONB), `ip_address`, `criado_em`
+
+**`platform_settings`** — configurações globais da plataforma (key-value)  
+`key` (PK), `value` (JSONB), `updated_by` → users, `updated_at`
 
 ## Contas de Teste (password: `password123`)
 
