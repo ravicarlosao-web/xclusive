@@ -297,6 +297,8 @@ interface AuthContextType {
   getTransactionHistory: () => MockTransaction[];
   /** Força refresh do saldo (ex: após operação externa) */
   refreshSaldo: () => void;
+  /** Atualiza o avatar do utilizador (funciona em modo real e mock) */
+  updateAvatarUrl: (url: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -659,6 +661,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return all.filter(tx => tx.fromUserId === session.userId).sort((a, b) => b.id - a.id);
   }, []);
 
+  const updateAvatarUrl = useCallback((url: string) => {
+    const users = getMockUsers();
+    const currentUser = isMockToken ? mockUser : (apiUser || null);
+    if (currentUser) {
+      const idx = users.findIndex(u => u.id === currentUser.id);
+      if (idx !== -1) {
+        users[idx].avatarUrl = url;
+        saveMockUsers(users);
+      }
+    }
+    if (isMockToken && mockUser) {
+      setMockUser({ ...mockUser, avatarUrl: url });
+    }
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+  }, [isMockToken, mockUser, apiUser, queryClient]);
+
   const updateTipoConta = useCallback((tipo: 'pessoal' | 'criador') => {
     const users = getMockUsers();
     const currentUser = isMockToken ? mockUser : (apiUser || null);
@@ -732,6 +750,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestWithdrawal,
       getTransactionHistory,
       refreshSaldo,
+      updateAvatarUrl,
     }}>
       {children}
     </AuthContext.Provider>

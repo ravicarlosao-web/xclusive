@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUpdateProfile } from '@workspace/api-client-react';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Loader2, Camera, User, Lock, Bell, Shield, LogOut } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
   const updateProfile = useUpdateProfile();
   const { toast } = useToast();
 
@@ -20,6 +20,8 @@ export default function Settings() {
   const [bio, setBio] = useState(user?.bio || '');
   const [link, setLink] = useState(user?.link || '');
   const [privado, setPrivado] = useState(user?.privado || false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveProfile = async () => {
     try {
@@ -27,6 +29,57 @@ export default function Settings() {
       toast({ title: 'Perfil atualizado com sucesso' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erro ao atualizar perfil' });
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so the same file can be re-selected if needed
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      toast({ variant: 'destructive', title: 'Seleciona uma imagem (JPG, PNG, WEBP, GIF)' });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      let avatarUrl: string;
+
+      if (isMockMode) {
+        // Em modo mock não há servidor disponível — usamos um blob URL local
+        avatarUrl = URL.createObjectURL(file);
+      } else {
+        const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+        const formData = new FormData();
+        formData.append('files', file);
+        const token = localStorage.getItem('xclusive_token');
+        const res = await fetch(`${base}/api/upload`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        if (!res.ok) throw new Error('Erro no upload');
+        const data = await res.json();
+        avatarUrl = data.files?.[0]?.url;
+        if (!avatarUrl) throw new Error('URL não devolvida pelo servidor');
+
+        await updateProfile.mutateAsync({ data: { avatarUrl } });
+      }
+
+      updateAvatarUrl(avatarUrl);
+      toast({ title: 'Foto de perfil atualizada!' });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: 'Erro ao atualizar foto de perfil' });
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -55,19 +108,35 @@ export default function Settings() {
             <div>
               <h2 className="text-xl font-bold mb-6">Informação Pública</h2>
               
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
               <div className="flex items-center gap-6 mb-8">
-                <div className="relative group cursor-pointer">
+                <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
                   <Avatar className="w-24 h-24 border-2 border-border group-hover:opacity-80 transition-opacity">
                     <AvatarImage src={user?.avatarUrl || ''} />
-                    <AvatarFallback>{user?.username[0]}</AvatarFallback>
+                    <AvatarFallback>{user?.username?.[0]}</AvatarFallback>
                   </Avatar>
                   <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera className="w-6 h-6 text-white" />
+                    {isUploadingAvatar
+                      ? <Loader2 className="w-6 h-6 text-white animate-spin" />
+                      : <Camera className="w-6 h-6 text-white" />}
                   </div>
                 </div>
                 <div>
                   <h3 className="font-bold">{user?.username}</h3>
-                  <p className="text-sm text-primary font-medium hover:underline cursor-pointer">Alterar foto de perfil</p>
+                  <button
+                    type="button"
+                    onClick={handleAvatarClick}
+                    disabled={isUploadingAvatar}
+                    className="text-sm text-primary font-medium hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingAvatar ? 'A carregar...' : 'Alterar foto de perfil'}
+                  </button>
                 </div>
               </div>
 
