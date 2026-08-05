@@ -140,17 +140,37 @@ export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
     if (mediaFiles.length === 1) setStep('select');
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (mediaFiles.length === 0) return;
 
     const tipo = mediaFiles.length > 1
       ? 'carrossel'
       : mediaFiles[0].tipo === 'video' ? 'video' : 'imagem';
 
-    // Parse and validate price
     const precoNumerico = exclusivo && preco
       ? (() => { const v = parseFloat(preco); return Number.isFinite(v) && v >= 0 ? v : undefined; })()
       : undefined;
+
+    // Upload real dos ficheiros para o servidor
+    let uploadedMedia: { url: string; tipo: 'imagem' | 'video' }[] = [];
+    try {
+      const formData = new FormData();
+      mediaFiles.forEach(m => formData.append('files', m.file));
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!uploadRes.ok) throw new Error('Upload falhou');
+      const uploadJson = await uploadRes.json() as { files: { url: string; tipo: string }[] };
+      uploadedMedia = uploadJson.files.map(f => ({
+        url: f.url,
+        tipo: f.tipo === 'video' ? 'video' : 'imagem',
+      }));
+    } catch {
+      toast.error('Erro ao enviar ficheiros. Tenta novamente.');
+      return;
+    }
 
     createPost(
       {
@@ -158,10 +178,9 @@ export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
           legenda: legenda.trim() || undefined,
           localizacao: localizacao.trim() || undefined,
           tipo,
-          media: mediaFiles.map(m => ({ url: m.previewUrl, tipo: m.tipo })),
+          media: uploadedMedia,
           exclusivo,
           precoDesbloqueio: precoNumerico,
-          // Note: 'audiencia' is UI-only until API endpoint adds support
         },
       },
       {
@@ -171,10 +190,7 @@ export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
           handleClose();
         },
         onError: () => {
-          // API unreachable — warn user content is session-only (object URLs don't persist across reload)
-          toast.warning('Servidor indisponível. A publicação fica visível apenas nesta sessão.', {
-            duration: 5000,
-          });
+          toast.error('Erro ao criar publicação. Tenta novamente.');
           handleClose();
         },
       }
