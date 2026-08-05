@@ -5,20 +5,18 @@ import { PlanDialog } from '@/components/monetization/PlanDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, CalendarDays, Lock } from 'lucide-react';
+import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, CalendarDays, Lock, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
+import {
+  useGetCreatorStats,
+  useGetSubscriptionPlans,
+  useGetCreatorEarnings,
+  type SubscriptionPlan,
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 
-// Valores em Kwanza angolano (AOA)
-const mockChartData = [
-  { date: '1 Mar', ganhos: 40500 },
-  { date: '5 Mar', ganhos: 108000 },
-  { date: '10 Mar', ganhos: 76500 },
-  { date: '15 Mar', ganhos: 225000 },
-  { date: '20 Mar', ganhos: 171000 },
-  { date: '25 Mar', ganhos: 279000 },
-  { date: '30 Mar', ganhos: 405000 },
-];
+type Period = '7d' | '30d' | '1y';
 
 function formatKz(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M Kz`;
@@ -41,15 +39,18 @@ const ANGOLAN_BANKS = [
 export default function Monetization() {
   const { user, ganhos, getMockUserData, saveDadosBancarios, requestWithdrawal } = useAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
 
-  // Bank details form
+  const [period, setPeriod] = useState<Period>('30d');
+
+  // Bank details
   const [editingBank, setEditingBank] = useState(false);
   const [bankForm, setBankForm] = useState<DadosBancarios>({ iban: '', nomeTitular: '', banco: '' });
   const [bankSaved, setBankSaved] = useState(false);
   const [bankError, setBankError] = useState('');
 
   // Plan dialogs
-  const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [editPlan, setEditPlan] = useState<SubscriptionPlan | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
 
   // Withdrawal
@@ -60,24 +61,41 @@ export default function Monetization() {
   const today = new Date();
   const isWithdrawalDay = today.getDate() === 29;
 
+  // ── API queries ───────────────────────────────────────────────────────────
+  const { data: stats, isLoading: statsLoading } = useGetCreatorStats({
+    query: { enabled: !!user && user.tipoConta === 'criador' },
+  });
+
+  const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlans({
+    query: { enabled: !!user && user.tipoConta === 'criador' },
+  });
+
+  const { data: earningsRaw, isLoading: earningsLoading } = useGetCreatorEarnings(
+    { period },
+    { query: { enabled: !!user && user.tipoConta === 'criador' } },
+  );
+
+  // Format chart data
+  const chartData = (earningsRaw ?? []).map((p) => ({
+    date: new Date(p.data).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' }),
+    ganhos: p.valor,
+  }));
+
+  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (user && user.tipoConta !== 'criador') {
-      setLocation('/home');
-    }
+    if (user && user.tipoConta !== 'criador') setLocation('/home');
   }, [user, setLocation]);
 
-  // Load existing bank details
   useEffect(() => {
     const data = getMockUserData();
-    if (data?.dadosBancarios) {
-      setBankForm(data.dadosBancarios);
-    }
+    if (data?.dadosBancarios) setBankForm(data.dadosBancarios);
   }, [getMockUserData]);
 
   if (!user || user.tipoConta !== 'criador') return null;
 
   const dadosBancarios = getMockUserData()?.dadosBancarios;
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   function handleSaveBank() {
     setBankError('');
     if (!bankForm.iban.trim() || !bankForm.nomeTitular.trim() || !bankForm.banco.trim()) {
@@ -104,6 +122,12 @@ export default function Monetization() {
     }
   }
 
+  function handlePlanSaved() {
+    queryClient.invalidateQueries({ queryKey: ['/api/creator/plans'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/creator/stats'] });
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-6xl mx-auto p-4 sm:p-8 pb-24">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -124,23 +148,37 @@ export default function Monetization() {
             <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Kz</span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1.305.000 Kz</div>
-            <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
-              <Activity className="w-3 h-3" /> +15.3% do último mês
-            </p>
+            {statsLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {(stats?.ganhosMes ?? 0).toLocaleString('pt-PT')} Kz
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> Ganhos no mês atual
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Subscritores Ativos</CardTitle>
             <Users className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">245</div>
-            <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
-              <Activity className="w-3 h-3" /> +12 novos esta semana
-            </p>
+            {statsLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.totalSubscritores ?? 0}</div>
+                <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> +{stats?.novosSubscritores ?? 0} novos este mês
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -150,19 +188,33 @@ export default function Monetization() {
             <Activity className="w-4 h-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">84%</div>
-            <p className="text-xs text-muted-foreground mt-1">Taxa de renovação</p>
+            {statsLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.taxaRetencao ?? 0}%</div>
+                <p className="text-xs text-muted-foreground mt-1">Taxa de renovação</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Visualizações PPV</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Conteúdo Publicado</CardTitle>
             <Eye className="w-4 h-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3.892</div>
-            <p className="text-xs text-muted-foreground mt-1">Ganhos: 220.950 Kz</p>
+            {statsLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.visualizacoesTotais ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Total ganho: {(stats?.ganhosTotal ?? 0).toLocaleString('pt-PT')} Kz
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -173,26 +225,45 @@ export default function Monetization() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Ganhos ao longo do tempo (Kz)</CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-8">7D</Button>
-              <Button variant="default" size="sm" className="h-8 bg-secondary text-foreground">30D</Button>
-              <Button variant="outline" size="sm" className="h-8">Anual</Button>
+              {(['7d', '30d', '1y'] as Period[]).map((p) => (
+                <Button
+                  key={p}
+                  variant={period === p ? 'default' : 'outline'}
+                  size="sm"
+                  className={cn('h-8', period === p && 'bg-secondary text-foreground')}
+                  onClick={() => setPeriod(p)}
+                >
+                  {p === '7d' ? '7D' : p === '30d' ? '30D' : 'Anual'}
+                </Button>
+              ))}
             </div>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-                  <XAxis dataKey="date" stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatKz} width={70} />
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: '#121212', border: '1px solid #262626', borderRadius: '8px' }}
-                    itemStyle={{ color: '#ff3e72', fontWeight: 'bold' }}
-                    formatter={(v: number) => [`${Number(v).toLocaleString('pt-PT')} Kz`, 'Ganhos']}
-                  />
-                  <Line type="monotone" dataKey="ganhos" stroke="#ff3e72" strokeWidth={3} dot={{ r: 4, fill: '#121212', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#ff3e72' }} />
-                </LineChart>
-              </ResponsiveContainer>
+              {earningsLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <TrendingUp className="w-10 h-10 mb-2 opacity-30" />
+                  <p className="text-sm">Nenhuma transação neste período</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+                    <XAxis dataKey="date" stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatKz} width={70} />
+                    <RechartsTooltip
+                      contentStyle={{ backgroundColor: '#121212', border: '1px solid #262626', borderRadius: '8px' }}
+                      itemStyle={{ color: '#ff3e72', fontWeight: 'bold' }}
+                      formatter={(v: number) => [`${Number(v).toLocaleString('pt-PT')} Kz`, 'Ganhos']}
+                    />
+                    <Line type="monotone" dataKey="ganhos" stroke="#ff3e72" strokeWidth={3} dot={{ r: 4, fill: '#121212', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#ff3e72' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -206,20 +277,47 @@ export default function Monetization() {
             </Button>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col gap-4">
-            <div className="border border-primary bg-primary/5 rounded-xl p-4 relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">ATIVO</div>
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="font-bold text-lg">VIP Club</h3>
-                <span className="text-xl font-bold text-primary">4.990 Kz<span className="text-sm text-muted-foreground font-normal">/mês</span></span>
+            {plansLoading ? (
+              <div className="flex items-center justify-center flex-1 py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
-              <p className="text-sm text-muted-foreground mb-4">Acesso a todo o conteúdo exclusivo, chat direto e lives privadas.</p>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-white font-semibold">245 subscritores</span>
-                <Button variant="outline" size="sm" className="h-8 bg-secondary/50" onClick={() => setEditPlanOpen(true)}>Editar</Button>
+            ) : plans && plans.length > 0 ? (
+              <>
+                {plans.map((plan) => (
+                  <div key={plan.id} className={cn(
+                    'border rounded-xl p-4 relative overflow-hidden',
+                    plan.ativo ? 'border-primary bg-primary/5' : 'border-border bg-secondary/30',
+                  )}>
+                    {plan.ativo && (
+                      <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">ATIVO</div>
+                    )}
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-lg">{plan.nome}</h3>
+                      <span className="text-xl font-bold text-primary">
+                        {plan.preco.toLocaleString('pt-PT')} Kz
+                        <span className="text-sm text-muted-foreground font-normal">/mês</span>
+                      </span>
+                    </div>
+                    {plan.beneficios && (
+                      <p className="text-sm text-muted-foreground mb-4">{plan.beneficios}</p>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-white font-semibold">{plan.totalSubscritores} subscritor{plan.totalSubscritores !== 1 ? 'es' : ''}</span>
+                      <Button variant="outline" size="sm" className="h-8 bg-secondary/50" onClick={() => setEditPlan(plan)}>
+                        Editar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                <p>Ainda não tens planos de subscrição.</p>
               </div>
-            </div>
+            )}
+
             <div
-              className="border border-border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center text-muted-foreground h-full min-h-[120px] hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+              className="border border-border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center text-muted-foreground min-h-[100px] hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
               onClick={() => setNewPlanOpen(true)}
             >
               <Plus className="w-6 h-6 mb-2" />
@@ -227,25 +325,25 @@ export default function Monetization() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Plan dialogs */}
-        <PlanDialog
-          open={editPlanOpen}
-          onClose={() => setEditPlanOpen(false)}
-          mode="edit"
-          initial={{ nome: 'VIP Club', preco: '4990', descricao: 'Acesso a todo o conteúdo exclusivo, chat direto e lives privadas.' }}
-        />
-        <PlanDialog
-          open={newPlanOpen}
-          onClose={() => setNewPlanOpen(false)}
-          mode="create"
-        />
       </div>
 
-      {/* ── Levantamento + Dados Bancários ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Plan Dialogs */}
+      <PlanDialog
+        open={!!editPlan}
+        onClose={() => setEditPlan(null)}
+        mode="edit"
+        plan={editPlan}
+        onSaved={handlePlanSaved}
+      />
+      <PlanDialog
+        open={newPlanOpen}
+        onClose={() => setNewPlanOpen(false)}
+        mode="create"
+        onSaved={handlePlanSaved}
+      />
 
-        {/* Saldo para levantamento */}
+      {/* Levantamento + Dados Bancários */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -266,7 +364,6 @@ export default function Monetization() {
               <p>Os levantamentos estão disponíveis <strong className="text-foreground">todos os dias 29</strong> de cada mês.</p>
             </div>
 
-            {/* Withdrawal error / success */}
             {withdrawalError && (
               <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -282,10 +379,10 @@ export default function Monetization() {
 
             <Button
               className={cn(
-                "w-full h-12 font-bold rounded-xl gap-2",
+                'w-full h-12 font-bold rounded-xl gap-2',
                 isWithdrawalDay
-                  ? "bg-green-500 hover:bg-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]"
-                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+                  ? 'bg-green-500 hover:bg-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]'
+                  : 'bg-secondary text-muted-foreground cursor-not-allowed',
               )}
               disabled={!isWithdrawalDay || withdrawing || (ganhos ?? 0) < 1000 || !dadosBancarios}
               onClick={handleWithdrawal}
@@ -293,15 +390,9 @@ export default function Monetization() {
               {withdrawing ? (
                 'A processar...'
               ) : isWithdrawalDay ? (
-                <>
-                  <ArrowDownToLine className="w-4 h-4" />
-                  Solicitar Levantamento
-                </>
+                <><ArrowDownToLine className="w-4 h-4" /> Solicitar Levantamento</>
               ) : (
-                <>
-                  <Lock className="w-4 h-4" />
-                  Disponível no dia 29
-                </>
+                <><Lock className="w-4 h-4" /> Disponível no dia 29</>
               )}
             </Button>
 
@@ -313,7 +404,6 @@ export default function Monetization() {
           </CardContent>
         </Card>
 
-        {/* Dados bancários */}
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -335,7 +425,6 @@ export default function Monetization() {
             )}
 
             {dadosBancarios && !editingBank ? (
-              /* View mode */
               <div className="bg-secondary/60 border border-border rounded-xl p-4 space-y-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Titular</p>
@@ -353,7 +442,6 @@ export default function Monetization() {
                 </div>
               </div>
             ) : (
-              /* Edit / Add mode */
               <div className="space-y-4">
                 {!dadosBancarios && !editingBank && (
                   <div className="text-center py-6">
@@ -366,7 +454,7 @@ export default function Monetization() {
                   </div>
                 )}
 
-                {(editingBank || (!dadosBancarios && editingBank)) && (
+                {editingBank && (
                   <div className="space-y-3">
                     <div>
                       <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Nome do titular</label>
@@ -400,9 +488,7 @@ export default function Monetization() {
                       />
                     </div>
 
-                    {bankError && (
-                      <p className="text-xs text-destructive">{bankError}</p>
-                    )}
+                    {bankError && <p className="text-xs text-destructive">{bankError}</p>}
 
                     <div className="flex gap-2 pt-1">
                       {dadosBancarios && (
