@@ -402,18 +402,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (data: LoginInput) => {
-    const knownMockUser = getMockUsers().find(u => u.email === data.email);
-    if (knownMockUser) {
-      const response = await mockLogin(data);
-      setIsMockMode(true);
-      setToken(response.token);
-      setMockUser(response.user);
-      setSaldo(getMockSaldo());
-      setGanhos(getMockGanhos());
-      setLocation('/home');
-      return;
-    }
-
+    // Always try the real API first — mock users may also exist in localStorage
+    // from previous sessions, so we cannot short-circuit to mock based on email alone.
     try {
       const response = await apiLogin(data);
       setIsMockMode(false);
@@ -423,8 +413,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     } catch (apiError: any) {
       const apiStatus: number | undefined = apiError?.response?.status ?? apiError?.status;
-      const isCredentialRejection = apiStatus && apiStatus >= 400 && apiStatus < 500;
-      if (isCredentialRejection) throw apiError;
+      // 4xx = credential rejection or client error — do NOT fall back to mock.
+      if (apiStatus && apiStatus >= 400 && apiStatus < 500) throw apiError;
+      // Network/server error — fall back to mock only if user is a known mock account.
+      const knownMockUser = getMockUsers().find(u => u.email === data.email);
+      if (!knownMockUser) throw apiError;
       const response = await mockLogin(data);
       setIsMockMode(true);
       setToken(response.token);
