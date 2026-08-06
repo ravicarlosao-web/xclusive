@@ -5,6 +5,8 @@ import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
 import { StoryViewer } from '@/components/shared/StoryViewer';
 import { PostSkeleton, StorySkeleton, SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
+import { InlineComposer } from '@/components/shared/InlineComposer';
+import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,6 +26,21 @@ export default function Home() {
   const [followingMap, setFollowingMap] = useState<Record<number, boolean>>({});
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
+
+  // Inline composer → full modal (for media posts)
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalInitialFiles, setModalInitialFiles] = useState<File[]>([]);
+
+  function handleOpenWithFiles(files: File[]) {
+    setModalInitialFiles(files);
+    setModalOpen(true);
+  }
+
+  function handleModalClose() {
+    setModalOpen(false);
+    setModalInitialFiles([]);
+    queryClient.invalidateQueries({ queryKey: ['/api/feed', 1] });
+  }
 
   const handleSuggestionFollow = (id: number, username: string) => {
     const isNowFollowing = !followingMap[id];
@@ -182,6 +199,14 @@ export default function Home() {
           />
         )}
 
+        {/* Inline Composer — only for creators */}
+        {user?.tipoConta === 'criador' && (
+          <InlineComposer
+            user={user}
+            onOpenWithFiles={handleOpenWithFiles}
+          />
+        )}
+
         {/* Posts Feed */}
         <div className="flex flex-col">
           {isLoadingFeed && !isMockMode ? (
@@ -285,6 +310,13 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      {/* Full modal — opens when composer has media files */}
+      <CreatePostModal
+        open={modalOpen}
+        onClose={handleModalClose}
+        initialFiles={modalInitialFiles}
+      />
     </div>
   );
 }

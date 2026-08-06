@@ -18,6 +18,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface CreatePostModalProps {
   open: boolean;
   onClose: () => void;
+  /** Jump straight to a specific step when the modal opens */
+  defaultStep?: 'select' | 'preview' | 'details' | 'texto';
+  /** Pre-load these files (e.g. from the inline composer's file picker) */
+  initialFiles?: File[];
 }
 
 type Step = 'select' | 'preview' | 'details' | 'texto';
@@ -38,7 +42,7 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
+export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: CreatePostModalProps) {
   const queryClient = useQueryClient();
   const { mutate: createPost, isPending } = useCreatePost();
 
@@ -68,6 +72,22 @@ export function CreatePostModal({ open, onClose }: CreatePostModalProps) {
       mediaFiles.forEach(m => URL.revokeObjectURL(m.previewUrl));
     };
   }, []);
+
+  // When modal opens with defaultStep / initialFiles, apply them
+  useEffect(() => {
+    if (!open) return;
+    if (defaultStep) setStep(defaultStep);
+    if (initialFiles && initialFiles.length > 0) {
+      const newMedia: MediaFile[] = initialFiles.map(file => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        tipo: file.type.startsWith('video/') ? 'video' : 'imagem',
+      }));
+      setMediaFiles(newMedia);
+      setCurrentIndex(0);
+      setStep('preview');
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-focus text area when switching to text step
   useEffect(() => {
