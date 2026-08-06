@@ -396,10 +396,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [error, setToken, isMockToken, tryRefreshToken, queryClient]);
 
-  const refreshSaldo = useCallback(() => {
-    setSaldo(getMockSaldo());
-    setGanhos(getMockGanhos());
+  // ─── Fetch real wallet balance from API ──────────────────────────────────────
+  const fetchApiWallet = useCallback(async (currentToken: string) => {
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/wallet/balance`, {
+        headers: { Authorization: `Bearer ${currentToken}` },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.saldo === 'number') setSaldo(data.saldo);
+      if (typeof data.ganhos === 'number') setGanhos(data.ganhos);
+    } catch {
+      // silently ignore — balance will refresh on next action
+    }
   }, []);
+
+  // Fetch real balance on mount and whenever the (non-mock) token changes
+  useEffect(() => {
+    if (!token || isMockToken) return;
+    fetchApiWallet(token);
+  }, [token, isMockToken, fetchApiWallet]);
+
+  const refreshSaldo = useCallback(() => {
+    if (isMockToken) {
+      setSaldo(getMockSaldo());
+      setGanhos(getMockGanhos());
+    } else if (token) {
+      fetchApiWallet(token);
+    }
+  }, [isMockToken, token, fetchApiWallet]);
 
   const login = async (data: LoginInput) => {
     // Always try the real API first — mock users may also exist in localStorage
@@ -484,6 +511,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!Number.isFinite(amount) || amount < 500) {
       throw new Error('Valor mínimo de carregamento: 500 Kz.');
     }
+
+    // ── Real API mode ──────────────────────────────────────────────────────────
+    if (token && !isMockToken) {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/wallet/topup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ amount, reference, comprovantivoBase64, comprovantivoNome }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Erro ao submeter pedido de carregamento.');
+      }
+      return;
+    }
+
+    // ── Mock mode ──────────────────────────────────────────────────────────────
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
@@ -509,7 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reqs.push(newReq);
     _saveTopUpRequests(reqs);
     // Não adiciona saldo agora — só após aprovação do admin
-  }, []);
+  }, [token, isMockToken]);
 
   const unlockPost = useCallback(async (postId: number, creatorUsername: string, preco: number) => {
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');

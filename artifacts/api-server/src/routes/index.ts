@@ -12,6 +12,7 @@ import creatorRouter from "./creator";
 import gorjetaRouter from "./gorjeta";
 import adminRouter from "./admin";
 import uploadRouter from "./upload";
+import walletRouter from "./wallet";
 
 const router: Router = Router();
 
@@ -28,5 +29,6 @@ router.use(creatorRouter);
 router.use(gorjetaRouter);
 router.use(adminRouter);
 router.use(uploadRouter);
+router.use(walletRouter);
 
 export default router;

@@ -64,6 +64,24 @@ export const auditLogTable = pgTable("audit_log", {
 
 export type AuditLog = typeof auditLogTable.$inferSelect;
 
+// ─── topup_requests ──────────────────────────────────────────────────────────
+
+export const topupRequestsTable = pgTable("topup_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  reference: varchar("reference", { length: 20 }).notNull().unique(),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente | aprovado | rejeitado
+  comprovantivoBase64: text("comprovativo_base64"),
+  comprovantivoNome: varchar("comprovativo_nome", { length: 255 }),
+  processadoPor: integer("processado_por").references(() => usersTable.id),
+  processadoEm: timestamp("processado_em"),
+  notas: text("notas"),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+});
+
+export type TopupRequest = typeof topupRequestsTable.$inferSelect;
+
 // ─── platform_settings ───────────────────────────────────────────────────────
 
 export const platformSettingsTable = pgTable("platform_settings", {
