@@ -71,6 +71,24 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const isOwnPost = user?.username === post.autor.username;
   const isVideo = post.tipo === 'video' || post.media?.[0]?.tipo === 'video';
 
+  // Adaptive aspect ratio: detected from actual media dimensions
+  // Clamped between 9:16 (tall portrait) and 16:9 (wide landscape)
+  const [mediaAspect, setMediaAspect] = useState<number | null>(null);
+  const handleVideoMeta = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (v.videoWidth && v.videoHeight) {
+      const ratio = v.videoWidth / v.videoHeight;
+      setMediaAspect(Math.min(Math.max(ratio, 9 / 16), 16 / 9));
+    }
+  };
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      setMediaAspect(Math.min(Math.max(ratio, 9 / 16), 16 / 9));
+    }
+  };
+
   // Check if user already has access
   const hasSubscription = localSubscribed || isSubscribed(post.autor.username);
   const hasUnlocked = localUnlocked || isPostUnlocked(post.id);
@@ -188,9 +206,13 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           </button>
         </div>
 
-        {/* Media */}
+        {/* Media — aspect ratio adapts to the actual media dimensions (clamped 9:16 → 16:9) */}
         <div
-          className="relative w-full bg-secondary aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer select-none"
+          className={cn(
+            "relative w-full bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
+            !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
+          )}
+          style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
           onClick={handleMediaClick}
         >
           {isLocked ? (
@@ -248,10 +270,20 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                   muted
                   loop
                   playsInline
+                  onLoadedMetadata={handleVideoMeta}
                 />
+                {/* Play hint — tap to open in Reels */}
+                <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm rounded-full p-2 pointer-events-none">
+                  <Play className="w-4 h-4 text-white fill-white" />
+                </div>
               </>
             ) : (
-              <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" />
+              <img
+                src={post.media[0].url}
+                alt="Post"
+                className="w-full h-full object-cover"
+                onLoad={handleImageLoad}
+              />
             )
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
