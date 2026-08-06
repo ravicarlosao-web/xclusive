@@ -99,7 +99,7 @@ export default function Profile() {
             <AvatarFallback className="text-4xl">{profile.nomeExibicao[0]}</AvatarFallback>
           </Avatar>
           
-          <div className="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0">
             {isMe ? (
               <>
                 <Link href="/definicoes">

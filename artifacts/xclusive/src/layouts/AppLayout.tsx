@@ -174,24 +174,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <TopUpModal open={topUpOpen} onClose={() => setTopUpOpen(false)} />
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-2">
-        {navItems.slice(0, 4).map((item) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-1">
+        {navItems.map((item) => {
           const isActive = location.startsWith(item.path);
           return (
-            <Link key={item.path} href={item.path} className="p-2 relative">
-              <item.icon className={cn("w-6 h-6 transition-transform", isActive ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground")} />
+            <Link key={item.path} href={item.path} className="flex-1 flex items-center justify-center py-2 relative">
+              <item.icon className={cn("w-5 h-5 transition-transform", isActive ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground")} />
               {item.badge && (
-                <span className="absolute top-1.5 right-1.5 bg-primary text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center border border-card">
+                <span className="absolute top-1 right-2 bg-primary text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center border border-card">
                   {item.badge}
                 </span>
               )}
             </Link>
           );
         })}
-        <Link href={user ? `/perfil/${user.username}` : '/login'} className="p-2">
-          <Avatar className={cn("w-6 h-6 transition-transform", location.startsWith('/perfil') ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : "")}>
+        <Link href={user ? `/perfil/${user.username}` : '/login'} className="flex-1 flex items-center justify-center py-2">
+          <Avatar className={cn("w-5 h-5 transition-transform", location.startsWith('/perfil') ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : "")}>
             <AvatarImage src={user?.avatarUrl || ''} />
-            <AvatarFallback className="bg-secondary"><UserIcon className="w-4 h-4" /></AvatarFallback>
+            <AvatarFallback className="bg-secondary"><UserIcon className="w-3 h-3" /></AvatarFallback>
           </Avatar>
         </Link>
       </nav>

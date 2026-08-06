@@ -46,14 +46,14 @@ export default function Reels() {
   }, [initialId, posts.length]);
 
   return (
-    <div className="h-[100dvh] w-full bg-black flex items-center justify-center relative overflow-hidden">
+    <div className="h-[calc(100dvh-60px)] md:h-[100dvh] w-full bg-black flex items-center justify-center relative overflow-hidden">
       <div className="w-full h-full max-w-[500px] overflow-y-scroll snap-y snap-mandatory no-scrollbar relative">
         {isLoading ? (
-          <div className="w-full h-[100dvh] flex items-center justify-center text-white/60">
+          <div className="w-full h-[calc(100dvh-60px)] md:h-[100dvh] flex items-center justify-center text-white/60">
             A carregar Reels…
           </div>
         ) : posts.length === 0 ? (
-          <div className="w-full h-[100dvh] flex items-center justify-center text-white/50 text-center px-8">
+          <div className="w-full h-[calc(100dvh-60px)] md:h-[100dvh] flex items-center justify-center text-white/50 text-center px-8">
             <p>Ainda não há vídeos no feed.</p>
           </div>
         ) : (
@@ -162,7 +162,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
   return (
     <div
       ref={setRef}
-      className="w-full h-[100dvh] snap-start relative bg-black flex flex-col justify-center"
+      className="w-full h-[calc(100dvh-60px)] md:h-[100dvh] snap-start relative bg-black flex flex-col justify-center"
     >
       <video
         ref={videoRef}
@@ -197,7 +197,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
       </button>
 
       {/* Bottom info overlay */}
-      <div className="absolute bottom-0 left-0 right-16 p-4 pb-8 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none">
+      <div className="absolute bottom-0 left-0 right-16 p-4 pb-6 md:pb-8 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none">
         <Link
           href={`/perfil/${post.autor.username}`}
           className="flex items-center gap-3 mb-3 pointer-events-auto w-fit"

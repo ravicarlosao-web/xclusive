@@ -13,7 +13,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-background/80 backdrop-blur-md z-50 flex items-center justify-between px-6 lg:px-12">
+      <nav className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-background/80 backdrop-blur-md z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12">
         <div className="text-2xl font-extrabold tracking-tighter">
           <span className="text-primary">X</span>
           <span className="text-white">clusive</span>
@@ -34,17 +34,17 @@ export default function Landing() {
 
       {/* Hero */}
       <main className="flex-1 mt-16 flex flex-col">
-        <section className="flex flex-col items-center justify-center text-center px-4 py-24 lg:py-32">
+        <section className="flex flex-col items-center justify-center text-center px-4 sm:px-6 py-16 sm:py-24 lg:py-32">
           <div className="bg-secondary text-primary font-bold text-xs uppercase tracking-wider px-4 py-1.5 rounded-full mb-8 border border-border">
             Sem intermediários.
           </div>
-          <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl">
+          <h1 className="text-3xl sm:text-5xl lg:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl">
             Conteúdo exclusivo.<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-[#ff8a5c] to-[#ffc93e]">
               Ganhos diretos.
             </span>
           </h1>
-          <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl mb-10">
+          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mb-10">
             A plataforma onde criadores e fãs se conectam sem filtros. Monetiza o teu conteúdo, constrói a tua comunidade e fica com o que é teu.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
@@ -62,10 +62,10 @@ export default function Landing() {
         </section>
 
         {/* Featured Creators */}
-        <section className="px-6 lg:px-12 py-16 bg-secondary/30">
+        <section className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 bg-secondary/30">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-10">
-              <h2 className="text-3xl font-bold">Criadores em destaque</h2>
+            <div className="flex items-center justify-between mb-6 sm:mb-10">
+              <h2 className="text-2xl sm:text-3xl font-bold">Criadores em destaque</h2>
               <Link href="/explorar" className="text-primary hover:underline font-semibold">Ver todos</Link>
             </div>
             

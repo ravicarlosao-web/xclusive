@@ -70,7 +70,7 @@ export default function Notifications() {
     : notifications;
 
   return (
-    <div className="w-full max-w-2xl mx-auto pb-20 md:pb-0 h-screen overflow-hidden flex flex-col border-x border-border bg-card">
+    <div className="w-full max-w-2xl mx-auto h-[calc(100dvh-60px)] md:h-screen overflow-hidden flex flex-col border-x border-border bg-card">
       {/* Header */}
       <div className="p-4 sm:p-6 border-b border-border bg-background/95 backdrop-blur z-10">
         <div className="flex items-center justify-between mb-4">

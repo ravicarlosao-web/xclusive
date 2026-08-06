@@ -31,7 +31,7 @@ export default function Explore() {
     : (exploreData?.posts ?? []);
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto pb-20 md:pb-0 h-screen overflow-hidden flex flex-col">
+    <div className="w-full max-w-screen-xl mx-auto h-[calc(100dvh-60px)] md:h-screen overflow-hidden flex flex-col">
 
       {/* Cabeçalho fixo — só contém barra de pesquisa e controlos de filtro/tab */}
       <div className="px-4 sm:px-8 py-6 border-b border-border bg-background/95 backdrop-blur z-10 sticky top-0">
