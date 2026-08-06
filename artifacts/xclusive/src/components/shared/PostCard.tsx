@@ -69,7 +69,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
-  const isVideo = post.tipo === 'video' || post.media?.[0]?.tipo === 'video';
+  const isTextPost = post.tipo === 'texto';
+  const isVideo = !isTextPost && (post.tipo === 'video' || post.media?.[0]?.tipo === 'video');
 
   // Adaptive aspect ratio: detected from actual media dimensions
   // Clamped between 9:16 (tall portrait) and 16:9 (wide landscape)
@@ -206,114 +207,135 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           </button>
         </div>
 
-        {/* Media — aspect ratio adapts to the actual media dimensions (clamped 9:16 → 16:9) */}
-        <div
-          className={cn(
-            "relative w-full bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
-            !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
-          )}
-          style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
-          onClick={handleMediaClick}
-        >
-          {isLocked ? (
-            <div
-              className="absolute inset-0 backdrop-blur-xl bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center"
-              onClick={e => e.stopPropagation()}
-            >
-              {post.precoDesbloqueio ? (
-                /* ── Pay-per-view ── */
+        {/* Text post — rendered inline, no media container */}
+        {isTextPost ? (
+          <div
+            className={cn(
+              "mx-3 sm:mx-4 mb-1 rounded-2xl px-5 py-5 cursor-pointer select-none relative",
+              "bg-gradient-to-br from-secondary/60 to-secondary/30 border border-border/50",
+            )}
+            onClick={handleMediaClick}
+          >
+            {/* Locked overlay for text posts */}
+            {isLocked && (
+              <div className="absolute inset-0 rounded-2xl backdrop-blur-md bg-black/40 z-10 flex flex-col items-center justify-center p-4 text-center" onClick={e => e.stopPropagation()}>
+                {post.precoDesbloqueio ? (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-xs text-white/70 mb-3 max-w-[180px]">Conteúdo exclusivo — desbloqueia por pagamento único.</p>
+                    <button onClick={() => setUnlockOpen(true)} className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-full text-xs transition-colors">
+                      Desbloquear · {Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <p className="text-xs text-white/70 mb-3 max-w-[180px]">Exclusivo para subscritores de {post.autor.username}.</p>
+                    <button onClick={() => setSubscribeOpen(true)} className="bg-primary hover:bg-primary/90 text-white font-bold px-4 py-2 rounded-full text-xs transition-colors">Subscrever</button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <p className={cn(
+              "whitespace-pre-wrap leading-relaxed break-words",
+              (post.legenda?.length ?? 0) > 280 ? "text-base" : (post.legenda?.length ?? 0) > 140 ? "text-lg" : "text-xl font-medium",
+            )}>
+              {post.legenda}
+            </p>
+
+            {/* Exclusive badge for text */}
+            {post.exclusivo && (
+              <div className="mt-3 inline-flex items-center gap-1 bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.5 6.5H19l-5.5 4.5 2 7L10 15.5 4.5 20l2-7L1 8.5h6.5z"/></svg>
+                EXCLUSIVO
+              </div>
+            )}
+
+            {/* Double-click heart */}
+            <AnimatePresence>
+              {showHeartAnimation && (
+                <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0, scale: 1 }} transition={{ duration: 0.3, type: "spring", bounce: 0.5 }} className="absolute z-30 pointer-events-none drop-shadow-2xl text-primary inset-0 flex items-center justify-center">
+                  <Heart className="w-20 h-20 fill-current" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          /* Media — aspect ratio adapts to the actual media dimensions (clamped 9:16 → 16:9) */
+          <div
+            className={cn(
+              "relative w-full bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
+              !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
+            )}
+            style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
+            onClick={handleMediaClick}
+          >
+            {isLocked ? (
+              <div className="absolute inset-0 backdrop-blur-xl bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center" onClick={e => e.stopPropagation()}>
+                {post.precoDesbloqueio ? (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4">
+                      <svg className="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-widest text-amber-400 uppercase mb-1">Conteúdo Premium</span>
+                    <h3 className="text-lg font-bold text-white mb-1">Acesso único</h3>
+                    <p className="text-sm text-white/60 mb-5 max-w-[200px]">Desbloqueia apenas este post por um pagamento único.</p>
+                    <button onClick={() => setUnlockOpen(true)} className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(245,158,11,0.35)] text-sm">
+                      Desbloquear · {Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center mb-4">
+                      <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Exclusivo para assinantes</span>
+                    <h3 className="text-lg font-bold text-white mb-1">Conteúdo bloqueado</h3>
+                    <p className="text-sm text-white/60 mb-5 max-w-[200px]">Subscreve {post.autor.username} para teres acesso a todo o conteúdo exclusivo.</p>
+                    <button onClick={() => setSubscribeOpen(true)} className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(255,62,114,0.35)] text-sm">Subscrever</button>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {post.media && post.media.length > 0 ? (
+              isVideo ? (
                 <>
-                  <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4">
-                    <svg className="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
+                  <video ref={feedVideoRef} src={post.media[0].url} className="w-full h-full object-cover pointer-events-none" muted loop playsInline onLoadedMetadata={handleVideoMeta} />
+                  <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm rounded-full p-2 pointer-events-none">
+                    <Play className="w-4 h-4 text-white fill-white" />
                   </div>
-                  <span className="text-[10px] font-bold tracking-widest text-amber-400 uppercase mb-1">Conteúdo Premium</span>
-                  <h3 className="text-lg font-bold text-white mb-1">Acesso único</h3>
-                  <p className="text-sm text-white/60 mb-5 max-w-[200px]">Desbloqueia apenas este post por um pagamento único.</p>
-                  <button
-                    onClick={() => setUnlockOpen(true)}
-                    className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(245,158,11,0.35)] text-sm"
-                  >
-                    Desbloquear · {Number(post.precoDesbloqueio).toLocaleString('pt-PT')} Kz
-                  </button>
                 </>
               ) : (
-                /* ── Subscription only ── */
-                <>
-                  <div className="w-14 h-14 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center mb-4">
-                    <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <span className="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Exclusivo para assinantes</span>
-                  <h3 className="text-lg font-bold text-white mb-1">Conteúdo bloqueado</h3>
-                  <p className="text-sm text-white/60 mb-5 max-w-[200px]">Subscreve {post.autor.username} para teres acesso a todo o conteúdo exclusivo.</p>
-                  <button
-                    onClick={() => setSubscribeOpen(true)}
-                    className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_24px_rgba(255,62,114,0.35)] text-sm"
-                  >
-                    Subscrever
-                  </button>
-                </>
-              )}
-            </div>
-          ) : null}
-
-          {post.media && post.media.length > 0 ? (
-            isVideo ? (
-              <>
-                <video
-                  ref={feedVideoRef}
-                  src={post.media[0].url}
-                  className="w-full h-full object-cover pointer-events-none"
-                  muted
-                  loop
-                  playsInline
-                  onLoadedMetadata={handleVideoMeta}
-                />
-                {/* Play hint — tap to open in Reels */}
-                <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm rounded-full p-2 pointer-events-none">
-                  <Play className="w-4 h-4 text-white fill-white" />
-                </div>
-              </>
+                <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" onLoad={handleImageLoad} />
+              )
             ) : (
-              <img
-                src={post.media[0].url}
-                alt="Post"
-                className="w-full h-full object-cover"
-                onLoad={handleImageLoad}
-              />
-            )
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
-              <span className="text-muted-foreground font-medium">Conteúdo não disponível</span>
-            </div>
-          )}
-
-          {/* Exclusive Badge */}
-          {post.exclusivo && (
-            <div className="absolute top-3 right-3 bg-primary text-white text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg z-20">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.5 6.5H19l-5.5 4.5 2 7L10 15.5 4.5 20l2-7L1 8.5h6.5z"/></svg>
-              EXCLUSIVO
-            </div>
-          )}
-
-          {/* Double-click Heart Animation */}
-          <AnimatePresence>
-            {showHeartAnimation && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1.2 }}
-                exit={{ opacity: 0, scale: 1 }}
-                transition={{ duration: 0.3, type: "spring", bounce: 0.5 }}
-                className="absolute z-30 pointer-events-none drop-shadow-2xl text-primary"
-              >
-                <Heart className="w-24 h-24 fill-current" />
-              </motion.div>
+              <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">
+                <span className="text-muted-foreground font-medium">Conteúdo não disponível</span>
+              </div>
             )}
-          </AnimatePresence>
-        </div>
+
+            {post.exclusivo && (
+              <div className="absolute top-3 right-3 bg-primary text-white text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg z-20">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.5 6.5H19l-5.5 4.5 2 7L10 15.5 4.5 20l2-7L1 8.5h6.5z"/></svg>
+                EXCLUSIVO
+              </div>
+            )}
+
+            <AnimatePresence>
+              {showHeartAnimation && (
+                <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0, scale: 1 }} transition={{ duration: 0.3, type: "spring", bounce: 0.5 }} className="absolute z-30 pointer-events-none drop-shadow-2xl text-primary">
+                  <Heart className="w-24 h-24 fill-current" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="p-3 sm:p-4">
@@ -358,8 +380,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             {likesCount.toLocaleString()} {likesCount === 1 ? 'Gosto' : 'Gostos'}
           </div>
 
-          {/* Caption */}
-          {post.legenda && (
+          {/* Caption — hidden for text posts (content already shown above) */}
+          {post.legenda && !isTextPost && (
             <div className="text-sm mb-2">
               <Link href={`/perfil/${post.autor.username}`} className="font-semibold hover:underline mr-2">
                 {post.autor.username}

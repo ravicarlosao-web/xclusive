@@ -52,10 +52,12 @@ pnpm --filter @workspace/scripts run seed
 #### 📸 Conteúdo (Posts, Media, Interacções)
 
 **`posts`** — publicações de um criador  
-`id`, `autor_id` → users, `legenda`, `localizacao`, `tipo` (`imagem`|`video`|`carrossel`), `exclusivo` (bool), `preco_desbloqueio` (Kz), `criado_em`
+`id`, `autor_id` → users, `legenda`, `localizacao`, `tipo` (`imagem`|`video`|`carrossel`|`texto`), `exclusivo` (bool), `preco_desbloqueio` (Kz), `criado_em`  
+> `tipo = 'texto'` — post apenas de texto (estilo X/Twitter); sem media associada. `legenda` é o conteúdo principal (obrigatória para este tipo). Os restantes tipos (`imagem`, `video`, `carrossel`) requerem pelo menos um registo em `post_media`.
 
 **`post_media`** — ficheiros de cada post (imagens/vídeos)  
-`id`, `post_id` → posts, `url`, `tipo` (`imagem`|`video`), `ordem`
+`id`, `post_id` → posts, `url`, `tipo` (`imagem`|`video`), `ordem`  
+> Não existe para posts do tipo `texto`.
 
 **`comments`** — comentários e respostas  
 `id`, `post_id` → posts, `autor_id` → users, `comentario_pai_id` (para respostas), `texto`, `criado_em`
@@ -205,15 +207,22 @@ O frontend funciona **sem base de dados** através de um sistema de mock em `loc
 
 Para testar sem DB: basta usar o registo — se a API falhar, cria conta local automaticamente.
 
-## Sistema de Criação de Conteúdo (Instagram-like)
+## Sistema de Criação de Conteúdo
 
-O modal de criação (`CreatePostModal.tsx`) tem 3 passos:
+O modal de criação (`CreatePostModal.tsx`) suporta dois fluxos distintos:
 
+### Fluxo de media (fotos/vídeos)
 1. **Selecionar** — zona de drag & drop + seletor de ficheiros (imagens e vídeos, até 10 ficheiros, máx. 100MB/ficheiro)
 2. **Pré-visualização** — carousel com navegação por setas, pontos indicadores, thumbnails inferiores, suporte a vídeo com autoplay
 3. **Detalhes** — legenda (2200 chars, com emojis/mentions/hashtags), localização, audiência (Todos / Seguidores / Subscritores), toggle de conteúdo exclusivo, preço em Kz
 
 Formatos suportados: JPG, PNG, WEBP, GIF, MP4, MOV, e outros formatos nativos do browser.
+
+### Fluxo de texto (estilo X/Twitter) — `tipo = 'texto'`
+1. **Compor** — área de texto grande ("O que está a acontecer?"), contador circular de caracteres (máx. 2200; fica amarelo nos últimos 100, vermelho nos últimos 20), localização, audiência, toggle exclusivo com preço em Kz
+2. Publicar direto — sem passo de pré-visualização nem upload de ficheiros
+
+O tamanho da fonte no `PostCard` adapta-se automaticamente ao comprimento do texto: maior para textos curtos (≤140 chars), médio até 280, normal acima disso. A legenda não é duplicada na secção de caption abaixo do post.
 
 ## Registo de Conta
 

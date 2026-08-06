@@ -8,14 +8,17 @@ import { validate } from "../lib/validate";
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
   localizacao: z.string().max(100).optional(),
-  tipo: z.enum(["imagem", "video", "carrossel"]).optional(),
+  tipo: z.enum(["imagem", "video", "carrossel", "texto"]).optional(),
   media: z
     .array(z.object({ url: z.url(), tipo: z.enum(["imagem", "video"]).optional() }))
     .max(10)
     .optional(),
   exclusivo: z.boolean().optional(),
   precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
-});
+}).refine(
+  data => data.tipo === 'texto' ? (data.legenda && data.legenda.trim().length > 0) : true,
+  { message: 'Posts de texto precisam de conteúdo na legenda.' }
+);
 
 const createCommentSchema = z.object({
   texto: z.string().min(1, "Texto é obrigatório").max(2200),

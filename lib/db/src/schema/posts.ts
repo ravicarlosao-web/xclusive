@@ -1,7 +1,7 @@
 import { pgTable, serial, integer, text, boolean, timestamp, pgEnum, numeric, unique } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
-export const postTipoEnum = pgEnum("post_tipo", ["imagem", "video", "carrossel"]);
+export const postTipoEnum = pgEnum("post_tipo", ["imagem", "video", "carrossel", "texto"]);
 export const mediaTipoEnum = pgEnum("media_tipo", ["imagem", "video"]);
 
 export const postsTable = pgTable("posts", {
