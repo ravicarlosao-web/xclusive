@@ -16,6 +16,26 @@ Uma plataforma de monetização para criadores de conteúdo em Angola, Moçambiq
 - `pnpm --filter @workspace/scripts run seed` — insere as contas de teste (idempotente)
 - Env necessário: `DATABASE_URL` (Postgres, já provisionado), `SESSION_SECRET` (JWT signing, já definido)
 
+### Armazenamento de media em produção
+
+Os uploads reais usam um bucket privado Backblaze B2 através da API S3. A entrega
+é feita pelo BunnyCDN Pull Zone; o backend nunca devolve o endpoint B2 ao
+utilizador. Preenche estas variáveis no ambiente de produção:
+
+| Variável | Valor a colocar |
+|---|---|
+| `B2_KEY_ID` | O **Key ID** de uma Application Key do Backblaze B2 com acesso ao bucket |
+| `B2_APPLICATION_KEY` | O segredo da mesma Application Key (não usar a Master Application Key) |
+| `B2_BUCKET_NAME` | O nome exacto do bucket privado B2 |
+| `B2_ENDPOINT` | O endpoint S3 da região do bucket, por exemplo `https://s3.<região>.backblazeb2.com` |
+| `BUNNY_CDN_HOSTNAME` | O hostname público do Pull Zone BunnyCDN, sem `https://` e sem `/` final |
+
+Configura o Pull Zone BunnyCDN para usar o bucket B2 como origem S3 (não uma
+Bunny Storage Zone separada). A Application Key precisa de permissões de
+leitura/escrita/remoção nesse bucket; o hostname Bunny deve conseguir fazer
+pull da origem B2. Depois de adicionar as variáveis, reinicia o workflow
+`artifacts/api-server: API Server`.
+
 ## Base de Dados
 
 A base de dados PostgreSQL está **provisionada e com schema aplicado** (27 tabelas). Para re-aplicar o schema após alterações:

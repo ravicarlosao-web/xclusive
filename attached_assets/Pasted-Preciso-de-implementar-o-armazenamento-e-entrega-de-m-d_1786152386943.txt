@@ -1,0 +1,57 @@
+Preciso de implementar o armazenamento e entrega de mídia (fotos e vídeos) na 
+plataforma Xclusive, substituindo o armazenamento local em disco (multer.diskStorage) 
+que está actualmente em api-server/src/routes/upload.ts.
+
+CONTEXTO ACTUAL:
+- api-server/src/routes/upload.ts usa multer.diskStorage (guarda no disco local, 
+  precisa de ser substituído)
+- api-server/src/lib/media.ts já tem um comentário "Se válido, redireciona 302 
+  para o rawUrl (CDN/object-storage)" — a lógica de redirect pode já existir 
+  parcialmente
+- api-server/src/routes/users.ts tem um TODO: "persistir documentos KYC no 
+  object storage"
+- api-server/src/routes/admin.ts tem um placeholder: "substituir por URLs reais 
+  do object-storage quando implementado"
+
+ARQUITECTURA A IMPLEMENTAR:
+- Armazenamento de origem: Backblaze B2 (compatível com S3), bucket privado
+- Entrega ao utilizador: BunnyCDN (Pull Zone), configurada para buscar (pull) 
+  directamente do bucket B2 como origem — não usar Bunny Storage Zone separada
+- Usar o AWS SDK v3 para Node.js (@aws-sdk/client-s3) para comunicar com a B2, 
+  já que a B2 é compatível com a API S3
+
+TAREFAS:
+1. Instalar @aws-sdk/client-s3 e @aws-sdk/lib-storage (para uploads multipart 
+   de ficheiros grandes, como vídeos)
+2. Criar um módulo novo (ex: api-server/src/lib/storage.ts) que:
+   - Inicializa o cliente S3 apontado para o endpoint da B2
+   - Exporta uma função uploadFile(buffer, key, contentType) que sobe o 
+     ficheiro para o bucket
+   - Exporta uma função deleteFile(key) para remoção
+   - Exporta uma função getPublicUrl(key) que devolve o URL final via BunnyCDN 
+     (não o URL directo da B2, que deve continuar privado)
+3. Substituir o multer.diskStorage em upload.ts por multer.memoryStorage(), e 
+   usar a nova função uploadFile() para enviar o ficheiro directamente para a B2, 
+   sem passar por disco
+4. Implementar o TODO em users.ts: persistir documentos KYC no object storage 
+   em vez de descartar
+5. Substituir os placeholders de URL em admin.ts pelos URLs reais gerados por 
+   getPublicUrl()
+6. Adicionar as seguintes variáveis de ambiente ao .env.example (só os nomes, 
+   sem valores):
+   - B2_KEY_ID
+   - B2_APPLICATION_KEY
+   - B2_BUCKET_NAME
+   - B2_ENDPOINT
+   - BUNNY_CDN_HOSTNAME
+
+IMPORTANTE:
+- O bucket B2 é privado — o acesso público deve ser sempre através do 
+  BUNNY_CDN_HOSTNAME, nunca do endpoint directo da B2
+- Não hardcodar nenhuma credencial no código — tudo deve vir de process.env
+- Manter compatibilidade com os dados mock existentes (mockPosts.ts) sem os 
+  apagar, apenas garantir que o caminho de upload real não depende deles
+- Não mexer na lógica de autenticação/sessões existente
+
+Depois de implementado, diz-me exactamente que valores preciso de colocar em 
+cada variável do .env, para eu preencher no servidor de produção.

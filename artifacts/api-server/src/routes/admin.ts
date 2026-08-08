@@ -26,6 +26,7 @@ import {
   purchasesTable,
   followsTable,
   subscriptionsTable,
+  kycSubmissionsTable,
 } from "@workspace/db";
 import {
   eq,
@@ -39,8 +40,10 @@ import {
   count,
   sum,
   isNotNull,
+  inArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { getPublicUrl } from "../lib/storage.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
 
@@ -628,19 +631,27 @@ router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, 
       .where(and(eq(usersTable.tipoConta, "criador"), eq(usersTable.verificado, false), eq(usersTable.ativo, true)))
       .orderBy(asc(usersTable.criadoEm));
 
-    res.json(queue.map(u => ({
-      ...mapUser(u),
-      kycSubmissao: {
-        // URLs dos documentos KYC — substituir por URLs reais do object-storage quando implementado
-        documentoFrente: signMediaUrl(`https://picsum.photos/seed/doc-f-${u.id}/600/400`),
-        documentoVerso: signMediaUrl(`https://picsum.photos/seed/doc-v-${u.id}/600/400`),
-        selfie: signMediaUrl(`https://picsum.photos/seed/selfie-${u.id}/600/400`),
-        provaDeMorada: signMediaUrl(`https://picsum.photos/seed/morada-${u.id}/600/400`),
-        selfieComDocumento: signMediaUrl(`https://picsum.photos/seed/selfie-doc-${u.id}/600/400`),
-        videoVerificacao: null,
-        submissaoEm: u.criadoEm,
-      },
-    })));
+    const userIds = queue.map((user) => user.id);
+    const submissions = userIds.length > 0
+      ? await db.select().from(kycSubmissionsTable).where(inArray(kycSubmissionsTable.userId, userIds))
+      : [];
+    const submissionByUser = new Map(submissions.map((submission) => [submission.userId, submission]));
+
+    res.json(queue.map(u => {
+      const submission = submissionByUser.get(u.id);
+      return {
+        ...mapUser(u),
+        kycSubmissao: submission ? {
+          documentoFrente: signMediaUrl(getPublicUrl(submission.documentoKey)),
+          documentoVerso: null,
+          selfie: signMediaUrl(getPublicUrl(submission.selfieKey)),
+          provaDeMorada: null,
+          selfieComDocumento: null,
+          videoVerificacao: signMediaUrl(getPublicUrl(submission.livenessKey)),
+          submissaoEm: submission.submetidoEm,
+        } : null,
+      };
+    }));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao obter fila KYC");
     res.status(500).json({ error: "Erro interno." });
@@ -654,7 +665,8 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
       .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
     if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
 
-    const { acao, motivo } = req.body;
+    const acao = req.body?.acao ?? (req.body?.status === "aprovado" ? "aprovar" : req.body?.status === "rejeitado" ? "rejeitar" : undefined);
+    const motivo = req.body?.motivo ?? req.body?.reason;
     if (!["aprovar", "rejeitar"].includes(acao)) {
       return void res.status(400).json({ error: "Acção inválida. Use 'aprovar' ou 'rejeitar'." });
     }
@@ -664,6 +676,22 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
       .set({ verificado: acao === "aprovar" })
       .where(eq(usersTable.id, id))
       .returning();
+
+    const [submission] = await db.select({ id: kycSubmissionsTable.id })
+      .from(kycSubmissionsTable)
+      .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
+      .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`)
+      .limit(1);
+    if (submission) {
+      await db.update(kycSubmissionsTable)
+        .set({
+          status: acao === "aprovar" ? "aprovado" : "rejeitado",
+          motivoRejeicao: acao === "rejeitar" ? (motivo ?? null) : null,
+          revistoEm: new Date(),
+          revistoPor: req.adminId!,
+        })
+        .where(eq(kycSubmissionsTable.id, submission.id));
+    }
 
     await logAudit(req, `kyc_${acao}`, "user", id, {
       before: { verificado: verificadoAnterior },

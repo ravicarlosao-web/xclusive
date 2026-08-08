@@ -227,40 +227,9 @@ app.use(
 );
 
 // ─── Body parsers (com limite explícito) ──────────────────────────────────────
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 app.use(cookieParser());
-
-// ─── Ficheiros de media enviados pelos utilizadores ───────────────────────────
-import path from "path";
-import { createReadStream } from "fs";
-import fs from "fs";
-
-const UPLOADS_DIR = path.resolve(process.cwd(), "../../uploads");
-
-app.get("/api/media/:filename", (req, res): void => {
-  // Sanitizar: só aceitar nomes sem barras ou pontos duplos
-  const filename = (Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename) ?? "";
-  if (!filename || /[/\\]/.test(filename) || filename.includes("..")) {
-    res.status(400).json({ error: "Nome inválido." });
-    return;
-  }
-  const filePath = path.join(UPLOADS_DIR, filename);
-  if (!fs.existsSync(filePath)) {
-    res.status(404).json({ error: "Ficheiro não encontrado." });
-    return;
-  }
-  // Inferir Content-Type a partir da extensão
-  const ext = path.extname(filename).toLowerCase();
-  const mime: Record<string, string> = {
-    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-    ".webp": "image/webp", ".gif": "image/gif",
-    ".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
-  };
-  res.setHeader("Content-Type", mime[ext] ?? "application/octet-stream");
-  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-  createReadStream(filePath).pipe(res);
-});
 
 // ─── Rotas ────────────────────────────────────────────────────────────────────
 app.use("/api", router);

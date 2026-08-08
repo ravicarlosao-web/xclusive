@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, usersTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable } from "@workspace/db";
+import { db, usersTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { createStorageKey, deleteFile, uploadFile } from "../lib/storage";
 
 const updateProfileSchema = z.object({
   nomeExibicao: z.string().min(1).max(100).optional(),
@@ -22,7 +23,7 @@ const kycSubmissionSchema = z.object({
   tipoDocumento: z.enum(["bi", "passaporte", "carta"]),
   numeroDocumento: z.string().min(3).max(50),
   paisEmissao: z.string().min(1).max(100),
-  // Fotos chegam como base64 ou URL (na versão sem object-storage)
+  // As fotos chegam como data URLs capturados pela câmara.
   documentoFoto: z.string().min(1),
   selfieFoto: z.string().min(1),
   livenessFoto: z.string().min(1),
@@ -157,14 +158,65 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     return;
   }
 
-  // NÃO promover a conta imediatamente — tipoConta só muda para 'criador'
-  // após revisão e aprovação explícita por um admin.
-  // TODO: persistir documentos KYC no object storage e registar submissão numa tabela kycSubmissions
-  // Por agora os dados são recebidos e validados mas não armazenados (sem object storage)
+  function decodeCapturedImage(value: string, field: string): { buffer: Buffer; contentType: string; extension: string } {
+    const match = value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/);
+    if (!match) {
+      throw new Error(`${field} tem um formato de imagem inválido.`);
+    }
+    const contentType = match[1];
+    const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+    if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) {
+      throw new Error(`${field} excede o tamanho permitido.`);
+    }
+    return { buffer, contentType, extension: contentType.split("/")[1] === "jpeg" ? "jpg" : contentType.split("/")[1] };
+  }
+
+  const uploadedKeys: string[] = [];
+  try {
+    const captured = [
+      decodeCapturedImage(req.body.documentoFoto, "documentoFoto"),
+      decodeCapturedImage(req.body.selfieFoto, "selfieFoto"),
+      decodeCapturedImage(req.body.livenessFoto, "livenessFoto"),
+    ];
+    const prefixes = ["documento", "selfie", "liveness"];
+    const keys = captured.map((file, index) => createStorageKey(`users/${userId}/kyc/${prefixes[index]}`, file.extension));
+
+    for (let index = 0; index < captured.length; index++) {
+      const file = captured[index];
+      const key = keys[index];
+      await uploadFile(file.buffer, key, file.contentType);
+      uploadedKeys.push(key);
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.insert(kycSubmissionsTable).values({
+        userId,
+        nomeCompleto: req.body.nomeCompleto,
+        dataNascimento: req.body.dataNascimento,
+        tipoDocumento: req.body.tipoDocumento,
+        numeroDocumento: req.body.numeroDocumento,
+        paisEmissao: req.body.paisEmissao,
+        documentoKey: keys[0],
+        selfieKey: keys[1],
+        livenessKey: keys[2],
+      });
+
+      // A conta passa a aparecer na fila de revisão, mas só fica verificada
+      // depois da aprovação explícita de um administrador.
+      await tx.update(usersTable)
+        .set({ tipoConta: "criador", verificado: false })
+        .where(eq(usersTable.id, userId));
+    });
+  } catch (error) {
+    await Promise.allSettled(uploadedKeys.map((key) => deleteFile(key)));
+    const message = error instanceof Error ? error.message : "Não foi possível guardar os documentos.";
+    res.status(400).json({ error: message });
+    return;
+  }
 
   res.status(202).json({
     ok: true,
-    tipoConta: current.tipoConta,
+    tipoConta: "criador",
     verificado: false,
     mensagem: "Pedido de verificação submetido com sucesso. A tua conta ficará pendente de revisão — serás notificado quando for aprovada.",
   });
