@@ -1,12 +1,8 @@
 import crypto from "node:crypto";
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
 
 const REQUIRED_STORAGE_ENV = [
-  "B2_KEY_ID",
-  "B2_APPLICATION_KEY",
-  "B2_BUCKET_NAME",
-  "B2_ENDPOINT",
+  "BUNNY_STORAGE_ZONE",
+  "BUNNY_STORAGE_PASSWORD",
   "BUNNY_CDN_HOSTNAME",
 ] as const;
 
@@ -25,31 +21,31 @@ function getStorageConfig() {
   }
 
   return {
-    bucket: process.env.B2_BUCKET_NAME as string,
-    endpoint: process.env.B2_ENDPOINT as string,
+    storageZone: process.env.BUNNY_STORAGE_ZONE as string,
+    storagePassword: process.env.BUNNY_STORAGE_PASSWORD as string,
     cdnHostname: process.env.BUNNY_CDN_HOSTNAME as string,
   };
 }
 
-let client: S3Client | undefined;
+function storageUrl(key: string): string {
+  const { storageZone } = getStorageConfig();
+  const safeKey = key
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
 
-function getClient(): S3Client {
-  if (client) return client;
+  return `https://storage.bunnycdn.com/${encodeURIComponent(storageZone)}/${safeKey}`;
+}
 
-  const { endpoint } = getStorageConfig();
-  const endpointHost = new URL(endpoint).hostname;
-  const region = endpointHost.match(/^s3[.-]([^.]+)\./)?.[1] ?? "us-east-1";
+async function assertSuccessfulResponse(response: Response, operation: string): Promise<void> {
+  if (response.ok) return;
 
-  client = new S3Client({
-    endpoint,
-    region,
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: process.env.B2_KEY_ID as string,
-      secretAccessKey: process.env.B2_APPLICATION_KEY as string,
-    },
-  });
-  return client;
+  const responseText = await response.text().catch(() => "");
+  const details = responseText.trim() ? `: ${responseText.trim().slice(0, 300)}` : "";
+  throw new Error(
+    `Bunny Storage ${operation} failed with ${response.status} ${response.statusText}${details}`,
+  );
 }
 
 function publicKeyPath(key: string): string {
@@ -61,37 +57,42 @@ function publicKeyPath(key: string): string {
 }
 
 /**
- * Uploads an object to the private Backblaze B2 bucket.
- * lib-storage uses multipart uploads automatically for large files.
+ * Uploads an object directly to a Bunny Storage Zone.
+ * Bunny Storage authenticates with the zone password in the AccessKey header.
  */
 export async function uploadFile(
   buffer: Buffer,
   key: string,
   contentType: string,
 ): Promise<void> {
-  const { bucket } = getStorageConfig();
-  const upload = new Upload({
-    client: getClient(),
-    params: {
-      Bucket: bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
+  const { storagePassword } = getStorageConfig();
+  const response = await fetch(storageUrl(key), {
+    method: "PUT",
+    headers: {
+      AccessKey: storagePassword,
+      "Content-Type": contentType || "application/octet-stream",
+      "Content-Length": String(buffer.byteLength),
     },
-    partSize: 10 * 1024 * 1024,
-    queueSize: 2,
+    body: buffer,
   });
 
-  await upload.done();
+  await assertSuccessfulResponse(response, "upload");
 }
 
 export async function deleteFile(key: string): Promise<void> {
-  const { bucket } = getStorageConfig();
-  await getClient().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  const { storagePassword } = getStorageConfig();
+  const response = await fetch(storageUrl(key), {
+    method: "DELETE",
+    headers: {
+      AccessKey: storagePassword,
+    },
+  });
+
+  await assertSuccessfulResponse(response, "delete");
 }
 
 /**
- * Returns the Bunny Pull Zone URL, never the private B2 origin URL.
+ * Returns the Bunny CDN URL, never the private Storage Zone origin URL.
  */
 export function getPublicUrl(key: string): string {
   const { cdnHostname } = getStorageConfig();
