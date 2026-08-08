@@ -112,6 +112,7 @@ export const PostTipo = {
   imagem: 'imagem',
   video: 'video',
   carrossel: 'carrossel',
+  texto: 'texto',
 } as const;
 
 export type PostMediaTipo = typeof PostMediaTipo[keyof typeof PostMediaTipo];
@@ -155,6 +156,7 @@ export const PostInputTipo = {
   imagem: 'imagem',
   video: 'video',
   carrossel: 'carrossel',
+  texto: 'texto',
 } as const;
 
 export type PostInputMediaItemTipo = typeof PostInputMediaItemTipo[keyof typeof PostInputMediaItemTipo];
@@ -174,7 +176,7 @@ export interface PostInput {
   legenda?: string;
   localizacao?: string;
   tipo: PostInputTipo;
-  media: PostInputMediaItem[];
+  media?: PostInputMediaItem[];
   exclusivo?: boolean;
   precoDesbloqueio?: number;
 }

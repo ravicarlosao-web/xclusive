@@ -282,7 +282,7 @@ export const GetUserPostsResponse = zod.object({
 }),
   "legenda": zod.string().nullish(),
   "localizacao": zod.string().nullish(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
   "url": zod.string(),
@@ -366,7 +366,7 @@ export const GetFeedResponse = zod.object({
 }),
   "legenda": zod.string().nullish(),
   "localizacao": zod.string().nullish(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
   "url": zod.string(),
@@ -395,11 +395,11 @@ export const createPostBodyExclusivoDefault = false;
 export const CreatePostBody = zod.object({
   "legenda": zod.string().optional(),
   "localizacao": zod.string().optional(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "url": zod.string(),
   "tipo": zod.enum(['imagem', 'video'])
-})),
+})).optional(),
   "exclusivo": zod.boolean().default(createPostBodyExclusivoDefault),
   "precoDesbloqueio": zod.number().optional()
 })
@@ -418,7 +418,7 @@ export const CreatePostResponse = zod.object({
 }),
   "legenda": zod.string().nullish(),
   "localizacao": zod.string().nullish(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
   "url": zod.string(),
@@ -456,7 +456,7 @@ export const GetPostResponse = zod.object({
 }),
   "legenda": zod.string().nullish(),
   "localizacao": zod.string().nullish(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
   "url": zod.string(),
@@ -877,7 +877,7 @@ export const GetExploreResponse = zod.object({
 }),
   "legenda": zod.string().nullish(),
   "localizacao": zod.string().nullish(),
-  "tipo": zod.enum(['imagem', 'video', 'carrossel']),
+  "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
   "url": zod.string(),

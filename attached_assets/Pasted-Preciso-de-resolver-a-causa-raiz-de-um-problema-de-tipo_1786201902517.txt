@@ -1,0 +1,40 @@
+Preciso de resolver a causa raiz de um problema de tipos, não só o sintoma. 
+Actualmente, em src/components/shared/PostCard.tsx, há este código:
+
+const isTextPost = (post.tipo as string) === 'texto';
+
+Isto usa um cast para contornar o facto de "texto" não existir no enum 
+PostTipo gerado (que actualmente só tem: imagem, video, carrossel). O cast 
+funciona, mas esconde o problema real: o backend não declara "texto" como 
+tipo de post válido na definição da API.
+
+Preciso que resolvas isto na origem:
+
+1. Localiza onde o enum/tipo de post é definido no lado do backend — 
+   provavelmente num schema Zod ou OpenAPI em api-server/src/routes/posts.ts, 
+   ou num ficheiro de schema partilhado (lib/db/src/schema/ ou similar) que 
+   define os valores válidos para 'tipo' de um post.
+
+2. Confirma se "texto" já é aceite como valor válido no schema de validação 
+   do backend (o Zod que valida o payload ao criar um post), mesmo que não 
+   apareça no enum gerado para o cliente. Se o backend já aceita "texto" mas 
+   o gerador de tipos do cliente (api-client-react) não o está a incluir, 
+   o problema está na definição da fonte que alimenta esse gerador — corrige 
+   aí, adicionando "texto" ao enum de tipos de post na definição oficial.
+
+3. Depois de corrigido na origem, regenera o cliente de API 
+   (lib/api-client-react) a partir do schema actualizado, para que o tipo 
+   PostTipo gerado passe a incluir "texto" oficialmente.
+
+4. Remove o cast (post.tipo as string) em PostCard.tsx, voltando à 
+   comparação directa: post.tipo === 'texto' — isto só deve compilar sem 
+   erro depois do PostTipo gerado já incluir "texto" correctamente.
+
+5. Confirma que não há mais nenhum sítio no código a usar casts semelhantes 
+   como contorno para o mesmo problema (procura por "as string" próximo de 
+   comparações com post.tipo, para garantir que todos os pontos usam o tipo 
+   correcto agora).
+
+Depois de corrigido, corre o typecheck completo (pnpm run typecheck na raiz, 
+que valida backend e frontend) e confirma que passa sem erros em lado nenhum, 
+não só no frontend isoladamente.

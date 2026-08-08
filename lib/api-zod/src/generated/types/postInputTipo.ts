@@ -13,4 +13,5 @@ export const PostInputTipo = {
   imagem: 'imagem',
   video: 'video',
   carrossel: 'carrossel',
+  texto: 'texto',
 } as const;

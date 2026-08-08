@@ -12,7 +12,7 @@ export interface PostInput {
   legenda?: string;
   localizacao?: string;
   tipo: PostInputTipo;
-  media: PostInputMediaItem[];
+  media?: PostInputMediaItem[];
   exclusivo?: boolean;
   precoDesbloqueio?: number;
 }
