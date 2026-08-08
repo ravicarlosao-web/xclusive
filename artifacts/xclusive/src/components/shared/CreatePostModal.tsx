@@ -235,6 +235,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
           legenda: textoConteudo.trim(),
           localizacao: textoLocalizacao.trim() || undefined,
           tipo: 'texto' as any,
+          media: [],
           exclusivo: textoExclusivo,
           precoDesbloqueio: precoNumerico,
         },

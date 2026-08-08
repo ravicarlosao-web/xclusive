@@ -69,7 +69,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
-  const isTextPost = post.tipo === 'texto';
+  const isTextPost = (post.tipo as string) === 'texto';
   const isVideo = !isTextPost && (post.tipo === 'video' || post.media?.[0]?.tipo === 'video');
 
   // Adaptive aspect ratio: detected from actual media dimensions

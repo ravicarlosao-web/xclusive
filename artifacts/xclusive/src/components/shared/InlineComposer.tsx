@@ -14,7 +14,7 @@ interface InlineComposerProps {
     id: number;
     username: string;
     nomeExibicao: string | null;
-    avatarUrl: string | null;
+    avatarUrl?: string | null;
   };
   /** Called when the user selects files — parent opens the full modal with those files */
   onOpenWithFiles: (files: File[]) => void;
@@ -48,7 +48,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
   function handleSubmit() {
     if (!canSubmit) return;
     createPost(
-      { data: { legenda: texto.trim(), tipo: 'texto' as any } },
+      { data: { legenda: texto.trim(), tipo: 'texto' as any, media: [] } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
