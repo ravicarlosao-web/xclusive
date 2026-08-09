@@ -557,6 +557,10 @@ export const SearchType = {
   all: 'all',
 } as const;
 
+export type MarkConversationRead200 = {
+  ok: boolean;
+};
+
 export type GetNotificationsParams = {
 page?: number;
 };

@@ -37,6 +37,7 @@ import type {
   Highlight,
   HighlightInput,
   LoginInput,
+  MarkConversationRead200,
   Message,
   MessageInput,
   PaginatedComments,
@@ -3225,6 +3226,77 @@ export const useSendMessage = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendMessageMutationOptions(options));
+    }
+
+export const getMarkConversationReadUrl = (id: number,) => {
+
+
+
+
+  return `/api/conversations/${id}/read`
+}
+
+/**
+ * @summary Marcar mensagens de uma conversa como lidas
+ */
+export const markConversationRead = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<MarkConversationRead200> => {
+
+  return customFetch<MarkConversationRead200>(getMarkConversationReadUrl(id),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkConversationReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markConversationRead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markConversationRead>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['markConversationRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markConversationRead>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  markConversationRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkConversationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markConversationRead>>>
+
+    export type MarkConversationReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Marcar mensagens de uma conversa como lidas
+ */
+export const useMarkConversationRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markConversationRead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markConversationRead>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getMarkConversationReadMutationOptions(options));
     }
 
 export const getGetNotificationsUrl = (params?: GetNotificationsParams,) => {

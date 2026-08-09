@@ -26,6 +26,7 @@ export * from './healthStatus';
 export * from './highlight';
 export * from './highlightInput';
 export * from './loginInput';
+export * from './markConversationRead200';
 export * from './message';
 export * from './messageInput';
 export * from './messageInputTipo';

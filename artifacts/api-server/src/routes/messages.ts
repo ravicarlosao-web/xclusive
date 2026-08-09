@@ -190,6 +190,27 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
   });
 });
 
+// Marcar como lidas as mensagens recebidas numa conversa
+router.patch("/conversations/:id/read", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  if (!(await verificarParticipante(id, req.userId!))) {
+    res.status(403).json({ error: "Sem acesso a esta conversa" });
+    return;
+  }
+
+  await db.update(messagesTable)
+    .set({ lido: true })
+    .where(and(
+      eq(messagesTable.conversationId, id),
+      eq(messagesTable.lido, false),
+      sql`${messagesTable.autorId} != ${req.userId!}`,
+    ));
+
+  res.json({ ok: true });
+});
+
 // Enviar mensagem
 router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);

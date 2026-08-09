@@ -1095,6 +1095,18 @@ export const SendMessageResponse = zod.object({
 
 
 /**
+ * @summary Marcar mensagens de uma conversa como lidas
+ */
+export const MarkConversationReadParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const MarkConversationReadResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Notificações do utilizador
  */
 export const getNotificationsQueryPageDefault = 1;

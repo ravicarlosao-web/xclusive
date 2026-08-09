@@ -773,6 +773,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Message"
 
+  /conversations/{id}/read:
+    patch:
+      operationId: markConversationRead
+      tags: [messages]
+      summary: Marcar mensagens de uma conversa como lidas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Mensagens marcadas como lidas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "403":
+          description: Sem acesso a esta conversa
+
   # NOTIFICATIONS
   /notifications:
     get:

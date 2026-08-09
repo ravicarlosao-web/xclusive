@@ -8,8 +8,10 @@ import {
   useGetMessages,
   useSendMessage,
   useGetConversations,
+  useMarkConversationRead,
   getGetMessagesQueryKey,
   getGetConversationsQueryKey,
+  getGetUnreadConversationsCountQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -44,6 +46,23 @@ export default function MessageThread() {
     query: { queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0 },
   });
   const messages = msgData?.messages ?? [];
+
+  const { mutate: markConversationRead } = useMarkConversationRead({
+    mutation: {
+      onSuccess: () => {
+        // O layout usa esta chave manual para o badge global de mensagens.
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetUnreadConversationsCountQueryKey() });
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (convId > 0) {
+      markConversationRead({ id: convId });
+    }
+  }, [convId, markConversationRead]);
 
   // Enviar mensagem
   const { mutate: sendMsg, isPending: isSending } = useSendMessage({
