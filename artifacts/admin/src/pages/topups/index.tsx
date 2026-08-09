@@ -8,10 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { CheckCircle2, XCircle, Wallet, Clock, TrendingUp, Ban, FileText, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-// ─── Shared localStorage keys (same as Xclusive frontend) ───────────────────
-const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
-const MOCK_USERS_KEY = 'xclusive_mock_users';
+import { adminApi } from '@/lib/api';
 
 interface TopUpRequest {
   id: string;
@@ -26,29 +23,6 @@ interface TopUpRequest {
   adminNota?: string;
   comprovantivoBase64?: string;
   comprovantivoNome?: string;
-}
-
-interface MockUser {
-  id: number;
-  username: string;
-  saldo: number;
-  [key: string]: any;
-}
-
-function getRequests(): TopUpRequest[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]'); } catch { return []; }
-}
-
-function saveRequests(reqs: TopUpRequest[]) {
-  localStorage.setItem(MOCK_TOPUP_KEY, JSON.stringify(reqs));
-}
-
-function getUsers(): MockUser[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_USERS_KEY) || '[]'); } catch { return []; }
-}
-
-function saveUsers(users: MockUser[]) {
-  localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
 }
 
 function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; onClose: () => void }) {
@@ -103,8 +77,15 @@ export default function TopUps() {
   const { toast } = useToast();
 
   const refresh = useCallback(() => {
-    setRequests(getRequests());
-  }, []);
+    adminApi.getTopups({ status: statusFilter, page: '1', limit: '100' })
+      .then((result) => {
+        const rows = Array.isArray(result) ? result : (result.data ?? []);
+        setRequests(rows);
+      })
+      .catch(() => {
+        toast({ title: 'Não foi possível carregar os pedidos', description: 'Tenta novamente dentro de instantes.', variant: 'destructive' });
+      });
+  }, [statusFilter, toast]);
 
   useEffect(() => {
     refresh();
@@ -121,49 +102,29 @@ export default function TopUps() {
   const approved = requests.filter(r => r.status === 'aprovado');
   const totalApproved = approved.reduce((s, r) => s + r.amount, 0);
 
-  function handleApprove(req: TopUpRequest) {
+  async function handleApprove(req: TopUpRequest) {
     if (!confirm(`Aprovar carregamento de ${req.amount.toLocaleString('pt-PT')} Kz para @${req.username}?\n\nRef: ${req.reference}\n\nEsta ação adiciona o saldo imediatamente à conta do utilizador.`)) return;
 
-    const allReqs = getRequests();
-    const idx = allReqs.findIndex(r => r.id === req.id);
-    if (idx === -1) return;
-
-    // Credit the user's saldo
-    const users = getUsers();
-    const uIdx = users.findIndex(u => u.id === req.userId);
-    if (uIdx === -1) {
-      toast({ title: 'Utilizador não encontrado', description: 'A conta pode ter sido removida.', variant: 'destructive' });
-      return;
+    try {
+      await adminApi.updateTopup(Number(req.id), { status: 'aprovado' });
+      await refresh();
+      toast({ title: 'Carregamento aprovado', description: `${req.amount.toLocaleString('pt-PT')} Kz adicionados à conta de @${req.username}.` });
+    } catch (error) {
+      toast({ title: 'Não foi possível aprovar', description: error instanceof Error ? error.message : 'Tenta novamente.', variant: 'destructive' });
     }
-    users[uIdx].saldo = (users[uIdx].saldo ?? 0) + req.amount;
-    saveUsers(users);
-
-    // Mark request as approved
-    allReqs[idx] = { ...allReqs[idx], status: 'aprovado', processadoEm: new Date().toISOString() };
-    saveRequests(allReqs);
-    setRequests([...allReqs]);
-
-    toast({ title: 'Carregamento aprovado', description: `${req.amount.toLocaleString('pt-PT')} Kz adicionados à conta de @${req.username}.` });
   }
 
-  function handleReject(req: TopUpRequest) {
+  async function handleReject(req: TopUpRequest) {
     const nota = prompt(`Motivo da rejeição para @${req.username} (Ref: ${req.reference}):\n\nEste motivo fica registado internamente.`);
     if (nota === null) return; // cancelled
 
-    const allReqs = getRequests();
-    const idx = allReqs.findIndex(r => r.id === req.id);
-    if (idx === -1) return;
-
-    allReqs[idx] = {
-      ...allReqs[idx],
-      status: 'rejeitado',
-      processadoEm: new Date().toISOString(),
-      adminNota: nota || 'Sem motivo indicado',
-    };
-    saveRequests(allReqs);
-    setRequests([...allReqs]);
-
-    toast({ title: 'Pedido rejeitado', description: `Carregamento de @${req.username} rejeitado.`, variant: 'destructive' });
+    try {
+      await adminApi.updateTopup(Number(req.id), { status: 'rejeitado', notas: nota || 'Sem motivo indicado' });
+      await refresh();
+      toast({ title: 'Pedido rejeitado', description: `Carregamento de @${req.username} rejeitado.`, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Não foi possível rejeitar', description: error instanceof Error ? error.message : 'Tenta novamente.', variant: 'destructive' });
+    }
   }
 
   const columns: Column<TopUpRequest>[] = [

@@ -73,6 +73,11 @@ export const adminApi = {
   updateWithdrawal: (id: number, data: any) =>
     adminFetch('/admin/withdrawals/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
 
+  getTopups: (params?: Record<string, string>) =>
+    adminFetch('/admin/topups?' + new URLSearchParams(params)),
+  updateTopup: (id: number, data: { status: 'aprovado' | 'rejeitado'; notas?: string }) =>
+    adminFetch('/admin/topups/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
+
   sendBroadcast: (data: any) =>
     adminFetch('/admin/broadcast', { method: 'POST', body: JSON.stringify(data) }),
   getBroadcastHistory: () => adminFetch('/admin/broadcast/history'),

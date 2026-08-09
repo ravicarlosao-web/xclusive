@@ -27,6 +27,7 @@ import {
   followsTable,
   subscriptionsTable,
   kycSubmissionsTable,
+  topupRequestsTable,
 } from "@workspace/db";
 import {
   eq,
@@ -1104,6 +1105,151 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao processar levantamento");
     res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// TOP-UPS
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lista pedidos de carregamento da base de dados real.
+ *
+ * O estado interno dos top-ups usa os valores portugueses "pendente",
+ * "aprovado" e "rejeitado" (ao contrário dos levantamentos, que usam
+ * pending/approved/rejected). Quando não é enviado filtro, devolvemos todos
+ * os estados para que nenhum pedido fique invisível por omissão.
+ */
+router.get("/admin/topups", async (req, res) => {
+  try {
+    const { page = "1", limit = "20", status } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const estadosValidos = ["pendente", "aprovado", "rejeitado"];
+    const conditions: any[] = [];
+    if (status && estadosValidos.includes(status)) {
+      conditions.push(eq(topupRequestsTable.status, status));
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id: topupRequestsTable.id,
+        userId: topupRequestsTable.userId,
+        username: usersTable.username,
+        nomeCompleto: usersTable.nomeExibicao,
+        amount: topupRequestsTable.amount,
+        reference: topupRequestsTable.reference,
+        status: topupRequestsTable.status,
+        comprovantivoBase64: topupRequestsTable.comprovantivoBase64,
+        comprovantivoNome: topupRequestsTable.comprovantivoNome,
+        processadoPor: topupRequestsTable.processadoPor,
+        processadoEm: topupRequestsTable.processadoEm,
+        notas: topupRequestsTable.notas,
+        criadoEm: topupRequestsTable.criadoEm,
+      })
+        .from(topupRequestsTable)
+        .innerJoin(usersTable, eq(topupRequestsTable.userId, usersTable.id))
+        .where(where)
+        .orderBy(desc(topupRequestsTable.criadoEm))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ total: count() }).from(topupRequestsTable).where(where),
+    ]);
+
+    res.json(paginate(
+      rows.map((row) => ({
+        ...row,
+        amount: Number(row.amount),
+        processadoEm: row.processadoEm?.toISOString() ?? null,
+        criadoEm: row.criadoEm.toISOString(),
+        adminNota: row.notas,
+      })),
+      Number(total),
+      pageNum,
+      limitNum,
+    ));
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar carregamentos");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * Aprova ou rejeita um pedido. A aprovação credita o saldo uma única vez:
+ * a transacção actualiza apenas pedidos ainda pendentes e só depois credita
+ * o utilizador, evitando crédito duplicado em cliques concorrentes.
+ */
+router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const status = req.body?.status;
+  const notas = typeof req.body?.notas === "string" ? req.body.notas.trim() : undefined;
+
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "ID inválido." });
+    return;
+  }
+  if (status !== "aprovado" && status !== "rejeitado") {
+    res.status(400).json({ error: "Estado inválido. Use 'aprovado' ou 'rejeitado'." });
+    return;
+  }
+
+  try {
+    const updated = await db.transaction(async (tx) => {
+      const [request] = await tx
+        .update(topupRequestsTable)
+        .set({
+          status,
+          processadoPor: req.adminId!,
+          processadoEm: new Date(),
+          ...(notas !== undefined ? { notas: notas || null } : {}),
+        })
+        .where(and(
+          eq(topupRequestsTable.id, id),
+          eq(topupRequestsTable.status, "pendente"),
+        ))
+        .returning();
+
+      if (!request) return null;
+
+      if (status === "aprovado") {
+        await tx
+          .update(usersTable)
+          .set({ saldo: sql`${usersTable.saldo} + ${request.amount}` })
+          .where(eq(usersTable.id, request.userId));
+      }
+
+      return request;
+    });
+
+    if (!updated) {
+      res.status(409).json({ error: "Este pedido já foi processado ou não existe." });
+      return;
+    }
+
+    await logAudit(req, status === "aprovado" ? "topup_approved" : "topup_rejected", "topup", id, {
+      amount: Number(updated.amount),
+      userId: updated.userId,
+      reference: updated.reference,
+      notas: notas ?? null,
+    });
+
+    res.json({
+      id: updated.id,
+      userId: updated.userId,
+      amount: Number(updated.amount),
+      reference: updated.reference,
+      status: updated.status,
+      processadoPor: updated.processadoPor,
+      processadoEm: updated.processadoEm?.toISOString() ?? null,
+      notas: updated.notas,
+      criadoEm: updated.criadoEm.toISOString(),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao processar carregamento");
+    res.status(500).json({ error: "Erro ao processar pedido de carregamento." });
   }
 });
 
