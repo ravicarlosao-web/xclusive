@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deleteFile, uploadFile } from "../lib/storage";
+import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 
 const updateProfileSchema = z.object({
   nomeExibicao: z.string().min(1).max(100).optional(),
@@ -365,14 +366,21 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
     const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);
     const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, p.id)));
     const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(eq(commentsTable.postId, p.id));
+    const acesso = p.exclusivo
+      ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
+      : true;
+    const mediaSegura = acesso
+      ? media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }))
+      : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
     return {
       id: p.id,
       autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
       legenda: p.legenda,
       localizacao: p.localizacao,
       tipo: p.tipo,
-      media: media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem })),
+      media: mediaSegura,
       exclusivo: p.exclusivo,
+      bloqueado: p.exclusivo && !acesso,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: likes || 0,
       totalComentarios: comments || 0,

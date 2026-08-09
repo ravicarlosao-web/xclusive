@@ -9,7 +9,9 @@ import type { PostMediaTipo } from './postMediaTipo';
 
 export interface PostMedia {
   id: number;
-  url: string;
+  /** @nullable */
+  url?: string | null;
   tipo: PostMediaTipo;
   ordem: number;
+  bloqueado?: boolean;
 }

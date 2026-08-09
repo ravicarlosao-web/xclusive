@@ -125,9 +125,11 @@ export const PostMediaTipo = {
 
 export interface PostMedia {
   id: number;
-  url: string;
+  /** @nullable */
+  url?: string | null;
   tipo: PostMediaTipo;
   ordem: number;
+  bloqueado?: boolean;
 }
 
 export interface Post {
@@ -140,6 +142,7 @@ export interface Post {
   tipo: PostTipo;
   media?: PostMedia[];
   exclusivo: boolean;
+  bloqueado?: boolean;
   /** @nullable */
   precoDesbloqueio?: number | null;
   totalCurtidas: number;

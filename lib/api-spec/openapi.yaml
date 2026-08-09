@@ -1201,6 +1201,8 @@ components:
             $ref: "#/components/schemas/PostMedia"
         exclusivo:
           type: boolean
+        bloqueado:
+          type: boolean
         precoDesbloqueio:
           type: ["number", "null"]
         totalCurtidas:
@@ -1217,17 +1219,19 @@ components:
 
     PostMedia:
       type: object
-      required: [id, url, tipo, ordem]
+      required: [id, tipo, ordem]
       properties:
         id:
           type: integer
         url:
-          type: string
+          type: ["string", "null"]
         tipo:
           type: string
           enum: [imagem, video]
         ordem:
           type: integer
+        bloqueado:
+          type: boolean
 
     PostInput:
       type: object

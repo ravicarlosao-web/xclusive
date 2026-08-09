@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
+import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -227,35 +228,6 @@ router.delete("/comments/:id", requireAuth, async (req: AuthRequest, res): Promi
   await db.delete(commentsTable).where(eq(commentsTable.id, id));
   res.sendStatus(204);
 });
-
-/** Verifica se um utilizador tem acesso a conteúdo exclusivo de um criador */
-async function temAcessoExclusivo(userId: number | undefined, autorId: number, postId: number): Promise<boolean> {
-  // Autor sempre tem acesso ao próprio conteúdo
-  if (userId === autorId) return true;
-  // Sem sessão → sem acesso
-  if (!userId) return false;
-  // Subscrição ativa ao criador
-  const [sub] = await db.select({ id: subscriptionsTable.id })
-    .from(subscriptionsTable)
-    .where(and(
-      eq(subscriptionsTable.subscriitorId, userId),
-      eq(subscriptionsTable.criadorId, autorId),
-      eq(subscriptionsTable.estado, "ativa"),
-    ))
-    .limit(1);
-  if (sub) return true;
-  // Compra PPV deste post específico
-  const [ppv] = await db.select({ id: purchasesTable.id })
-    .from(purchasesTable)
-    .where(and(
-      eq(purchasesTable.compradorId, userId),
-      eq(purchasesTable.vendedorId, autorId),
-      eq(purchasesTable.tipo, "ppv"),
-      eq(purchasesTable.conteudoId, postId),
-    ))
-    .limit(1);
-  return !!ppv;
-}
 
 async function formatPost(post: any, userId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, post.autorId));

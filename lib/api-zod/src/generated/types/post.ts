@@ -19,6 +19,7 @@ export interface Post {
   tipo: PostTipo;
   media?: PostMedia[];
   exclusivo: boolean;
+  bloqueado?: boolean;
   /** @nullable */
   precoDesbloqueio?: number | null;
   totalCurtidas: number;

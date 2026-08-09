@@ -111,8 +111,8 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
 
   const videoUrl =
     post.media?.[0]?.tipo === 'video'
-      ? post.media[0].url
-      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+      ? post.media[0].url ?? undefined
+      : undefined;
 
   // Expose div ref both to parent (for scroll) and local (for IntersectionObserver)
   const setRef = useCallback(
@@ -164,15 +164,22 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
       ref={setRef}
       className="w-full h-[calc(100dvh-60px)] md:h-[100dvh] snap-start relative bg-black flex flex-col justify-center"
     >
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        className="w-full h-full object-cover"
-        loop
-        playsInline
-        muted={isMuted}
-        onClick={togglePlay}
-      />
+      {videoUrl ? (
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          className="w-full h-full object-cover"
+          loop
+          playsInline
+          muted={isMuted}
+          onClick={togglePlay}
+        />
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary to-background text-white/70">
+          <span className="text-4xl">🔒</span>
+          <span className="text-sm font-semibold">Conteúdo exclusivo</span>
+        </div>
+      )}
 
       {/* Pause indicator */}
       {!isPlaying && (

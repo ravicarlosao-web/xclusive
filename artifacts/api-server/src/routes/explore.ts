@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
-import { like, sql, desc, eq, inArray } from "drizzle-orm";
+import { sql, desc, inArray } from "drizzle-orm";
 import { optionalAuth, type AuthRequest } from "../lib/auth";
+import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 
 const router = Router();
 
@@ -53,11 +54,17 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
 
   const usersById = new Map(userRows.map(u => [u.id, u]));
 
-  const result = posts.map(p => {
+  const result = await Promise.all(posts.map(async p => {
     const user = usersById.get(p.autorId);
     const media = (mediaByPost.get(p.id) ?? [])
       .sort((a, b) => a.ordem - b.ordem)
       .map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }));
+    const acesso = p.exclusivo
+      ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
+      : true;
+    const mediaSegura = acesso
+      ? media
+      : media.map(m => ({ ...m, url: null, bloqueado: true }));
     return {
       id: p.id,
       autor: user ? {
@@ -68,8 +75,9 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
       legenda: p.legenda,
       localizacao: p.localizacao,
       tipo: p.tipo,
-      media,
+      media: mediaSegura,
       exclusivo: p.exclusivo,
+      bloqueado: p.exclusivo && !acesso,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: 0,
       totalComentarios: 0,
@@ -77,7 +85,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
       guardado: false,
       criadoEm: p.criadoEm.toISOString(),
     };
-  });
+  }));
 
   res.json({ posts: result, total: result.length, page, hasMore: result.length === limit });
 });

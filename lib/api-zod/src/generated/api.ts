@@ -285,11 +285,13 @@ export const GetUserPostsResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
-  "url": zod.string(),
+  "url": zod.string().nullish(),
   "tipo": zod.enum(['imagem', 'video']),
-  "ordem": zod.int()
+  "ordem": zod.int(),
+  "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
@@ -369,11 +371,13 @@ export const GetFeedResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
-  "url": zod.string(),
+  "url": zod.string().nullish(),
   "tipo": zod.enum(['imagem', 'video']),
-  "ordem": zod.int()
+  "ordem": zod.int(),
+  "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
@@ -421,11 +425,13 @@ export const CreatePostResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
-  "url": zod.string(),
+  "url": zod.string().nullish(),
   "tipo": zod.enum(['imagem', 'video']),
-  "ordem": zod.int()
+  "ordem": zod.int(),
+  "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
@@ -459,11 +465,13 @@ export const GetPostResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
-  "url": zod.string(),
+  "url": zod.string().nullish(),
   "tipo": zod.enum(['imagem', 'video']),
-  "ordem": zod.int()
+  "ordem": zod.int(),
+  "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
@@ -880,11 +888,13 @@ export const GetExploreResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video', 'carrossel', 'texto']),
   "media": zod.array(zod.object({
   "id": zod.int(),
-  "url": zod.string(),
+  "url": zod.string().nullish(),
   "tipo": zod.enum(['imagem', 'video']),
-  "ordem": zod.int()
+  "ordem": zod.int(),
+  "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),

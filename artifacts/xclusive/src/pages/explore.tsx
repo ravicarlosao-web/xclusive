@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Hash } from 'lucide-react';
+import { Search, Hash, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGetExplore, useSearch, SearchType } from '@workspace/api-client-react';
@@ -189,7 +189,12 @@ export default function Explore() {
                   className={`relative bg-secondary group cursor-pointer overflow-hidden rounded-sm sm:rounded-xl block
                     ${i % 7 === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`}
                 >
-                  {post.media && post.media.length > 0 ? (
+                  {post.bloqueado ? (
+                    <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                      <Lock className="w-6 h-6 text-primary" />
+                      <span className="text-xs font-semibold">Conteúdo exclusivo</span>
+                    </div>
+                  ) : post.media && post.media.length > 0 && post.media[0].url ? (
                     post.media[0].tipo === 'imagem' ? (
                       <img src={post.media[0].url} alt="" className="w-full h-full object-cover" />
                     ) : (
