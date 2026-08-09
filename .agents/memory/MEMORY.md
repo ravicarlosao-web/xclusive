@@ -8,3 +8,4 @@
 - [Package Firewall tsx constraint](package-firewall-tsx.md) — newer tsx tarballs are blocked; align catalog and loader override to cached 4.22.4
 - [Bunny Storage provider](storage-provider.md) — Bunny Storage Zone is the active media origin; the B2 adapter remains preserved as legacy reference
 - [API contract codegen source](api-contract-codegen.md) — update OpenAPI first, regenerate clients, and never fix generated enum types manually
+- [Database schema drift compatibility](database-schema-drift.md) — use text casts and explicit columns for read paths during staged schema migrations

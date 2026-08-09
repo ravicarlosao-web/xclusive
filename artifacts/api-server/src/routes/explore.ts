@@ -11,7 +11,15 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  const posts = await db.select().from(postsTable).orderBy(desc(postsTable.criadoEm)).limit(limit).offset(offset);
+  const posts = await db
+    .select()
+    .from(postsTable)
+    // Cast the enum to text so this route also works while older databases
+    // still have a post_tipo enum without the newer "texto" value.
+    .where(sql`${postsTable.tipo}::text <> 'texto'`)
+    .orderBy(desc(postsTable.criadoEm))
+    .limit(limit)
+    .offset(offset);
 
   if (posts.length === 0) {
     res.json({ posts: [], total: 0, page, hasMore: false });
@@ -24,7 +32,17 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
   // Fetch users and media in parallel (batch queries, not N+1)
   const [mediaRows, userRows] = await Promise.all([
     db.select().from(postMediaTable).where(inArray(postMediaTable.postId, postIds)),
-    db.select().from(usersTable).where(inArray(usersTable.id, autorIds)),
+    db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        nomeExibicao: usersTable.nomeExibicao,
+        avatarUrl: usersTable.avatarUrl,
+        verificado: usersTable.verificado,
+        tipoConta: usersTable.tipoConta,
+      })
+      .from(usersTable)
+      .where(inArray(usersTable.id, autorIds)),
   ]);
 
   const mediaByPost = new Map<number, typeof mediaRows>();
