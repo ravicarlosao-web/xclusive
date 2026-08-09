@@ -10,3 +10,5 @@ CreatePostModal em artifacts/xclusive/src/components/shared/CreatePostModal.tsx 
 **How to apply:** Para persistência real, substituir blob URLs por upload multipart para object storage (skill object-storage). Blob URLs ficam como source de preview in-modal; o upload deve produzir URL durável antes de chamar createPost.
 
 **On API error:** Mostra warning toast ("Servidor indisponível. A publicação fica visível apenas nesta sessão.") em vez de falso sucesso.
+
+**Mobile layout:** O modal de publicação precisa manter o cabeçalho fixo e limitar o conteúdo dos detalhes ao viewport (`dvh`), com scroll no corpo; caso contrário o botão de partilha fica inacessível em ecrãs pequenos ou com teclado virtual.
