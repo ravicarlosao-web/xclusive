@@ -45,6 +45,7 @@ import {
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getPublicUrl } from "../lib/storage.js";
+import { deletePostWithMedia } from "../lib/postDeletion.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
 
@@ -843,7 +844,7 @@ router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res): 
     const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
     if (!post) return void res.status(404).json({ error: "Post não encontrado" });
 
-    await db.delete(postsTable).where(eq(postsTable.id, id));
+    await deletePostWithMedia(id);
     await logAudit(req, "post_delete", "post", id, { motivo: req.body?.motivo ?? null });
     res.json({ success: true });
   } catch (err) {

@@ -1,6 +1,6 @@
-import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost } from '@workspace/api-client-react';
+import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
@@ -33,6 +33,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const { mutate: apiUnlike } = useUnlikePost();
   const { mutate: apiSave } = useSavePost();
   const { mutate: apiUnsave } = useUnsavePost();
+  const { mutate: apiDeletePost, isPending: isDeletingPost } = useDeletePost();
 
   function invalidateFeed() {
     queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
@@ -69,6 +70,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const lastClickTime = useRef(0);
 
   const isOwnPost = user?.username === post.autor.username;
+  const canDeletePost = user?.id === post.autor.id;
   const isTextPost = post.tipo === 'texto';
   const isVideo = !isTextPost && (post.tipo === 'video' || post.media?.[0]?.tipo === 'video');
 
@@ -182,6 +184,24 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     setGorjetasCount(c => c + 1);
   };
 
+  const handleDeletePost = () => {
+    if (!canDeletePost || isDeletingPost) return;
+    const confirmed = window.confirm(
+      'Tens a certeza que queres apagar este post? Esta acção é irreversível e remove também a media associada.',
+    );
+    if (!confirmed) return;
+
+    apiDeletePost({ id: post.id }, {
+      onSuccess: () => {
+        invalidateFeed();
+        toast({ title: 'Publicação eliminada' });
+      },
+      onError: () => {
+        toast({ variant: 'destructive', title: 'Não foi possível eliminar a publicação' });
+      },
+    });
+  };
+
   return (
     <>
       <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-2xl">
@@ -202,9 +222,21 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
               {post.localizacao && <span className="text-xs text-muted-foreground">{post.localizacao}</span>}
             </div>
           </Link>
-          <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
-            <MoreHorizontal className="w-5 h-5" />
-          </button>
+          {canDeletePost ? (
+            <button
+              className="text-muted-foreground hover:text-destructive transition-colors p-2 disabled:opacity-50"
+              onClick={handleDeletePost}
+              disabled={isDeletingPost}
+              title="Apagar publicação"
+              aria-label="Apagar publicação"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          ) : (
+            <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Text post — rendered inline, no media container */}

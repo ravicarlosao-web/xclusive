@@ -100,6 +100,30 @@ export function getPublicUrl(key: string): string {
   return `https://${hostname}/${publicKeyPath(key)}`;
 }
 
+/**
+ * Converts a public Bunny CDN URL back to its storage key.
+ * Returns null for URLs that do not belong to the configured CDN.
+ */
+export function getStorageKeyFromPublicUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const configuredHostname = (process.env.BUNNY_CDN_HOSTNAME ?? "")
+      .replace(/^https?:\/\//, "")
+      .replace(/\/+$/, "")
+      .split("/")[0]
+      ?.toLowerCase();
+
+    if (!configuredHostname || parsed.hostname.toLowerCase() !== configuredHostname) {
+      return null;
+    }
+
+    const key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    return key || null;
+  } catch {
+    return null;
+  }
+}
+
 export function createStorageKey(prefix: string, extension = "bin"): string {
   const safeExtension = extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
   return `${prefix}/${crypto.randomUUID()}.${safeExtension}`;

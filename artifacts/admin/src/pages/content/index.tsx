@@ -27,6 +27,9 @@ export default function Content() {
   });
 
   const handleDelete = (id: number) => {
+    if (!window.confirm('Tens a certeza que queres apagar este post? Esta acção é irreversível e remove também a media associada.')) {
+      return;
+    }
     const motivo = prompt('Motivo da remoção (obrigatório para notificar o criador):');
     if (!motivo) return;
     deletePost.mutate({ id, motivo });

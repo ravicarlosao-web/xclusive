@@ -6,6 +6,7 @@
 - [Xclusive KYC flow](xclusive-kyc.md) — 6-step creator verification at /tornar-criador; camera via getUserMedia only, auto-approves in mock mode only
 - [Stories creation flow](stories-flow.md) — real stories use Bunny upload followed by /api/stories; blob/localStorage is mock-only
 - [New conversation flow](messages-flow.md) — create/resolve the conversation before navigating to the message thread
+- [Post deletion flow](post-deletion.md) — shared deletion cleans Bunny media, polymorphic likes, and cascade-owned post data
 - [Xclusive gorjeta system](xclusive-gorjeta.md) — saldo in MockUser, sendTip with self-tip guard + optimistic concurrency, TipModal + PostCard button + sidebar wallet
 - [Package Firewall tsx constraint](package-firewall-tsx.md) — newer tsx tarballs are blocked; align catalog and loader override to cached 4.22.4
 - [Bunny Storage provider](storage-provider.md) — Bunny Storage Zone is the active media origin; the B2 adapter remains preserved as legacy reference

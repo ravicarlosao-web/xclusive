@@ -4,6 +4,7 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { deletePostWithMedia } from "../lib/postDeletion";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -92,9 +93,22 @@ router.get("/posts/:id", optionalAuth, async (req: AuthRequest, res): Promise<vo
 // Eliminar post
 router.delete("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
   const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id));
-  if (!post || post.autorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
-  await db.delete(postsTable).where(eq(postsTable.id, id));
+  if (!post) { res.status(404).json({ error: "Post não encontrado" }); return; }
+
+  const [requestingUser] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.userId!))
+    .limit(1);
+  const isAdmin = requestingUser?.role === "admin" || requestingUser?.role === "superadmin";
+  if (post.autorId !== req.userId && !isAdmin) {
+    res.status(403).json({ error: "Sem permissão" });
+    return;
+  }
+
+  await deletePostWithMedia(id);
   res.sendStatus(204);
 });
 
