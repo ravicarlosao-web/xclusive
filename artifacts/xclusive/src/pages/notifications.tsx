@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
@@ -57,6 +57,7 @@ export default function Notifications() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetNotificationsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ['unreadNotifs'] });
       },
     },
   });
@@ -64,6 +65,12 @@ export default function Notifications() {
   const notifications = data?.notifications ?? [];
 
   const unreadCount = notifications.filter(n => !n.lida).length;
+
+  useEffect(() => {
+    if (!isLoading && !isError && unreadCount > 0) {
+      markAllRead();
+    }
+  }, [isLoading, isError, unreadCount, markAllRead]);
 
   const filtered = filter === 'mencoes'
     ? notifications.filter(n => MENCAO_TYPES.includes(n.tipo as NotifTipo))
