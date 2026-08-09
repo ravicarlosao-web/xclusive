@@ -101,7 +101,7 @@ export default function Home() {
     fileInputRef.current?.click();
   }, []);
 
-  function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !user) return;
@@ -114,9 +114,60 @@ export default function Home() {
       return;
     }
     const tipo = file.type.startsWith('video/') ? 'video' : 'imagem';
-    addLocalStory(user.id, URL.createObjectURL(file), tipo);
-    setLocalStoriesVersion(v => v + 1);
-    toast.success('Story adicionado! Visível apenas nesta sessão.');
+
+    if (isMockMode) {
+      addLocalStory(user.id, URL.createObjectURL(file), tipo);
+      setLocalStoriesVersion(v => v + 1);
+      toast.success('Story adicionado! Visível apenas nesta sessão.');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+      const token = localStorage.getItem('xclusive_token');
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const authHeaders: Record<string, string> = token
+        ? { Authorization: `Bearer ${token}` }
+        : {};
+
+      const uploadResponse = await fetch(`${base}/api/upload`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      });
+      const uploadBody = await uploadResponse.json().catch(() => null) as {
+        files?: { url: string; tipo: string }[];
+        error?: string;
+      } | null;
+      if (!uploadResponse.ok) {
+        throw new Error(uploadBody?.error || `Upload falhou: ${uploadResponse.status}`);
+      }
+
+      const uploadedFile = uploadBody?.files?.[0];
+      if (!uploadedFile?.url) {
+        throw new Error('O upload não devolveu um URL de media.');
+      }
+
+      const storyResponse = await fetch(`${base}/api/stories`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mediaUrl: uploadedFile.url,
+          tipo: uploadedFile.tipo === 'video' ? 'video' : tipo,
+        }),
+      });
+      const storyBody = await storyResponse.json().catch(() => null) as { error?: string } | null;
+      if (!storyResponse.ok) {
+        throw new Error(storyBody?.error || `Criação da story falhou: ${storyResponse.status}`);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['/api/stories/feed'] });
+      toast.success('Story publicado!');
+    } catch (error) {
+      console.error('[Stories] creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao publicar story. Tenta novamente.');
+    }
   }
 
   function handleDeleteStory(userId: number, storyId: number) {
