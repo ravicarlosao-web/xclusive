@@ -1,5 +1,5 @@
 import { useRoute } from 'wouter';
-import { useGetUserProfile, useGetUserPosts, useFollowUser, useUnfollowUser } from '@workspace/api-client-react';
+import { useGetUserProfile, useGetUserPosts, useFollowUser, useUnfollowUser, useCreateConversation } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ export default function Profile() {
 
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
+  const createConversationMutation = useCreateConversation();
 
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
@@ -47,6 +48,21 @@ export default function Profile() {
     } else {
       setIsFollowingLocally(true);
       followMutation.mutate({ username });
+    }
+  };
+
+  const handleStartConversation = async () => {
+    if (createConversationMutation.isPending) return;
+    const participanteId = profile?.id;
+    if (!participanteId) return;
+
+    try {
+      const conversation = await createConversationMutation.mutateAsync({
+        data: { participanteId },
+      });
+      setLocation(`/mensagens/${conversation.id}`);
+    } catch (error) {
+      console.error('[Messages] conversation creation error:', error);
     }
   };
 
@@ -133,9 +149,10 @@ export default function Profile() {
                 <Button
                   variant="secondary"
                   className="font-semibold flex-1 sm:flex-none"
-                  onClick={() => setLocation('/mensagens')}
+                  onClick={handleStartConversation}
+                  disabled={createConversationMutation.isPending}
                 >
-                  Mensagem
+                  {createConversationMutation.isPending ? 'A abrir…' : 'Mensagem'}
                 </Button>
               </>
             )}
