@@ -1,7 +1,7 @@
 /**
  * POST /api/upload
- * Recebe ficheiros multipart (imagens e vídeos), envia-os para B2 e devolve URLs BunnyCDN.
- * Máximo: 10 ficheiros, 100 MB cada.
+ * Recebe ficheiros multipart (imagens e vídeos), envia-os para Bunny Storage e devolve URLs BunnyCDN.
+ * Máximo: 10 ficheiros, 200 MB cada.
  */
 
 import { Router, type RequestHandler } from "express";
@@ -18,6 +18,7 @@ import {
 } from "../lib/storage";
 
 const router = Router();
+const MAX_UPLOAD_SIZE_BYTES = 200 * 1024 * 1024;
 
 const ALLOWED_MIME = new Set([
   "image/jpeg", "image/png", "image/webp", "image/gif",
@@ -63,7 +64,7 @@ const streamingVideoStorage: multer.StorageEngine = {
     });
     file.stream.on("limit", () => {
       streamState.truncated = true;
-      stream.destroy(new Error("O vídeo excede o limite de 100 MB."));
+      stream.destroy(new Error("O vídeo excede o limite de 200 MB."));
     });
     file.stream.on("error", (error) => stream.destroy(error));
     file.stream.pipe(stream);
@@ -71,7 +72,7 @@ const streamingVideoStorage: multer.StorageEngine = {
     void uploadFileStream(stream, storageKey, file.mimetype)
       .then(() => {
         if (streamState.truncated) {
-          cb(new Error("O vídeo excede o limite de 100 MB."));
+          cb(new Error("O vídeo excede o limite de 200 MB."));
           return;
         }
         streamUploadInfo.set(file, { storageKey, streamState });
@@ -107,7 +108,7 @@ const hybridStorage: multer.StorageEngine = {
 
 const upload = multer({
   storage: hybridStorage,
-  limits: { fileSize: 100 * 1024 * 1024, files: 10 },
+  limits: { fileSize: MAX_UPLOAD_SIZE_BYTES, files: 10 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
     cb(new Error(`Tipo não suportado: ${file.mimetype}`));
