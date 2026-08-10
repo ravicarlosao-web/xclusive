@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 
 const REQUIRED_STORAGE_ENV = [
   "BUNNY_STORAGE_ZONE",
@@ -77,6 +78,34 @@ export async function uploadFile(
   });
 
   await assertSuccessfulResponse(response, "upload");
+}
+
+/**
+ * Uploads a stream directly to Bunny Storage.
+ *
+ * This is intentionally separate from uploadFile(): small images can keep
+ * using the existing Buffer-based path, while large videos are forwarded
+ * without first being materialised in the Node.js heap.
+ */
+export async function uploadFileStream(
+  stream: Readable,
+  key: string,
+  contentType: string,
+): Promise<void> {
+  const { storagePassword } = getStorageConfig();
+  const response = await fetch(storageUrl(key), {
+    method: "PUT",
+    headers: {
+      AccessKey: storagePassword,
+      "Content-Type": contentType || "application/octet-stream",
+    },
+    // Node's fetch requires duplex for a request body whose size is not
+    // known up front. Bunny accepts the resulting chunked PUT request.
+    body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+    duplex: "half",
+  });
+
+  await assertSuccessfulResponse(response, "stream upload");
 }
 
 export async function deleteFile(key: string): Promise<void> {

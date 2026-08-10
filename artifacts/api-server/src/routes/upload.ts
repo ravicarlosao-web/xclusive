@@ -4,10 +4,18 @@
  * Máximo: 10 ficheiros, 100 MB cada.
  */
 
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import multer from "multer";
+import { PassThrough, type Readable } from "node:stream";
 import { requireAuth, type AuthRequest } from "../lib/auth";
-import { createStorageKey, getPublicUrl, isStorageConfigured, uploadFile } from "../lib/storage";
+import {
+  createStorageKey,
+  deleteFile,
+  getPublicUrl,
+  isStorageConfigured,
+  uploadFile,
+  uploadFileStream,
+} from "../lib/storage";
 
 const router = Router();
 
@@ -16,8 +24,89 @@ const ALLOWED_MIME = new Set([
   "video/mp4", "video/quicktime", "video/webm",
 ]);
 
+type StreamUploadState = {
+  bytes: number;
+  truncated: boolean;
+};
+
+type StreamUploadInfo = {
+  storageKey: string;
+  streamState: StreamUploadState;
+};
+
+const streamUploadInfo = new WeakMap<Express.Multer.File, StreamUploadInfo>();
+
+const imageStorage = multer.memoryStorage();
+
+const requireStorage: RequestHandler = (_req, res, next) => {
+  if (!isStorageConfigured()) {
+    res.status(503).json({ error: "Armazenamento de media não está configurado." });
+    return;
+  }
+  next();
+};
+
+/**
+ * Keeps the existing memoryStorage behaviour for images. Videos are piped to
+ * Bunny while Multer is parsing the multipart request; this is important
+ * because the route handler only runs after Multer has finished parsing.
+ */
+const streamingVideoStorage: multer.StorageEngine = {
+  _handleFile: (req, file, cb) => {
+    const streamState: StreamUploadState = { bytes: 0, truncated: false };
+    const stream = new PassThrough();
+    const extension = file.mimetype.split("/")[1] ?? "bin";
+    const storageKey = createStorageKey(`users/${(req as AuthRequest).userId}/media`, extension);
+
+    file.stream.on("data", (chunk: Buffer) => {
+      streamState.bytes += chunk.length;
+    });
+    file.stream.on("limit", () => {
+      streamState.truncated = true;
+      stream.destroy(new Error("O vídeo excede o limite de 100 MB."));
+    });
+    file.stream.on("error", (error) => stream.destroy(error));
+    file.stream.pipe(stream);
+
+    void uploadFileStream(stream, storageKey, file.mimetype)
+      .then(() => {
+        if (streamState.truncated) {
+          cb(new Error("O vídeo excede o limite de 100 MB."));
+          return;
+        }
+        streamUploadInfo.set(file, { storageKey, streamState });
+        cb(null, {});
+      })
+      .catch((error: unknown) => {
+        void deleteFile(storageKey).catch(() => undefined).finally(() => {
+          cb(error as Error);
+        });
+      });
+  },
+  _removeFile: (_req, file, cb) => {
+    cb(null);
+  },
+};
+
+const hybridStorage: multer.StorageEngine = {
+  _handleFile: (req, file, cb) => {
+    if (file.mimetype.startsWith("video/")) {
+      streamingVideoStorage._handleFile(req, file, cb);
+      return;
+    }
+    imageStorage._handleFile(req, file, cb);
+  },
+  _removeFile: (req, file, cb) => {
+    if (file.mimetype.startsWith("video/")) {
+      streamingVideoStorage._removeFile(req, file, cb);
+      return;
+    }
+    imageStorage._removeFile(req, file, cb);
+  },
+};
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: hybridStorage,
   limits: { fileSize: 100 * 1024 * 1024, files: 10 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
@@ -28,6 +117,7 @@ const upload = multer({
 router.post(
   "/upload",
   requireAuth,
+  requireStorage,
   upload.array("files", 10),
   async (req: AuthRequest, res): Promise<void> => {
     if (!isStorageConfigured()) {
@@ -41,18 +131,48 @@ router.post(
       return;
     }
 
-    const uploaded = await Promise.all(files.map(async (file) => {
-      const extension = file.mimetype.split("/")[1] ?? "bin";
-      const key = createStorageKey(`users/${req.userId}/media`, extension);
-      await uploadFile(file.buffer, key, file.mimetype);
-      return {
-        url: getPublicUrl(key),
-        tipo: file.mimetype.startsWith("video/") ? "video" : "imagem",
-        size: file.size,
-      };
-    }));
+    const uploadedKeys: string[] = [];
 
-    res.status(201).json({ files: uploaded });
+    try {
+      const uploaded = await Promise.all(files.map(async (file) => {
+        const isVideo = file.mimetype.startsWith("video/");
+        const extension = file.mimetype.split("/")[1] ?? "bin";
+        let key: string;
+        let size: number;
+
+        if (isVideo) {
+          const streamInfo = streamUploadInfo.get(file);
+          if (!streamInfo) {
+            throw new Error("Metadata do upload de vídeo não encontrado.");
+          }
+          key = streamInfo.storageKey;
+          size = streamInfo.streamState.bytes;
+        } else {
+          key = createStorageKey(`users/${req.userId}/media`, extension);
+          size = file.size;
+        }
+        uploadedKeys.push(key);
+
+        if (isVideo) {
+          // The streaming storage engine already completed this upload while
+          // Multer was parsing the request.
+        } else {
+          await uploadFile(file.buffer, key, file.mimetype);
+        }
+
+        return {
+          url: getPublicUrl(key),
+          tipo: isVideo ? "video" : "imagem",
+          size,
+        };
+      }));
+
+      res.status(201).json({ files: uploaded });
+    } catch (error) {
+      // Remove objects created by a partially failed multi-file upload.
+      await Promise.allSettled(uploadedKeys.map((key) => deleteFile(key)));
+      throw error;
+    }
   },
 );
 
