@@ -112,8 +112,12 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 py-12">
-      <Link href="/" className="text-3xl font-extrabold tracking-tighter mb-8 text-center block">
-        <span className="text-primary">X</span>clusive
+      <Link href="/" className="flex items-center justify-center mb-8 text-center group">
+        <img
+          src="/logo.png"
+          alt="Xclusive"
+          className="h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+        />
       </Link>
 
       <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">

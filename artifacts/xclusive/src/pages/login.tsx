@@ -51,10 +51,11 @@ export default function Login() {
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1616469829581-73993eb86b02?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-30 mix-blend-overlay" />
         
         <div className="relative z-20 flex flex-col items-center text-center p-12">
-          <div className="text-6xl font-extrabold tracking-tighter mb-6">
-            <span className="text-primary">X</span>
-            <span className="text-white">clusive</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="Xclusive"
+            className="h-16 w-auto object-contain mb-8 drop-shadow-[0_0_35px_rgba(255,59,92,0.4)]"
+          />
           <p className="text-xl text-gray-300 max-w-md font-medium">
             Entra na tua conta e descobre o conteúdo mais exclusivo dos teus criadores favoritos.
           </p>
@@ -65,8 +66,8 @@ export default function Login() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left mb-10">
-            <div className="lg:hidden text-4xl font-extrabold tracking-tighter mb-6">
-              <span className="text-primary">X</span>clusive
+            <div className="lg:hidden flex items-center justify-center mb-6">
+              <img src="/logo.png" alt="Xclusive" className="h-9 w-auto object-contain drop-shadow" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Bem-vindo de volta</h1>
             <p className="text-muted-foreground">Insere os teus dados para entrares na tua conta.</p>

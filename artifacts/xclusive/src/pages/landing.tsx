@@ -14,10 +14,9 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-background/80 backdrop-blur-md z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12">
-        <div className="text-2xl font-extrabold tracking-tighter">
-          <span className="text-primary">X</span>
-          <span className="text-white">clusive</span>
-        </div>
+        <Link href="/">
+          <img src="/logo.png" alt="Xclusive" className="h-7 w-auto object-contain cursor-pointer drop-shadow" />
+        </Link>
         <div className="flex items-center gap-4">
           <Link href="/login">
             <Button variant="ghost" className="font-semibold text-white hover:text-primary transition-colors">
@@ -99,9 +98,9 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border py-8 px-6 lg:px-12 mt-auto">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="text-xl font-extrabold tracking-tighter">
-            <span className="text-primary">X</span>clusive
-          </div>
+          <Link href="/">
+            <img src="/logo.png" alt="Xclusive" className="h-6 w-auto object-contain cursor-pointer" />
+          </Link>
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
             <a href="#" className="hover:text-primary transition-colors">Sobre</a>
             <a href="#" className="hover:text-primary transition-colors">Termos</a>

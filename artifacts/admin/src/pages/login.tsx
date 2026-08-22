@@ -42,13 +42,11 @@ export default function Login() {
       <div className="relative z-10 w-full max-w-sm px-4">
         <Card className="border-border/50 shadow-2xl bg-card/80 backdrop-blur-xl">
           <CardHeader className="space-y-2 text-center pb-6">
-            <div className="flex justify-center mb-3">
-              <div className="h-14 w-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
-                <ShieldAlert className="h-7 w-7 text-primary" />
-              </div>
+            <div className="flex justify-center mb-4">
+              <img src="/logo.png" alt="Xclusive" className="h-10 w-auto object-contain drop-shadow-[0_0_20px_rgba(255,59,92,0.3)]" />
             </div>
-            <CardTitle className="text-2xl font-bold tracking-tight">
-              <span className="text-primary">X</span>clusive <span className="font-light">Admin</span>
+            <CardTitle className="text-xl font-medium tracking-tight text-muted-foreground">
+              Painel <span className="font-bold text-foreground">Admin</span>
             </CardTitle>
             <CardDescription className="text-muted-foreground font-mono text-xs uppercase tracking-widest">
               Command Centre

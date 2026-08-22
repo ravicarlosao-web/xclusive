@@ -48,11 +48,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Desktop & Tablet Sidebar */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-50 w-[80px] lg:w-[245px] border-r border-border bg-card transition-all duration-300">
         <div className="p-4 lg:p-6 mb-2">
-          <Link href="/home" className="flex items-center gap-2">
-            <span className="text-2xl font-extrabold tracking-tighter">
-              <span className="text-primary">X</span>
-              <span className="hidden lg:inline text-white">clusive</span>
-            </span>
+          <Link href="/home" className="flex items-center group">
+            <img
+              src="/logo.png"
+              alt="Xclusive"
+              className="hidden lg:block h-7 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+            />
+            <div className="lg:hidden w-8 h-8 overflow-hidden flex items-center justify-start">
+              <img
+                src="/logo.png"
+                alt="Xclusive"
+                className="h-8 max-w-none object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+              />
+            </div>
           </Link>
         </div>
 
