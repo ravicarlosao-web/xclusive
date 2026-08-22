@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Flame, Heart, WifiOff } from 'lucide-react';
 import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
 import { StoryViewer } from '@/components/shared/StoryViewer';
@@ -18,6 +19,25 @@ import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToSt
 import { toast } from 'sonner';
 
 const MAX_STORY_SIZE_MB = 50;
+
+interface TopCreator {
+  id: number;
+  username: string;
+  nomeExibicao: string;
+  avatarUrl: string | null;
+  verificado: boolean;
+  tipoConta?: string;
+  totalPublicacoes: number;
+  totalCurtidas: number;
+  totalSeguidores?: number;
+  estaASeguir?: boolean;
+}
+
+function formatNumberCompact(num: number): string {
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return (num || 0).toLocaleString('pt-PT');
+}
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
@@ -74,6 +94,27 @@ export default function Home() {
   const { data: suggestionsData, isLoading: isLoadingSuggestions } = useGetUserSuggestions({
     query: { queryKey: ['/api/users/suggestions'] }
   });
+
+  // Top Criadores — apenas dados reais da base de dados (sem fallback mock)
+  const { data: topCreatorsData, isLoading: isLoadingTopCreators, isError: isTopCreatorsError } = useQuery<TopCreator[]>({
+    queryKey: ['/api/users/top-creators'],
+    queryFn: async () => {
+      const token = localStorage.getItem('xclusive_token');
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/users/top-creators`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Falha ao carregar top criadores');
+      return await res.json();
+    },
+    staleTime: 60_000,
+    // Não executar em modo mock — sem base de dados real ligada
+    enabled: !isMockMode,
+    retry: 1,
+  });
+
+  // Apenas dados reais — nunca dados demonstrativos
+  const topCreators: TopCreator[] = (!isMockMode && topCreatorsData) ? topCreatorsData : [];
 
   // Em modo mock sem DB, usa stories demonstrativos de outros utilizadores
   const otherGroups: StoryGroup[] = isMockMode && !storiesData?.length
@@ -286,7 +327,7 @@ export default function Home() {
       {/* Right Column (Desktop Only) */}
       <div className="hidden lg:block w-[320px] flex-shrink-0 pt-2">
         {user && (
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-6">
             <Link href={`/perfil/${user.username}`} className="flex items-center gap-4 group">
               <Avatar className="w-14 h-14 border border-border group-hover:scale-105 transition-transform">
                 <AvatarImage src={user.avatarUrl || ''} />
@@ -303,47 +344,172 @@ export default function Home() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-semibold text-muted-foreground">Sugestões para ti</span>
-          <Link href="/explorar" className="text-xs font-semibold hover:text-primary transition-colors">Ver todas</Link>
+        {/* Top Criadores Section */}
+        <div className="mb-6 bg-card/70 border border-border/80 rounded-2xl p-3.5 shadow-sm">
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-[0_0_10px_rgba(244,63,94,0.35)]">
+                <Flame className="w-3.5 h-3.5 text-white fill-current" />
+              </div>
+              <span className="text-sm font-bold tracking-tight text-foreground">Top Criadores</span>
+            </div>
+            <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+              Em alta
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            {isLoadingTopCreators ? (
+              Array(3).fill(0).map((_, i) => <SuggestionSkeleton key={i} />)
+            ) : isMockMode ? (
+              /* Sem base de dados real ligada */
+              <div className="flex flex-col items-center gap-2 py-4 px-2">
+                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                  <WifiOff className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                  Sem ligação à base de dados.
+                  <br />
+                  Conecta ao servidor para ver o ranking real.
+                </p>
+              </div>
+            ) : isTopCreatorsError ? (
+              /* Erro ao carregar */
+              <div className="flex flex-col items-center gap-2 py-4 px-2">
+                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <WifiOff className="w-4 h-4 text-destructive/60" />
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Não foi possível carregar o ranking.
+                </p>
+              </div>
+            ) : topCreators.length > 0 ? (
+              topCreators.map((creator, index) => {
+                const isFirst = index === 0;
+                const isSecond = index === 1;
+                const isThird = index === 2;
+
+                const rankBadgeClass = isFirst
+                  ? "bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]"
+                  : isSecond
+                  ? "bg-slate-300/20 text-slate-200 border-slate-300/40"
+                  : isThird
+                  ? "bg-amber-700/20 text-amber-400 border-amber-600/40"
+                  : "bg-secondary text-muted-foreground border-border/60";
+
+                const isFollowing = followingMap[creator.id] ?? creator.estaASeguir;
+
+                return (
+                  <div
+                    key={creator.id}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-secondary/70 transition-colors group"
+                  >
+                    <Link href={`/perfil/${creator.username}`} className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {/* Rank Indicator */}
+                      <span className={`w-5 h-5 rounded-full text-[11px] font-black flex items-center justify-center shrink-0 border ${rankBadgeClass}`}>
+                        {index + 1}
+                      </span>
+
+                      {/* Avatar */}
+                      <Avatar className={`w-9 h-9 border transition-transform group-hover:scale-105 shrink-0 ${isFirst ? 'border-amber-400/60 ring-1 ring-amber-400/30' : 'border-border'}`}>
+                        <AvatarImage src={creator.avatarUrl || ''} />
+                        <AvatarFallback className="text-xs font-bold">{creator.nomeExibicao?.[0] || creator.username[0]}</AvatarFallback>
+                      </Avatar>
+
+                      {/* Creator Info & Activity Metrics */}
+                      <div className="flex flex-col min-w-0 flex-1 pr-1">
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold text-xs text-foreground truncate hover:underline group-hover:text-primary transition-colors">
+                            {creator.username}
+                          </span>
+                          {creator.verificado && (
+                            <svg className="w-3 h-3 text-primary fill-current shrink-0" viewBox="0 0 24 24">
+                              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/>
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                          <span className="flex items-center gap-0.5 text-rose-400 font-medium">
+                            <Heart className="w-2.5 h-2.5 fill-current" />
+                            {formatNumberCompact(creator.totalCurtidas)}
+                          </span>
+                          <span className="text-muted-foreground/40">•</span>
+                          <span className="text-[10px] text-muted-foreground/80 font-medium truncate">
+                            {creator.totalPublicacoes} {creator.totalPublicacoes === 1 ? 'post' : 'posts'}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+
+                    {/* Follow Action Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`font-bold text-[11px] h-7 px-2.5 rounded-lg shrink-0 transition-colors ${
+                        isFollowing
+                          ? 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                          : 'text-primary hover:text-white hover:bg-primary/20 bg-primary/10'
+                      }`}
+                      onClick={() => handleSuggestionFollow(creator.id, creator.username)}
+                    >
+                      {isFollowing ? 'A seguir' : 'Seguir'}
+                    </Button>
+                  </div>
+                );
+              })
+            ) : (
+              /* DB ligada mas sem criadores com atividade */
+              <p className="text-xs text-muted-foreground text-center py-3">
+                Ainda não há criadores com publicações.
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          {isLoadingSuggestions ? (
-            Array(5).fill(0).map((_, i) => <SuggestionSkeleton key={i} />)
-          ) : suggestionsData?.length ? (
-            suggestionsData.slice(0, 5).map(suggestion => (
-              <div key={suggestion.id} className="flex items-center justify-between py-2 group">
-                <Link href={`/perfil/${suggestion.username}`} className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10 border border-border group-hover:scale-105 transition-transform">
-                    <AvatarImage src={suggestion.avatarUrl || ''} />
-                    <AvatarFallback>{suggestion.nomeExibicao?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-sm hover:underline flex items-center gap-1">
-                      {suggestion.username}
-                      {suggestion.verificado && (
-                        <svg className="w-3 h-3 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
-                      )}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                      {suggestion.tipoConta === 'criador' ? 'Criador sugerido' : 'Novo no Xclusive'}
-                    </span>
-                  </div>
-                </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`font-bold text-xs h-8 transition-colors ${followingMap[suggestion.id] ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:text-white hover:bg-primary/20'}`}
-                  onClick={() => handleSuggestionFollow(suggestion.id, suggestion.username)}
-                >
-                  {followingMap[suggestion.id] ? 'A seguir' : 'Seguir'}
-                </Button>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Sem sugestões de momento.</p>
-          )}
+        {/* Sugestões para ti */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-sm font-semibold text-muted-foreground">Sugestões para ti</span>
+            <Link href="/explorar" className="text-xs font-semibold hover:text-primary transition-colors">Ver todas</Link>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {isLoadingSuggestions ? (
+              Array(3).fill(0).map((_, i) => <SuggestionSkeleton key={i} />)
+            ) : suggestionsData?.length ? (
+              suggestionsData.slice(0, 4).map(suggestion => (
+                <div key={suggestion.id} className="flex items-center justify-between py-1.5 px-1 group rounded-lg hover:bg-secondary/40 transition-colors">
+                  <Link href={`/perfil/${suggestion.username}`} className="flex items-center gap-3 min-w-0 flex-1">
+                    <Avatar className="w-8 h-8 border border-border group-hover:scale-105 transition-transform shrink-0">
+                      <AvatarImage src={suggestion.avatarUrl || ''} />
+                      <AvatarFallback className="text-xs">{suggestion.nomeExibicao?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-semibold text-xs hover:underline flex items-center gap-1 truncate">
+                        {suggestion.username}
+                        {suggestion.verificado && (
+                          <svg className="w-3 h-3 text-primary fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
+                        {suggestion.tipoConta === 'criador' ? 'Criador sugerido' : 'Novo no Xclusive'}
+                      </span>
+                    </div>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`font-bold text-xs h-7 px-2.5 transition-colors ${followingMap[suggestion.id] ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:text-white hover:bg-primary/20'}`}
+                    onClick={() => handleSuggestionFollow(suggestion.id, suggestion.username)}
+                  >
+                    {followingMap[suggestion.id] ? 'A seguir' : 'Seguir'}
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-2">Sem sugestões de momento.</p>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 pt-4 border-t border-border">

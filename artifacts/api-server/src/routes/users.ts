@@ -88,6 +88,146 @@ router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Pr
   res.json(result);
 });
 
+// Top Criadores (mais ativos em publicações e mais curtidos)
+router.get(["/users/top-creators", "/creators/top"], optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+  const viewerId = req.userId;
+
+  try {
+    const creators = await db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        nomeExibicao: usersTable.nomeExibicao,
+        avatarUrl: usersTable.avatarUrl,
+        verificado: usersTable.verificado,
+        tipoConta: usersTable.tipoConta,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.tipoConta, "criador"))
+      .limit(20);
+
+    let candidateUsers = creators;
+    if (candidateUsers.length === 0) {
+      candidateUsers = await db
+        .select({
+          id: usersTable.id,
+          username: usersTable.username,
+          nomeExibicao: usersTable.nomeExibicao,
+          avatarUrl: usersTable.avatarUrl,
+          verificado: usersTable.verificado,
+          tipoConta: usersTable.tipoConta,
+        })
+        .from(usersTable)
+        .limit(20);
+    }
+
+    if (candidateUsers.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    const candidateIds = candidateUsers.map(u => u.id);
+
+    const postsCountRows = await db
+      .select({
+        autorId: postsTable.autorId,
+        totalPosts: sql<number>`count(*)::int`,
+      })
+      .from(postsTable)
+      .where(inArray(postsTable.autorId, candidateIds))
+      .groupBy(postsTable.autorId);
+
+    const postsCountMap = new Map<number, number>();
+    for (const r of postsCountRows) {
+      postsCountMap.set(r.autorId, r.totalPosts || 0);
+    }
+
+    const allUserPosts = await db
+      .select({ id: postsTable.id, autorId: postsTable.autorId })
+      .from(postsTable)
+      .where(inArray(postsTable.autorId, candidateIds));
+
+    const postIds = allUserPosts.map(p => p.id);
+    const postToAuthorMap = new Map<number, number>();
+    for (const p of allUserPosts) {
+      postToAuthorMap.set(p.id, p.autorId);
+    }
+
+    const likesCountMap = new Map<number, number>();
+    if (postIds.length > 0) {
+      const likesRows = await db
+        .select({
+          postId: likesTable.alvoId,
+          totalLikes: sql<number>`count(*)::int`,
+        })
+        .from(likesTable)
+        .where(and(eq(likesTable.alvoTipo, "post"), inArray(likesTable.alvoId, postIds)))
+        .groupBy(likesTable.alvoId);
+
+      for (const l of likesRows) {
+        const autorId = postToAuthorMap.get(l.postId);
+        if (autorId) {
+          likesCountMap.set(autorId, (likesCountMap.get(autorId) || 0) + (l.totalLikes || 0));
+        }
+      }
+    }
+
+    const followersRows = await db
+      .select({
+        seguidoId: followsTable.seguidoId,
+        totalSeguidores: sql<number>`count(*)::int`,
+      })
+      .from(followsTable)
+      .where(inArray(followsTable.seguidoId, candidateIds))
+      .groupBy(followsTable.seguidoId);
+
+    const followersMap = new Map<number, number>();
+    for (const f of followersRows) {
+      followersMap.set(f.seguidoId, f.totalSeguidores || 0);
+    }
+
+    const followingSet = new Set<number>();
+    if (viewerId) {
+      const viewerFollows = await db
+        .select({ seguidoId: followsTable.seguidoId })
+        .from(followsTable)
+        .where(and(eq(followsTable.seguidorId, viewerId), inArray(followsTable.seguidoId, candidateIds)));
+      for (const vf of viewerFollows) {
+        followingSet.add(vf.seguidoId);
+      }
+    }
+
+    const ranked = candidateUsers.map(u => {
+      const totalPosts = postsCountMap.get(u.id) || 0;
+      const totalCurtidas = likesCountMap.get(u.id) || 0;
+      const totalSeguidores = followersMap.get(u.id) || 0;
+      const estaASeguir = followingSet.has(u.id);
+      const score = (totalCurtidas * 2) + (totalPosts * 5);
+
+      return {
+        id: u.id,
+        username: u.username,
+        nomeExibicao: u.nomeExibicao,
+        avatarUrl: u.avatarUrl,
+        verificado: u.verificado,
+        tipoConta: u.tipoConta,
+        totalPublicacoes: totalPosts,
+        totalCurtidas: totalCurtidas,
+        totalSeguidores: totalSeguidores,
+        estaASeguir: estaASeguir,
+        score,
+      };
+    });
+
+    ranked.sort((a, b) => b.score - a.score || b.totalCurtidas - a.totalCurtidas || b.totalPublicacoes - a.totalPublicacoes);
+
+    res.json(ranked.slice(0, 5));
+  } catch (error) {
+    console.error("[top-creators] error:", error);
+    res.status(500).json({ error: "Erro ao carregar top criadores" });
+  }
+});
+
 // Atualizar perfil
 router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
