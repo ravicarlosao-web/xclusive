@@ -13,6 +13,7 @@ import gorjetaRouter from "./gorjeta";
 import adminRouter from "./admin";
 import uploadRouter from "./upload";
 import walletRouter from "./wallet";
+import appypayRouter from "./appypay";
 
 const router: Router = Router();
 
@@ -30,5 +31,6 @@ router.use(gorjetaRouter);
 router.use(adminRouter);
 router.use(uploadRouter);
 router.use(walletRouter);
+router.use(appypayRouter);
 
 export default router;

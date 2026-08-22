@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth, XCLUSIVE_IBAN } from '@/contexts/AuthContext';
-import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X } from 'lucide-react';
+import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X, Smartphone, CreditCard, Receipt, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TopUpModalProps {
@@ -13,7 +13,7 @@ interface TopUpModalProps {
 
 const PRESET_AMOUNTS = [1000, 2500, 5000, 10000, 25000, 50000];
 
-type Step = 'amount' | 'transfer' | 'confirm' | 'success';
+type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success';
 
 export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const { topUp, saldo } = useAuth();
@@ -22,15 +22,21 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const [customAmount, setCustomAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // States for manual flow
   const [copiedIban, setCopiedIban] = useState(false);
   const [reference] = useState(() => {
-    // Generate a unique reference number per modal instance
     const rand = Math.floor(100000 + Math.random() * 900000);
     return `XCL-${rand}`;
   });
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // States for AppyPay flows
+  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref'>('gpo');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [refData, setRefData] = useState<{ entity: string; referenceNumber: string; dueDate: string } | null>(null);
 
   const selectedAmount = amount !== '' ? amount : (customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0);
 
@@ -42,6 +48,9 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setLoading(false);
     setPdfBase64(null);
     setPdfName('');
+    setPaymentMethod('gpo');
+    setPhoneNumber('');
+    setRefData(null);
   }
 
   function handlePdfSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -67,7 +76,9 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     onClose();
   }
 
-  async function handleConfirm() {
+  // --- Submit Handlers ---
+
+  async function handleConfirmManual() {
     if (!pdfBase64) {
       setError('Anexa o comprovativo em PDF antes de continuar.');
       return;
@@ -84,6 +95,64 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     }
   }
 
+  async function handleGpoSubmit() {
+    if (phoneNumber.length < 9) {
+      setError('Número de telemóvel inválido.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const token = localStorage.getItem('xclusive_token');
+      const res = await fetch(`${base}/api/wallet/topup/appypay/gpo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount: selectedAmount, phoneNumber })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao processar GPO');
+      setStep('gpo_success');
+    } catch (e: any) {
+      setError(e.message || 'Erro ao processar pedido.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefSubmit() {
+    setError('');
+    setLoading(true);
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const token = localStorage.getItem('xclusive_token');
+      const res = await fetch(`${base}/api/wallet/topup/appypay/ref`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount: selectedAmount })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar referência');
+      
+      setRefData({
+        entity: data.entity,
+        referenceNumber: data.referenceNumber,
+        dueDate: data.dueDate,
+      });
+      setStep('ref_success');
+    } catch (e: any) {
+      setError(e.message || 'Erro ao processar pedido.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleMethodContinue() {
+    if (paymentMethod === 'gpo') setStep('gpo_phone');
+    else if (paymentMethod === 'ref') handleRefSubmit();
+    else setStep('transfer'); // manual
+  }
+
   function copyIban() {
     navigator.clipboard.writeText(XCLUSIVE_IBAN).then(() => {
       setCopiedIban(true);
@@ -97,7 +166,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-[420px] bg-card border-border rounded-2xl p-0 overflow-hidden">
 
-        {/* ── Step: Amount ── */}
+        {/* ── Step 1: Amount ── */}
         {step === 'amount' && (
           <div className="p-6">
             <DialogHeader className="mb-6">
@@ -109,7 +178,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </div>
               {saldo !== null && (
                 <p className="text-sm text-muted-foreground ml-[52px]">
-                  Saldo atual: <span className="font-semibold text-foreground">{saldo.toLocaleString('pt-PT')} Kz</span>
+                  Saldo atual: <span className="font-semibold text-foreground">{saldo?.toLocaleString('pt-PT')} Kz</span>
                 </p>
               )}
             </DialogHeader>
@@ -155,7 +224,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <Button
               className="w-full h-12 font-bold text-base bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
               disabled={!isAmountValid}
-              onClick={() => setStep('transfer')}
+              onClick={() => setStep('method')}
             >
               Continuar · {isAmountValid ? selectedAmount.toLocaleString('pt-PT') + ' Kz' : '–'}
               <ChevronRight className="w-4 h-4 ml-1" />
@@ -163,7 +232,216 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           </div>
         )}
 
-        {/* ── Step: Transfer Instructions ── */}
+        {/* ── Step 2: Payment Method ── */}
+        {step === 'method' && (
+          <div className="p-6">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-xl font-bold">Método de Pagamento</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escolhe como pretendes pagar <span className="font-bold text-foreground">{selectedAmount.toLocaleString('pt-PT')} Kz</span>
+              </p>
+            </DialogHeader>
+
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => setPaymentMethod('gpo')}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
+                  paymentMethod === 'gpo'
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    : "border-border bg-secondary/30 hover:border-border/80"
+                )}
+              >
+                <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shrink-0 p-1 border border-border/50">
+                  <img src="/mcx-express.png" alt="Multicaixa Express" className="w-full h-full object-contain" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm">Multicaixa Express</h3>
+                  <p className="text-xs text-muted-foreground">Aprovação imediata no telemóvel</p>
+                </div>
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'gpo' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
+                  {paymentMethod === 'gpo' && <Check className="w-3 h-3 text-black" />}
+                </div>
+              </button>
+
+              <button
+                onClick={() => setPaymentMethod('ref')}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
+                  paymentMethod === 'ref'
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    : "border-border bg-secondary/30 hover:border-border/80"
+                )}
+              >
+                <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shrink-0 p-1 border border-border/50">
+                  <img src="/multicaixa-ref.png" alt="Multicaixa" className="w-full h-full object-contain" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm">Pagamento por Referência</h3>
+                  <p className="text-xs text-muted-foreground">Paga no ATM ou Homebanking</p>
+                </div>
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'ref' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
+                  {paymentMethod === 'ref' && <Check className="w-3 h-3 text-black" />}
+                </div>
+              </button>
+
+              <button
+                onClick={() => setPaymentMethod('manual')}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
+                  paymentMethod === 'manual'
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    : "border-border bg-secondary/30 hover:border-border/80"
+                )}
+              >
+                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'manual' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm">Transferência Manual</h3>
+                  <p className="text-xs text-muted-foreground">Envio de comprovativo (mais lento)</p>
+                </div>
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'manual' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
+                  {paymentMethod === 'manual' && <Check className="w-3 h-3 text-black" />}
+                </div>
+              </button>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-destructive text-xs mb-4 bg-destructive/10 p-2.5 rounded-lg">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep('amount')} disabled={loading}>
+                Voltar
+              </Button>
+              <Button
+                className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                onClick={handleMethodContinue}
+                disabled={loading}
+              >
+                {loading ? 'Aguarde...' : 'Continuar'}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step: GPO Phone Input ── */}
+        {step === 'gpo_phone' && (
+          <div className="p-6">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-xl font-bold">Multicaixa Express</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Introduz o número de telemóvel associado ao teu Multicaixa Express. Vais receber uma notificação para aprovar o pagamento.
+              </p>
+            </DialogHeader>
+
+            <div className="mb-6">
+              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Número de Telemóvel</label>
+              <Input
+                placeholder="Ex: 922 000 000"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                className="bg-secondary border-border"
+                maxLength={15}
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-destructive text-xs mb-4 bg-destructive/10 p-2.5 rounded-lg">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep('method')} disabled={loading}>
+                Voltar
+              </Button>
+              <Button
+                className="flex-[2] h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                onClick={handleGpoSubmit}
+                disabled={loading || phoneNumber.length < 9}
+              >
+                {loading ? 'A enviar pedido...' : `Pagar ${selectedAmount.toLocaleString('pt-PT')} Kz`}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step: GPO Success ── */}
+        {step === 'gpo_success' && (
+          <div className="p-8 flex flex-col items-center text-center">
+            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
+              <Smartphone className="w-10 h-10 text-yellow-400 animate-pulse" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Verifica o teu telemóvel!</h2>
+            <p className="text-muted-foreground mb-6">
+              Enviamos um pedido de pagamento para o teu Multicaixa Express. 
+              Abre a app no telemóvel e confirma a cobrança.
+            </p>
+            <div className="w-full bg-secondary/60 border border-border rounded-xl p-4 mb-6 text-left">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">Atenção:</span><br />
+                O saldo será creditado automaticamente na tua conta assim que aprovares o pagamento na app. Podes fechar esta janela com segurança.
+              </p>
+            </div>
+            <Button className="w-full h-12 font-bold rounded-xl" onClick={handleClose}>
+              Concluir
+            </Button>
+          </div>
+        )}
+
+        {/* ── Step: REF Success ── */}
+        {step === 'ref_success' && refData && (
+          <div className="p-6">
+            <DialogHeader className="mb-5">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
+                  <Receipt className="w-5 h-5 text-yellow-500" />
+                </div>
+                <DialogTitle className="text-xl font-bold">Referência Gerada</DialogTitle>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Paga a referência abaixo num ATM ou através do teu Homebanking.
+              </p>
+            </DialogHeader>
+
+            <div className="bg-secondary/60 border border-border rounded-xl p-5 space-y-4 mb-6">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Entidade</p>
+                <p className="text-lg font-bold font-mono tracking-widest">{refData.entity}</p>
+              </div>
+              <div className="h-px bg-border" />
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Referência</p>
+                <p className="text-xl font-bold font-mono tracking-widest text-primary">{refData.referenceNumber.replace(/(.{3})/g, '$1 ').trim()}</p>
+              </div>
+              <div className="h-px bg-border" />
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Valor a Pagar</p>
+                <p className="text-lg font-bold">{selectedAmount.toLocaleString('pt-PT')} Kz</p>
+              </div>
+            </div>
+
+            <div className="w-full bg-secondary/60 border border-border rounded-xl p-4 mb-6">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                O saldo será creditado <span className="font-semibold text-foreground">automaticamente</span> assim que o pagamento for confirmado pelo banco. 
+                A referência é válida até {new Date(refData.dueDate).toLocaleDateString('pt-PT')}.
+              </p>
+            </div>
+
+            <Button className="w-full h-12 font-bold rounded-xl" onClick={handleClose}>
+              Entendi, já copiei os dados
+            </Button>
+          </div>
+        )}
+
+        {/* ── Step: Manual Transfer Instructions ── */}
         {step === 'transfer' && (
           <div className="p-6">
             <DialogHeader className="mb-5">
@@ -203,15 +481,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </div>
             </div>
 
-            <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-5">
-              <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-200/80">
-                Inclui sempre a referência <strong className="text-yellow-400">{reference}</strong> na descrição da transferência para identificar o teu pagamento.
-              </p>
-            </div>
-
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep('amount')}>
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setStep('method')}>
                 Voltar
               </Button>
               <Button
@@ -225,7 +496,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           </div>
         )}
 
-        {/* ── Step: PDF upload ── */}
+        {/* ── Step: Manual PDF upload ── */}
         {step === 'confirm' && (
           <div className="p-6">
             <DialogHeader className="mb-5">
@@ -235,7 +506,6 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </p>
             </DialogHeader>
 
-            {/* PDF upload */}
             <div className="mb-4">
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">
                 Comprovativo de transferência <span className="text-destructive">*</span>
@@ -286,7 +556,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               <Button
                 className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
                 disabled={loading}
-                onClick={handleConfirm}
+                onClick={handleConfirmManual}
               >
                 {loading ? 'A enviar...' : 'Submeter pedido'}
               </Button>
@@ -294,7 +564,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           </div>
         )}
 
-        {/* ── Step: Success ── */}
+        {/* ── Step: Manual Success ── */}
         {step === 'success' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">

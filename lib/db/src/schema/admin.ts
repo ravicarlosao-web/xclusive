@@ -8,6 +8,7 @@ import {
   numeric,
   jsonb,
   primaryKey,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
@@ -71,7 +72,25 @@ export const topupRequestsTable = pgTable("topup_requests", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   reference: varchar("reference", { length: 20 }).notNull().unique(),
-  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente | aprovado | rejeitado
+  /**
+   * Status do pedido:
+   *   pendente            — comprovativo manual, aguarda revisão do admin
+   *   processando         — AppyPay GPO: cobrança enviada, aguarda confirmação no telemóvel
+   *   aguardando_pagamento — AppyPay REF: referência gerada, aguarda pagamento pelo utilizador
+   *   aprovado            — saldo creditado (manual ou via webhook)
+   *   rejeitado           — negado/expirado (manual ou via webhook)
+   */
+  status: varchar("status", { length: 30 }).notNull().default("pendente"),
+  /** Método de pagamento: 'manual' | 'gpo' | 'ref' */
+  paymentMethod: varchar("payment_method", { length: 10 }).notNull().default("manual"),
+  /** ID do charge no AppyPay (para lookup no webhook e verificação dupla) */
+  externalChargeId: varchar("external_charge_id", { length: 120 }),
+  /**
+   * Dados extra do AppyPay:
+   *   REF: { entity, referenceNumber, dueDate }
+   *   GPO: null (confirmação via webhook)
+   */
+  externalRef: jsonb("external_ref"),
   comprovantivoBase64: text("comprovativo_base64"),
   comprovantivoNome: varchar("comprovativo_nome", { length: 255 }),
   processadoPor: integer("processado_por").references(() => usersTable.id),
