@@ -6,6 +6,8 @@ export {
   setTokenRefreshHandler,
   setOnTokenRefreshed,
   setOnSessionExpired,
+  executeTokenRefresh,
+  getFreshAuthToken,
   customFetch,
 } from "./custom-fetch";
 export type {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup } from '@workspace/api-client-react';
+import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup, getFreshAuthToken } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Flame, Heart, WifiOff } from 'lucide-react';
 import { PostCard } from '@/components/shared/PostCard';
@@ -161,7 +161,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('files', file);
-      const token = localStorage.getItem('xclusive_token');
+      const token = await getFreshAuthToken(true);
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
       const authHeaders: Record<string, string> = token
         ? { Authorization: `Bearer ${token}` }
@@ -170,6 +170,7 @@ export default function Home() {
       const uploadResponse = await fetch(`${base}/api/upload`, {
         method: 'POST',
         headers: authHeaders,
+        credentials: 'same-origin',
         body: formData,
       });
       const uploadBody = await uploadResponse.json().catch(() => null) as {
@@ -185,9 +186,16 @@ export default function Home() {
         throw new Error('O upload não devolveu um URL de media.');
       }
 
+      const freshStoryToken = await getFreshAuthToken();
+      const storyHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(freshStoryToken ? { Authorization: `Bearer ${freshStoryToken}` } : {}),
+      };
+
       const storyResponse = await fetch(`${base}/api/stories`, {
         method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        headers: storyHeaders,
+        credentials: 'same-origin',
         body: JSON.stringify({
           mediaUrl: uploadedFile.url,
           tipo: uploadedFile.tipo === 'video' ? 'video' : tipo,

@@ -72,7 +72,7 @@ export function setOnSessionExpired(callback: SessionExpiredCallback | null): vo
  * If multiple requests fail with 401 at the same time, all of them wait for
  * the SAME refresh promise, avoiding duplicate refresh calls and race conditions.
  */
-async function executeTokenRefresh(): Promise<string | null> {
+export async function executeTokenRefresh(): Promise<string | null> {
   if (_refreshPromise) {
     return _refreshPromise;
   }
@@ -118,6 +118,47 @@ async function executeTokenRefresh(): Promise<string | null> {
   })();
 
   return _refreshPromise;
+}
+
+/**
+ * Returns a valid auth token, proactively refreshing it if it's missing, expired,
+ * expiring soon (< 2 minutes), or if forceRefresh is true (e.g. before long video uploads).
+ */
+export async function getFreshAuthToken(forceRefresh = false): Promise<string | null> {
+  const currentToken = _authTokenGetter ? await _authTokenGetter() : null;
+
+  if (forceRefresh || !currentToken) {
+    const refreshed = await executeTokenRefresh();
+    return refreshed || currentToken;
+  }
+
+  // Check if current token is expired or close to expiring (< 2 minutes remaining)
+  try {
+    const part = currentToken.split(".")[1];
+    if (part) {
+      const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const decoded = typeof atob !== "undefined"
+        ? atob(base64)
+        : typeof (globalThis as any).Buffer !== "undefined"
+          ? (globalThis as any).Buffer.from(base64, "base64").toString("utf-8")
+          : null;
+      if (decoded) {
+        const payload = JSON.parse(decoded) as { exp?: number };
+        if (typeof payload.exp === "number") {
+          const msRemaining = payload.exp * 1000 - Date.now();
+          if (msRemaining < 120_000) {
+            // Token expires in less than 2 minutes, refresh it now
+            const refreshed = await executeTokenRefresh();
+            return refreshed || currentToken;
+          }
+        }
+      }
+    }
+  } catch {
+    // If payload decoding fails, proceed with currentToken
+  }
+
+  return currentToken;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {

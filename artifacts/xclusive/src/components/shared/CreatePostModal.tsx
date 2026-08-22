@@ -5,8 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Progress } from '@/components/ui/progress';
-import { useCreatePost } from '@workspace/api-client-react';
+import { useCreatePost, getFreshAuthToken, executeTokenRefresh } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MobileDataWarningDialog } from './MobileDataWarningDialog';
 import {
@@ -86,16 +85,20 @@ function isLongVideo(m?: MediaFile): boolean {
   return (m.duration !== undefined && m.duration > 45) || m.file.size > 15 * 1024 * 1024;
 }
 
-/** Upload with real-time XMLHttpRequest progress */
-function uploadWithProgress(
+/** Upload with real-time XMLHttpRequest progress, proactive token refresh, and 401 retry */
+async function uploadWithProgress(
   url: string,
   formData: FormData,
-  token: string | null,
-  onProgress: (loaded: number, total: number) => void
+  onProgress: (loaded: number, total: number) => void,
+  isRetry = false
 ): Promise<{ files: { url: string; tipo: string }[] }> {
+  // Proactively fetch a 100% fresh token before starting the upload stream
+  const token = await getFreshAuthToken(true);
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
+    xhr.withCredentials = true;
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
@@ -106,13 +109,31 @@ function uploadWithProgress(
       }
     };
 
-    xhr.onload = () => {
+    xhr.onload = async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const json = JSON.parse(xhr.responseText);
           resolve(json);
         } catch {
           reject(new Error('Resposta inválida do servidor.'));
+        }
+      } else if (xhr.status === 401 && !isRetry) {
+        // 401 Interceptor: attempt silent refresh and replay once
+        try {
+          const newToken = await executeTokenRefresh();
+          if (newToken) {
+            const retryRes = await uploadWithProgress(url, formData, onProgress, true);
+            resolve(retryRes);
+            return;
+          }
+        } catch {
+          // Fall through to error
+        }
+        try {
+          const json = JSON.parse(xhr.responseText);
+          reject(new Error(json.error || 'Token inválido ou sessão expirada.'));
+        } catch {
+          reject(new Error('Sessão expirada. Faz login novamente.'));
         }
       } else {
         try {
@@ -344,13 +365,11 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     try {
       const formData = new FormData();
       mediaFiles.forEach(m => formData.append('files', m.file));
-      const token = localStorage.getItem('xclusive_token');
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 
       const uploadJson = await uploadWithProgress(
         `${base}/api/upload`,
         formData,
-        token,
         (loaded, total) => {
           const pct = Math.min(99, Math.round((loaded / total) * 100));
           setUploadPercent(pct);
