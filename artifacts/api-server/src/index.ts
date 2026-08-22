@@ -1,25 +1,19 @@
+import path from "node:path";
+import dotenv from "dotenv";
+
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(import.meta.dirname, "../../.env") });
+dotenv.config();
+
 import app from "./app";
 import { logger } from "./lib/logger";
 
-// NODE_ENV deve ser definido explicitamente. Sem ele, o CORS permissivo de dev
-// fica desativado (comportamento seguro), mas a ausência pode indicar uma
-// configuração incorreta do ambiente.
 if (!process.env.NODE_ENV) {
-  logger.warn(
-    "NODE_ENV não está definido — a assumir modo de produção (CORS restrito). " +
-    "Define NODE_ENV=development para ambiente de desenvolvimento local.",
-  );
-  process.env.NODE_ENV = "production";
+  process.env.NODE_ENV = "development";
+  logger.info("NODE_ENV não definido — definido automaticamente como 'development'.");
 }
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
+const rawPort = process.env["PORT"] || "8080";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {

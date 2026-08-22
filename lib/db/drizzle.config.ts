@@ -1,5 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config();
 
 // SUPABASE_DATABASE_URL tem prioridade — mas só se for uma connection string
 // PostgreSQL válida (começa com postgresql:// ou postgres://).
@@ -13,7 +17,7 @@ if (!url) {
 }
 
 export default defineConfig({
-  schema: path.join(__dirname, "./src/schema/index.ts"),
+  schema: "./src/schema/index.ts",
   dialect: "postgresql",
   dbCredentials: { url },
 });
