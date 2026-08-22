@@ -1,5 +1,6 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  _isRetry?: boolean;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -7,6 +8,9 @@ export type ErrorType<T = unknown> = ApiError<T>;
 export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type TokenRefreshHandler = () => Promise<string | null>;
+export type TokenRefreshedCallback = (newToken: string) => void;
+export type SessionExpiredCallback = () => void;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -17,6 +21,10 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _tokenRefreshHandler: TokenRefreshHandler | null = null;
+let _onTokenRefreshed: TokenRefreshedCallback | null = null;
+let _onSessionExpired: SessionExpiredCallback | null = null;
+let _refreshPromise: Promise<string | null> | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -33,15 +41,83 @@ export function setBaseUrl(url: string | null): void {
  * Register a getter that supplies a bearer auth token.  Before every fetch
  * the getter is invoked; when it returns a non-null string, an
  * `Authorization: Bearer <token>` header is attached to the request.
- *
- * Useful for Expo bundles making token-gated API calls.
- * Pass `null` to clear the getter.
- *
- * NOTE: This function should never be used in web applications where session
- * token cookies are automatically associated with API calls by the browser.
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register a custom token refresh handler function.
+ */
+export function setTokenRefreshHandler(handler: TokenRefreshHandler | null): void {
+  _tokenRefreshHandler = handler;
+}
+
+/**
+ * Register a callback invoked when a token has been successfully refreshed.
+ */
+export function setOnTokenRefreshed(callback: TokenRefreshedCallback | null): void {
+  _onTokenRefreshed = callback;
+}
+
+/**
+ * Register a callback invoked when token refresh fails (session permanently expired).
+ */
+export function setOnSessionExpired(callback: SessionExpiredCallback | null): void {
+  _onSessionExpired = callback;
+}
+
+/**
+ * Executes a token refresh with single-flight concurrency lock.
+ * If multiple requests fail with 401 at the same time, all of them wait for
+ * the SAME refresh promise, avoiding duplicate refresh calls and race conditions.
+ */
+async function executeTokenRefresh(): Promise<string | null> {
+  if (_refreshPromise) {
+    return _refreshPromise;
+  }
+
+  _refreshPromise = (async () => {
+    try {
+      if (_tokenRefreshHandler) {
+        const token = await _tokenRefreshHandler();
+        if (token) {
+          if (_onTokenRefreshed) _onTokenRefreshed(token);
+          return token;
+        }
+        if (_onSessionExpired) _onSessionExpired();
+        return null;
+      }
+
+      // Default fallback: direct call to /api/auth/refresh
+      const refreshUrl = _baseUrl ? `${_baseUrl}/api/auth/refresh` : "/api/auth/refresh";
+      const res = await fetch(refreshUrl, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+
+      if (!res.ok) {
+        if (_onSessionExpired) _onSessionExpired();
+        return null;
+      }
+
+      const data = (await res.json().catch(() => null)) as { token?: string } | null;
+      if (data?.token && typeof data.token === "string") {
+        if (_onTokenRefreshed) _onTokenRefreshed(data.token);
+        return data.token;
+      }
+
+      if (_onSessionExpired) _onSessionExpired();
+      return null;
+    } catch {
+      if (_onSessionExpired) _onSessionExpired();
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -363,6 +439,31 @@ export async function customFetch<T = unknown>(
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {
+    // 401 Interceptor: if an authenticated request fails with 401 and hasn't been retried yet,
+    // automatically attempt silent refresh and replay the request with the fresh token.
+    if (response.status === 401 && !options._isRetry) {
+      const urlStr = resolveUrl(input);
+      const isAuthEndpoint =
+        urlStr.includes("/auth/login") ||
+        urlStr.includes("/auth/register") ||
+        urlStr.includes("/auth/refresh") ||
+        urlStr.includes("/auth/logout");
+
+      if (!isAuthEndpoint) {
+        const newToken = await executeTokenRefresh();
+        if (newToken) {
+          const newHeaders = new Headers(headers);
+          newHeaders.set("authorization", `Bearer ${newToken}`);
+
+          return customFetch<T>(input, {
+            ...options,
+            headers: newHeaders,
+            _isRetry: true,
+          });
+        }
+      }
+    }
+
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }

@@ -1,7 +1,18 @@
 import { createContext, useContext, ReactNode, useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { UserProfile, LoginInput, RegisterInput } from '@workspace/api-client-react';
-import { useGetMe, login as apiLogin, register as apiRegister, logout as apiLogout, setAuthTokenGetter } from '@workspace/api-client-react';
+import {
+  UserProfile,
+  LoginInput,
+  RegisterInput,
+  useGetMe,
+  login as apiLogin,
+  register as apiRegister,
+  logout as apiLogout,
+  setAuthTokenGetter,
+  setTokenRefreshHandler,
+  setOnTokenRefreshed,
+  setOnSessionExpired,
+} from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Wire the API client to always send the stored JWT token
@@ -367,6 +378,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data?.token) { setToken(data.token); return true; }
       return false;
     } catch { return false; }
+  }, [setToken]);
+
+  // Registar handlers de renovação no cliente API global (customFetch)
+  useEffect(() => {
+    setTokenRefreshHandler(async () => {
+      try {
+        const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+        const res = await fetch(`${base}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data?.token && typeof data.token === 'string') {
+          setToken(data.token);
+          return data.token;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    });
+
+    setOnTokenRefreshed((newToken) => {
+      localStorage.setItem('xclusive_token', newToken);
+      setTokenState(newToken);
+    });
+
+    setOnSessionExpired(() => {
+      localStorage.removeItem('xclusive_token');
+      setTokenState(null);
+    });
+
+    return () => {
+      setTokenRefreshHandler(null);
+      setOnTokenRefreshed(null);
+      setOnSessionExpired(null);
+    };
   }, [setToken]);
 
   // Renovação proativa: agenda refresh ~1 min antes do access token expirar
