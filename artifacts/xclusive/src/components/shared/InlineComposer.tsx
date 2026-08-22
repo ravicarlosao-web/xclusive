@@ -21,7 +21,7 @@ interface InlineComposerProps {
 }
 
 const MAX_TEXTO = 2200;
-const MAX_SIZE_MB = 100;
+const MAX_SIZE_MB = 500;
 
 export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
   const queryClient = useQueryClient();

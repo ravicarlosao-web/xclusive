@@ -8,6 +8,7 @@ import { StoryViewer } from '@/components/shared/StoryViewer';
 import { PostSkeleton, StorySkeleton, SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { InlineComposer } from '@/components/shared/InlineComposer';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
+import { MobileDataWarningDialog } from '@/components/shared/MobileDataWarningDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,7 +19,7 @@ import { MOCK_STORY_GROUPS } from '@/data/mockStories';
 import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToStory, markStoryViewed } from '@/lib/localStories';
 import { toast } from 'sonner';
 
-const MAX_STORY_SIZE_MB = 50;
+const MAX_STORY_SIZE_MB = 500;
 
 interface TopCreator {
   id: number;
@@ -75,6 +76,10 @@ export default function Home() {
   const [viewerGroupIndex, setViewerGroupIndex] = useState<number | null>(null);
   // Bumps whenever local stories change, to force re-reading localStorage
   const [localStoriesVersion, setLocalStoriesVersion] = useState(0);
+
+  // Story video data warning state
+  const [pendingStoryFile, setPendingStoryFile] = useState<File | null>(null);
+  const [showStoryDataWarning, setShowStoryDataWarning] = useState(false);
 
   // Queries
   const { data: feedData, isLoading: isLoadingFeed } = useGetFeed(
@@ -142,18 +147,8 @@ export default function Home() {
     fileInputRef.current?.click();
   }, []);
 
-  async function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !user) return;
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-      toast.error('Usa uma imagem ou vídeo para o teu story.');
-      return;
-    }
-    if (file.size > MAX_STORY_SIZE_MB * 1024 * 1024) {
-      toast.error(`Ficheiro demasiado grande. Máximo ${MAX_STORY_SIZE_MB}MB.`);
-      return;
-    }
+  async function uploadStory(file: File) {
+    if (!user) return;
     const tipo = file.type.startsWith('video/') ? 'video' : 'imagem';
 
     if (isMockMode) {
@@ -209,6 +204,29 @@ export default function Home() {
       console.error('[Stories] creation error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao publicar story. Tenta novamente.');
     }
+  }
+
+  function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      toast.error('Usa uma imagem ou vídeo para o teu story.');
+      return;
+    }
+    if (file.size > MAX_STORY_SIZE_MB * 1024 * 1024) {
+      toast.error(`Ficheiro demasiado grande. Máximo ${MAX_STORY_SIZE_MB}MB.`);
+      return;
+    }
+
+    // Check if video file > 20MB for data warning
+    if (file.type.startsWith('video/') && file.size > 20 * 1024 * 1024) {
+      setPendingStoryFile(file);
+      setShowStoryDataWarning(true);
+      return;
+    }
+
+    void uploadStory(file);
   }
 
   function handleDeleteStory(userId: number, storyId: number) {
@@ -533,6 +551,23 @@ export default function Home() {
         open={modalOpen}
         onClose={handleModalClose}
         initialFiles={modalInitialFiles}
+      />
+
+      {/* Story Video Mobile Data Warning */}
+      <MobileDataWarningDialog
+        open={showStoryDataWarning}
+        fileSizeBytes={pendingStoryFile?.size || 0}
+        onConfirm={() => {
+          setShowStoryDataWarning(false);
+          if (pendingStoryFile) {
+            void uploadStory(pendingStoryFile);
+            setPendingStoryFile(null);
+          }
+        }}
+        onCancel={() => {
+          setShowStoryDataWarning(false);
+          setPendingStoryFile(null);
+        }}
       />
     </div>
   );
