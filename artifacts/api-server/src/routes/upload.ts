@@ -35,7 +35,10 @@ type StreamUploadInfo = {
   streamState: StreamUploadState;
 };
 
-const streamUploadInfo = new WeakMap<Express.Multer.File, StreamUploadInfo>();
+interface CustomMulterFile extends Express.Multer.File {
+  storageKey?: string;
+  streamBytes?: number;
+}
 
 const imageStorage = multer.memoryStorage();
 
@@ -75,8 +78,12 @@ const streamingVideoStorage: multer.StorageEngine = {
           cb(new Error("O vídeo excede o limite de 500 MB."));
           return;
         }
-        streamUploadInfo.set(file, { storageKey, streamState });
-        cb(null, {});
+        (file as CustomMulterFile).storageKey = storageKey;
+        (file as CustomMulterFile).streamBytes = streamState.bytes;
+        cb(null, {
+          path: storageKey,
+          size: streamState.bytes,
+        });
       })
       .catch((error: unknown) => {
         void deleteFile(storageKey).catch(() => undefined).finally(() => {
@@ -85,7 +92,12 @@ const streamingVideoStorage: multer.StorageEngine = {
       });
   },
   _removeFile: (_req, file, cb) => {
-    cb(null);
+    const key = (file as CustomMulterFile).storageKey;
+    if (key) {
+      void deleteFile(key).catch(() => undefined).finally(() => cb(null));
+    } else {
+      cb(null);
+    }
   },
 };
 
@@ -126,7 +138,7 @@ router.post(
       return;
     }
 
-    const files = req.files as Express.Multer.File[];
+    const files = req.files as CustomMulterFile[];
     if (!files || files.length === 0) {
       res.status(400).json({ error: "Nenhum ficheiro enviado." });
       return;
@@ -142,12 +154,11 @@ router.post(
         let size: number;
 
         if (isVideo) {
-          const streamInfo = streamUploadInfo.get(file);
-          if (!streamInfo) {
+          key = file.storageKey || (file as any).path;
+          size = file.streamBytes ?? file.size ?? 0;
+          if (!key) {
             throw new Error("Metadata do upload de vídeo não encontrado.");
           }
-          key = streamInfo.storageKey;
-          size = streamInfo.streamState.bytes;
         } else {
           key = createStorageKey(`users/${req.userId}/media`, extension);
           size = file.size;
