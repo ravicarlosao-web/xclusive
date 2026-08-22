@@ -57,6 +57,9 @@ function publicKeyPath(key: string): string {
     .join("/");
 }
 
+const DEFAULT_TIMEOUT_MS = 60 * 1000; // 1 minute for small operations
+const STREAM_UPLOAD_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes for large video streaming
+
 /**
  * Uploads an object directly to a Bunny Storage Zone.
  * Bunny Storage authenticates with the zone password in the AccessKey header.
@@ -75,13 +78,14 @@ export async function uploadFile(
       "Content-Length": String(buffer.byteLength),
     },
     body: buffer,
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   await assertSuccessfulResponse(response, "upload");
 }
 
 /**
- * Uploads a stream directly to Bunny Storage.
+ * Uploads a stream directly to Bunny Storage with a 20-minute AbortSignal timeout.
  *
  * This is intentionally separate from uploadFile(): small images can keep
  * using the existing Buffer-based path, while large videos are forwarded
@@ -91,6 +95,7 @@ export async function uploadFileStream(
   stream: Readable,
   key: string,
   contentType: string,
+  timeoutMs: number = STREAM_UPLOAD_TIMEOUT_MS,
 ): Promise<void> {
   const { storagePassword } = getStorageConfig();
   const response = await fetch(storageUrl(key), {
@@ -103,6 +108,7 @@ export async function uploadFileStream(
     // known up front. Bunny accepts the resulting chunked PUT request.
     body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
     duplex: "half",
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   await assertSuccessfulResponse(response, "stream upload");
@@ -115,6 +121,7 @@ export async function deleteFile(key: string): Promise<void> {
     headers: {
       AccessKey: storagePassword,
     },
+    signal: AbortSignal.timeout(30 * 1000),
   });
 
   await assertSuccessfulResponse(response, "delete");
