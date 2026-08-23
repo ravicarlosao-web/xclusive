@@ -6,8 +6,13 @@
 
 import { Router, type RequestHandler } from "express";
 import multer from "multer";
-import { PassThrough, type Readable } from "node:stream";
+import os from "node:os";
+import fs from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { logger } from "../lib/logger";
 import {
   createStorageKey,
   deleteFile,
@@ -25,19 +30,65 @@ const ALLOWED_MIME = new Set([
   "video/mp4", "video/quicktime", "video/webm",
 ]);
 
-type StreamUploadState = {
-  bytes: number;
-  truncated: boolean;
-};
-
-type StreamUploadInfo = {
-  storageKey: string;
-  streamState: StreamUploadState;
-};
-
 interface CustomMulterFile extends Express.Multer.File {
   storageKey?: string;
   streamBytes?: number;
+}
+
+const UPLOAD_TMP_DIR = process.env.UPLOAD_TMP_DIR || os.tmpdir();
+
+/**
+ * Checks if there is enough free disk space in the temporary directory.
+ * Requires at least 2.5x the requested file buffer size + 500 MB safety buffer.
+ */
+async function checkAvailableDiskSpace(requiredBytes: number): Promise<boolean> {
+  try {
+    if (typeof fs.promises.statfs === "function") {
+      const stats = await fs.promises.statfs(UPLOAD_TMP_DIR);
+      const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+      const minRequired = requiredBytes * 2.5 + 500 * 1024 * 1024;
+      return freeBytes >= minRequired;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Runs FFmpeg to relocate the moov atom to the beginning of the MP4 container
+ * using `-movflags +faststart`. Pure remux with `-c copy` (takes 1-4 seconds, zero quality loss).
+ * Returns true if successful, false if FFmpeg is unavailable or failed.
+ */
+function applyFaststart(inputPath: string, outputPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const ffmpeg = spawn("ffmpeg", [
+      "-y",
+      "-i", inputPath,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      outputPath,
+    ]);
+
+    let stderr = "";
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve(true);
+      } else {
+        logger.warn({ code, stderr: stderr.slice(-300) }, "FFmpeg faststart falhou; a usar vídeo original");
+        resolve(false);
+      }
+    });
+
+    ffmpeg.on("error", (err) => {
+      logger.warn({ err: (err as Error).message }, "FFmpeg não disponível no servidor; a enviar vídeo original");
+      resolve(false);
+    });
+  });
 }
 
 const imageStorage = multer.memoryStorage();
@@ -51,45 +102,84 @@ const requireStorage: RequestHandler = (_req, res, next) => {
 };
 
 /**
- * Keeps the existing memoryStorage behaviour for images. Videos are piped to
- * Bunny while Multer is parsing the multipart request; this is important
- * because the route handler only runs after Multer has finished parsing.
+ * Stores large video files in a temporary file, optimizes container layout
+ * with FFmpeg (+faststart for instant progressive mobile playback),
+ * and streams the resulting optimized MP4 directly to Bunny Storage.
  */
 const streamingVideoStorage: multer.StorageEngine = {
-  _handleFile: (req, file, cb) => {
-    const streamState: StreamUploadState = { bytes: 0, truncated: false };
-    const stream = new PassThrough();
-    const extension = file.mimetype.split("/")[1] ?? "bin";
-    const storageKey = createStorageKey(`users/${(req as AuthRequest).userId}/media`, extension);
+  _handleFile: async (req, file, cb) => {
+    const hasSpace = await checkAvailableDiskSpace(MAX_UPLOAD_SIZE_BYTES);
+    if (!hasSpace) {
+      cb(new Error("Espaço em disco temporário insuficiente no servidor."));
+      return;
+    }
+
+    const uuid = randomUUID();
+    const extension = file.mimetype.split("/")[1] ?? "mp4";
+    const inputTempPath = path.join(UPLOAD_TMP_DIR, `xclusive_${uuid}_raw.${extension}`);
+    const outputTempPath = path.join(UPLOAD_TMP_DIR, `xclusive_${uuid}_faststart.mp4`);
+    const storageKey = createStorageKey(`users/${(req as AuthRequest).userId}/media`, "mp4");
+
+    const writeStream = fs.createWriteStream(inputTempPath);
+    let bytesWritten = 0;
+    let truncated = false;
 
     file.stream.on("data", (chunk: Buffer) => {
-      streamState.bytes += chunk.length;
+      bytesWritten += chunk.length;
     });
     file.stream.on("limit", () => {
-      streamState.truncated = true;
-      stream.destroy(new Error("O vídeo excede o limite de 500 MB."));
+      truncated = true;
+      writeStream.destroy(new Error("O vídeo excede o limite de 500 MB."));
     });
-    file.stream.on("error", (error) => stream.destroy(error));
-    file.stream.pipe(stream);
+    file.stream.on("error", (err) => writeStream.destroy(err));
+    file.stream.pipe(writeStream);
 
-    void uploadFileStream(stream, storageKey, file.mimetype)
-      .then(() => {
-        if (streamState.truncated) {
-          cb(new Error("O vídeo excede o limite de 500 MB."));
-          return;
+    writeStream.on("error", (err) => {
+      void fs.promises.unlink(inputTempPath).catch(() => undefined);
+      cb(err);
+    });
+
+    writeStream.on("finish", async () => {
+      if (truncated) {
+        void fs.promises.unlink(inputTempPath).catch(() => undefined);
+        cb(new Error("O vídeo excede o limite de 500 MB."));
+        return;
+      }
+
+      let finalUploadPath = inputTempPath;
+      let faststartApplied = false;
+
+      try {
+        // Tentar aplicar faststart com ffmpeg
+        faststartApplied = await applyFaststart(inputTempPath, outputTempPath);
+        if (faststartApplied) {
+          finalUploadPath = outputTempPath;
         }
+
+        const stat = await fs.promises.stat(finalUploadPath);
+        const finalSize = stat.size;
+        const uploadReadStream = fs.createReadStream(finalUploadPath);
+
+        await uploadFileStream(uploadReadStream, storageKey, "video/mp4");
+
         (file as CustomMulterFile).storageKey = storageKey;
-        (file as CustomMulterFile).streamBytes = streamState.bytes;
+        (file as CustomMulterFile).streamBytes = finalSize;
+
         cb(null, {
           path: storageKey,
-          size: streamState.bytes,
+          size: finalSize,
         });
-      })
-      .catch((error: unknown) => {
-        void deleteFile(storageKey).catch(() => undefined).finally(() => {
-          cb(error as Error);
-        });
-      });
+      } catch (uploadError) {
+        void deleteFile(storageKey).catch(() => undefined);
+        cb(uploadError as Error);
+      } finally {
+        // Limpeza garantida de todos os ficheiros temporários do disco
+        await Promise.allSettled([
+          fs.promises.unlink(inputTempPath).catch(() => undefined),
+          fs.promises.unlink(outputTempPath).catch(() => undefined),
+        ]);
+      }
+    });
   },
   _removeFile: (_req, file, cb) => {
     const key = (file as CustomMulterFile).storageKey;
