@@ -58,7 +58,7 @@ function publicKeyPath(key: string): string {
 }
 
 const DEFAULT_TIMEOUT_MS = 60 * 1000; // 1 minute for small operations
-const STREAM_UPLOAD_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes for large video streaming
+const STREAM_UPLOAD_TIMEOUT_MS = 40 * 60 * 1000; // 40 minutes for large video streaming
 
 /**
  * Uploads an object directly to a Bunny Storage Zone.
@@ -85,7 +85,7 @@ export async function uploadFile(
 }
 
 /**
- * Uploads a stream directly to Bunny Storage with a 20-minute AbortSignal timeout.
+ * Uploads a stream directly to Bunny Storage with a 40-minute AbortSignal timeout.
  *
  * This is intentionally separate from uploadFile(): small images can keep
  * using the existing Buffer-based path, while large videos are forwarded

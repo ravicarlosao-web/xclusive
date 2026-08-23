@@ -24,8 +24,8 @@ const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
 });
 
-// Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (20 minutos):
-server.requestTimeout = 20 * 60 * 1000; // 1.200.000 ms (era 300.000 ms por defeito no Node.js 18+)
-server.timeout = 20 * 60 * 1000;        // 20 minutos de timeout de inactividade do socket
+// Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (40 minutos / 2400s):
+server.requestTimeout = 40 * 60 * 1000; // 2.400.000 ms (alinhado com o Nginx a 2400s)
+server.timeout = 40 * 60 * 1000;        // 40 minutos de timeout de inactividade do socket
 server.headersTimeout = 65 * 1000;      // 65 segundos para recepção dos headers HTTP
 server.keepAliveTimeout = 60 * 1000;    // 60 segundos de keep-alive
