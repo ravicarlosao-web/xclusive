@@ -20,11 +20,12 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
+const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
 });
+
+// Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (20 minutos):
+server.requestTimeout = 20 * 60 * 1000; // 1.200.000 ms (era 300.000 ms por defeito no Node.js 18+)
+server.timeout = 20 * 60 * 1000;        // 20 minutos de timeout de inactividade do socket
+server.headersTimeout = 65 * 1000;      // 65 segundos para recepção dos headers HTTP
+server.keepAliveTimeout = 60 * 1000;    // 60 segundos de keep-alive
