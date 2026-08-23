@@ -55,17 +55,68 @@ async function checkAvailableDiskSpace(requiredBytes: number): Promise<boolean> 
   }
 }
 
+class TranscodeQueue {
+  private queue: Array<() => void> = [];
+  private active = 0;
+  private maxActive = 1;
+  private maxQueue = 3;
+
+  async enqueue<T>(task: () => Promise<T>): Promise<T> {
+    if (this.queue.length >= this.maxQueue) {
+      throw new Error("Servidor ocupado, tenta novamente daqui a alguns minutos.");
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      const run = async () => {
+        this.active++;
+        try {
+          const result = await task();
+          resolve(result);
+        } catch (e) {
+          reject(e);
+        } finally {
+          this.active--;
+          this.next();
+        }
+      };
+
+      if (this.active < this.maxActive) {
+        run();
+      } else {
+        this.queue.push(run);
+      }
+    });
+  }
+
+  next() {
+    if (this.active < this.maxActive && this.queue.length > 0) {
+      const task = this.queue.shift();
+      if (task) task();
+    }
+  }
+  
+  getStatus() {
+    return { active: this.active, queued: this.queue.length };
+  }
+}
+
+const videoQueue = new TranscodeQueue();
+
 /**
- * Runs FFmpeg to relocate the moov atom to the beginning of the MP4 container
- * using `-movflags +faststart`. Pure remux with `-c copy` (takes 1-4 seconds, zero quality loss).
- * Returns true if successful, false if FFmpeg is unavailable or failed.
+ * Transcodes video to H.264, scales to max 1080p, applies CRF compression,
+ * and relocates the moov atom with +faststart.
  */
-function applyFaststart(inputPath: string, outputPath: string): Promise<boolean> {
+function transcodeAndFaststart(inputPath: string, outputPath: string): Promise<boolean> {
   return new Promise((resolve) => {
+    const crf = process.env.VIDEO_TRANSCODE_CRF || "23";
     const ffmpeg = spawn("ffmpeg", [
       "-y",
       "-i", inputPath,
-      "-c", "copy",
+      "-vf", "scale=w='min(iw,1920)':h='min(ih,1080)':force_original_aspect_ratio=decrease",
+      "-c:v", "libx264",
+      "-crf", crf,
+      "-preset", "fast",
+      "-c:a", "aac",
       "-movflags", "+faststart",
       outputPath,
     ]);
@@ -79,7 +130,7 @@ function applyFaststart(inputPath: string, outputPath: string): Promise<boolean>
       if (code === 0) {
         resolve(true);
       } else {
-        logger.warn({ code, stderr: stderr.slice(-300) }, "FFmpeg faststart falhou; a usar vídeo original");
+        logger.warn({ code, stderr: stderr.slice(-300) }, "FFmpeg transcode falhou; a usar vídeo original");
         resolve(false);
       }
     });
@@ -150,8 +201,13 @@ const streamingVideoStorage: multer.StorageEngine = {
       let faststartApplied = false;
 
       try {
-        // Tentar aplicar faststart com ffmpeg
-        faststartApplied = await applyFaststart(inputTempPath, outputTempPath);
+        try {
+          faststartApplied = await videoQueue.enqueue(() => transcodeAndFaststart(inputTempPath, outputTempPath));
+        } catch (queueErr) {
+          cb(queueErr as Error);
+          return;
+        }
+
         if (faststartApplied) {
           finalUploadPath = outputTempPath;
         }
@@ -277,5 +333,9 @@ router.post(
     }
   },
 );
+
+router.get("/upload/queue-status", (req, res) => {
+  res.json(videoQueue.getStatus());
+});
 
 export default router;

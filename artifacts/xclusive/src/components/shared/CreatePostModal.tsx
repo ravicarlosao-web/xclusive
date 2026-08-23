@@ -185,6 +185,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   const [uploadTotalBytes, setUploadTotalBytes] = useState(0);
   const [uploadStage, setUploadStage] = useState<'uploading' | 'processing' | 'done' | 'error'>('uploading');
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [queueStatus, setQueueStatus] = useState<{ active: number, queued: number } | null>(null);
 
   // Mobile Data Warning State (> 20MB)
   const [showDataWarning, setShowDataWarning] = useState(false);
@@ -217,6 +218,25 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     }
   }, [step]);
 
+  // Poll queue status when processing
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (uploadStage === 'processing' && isUploading) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${(import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')}/api/upload/queue-status`);
+          if (res.ok) {
+            const data = await res.json();
+            setQueueStatus(data);
+          }
+        } catch {
+          // ignore
+        }
+      }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [uploadStage, isUploading]);
+
   function handleClose() {
     if (isUploading || isCreatingPost) return;
     mediaFiles.forEach(m => URL.revokeObjectURL(m.previewUrl));
@@ -237,6 +257,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     setUploadPercent(0);
     setUploadStage('uploading');
     setUploadError(null);
+    setQueueStatus(null);
     setShowDataWarning(false);
     setDataWarningConfirmed(false);
     setLargeVideoSizeBytes(0);
@@ -503,7 +524,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
             {/* Title & Stage */}
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-1 text-foreground">
               {uploadStage === 'uploading' && (hasLongVideo ? 'A carregar vídeo longo…' : 'A carregar ficheiros…')}
-              {uploadStage === 'processing' && 'A processar e publicar…'}
+              {uploadStage === 'processing' && (queueStatus?.queued && queueStatus.queued > 0 ? 'Na fila de processamento…' : 'A comprimir e optimizar…')}
               {uploadStage === 'done' && 'Publicação concluída!'}
               {uploadStage === 'error' && 'Ocorreu um erro'}
             </h2>
@@ -514,7 +535,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   ? 'Vídeos de alta duração requerem envio contínuo. Mantém esta janela aberta.'
                   : 'A enviar a tua publicação em alta qualidade para o servidor.'
               )}
-              {uploadStage === 'processing' && 'Ficheiro transferido com sucesso! A finalizar a publicação…'}
+              {uploadStage === 'processing' && (queueStatus?.queued && queueStatus.queued > 0 ? 'Há outro vídeo a ser processado, o teu vai começar em breve.' : 'O vídeo está a ser optimizado para melhor performance. Pode demorar 1-3 minutos…')}
               {uploadStage === 'done' && 'O teu vídeo já está disponível no feed do Xclusive.'}
               {uploadStage === 'error' && (uploadError || 'Não foi possível completar o envio.')}
             </p>
