@@ -42,6 +42,7 @@ import {
   sum,
   isNotNull,
   inArray,
+  notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getPublicUrl } from "../lib/storage.js";
@@ -234,11 +235,12 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       [{ receitaTotal }],
       [{ comissaoMes }],
     ] = await Promise.all([
-      db.select({ totalUtilizadores: count() }).from(usersTable),
+      db.select({ totalUtilizadores: count() }).from(usersTable)
+        .where(notInArray(usersTable.role, ['admin', 'superadmin'])),
       db.select({ totalCriadores: count() }).from(usersTable)
-        .where(eq(usersTable.tipoConta, "criador")),
+        .where(and(eq(usersTable.tipoConta, "criador"), notInArray(usersTable.role, ['admin', 'superadmin']))),
       db.select({ novosHoje: count() }).from(usersTable)
-        .where(gte(usersTable.criadoEm, hoje)),
+        .where(and(gte(usersTable.criadoEm, hoje), notInArray(usersTable.role, ['admin', 'superadmin']))),
       db.select({ postsHoje: count() }).from(postsTable)
         .where(gte(postsTable.criadoEm, hoje)),
       db.select({ denunciasPendentes: count() }).from(reportsTable)
@@ -421,7 +423,11 @@ router.get("/admin/users", async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const conditions: any[] = [];
-    if (role) conditions.push(eq(usersTable.role, role));
+    if (role) {
+      conditions.push(eq(usersTable.role, role));
+    } else {
+      conditions.push(notInArray(usersTable.role, ['admin', 'superadmin']));
+    }
     if (estado === "suspenso") conditions.push(eq(usersTable.ativo, false));
     if (estado === "ativo") conditions.push(eq(usersTable.ativo, true));
     if (search) {
@@ -674,8 +680,12 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
     }
 
     const verificadoAnterior = user.verificado;
+    const updateData = acao === "aprovar" 
+      ? { verificado: true, tipoConta: "criador" as const }
+      : { verificado: false, tipoConta: "pessoal" as const };
+
     const [updated] = await db.update(usersTable)
-      .set({ verificado: acao === "aprovar" })
+      .set(updateData)
       .where(eq(usersTable.id, id))
       .returning();
 
