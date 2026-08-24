@@ -89,10 +89,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
           {user?.tipoConta === 'criador' && (
             <button
-              onClick={() => setCreatePostOpen(true)}
-              className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary text-foreground text-left w-full"
+              onClick={() => {
+                if (user.verificado) setCreatePostOpen(true);
+              }}
+              disabled={!user.verificado}
+              title={!user.verificado ? "A tua conta está pendente de aprovação do administrador" : undefined}
+              className={cn(
+                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 text-left w-full",
+                !user.verificado 
+                  ? "opacity-50 cursor-not-allowed" 
+                  : "cursor-pointer group hover:bg-secondary text-foreground"
+              )}
             >
-              <PlusSquare className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
+              <PlusSquare className={cn("w-6 h-6 stroke-[1.5px]", user.verificado && "group-hover:scale-110 transition-transform")} />
               <span className="hidden lg:block text-[15px]">Criar</span>
             </button>
           )}

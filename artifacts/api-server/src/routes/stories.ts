@@ -67,9 +67,13 @@ router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise
 
 // Criar story (apenas criadores)
 router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
   if (!author || author.tipoConta !== 'criador') {
     res.status(403).json({ error: 'Apenas criadores podem publicar stories.' });
+    return;
+  }
+  if (!author.verificado) {
+    res.status(403).json({ error: 'A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador antes de publicares.' });
     return;
   }
 
@@ -134,9 +138,13 @@ router.get("/stories/:id/views", requireAuth, async (req: AuthRequest, res): Pro
 
 // Highlights (apenas criadores)
 router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
   if (!author || author.tipoConta !== 'criador') {
     res.status(403).json({ error: 'Apenas criadores podem criar destaques.' });
+    return;
+  }
+  if (!author.verificado) {
+    res.status(403).json({ error: 'A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador antes de publicares.' });
     return;
   }
 

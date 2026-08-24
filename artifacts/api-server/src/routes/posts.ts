@@ -48,9 +48,13 @@ router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> =
 router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
 
-  const [author] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, userId));
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado }).from(usersTable).where(eq(usersTable.id, userId));
   if (!author || author.tipoConta !== 'criador') {
     res.status(403).json({ error: 'Apenas criadores podem publicar conteúdo.' });
+    return;
+  }
+  if (!author.verificado) {
+    res.status(403).json({ error: 'A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador antes de publicares.' });
     return;
   }
 

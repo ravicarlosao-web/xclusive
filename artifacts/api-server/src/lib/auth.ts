@@ -210,13 +210,18 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
  */
 export async function requireCreator(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const [user] = await db.select({ tipoConta: usersTable.tipoConta })
+    const [user] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado })
       .from(usersTable)
       .where(eq(usersTable.id, req.userId!))
       .limit(1);
 
     if (!user || user.tipoConta !== "criador") {
       res.status(403).json({ error: "Acesso reservado a criadores." });
+      return;
+    }
+    
+    if (!user.verificado) {
+      res.status(403).json({ error: "A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador." });
       return;
     }
   } catch (err) {
