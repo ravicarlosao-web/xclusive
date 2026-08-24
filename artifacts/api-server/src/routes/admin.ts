@@ -28,6 +28,7 @@ import {
   subscriptionsTable,
   kycSubmissionsTable,
   topupRequestsTable,
+  notificationsTable,
 } from "@workspace/db";
 import {
   eq,
@@ -1275,11 +1276,44 @@ router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Pr
       return void res.status(400).json({ error: "titulo e mensagem são obrigatórios." });
     }
 
+    const conditions: any[] = [eq(usersTable.ativo, true), notInArray(usersTable.role, ['admin', 'superadmin'])];
+    if (segmento === "creators" || segmento === "criadores") {
+      conditions.push(eq(usersTable.tipoConta, "criador"));
+    } else if (segmento === "users" || segmento === "fans") {
+      conditions.push(eq(usersTable.tipoConta, "pessoal"));
+    } else if (segmento === "inactive") {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      conditions.push(sql`${usersTable.criadoEm} <= ${thirtyDaysAgo}`); // Approximation, as we don't track last login.
+    }
+
+    const targetUsers = await db.select({ id: usersTable.id }).from(usersTable).where(and(...conditions));
+    
+    let totalCriadas = 0;
+    if (targetUsers.length > 0) {
+      // Drizzle ORM supports batch inserts seamlessly via array
+      const notificationsData = targetUsers.map(user => ({
+        destinatarioId: user.id,
+        tipo: "sistema" as const,
+        atorId: req.adminId, // The admin is the sender
+        mensagem: mensagem.substring(0, 255), // safety limit
+      }));
+
+      // Insert in chunks of 500 to avoid query size limits on huge DBs
+      const chunkSize = 500;
+      for (let i = 0; i < notificationsData.length; i += chunkSize) {
+        const chunk = notificationsData.slice(i, i + chunkSize);
+        await db.insert(notificationsTable).values(chunk);
+      }
+      totalCriadas = targetUsers.length;
+    }
+
     // Guardar o broadcast no audit_log como registo
     await logAudit(req, "broadcast_send", "platform", null, {
       titulo,
       mensagem,
       segmento: segmento ?? "todos",
+      totalEntregas: totalCriadas,
     });
 
     res.status(201).json({
@@ -1287,6 +1321,7 @@ router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Pr
       titulo,
       mensagem,
       segmento: segmento ?? "todos",
+      totalEntregas: totalCriadas,
       criadoEm: new Date().toISOString(),
     });
   } catch (err) {

@@ -9,7 +9,8 @@ import { pt } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetNotificationsQueryKey } from '@workspace/api-client-react';
 
-type NotifTipo = 'novo_seguidor' | 'like_post' | 'like_reel' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao';
+type NotifTipo = 'novo_seguidor' | 'like_post' | 'like_reel' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema';
+
 type FilterType = 'tudo' | 'mencoes';
 
 const MENCAO_TYPES: NotifTipo[] = ['mencao', 'comentario'];
@@ -23,6 +24,7 @@ function renderIcon(tipo: NotifTipo) {
     case 'mencao':             return <AtSign className="w-4 h-4 text-sky-400" />;
     case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />;
     case 'pagamento_recebido': return <DollarSign className="w-4 h-4 text-emerald-500" />;
+    case 'sistema':            return <Bell className="w-4 h-4 text-purple-500 fill-purple-500" />;
     default:                   return null;
   }
 }
@@ -36,6 +38,7 @@ function renderText(tipo: NotifTipo) {
     case 'mencao':             return 'mencionou-te numa publicação.';
     case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo! 🎉';
     case 'pagamento_recebido': return 'pagou por conteúdo PPV.';
+    case 'sistema':            return 'Notificação de Sistema';
     default:                   return '';
   }
 }

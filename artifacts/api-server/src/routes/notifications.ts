@@ -31,6 +31,7 @@ router.get("/notifications", requireAuth, async (req: AuthRequest, res): Promise
       lida: n.lida,
       postId: n.alvoId,
       postThumbnail: n.postThumbnail,
+      mensagem: n.mensagem,
       criadoEm: n.criadoEm.toISOString(),
     })),
     page,

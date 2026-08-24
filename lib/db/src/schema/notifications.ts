@@ -9,6 +9,7 @@ export const notificationTipoEnum = pgEnum("notification_tipo", [
   "mencao",
   "nova_subscricao",
   "pagamento_recebido",
+  "sistema",
 ]);
 
 export const notificationsTable = pgTable("notifications", {
@@ -18,6 +19,7 @@ export const notificationsTable = pgTable("notifications", {
   atorId: integer("ator_id").references(() => usersTable.id, { onDelete: "set null" }),
   alvoId: integer("alvo_id"),
   postThumbnail: text("post_thumbnail"),
+  mensagem: text("mensagem"),
   lida: boolean("lida").notNull().default(false),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
