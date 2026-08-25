@@ -38,7 +38,7 @@ export default function Broadcast() {
     e.preventDefault();
     if (!title || !message) return;
     if (confirm(`Prestes a enviar notificação para o segmento: ${segment}. Continuar?`)) {
-      sendBroadcast.mutate({ title, message, segment });
+      sendBroadcast.mutate({ titulo: title, mensagem: message, segmento: segment });
     }
   };
 
