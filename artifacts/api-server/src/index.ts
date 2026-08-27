@@ -7,6 +7,7 @@ dotenv.config();
 
 import app from "./app";
 import { logger } from "./lib/logger";
+import { initSocket } from "./lib/socket";
 
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = "development";
@@ -23,6 +24,9 @@ if (Number.isNaN(port) || port <= 0) {
 const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
 });
+
+// Inicializar Socket.io (partilha a mesma porta do HTTP)
+initSocket(server);
 
 // Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (40 minutos / 2400s):
 server.requestTimeout = 40 * 60 * 1000; // 2.400.000 ms (alinhado com o Nginx a 2400s)

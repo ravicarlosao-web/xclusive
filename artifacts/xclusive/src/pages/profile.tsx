@@ -1,11 +1,12 @@
 import { useRoute } from 'wouter';
-import { useGetUserProfile, useGetUserPosts, useFollowUser, useUnfollowUser, useCreateConversation } from '@workspace/api-client-react';
+import { useGetUserProfile, useGetUserPosts, useFollowUser, useUnfollowUser, useCreateConversation, getFreshAuthToken } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Grid, PlaySquare, Lock, Settings } from 'lucide-react';
+import { Grid, PlaySquare, Lock, Settings, Radio } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { SubscribeModal } from '@/components/wallet/SubscribeModal';
@@ -37,6 +38,30 @@ export default function Profile() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [followModal, setFollowModal] = useState<{ type: 'followers' | 'following' } | null>(null);
   const [, setLocation] = useLocation();
+
+  // Verificar se este criador tem uma live activa
+  const { data: activeStreams } = useQuery<Array<{
+    id: number;
+    criadorId: number;
+    criador: { username: string; nomeExibicao: string | null; avatarUrl: string | null };
+  }>>( {
+    queryKey: ['/api/live/active'],
+    queryFn: async () => {
+      const token = await getFreshAuthToken();
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/live/active`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Erro ao carregar lives');
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    retry: 1,
+    enabled: !!username,
+  });
+
+  // Stream activo deste criador (se existir)
+  const activeStream = activeStreams?.find((s) => s.criador.username === username) ?? null;
 
   // Derive final following state
   const isFollowing = isFollowingLocally !== undefined ? isFollowingLocally : profile?.estaASeguir;
@@ -154,6 +179,15 @@ export default function Profile() {
                 >
                   {createConversationMutation.isPending ? 'A abrir…' : 'Mensagem'}
                 </Button>
+                {activeStream && (
+                  <Button
+                    className="gap-2 bg-red-600 hover:bg-red-700 text-white border-0 font-semibold animate-pulse"
+                    onClick={() => setLocation(`/live/${activeStream.id}`)}
+                  >
+                    <Radio className="w-4 h-4" />
+                    Ver Live
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -165,6 +199,12 @@ export default function Profile() {
             {profile.nomeExibicao}
             {profile.verificado && (
               <svg className="w-6 h-6 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+            )}
+            {activeStream && (
+              <span className="inline-flex items-center gap-1 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                <Radio className="w-3 h-3" />
+                AO VIVO
+              </span>
             )}
           </h1>
           <p className="text-muted-foreground font-medium mb-4">@{profile.username}</p>

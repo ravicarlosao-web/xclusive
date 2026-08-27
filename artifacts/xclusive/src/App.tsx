@@ -26,6 +26,7 @@ import Onboarding from '@/pages/onboarding';
 import KYCPage from '@/pages/kyc';
 import Carteira from '@/pages/carteira';
 import EsquecestePassword from '@/pages/esqueceste-password';
+import LivePage from '@/pages/live';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -117,6 +118,7 @@ function Router() {
       <Route path="/definicoes">{(params) => <ProtectedRoute component={Settings} path="/definicoes" />}</Route>
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
       <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
+      <Route path="/live/:streamId">{() => <ProtectedRoute component={LivePage} path="/live/:streamId" />}</Route>
 
       {/* Redirects */}
       <Route path="/feed">{() => <RedirectTo to="/home" />}</Route>

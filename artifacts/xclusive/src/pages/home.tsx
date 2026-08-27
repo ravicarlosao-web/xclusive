@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup, getFreshAuthToken } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { Flame, Heart, WifiOff } from 'lucide-react';
+import { Flame, Heart, WifiOff, Radio } from 'lucide-react';
 import { PostCard } from '@/components/shared/PostCard';
 import { StoryCircle } from '@/components/shared/StoryCircle';
 import { StoryViewer } from '@/components/shared/StoryViewer';
@@ -120,6 +120,29 @@ export default function Home() {
 
   // Apenas dados reais — nunca dados demonstrativos
   const topCreators: TopCreator[] = (!isMockMode && topCreatorsData) ? topCreatorsData : [];
+
+  // Lives activas — para mostrar badge "AO VIVO" no feed
+  const { data: activeStreams } = useQuery<Array<{
+    id: number;
+    criadorId: number;
+    totalVisualizadores: number;
+    criador: { username: string; nomeExibicao: string | null; avatarUrl: string | null };
+  }>>( {
+    queryKey: ['/api/live/active'],
+    queryFn: async () => {
+      const token = await getFreshAuthToken();
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/live/active`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Erro ao carregar lives');
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    enabled: !isMockMode,
+    retry: 1,
+  });
+  const liveStreams = activeStreams ?? [];
 
   // Em modo mock sem DB, usa stories demonstrativos de outros utilizadores
   const otherGroups: StoryGroup[] = isMockMode && !storiesData?.length
@@ -263,6 +286,47 @@ export default function Home() {
       {/* Main Feed Column */}
       <div className="w-full max-w-[540px] flex-shrink-0">
         
+        {/* Lives Ao Vivo — secção acima dos stories quando há lives activas */}
+        {liveStreams.length > 0 && (
+          <div className="mb-6 px-4 sm:px-0">
+            <div className="flex items-center gap-2 mb-3">
+              <Radio className="w-4 h-4 text-red-500 animate-pulse" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ao Vivo Agora</h2>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+              {liveStreams.map((stream) => (
+                <Link key={stream.id} href={`/live/${stream.id}`}>
+                  <div className="flex flex-col items-center gap-1.5 cursor-pointer group shrink-0">
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-full ring-2 ring-red-500 ring-offset-2 ring-offset-background overflow-hidden">
+                        {stream.criador.avatarUrl ? (
+                          <img
+                            src={stream.criador.avatarUrl}
+                            alt={stream.criador.nomeExibicao ?? stream.criador.username}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">
+                              {(stream.criador.nomeExibicao ?? stream.criador.username).slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                        AO VIVO
+                      </span>
+                    </div>
+                    <span className="text-xs text-foreground font-medium truncate max-w-[64px]">
+                      {stream.criador.nomeExibicao ?? stream.criador.username}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Stories Section */}
         <div className="mb-8">
           <input

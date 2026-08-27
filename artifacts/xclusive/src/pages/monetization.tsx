@@ -5,7 +5,7 @@ import { PlanDialog } from '@/components/monetization/PlanDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, CalendarDays, Lock, Loader2 } from 'lucide-react';
+import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, CalendarDays, Lock, Loader2, Radio } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -16,6 +16,7 @@ import {
   getGetSubscriptionPlansQueryKey,
   getGetCreatorEarningsQueryKey,
   type SubscriptionPlan,
+  getFreshAuthToken,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -61,6 +62,10 @@ export default function Monetization() {
   const [withdrawalError, setWithdrawalError] = useState('');
   const [withdrawalSuccess, setWithdrawalSuccess] = useState<number | null>(null);
 
+  // Live stream state
+  const [activeStreamId, setActiveStreamId] = useState<number | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
   const today = new Date();
   const isWithdrawalDay = today.getDate() === 29;
 
@@ -93,6 +98,25 @@ export default function Monetization() {
     const data = getMockUserData();
     if (data?.dadosBancarios) setBankForm(data.dadosBancarios);
   }, [getMockUserData]);
+
+  // Verificar live activa ao montar
+  useEffect(() => {
+    if (!user || user.tipoConta !== 'criador') return;
+    (async () => {
+      try {
+        const token = await getFreshAuthToken();
+        const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+        const res = await fetch(`${base}/api/live/active`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const streams: Array<{ id: number; criadorId: number }> = await res.json();
+        const mine = streams.find((s) => s.criadorId === user.id);
+        setActiveStreamId(mine?.id ?? null);
+      } catch { /* ignorar */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (!user || user.tipoConta !== 'criador') return null;
 
@@ -128,6 +152,59 @@ export default function Monetization() {
   function handlePlanSaved() {
     queryClient.invalidateQueries({ queryKey: ['/api/creator/plans'] });
     queryClient.invalidateQueries({ queryKey: ['/api/creator/stats'] });
+  }
+
+  async function handleStartLive() {
+    setLiveLoading(true);
+    try {
+      const token = await getFreshAuthToken();
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/live/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || 'Erro ao iniciar live');
+      }
+      const stream: { id: number } = await res.json();
+      setActiveStreamId(stream.id);
+      setLocation(`/live/${stream.id}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao iniciar live';
+      alert(msg);
+    } finally {
+      setLiveLoading(false);
+    }
+  }
+
+  async function handleEndLive() {
+    if (!activeStreamId) return;
+    setLiveLoading(true);
+    try {
+      const token = await getFreshAuthToken();
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/live/${activeStreamId}/end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || 'Erro ao terminar live');
+      }
+      setActiveStreamId(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao terminar live';
+      alert(msg);
+    } finally {
+      setLiveLoading(false);
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -221,6 +298,67 @@ export default function Monetization() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Live Stream Panel */}
+      <Card className="mb-8 bg-gradient-to-r from-red-950/40 to-zinc-900/60 border-red-500/30">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeStreamId ? 'bg-red-600' : 'bg-zinc-700'}`}>
+              <Radio className={`w-5 h-5 text-white ${activeStreamId ? 'animate-pulse' : ''}`} />
+            </div>
+            <div>
+              <CardTitle className="text-base">Transmissão ao Vivo</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {activeStreamId ? `Live activa — ID #${activeStreamId}` : 'Sem live activa no momento'}
+              </p>
+            </div>
+          </div>
+          {activeStreamId && (
+            <span className="inline-flex items-center gap-1 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">
+              <span className="w-1.5 h-1.5 bg-white rounded-full" />
+              AO VIVO
+            </span>
+          )}
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          {activeStreamId ? (
+            <>
+              <Button
+                onClick={() => setLocation(`/live/${activeStreamId}`)}
+                className="gap-2 bg-red-600 hover:bg-red-700 border-0 text-white"
+              >
+                <Radio className="w-4 h-4" />
+                Ir para a Live
+              </Button>
+              <Button
+                onClick={handleEndLive}
+                disabled={liveLoading}
+                variant="outline"
+                className="gap-2 border-red-500/50 text-red-400 hover:bg-red-950/50"
+              >
+                {liveLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Terminar Live
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={handleStartLive}
+              disabled={liveLoading}
+              className="gap-2 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 border-0 text-white font-semibold"
+            >
+              {liveLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Radio className="w-4 h-4" />
+              )}
+              {liveLoading ? 'A iniciar...' : 'Iniciar Live'}
+            </Button>
+          )}
+          <p className="w-full text-xs text-muted-foreground mt-1">
+            O player de vídeo (RTMP) será activado numa próxima fase. Por agora, a live permite gorjetas e comunicação em tempo real com os teus fãs.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Chart + Plans */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
