@@ -633,6 +633,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, isMockToken]);
 
   const unlockPost = useCallback(async (postId: number, creatorUsername: string, preco: number) => {
+    // ── Real API mode ──────────────────────────────────────────────────────────
+    if (token && !isMockToken) {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/posts/${postId}/unlock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Erro ao desbloquear conteúdo.');
+      }
+      // Actualizar saldo local a partir da API após débito bem-sucedido
+      await fetchApiWallet(token);
+      return;
+    }
+
+    // ── Mock mode ──────────────────────────────────────────────────────────────
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
@@ -663,7 +684,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     saveTransactions(txs);
     setSaldo(freshUsers[senderIdx].saldo);
-  }, []);
+  }, [token, isMockToken, fetchApiWallet]);
 
   const subscribe = useCallback(async (creatorUsername: string, preco: number) => {
 

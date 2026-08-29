@@ -6,6 +6,7 @@ import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
+import { getCommissionRate, calcComissao } from "../lib/commission";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -28,6 +29,14 @@ const createCommentSchema = z.object({
 });
 
 const router = Router();
+
+/** Erros de pagamento lançados dentro de transações. */
+class PaymentError extends Error {
+  constructor(msg: string, public readonly httpStatus: number) {
+    super(msg);
+    this.name = "PaymentError";
+  }
+}
 
 // Feed
 router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
@@ -82,6 +91,64 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
 
   const formatted = await formatPost(post, userId);
   res.status(201).json(formatted);
+});
+
+// Desbloquear post PPV
+router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const userId = req.userId!;
+
+  try {
+    // 1. Verificar se o post existe e é exclusivo
+    const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
+    if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
+    if (!post.exclusivo || !post.precoDesbloqueio) { res.status(400).json({ error: "Este post não precisa de ser desbloqueado por PPV." }); return; }
+    if (post.autorId === userId) { res.status(400).json({ error: "Não podes desbloquear o teu próprio post." }); return; }
+
+    const precoNumber = Number(post.precoDesbloqueio);
+
+    // 2. Transacção atómica de compra
+    await db.transaction(async (tx) => {
+      // a) Bloquear o comprador
+      const [comprador] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
+      if (!comprador) throw new PaymentError("Utilizador não encontrado.", 404);
+
+      // b) Verificar se já tem acesso (AGORA DENTRO DO LOCK para evitar race conditions)
+      const jaTemAcesso = await temAcessoExclusivo(userId, post.autorId, id);
+      if (jaTemAcesso) throw new PaymentError("Já tens acesso a este post.", 400);
+
+      if (Number(comprador.saldo) < precoNumber) throw new PaymentError("Saldo insuficiente. Carrega a tua carteira primeiro.", 402);
+
+      // b) Calcular comissões
+      const commissionRate = await getCommissionRate(tx);
+      const { valorCriador, comissao } = calcComissao(precoNumber, commissionRate);
+
+      // c) Debitar o comprador
+      await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoNumber}` }).where(eq(usersTable.id, userId));
+
+      // d) Creditar o criador
+      await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` }).where(eq(usersTable.id, post.autorId));
+
+      // e) Registar a compra (PPV)
+      await tx.insert(purchasesTable).values({
+        compradorId: userId,
+        vendedorId: post.autorId,
+        tipo: "ppv",
+        valor: String(precoNumber),
+        comissao: String(comissao),
+        conteudoId: id,
+        descricao: `Desbloqueio PPV do post #${id}`,
+      });
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    if (err instanceof PaymentError) {
+      res.status(err.httpStatus).json({ error: err.message });
+      return;
+    }
+    res.status(500).json({ error: "Erro interno ao processar desbloqueio." });
+  }
 });
 
 // Obter post
