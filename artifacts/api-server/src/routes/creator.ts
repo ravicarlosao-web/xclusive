@@ -228,10 +228,41 @@ router.get("/creator/transactions", requireAuth, requireCreator, async (req: Aut
   });
 });
 
+// Plano activo de um criador — endpoint público (sem requireAuth) para que
+// o frontend do fã possa resolver o planoId antes de chamar POST /subscriptions.
+router.get("/users/:username/subscription-plan", async (req, res): Promise<void> => {
+  const { username } = req.params;
+
+  const [user] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.username, username))
+    .limit(1);
+
+  if (!user) { res.status(404).json({ error: "Criador não encontrado." }); return; }
+
+  const [plan] = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .where(and(eq(subscriptionPlansTable.criadorId, user.id), eq(subscriptionPlansTable.ativo, true)))
+    .orderBy(subscriptionPlansTable.preco)
+    .limit(1);
+
+  if (!plan) { res.status(404).json({ error: "Este criador não tem um plano de subscrição activo." }); return; }
+
+  res.json({
+    id: plan.id,
+    nome: plan.nome,
+    preco: parseFloat(String(plan.preco)),
+    beneficios: plan.beneficios,
+  });
+});
+
 const subscribeSchema = z.object({
   planoId: z.number().int().positive(),
   precoEsperado: z.number().positive("precoEsperado deve ser positivo").finite(),
 });
+
 
 // Subscrever
 router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req: AuthRequest, res): Promise<void> => {

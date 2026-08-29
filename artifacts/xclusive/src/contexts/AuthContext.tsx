@@ -530,6 +530,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       throw new Error('Valor de gorjeta inválido.');
     }
+
+    // ── Real API mode ──────────────────────────────────────────────────────────
+    if (token && !isMockToken) {
+      if (!postId) throw new Error('ID do post em falta.');
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/posts/${postId}/gorjeta`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ valor: amount }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Erro ao enviar gorjeta.');
+      }
+      // Actualizar saldo local a partir da API após débito bem-sucedido
+      await fetchApiWallet(token);
+      return;
+    }
+
+    // ── Mock mode ──────────────────────────────────────────────────────────────
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const users = getMockUsers();
@@ -554,7 +578,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     txs.push({ id: Date.now(), fromUserId: session.userId, toUsername: creatorUsername, amount, postId, tipo: 'gorjeta', criadoEm: new Date().toISOString() });
     saveTransactions(txs);
     setSaldo(freshUsers[freshSenderIdx].saldo);
-  }, []);
+  }, [token, isMockToken, fetchApiWallet]);
 
   const topUp = useCallback(async (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => {
     if (!Number.isFinite(amount) || amount < 500) {
@@ -642,6 +666,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const subscribe = useCallback(async (creatorUsername: string, preco: number) => {
+
+    // ── Real API mode ──────────────────────────────────────────────────────────
+    if (token && !isMockToken) {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+
+      // 1. Resolver o planoId do criador (endpoint público, sem auth)
+      const planRes = await fetch(`${base}/api/users/${creatorUsername}/subscription-plan`, {
+        credentials: 'same-origin',
+      });
+      if (!planRes.ok) {
+        const err = await planRes.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Criador não tem plano de subscrição disponível.');
+      }
+      const plan = await planRes.json() as { id: number; preco: number };
+
+      // 2. Submeter subscrição com planoId e precoEsperado (protecção contra race condition de preço)
+      const res = await fetch(`${base}/api/subscriptions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ planoId: plan.id, precoEsperado: plan.preco }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Erro ao processar subscrição.');
+      }
+      // Actualizar saldo local a partir da API após débito bem-sucedido
+      await fetchApiWallet(token);
+      return;
+    }
+
+    // ── Mock mode ──────────────────────────────────────────────────────────────
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
@@ -680,7 +739,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     saveTransactions(txs);
     setSaldo(freshUsers[senderIdx].saldo);
-  }, []);
+  }, [token, isMockToken, fetchApiWallet]);
 
   const isSubscribed = useCallback((creatorUsername: string): boolean => {
     const u = getCurrentMockUser();
