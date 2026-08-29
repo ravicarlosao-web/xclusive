@@ -31,6 +31,12 @@ export const purchasesTable = pgTable("purchases", {
   vendedorId: integer("vendedor_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   tipo: purchaseTipoEnum("tipo").notNull(),
   valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
+  /**
+   * Valor retido pela plataforma (taxa de comissão aplicada no momento do pagamento).
+   * valorCreditadoAoCriador = valor - comissao
+   * Default 0 para retrocompatibilidade com registos anteriores a esta migração.
+   */
+  comissao: numeric("comissao", { precision: 10, scale: 2 }).notNull().default("0"),
   conteudoId: integer("conteudo_id"),
   descricao: text("descricao"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
@@ -38,6 +44,7 @@ export const purchasesTable = pgTable("purchases", {
   // Suporta GET /users/:username/gorjetas com ORDER BY criado_em DESC e LIMIT/OFFSET
   index("purchases_vendedor_tipo_criado_em_idx").on(t.vendedorId, t.tipo, t.criadoEm),
 ]);
+
 
 export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
 export type Subscription = typeof subscriptionsTable.$inferSelect;

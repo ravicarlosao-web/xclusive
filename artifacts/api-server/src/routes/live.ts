@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
+import { getCommissionRate, calcComissao } from "../lib/commission";
 
 class PaymentError extends Error {
   statusCode: number;
@@ -172,16 +173,20 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
         throw new PaymentError("Saldo insuficiente para enviar esta gorjeta.", 402);
       }
 
-      // 3. Debitar remetente
+      // 2b. Ler taxa de comissão activa (FOR SHARE).
+      const commissionRate = await getCommissionRate(tx);
+      const { valorCriador, comissao } = calcComissao(valor, commissionRate);
+
+      // 3. Debitar remetente (valor total — o fã paga sempre o valor cheio)
       await tx
         .update(usersTable)
         .set({ saldo: sql`${usersTable.saldo} - ${valor}` })
         .where(eq(usersTable.id, senderId));
 
-      // 4. Creditar ganhos do criador da live
+      // 4. Creditar ganhos líquidos ao criador da live
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${valor}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
         .where(eq(usersTable.id, stream.criadorId));
 
       // 5. Registar a gorjeta específica da live
@@ -195,7 +200,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
         })
         .returning();
 
-      // 6. Registar transação genérica na carteira (para histórico e gráficos)
+      // 6. Registar transação genérica na carteira com comissão gravada
       await tx
         .insert(purchasesTable)
         .values({
@@ -203,7 +208,8 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           vendedorId: stream.criadorId,
           tipo: "gorjeta",
           valor: String(valor),
-          conteudoId: streamId, // Aqui conteudoId faz referência ao streamId
+          comissao: String(comissao),
+          conteudoId: streamId,
           descricao: `Gorjeta na Live #${streamId}${mensagem ? ` - ${mensagem}` : ""}`,
         });
 

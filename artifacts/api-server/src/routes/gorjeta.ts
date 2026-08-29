@@ -4,6 +4,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { getCommissionRate, calcComissao } from "../lib/commission";
 
 const router = Router();
 
@@ -62,19 +63,23 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
         throw new PaymentError("Saldo insuficiente para enviar esta gorjeta.", 402);
       }
 
-      // 3. Debitar saldo do remetente.
+      // 2b. Ler taxa de comissão activa (FOR SHARE — impede alteração durante a transação).
+      const commissionRate = await getCommissionRate(tx);
+      const { valorCriador, comissao } = calcComissao(valor, commissionRate);
+
+      // 3. Debitar saldo do remetente (valor total — o fã paga sempre o valor cheio).
       await tx
         .update(usersTable)
         .set({ saldo: sql`${usersTable.saldo} - ${valor}` })
         .where(eq(usersTable.id, senderId));
 
-      // 4. Creditar ganhos do criador.
+      // 4. Creditar ganhos do criador (apenas a sua parte líquida após comissão).
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${valor}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
         .where(eq(usersTable.id, post.autorId));
 
-      // 5. Registar transação de compra.
+      // 5. Registar transação com comissão da plataforma gravada.
       const [p] = await tx
         .insert(purchasesTable)
         .values({
@@ -82,6 +87,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
           vendedorId: post.autorId,
           tipo: "gorjeta",
           valor: String(valor),
+          comissao: String(comissao),
           conteudoId: postId,
           descricao: `Gorjeta ao post #${postId}`,
         })

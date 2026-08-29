@@ -4,6 +4,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { getCommissionRate, calcComissao } from "../lib/commission";
 
 const createPlanSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório").max(100),
@@ -39,13 +40,17 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Ganhos do mês
-  const [{ ganhosMes }] = await db.select({ ganhosMes: sql<number>`coalesce(sum(${purchasesTable.valor}::numeric), 0)::float` })
+  // Ganhos do mês (líquido após comissão da plataforma)
+  const [{ ganhosMes }] = await db.select({
+    ganhosMes: sql<number>`coalesce(sum((${purchasesTable.valor}::numeric - coalesce(${purchasesTable.comissao}::numeric, 0))), 0)::float`,
+  })
     .from(purchasesTable)
     .where(and(eq(purchasesTable.vendedorId, userId), sql`${purchasesTable.criadoEm} >= ${startOfMonth}`));
 
-  // Ganhos totais
-  const [{ ganhosTotal }] = await db.select({ ganhosTotal: sql<number>`coalesce(sum(${purchasesTable.valor}::numeric), 0)::float` })
+  // Ganhos totais (líquido após comissão da plataforma)
+  const [{ ganhosTotal }] = await db.select({
+    ganhosTotal: sql<number>`coalesce(sum((${purchasesTable.valor}::numeric - coalesce(${purchasesTable.comissao}::numeric, 0))), 0)::float`,
+  })
     .from(purchasesTable)
     .where(eq(purchasesTable.vendedorId, userId));
 
@@ -179,9 +184,14 @@ router.get("/creator/earnings", requireAuth, requireCreator, async (req: AuthReq
     const end = new Date(dateStr);
     end.setDate(end.getDate() + 1);
 
-    const [{ valor }] = await db.select({ valor: sql<number>`coalesce(sum(${purchasesTable.valor}::numeric), 0)::float` })
+    const [{ valor }] = await db.select({
+      valor: sql<number>`coalesce(sum((${purchasesTable.valor}::numeric - coalesce(${purchasesTable.comissao}::numeric, 0))), 0)::float`,
+    })
       .from(purchasesTable)
-      .where(and(eq(purchasesTable.vendedorId, userId), sql`${purchasesTable.criadoEm} >= ${start} AND ${purchasesTable.criadoEm} < ${end}`));
+      .where(and(
+        eq(purchasesTable.vendedorId, userId),
+        sql`${purchasesTable.criadoEm} >= ${start} AND ${purchasesTable.criadoEm} < ${end}`,
+      ));
 
     points.push({ data: dateStr, valor: parseFloat(String(valor)) || 0, subscricoes: 0, ppv: 0 });
   }
@@ -283,10 +293,13 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
         .set({ saldo: sql`${usersTable.saldo} - ${precoReal}` })
         .where(eq(usersTable.id, req.userId!));
 
-      // 4. Creditar ganhos do criador.
+      // 4. Calcular comissão e creditar ganhos líquidos ao criador.
+      const commissionRate = await getCommissionRate(tx);
+      const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
+
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${precoReal}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
         .where(eq(usersTable.id, plan.criadorId));
 
       // 5. Criar subscrição.
@@ -301,12 +314,13 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
         renovacaoEm: renewAt,
       }).returning();
 
-      // 6. Registar transação de compra.
+      // 6. Registar transação de compra com comissão gravada.
       await tx.insert(purchasesTable).values({
         compradorId: req.userId!,
         vendedorId: plan.criadorId,
         tipo: "subscricao",
         valor: plan.preco,
+        comissao: String(comissao),
         conteudoId: plan.id,
         descricao: `Subscrição: ${plan.nome}`,
       });
