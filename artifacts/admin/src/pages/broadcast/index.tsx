@@ -43,22 +43,21 @@ export default function Broadcast() {
   };
 
   const columns: Column<any>[] = [
-    { header: 'Título', accessorKey: 'title', className: 'font-medium' },
-    { header: 'Segmento', accessorKey: 'segment', className: 'uppercase text-xs tracking-wider text-muted-foreground' },
+    { header: 'Título', accessorKey: 'titulo', className: 'font-medium' },
+    { header: 'Segmento', accessorKey: 'segmento', className: 'uppercase text-xs tracking-wider text-muted-foreground' },
     { 
       header: 'Data de Envio', 
-      cell: (item) => <span className="text-muted-foreground text-sm">{format(new Date(item.sentAt), 'dd MMM yyyy, HH:mm')}</span>
-    },
-    { 
-      header: 'Taxa de Leitura', 
-      cell: (item) => (
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-24 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary" style={{ width: `${item.readRate}%` }} />
-          </div>
-          <span className="text-xs font-mono">{item.readRate}%</span>
-        </div>
-      )
+      cell: (item) => {
+        const dateStr = item.criadoEm;
+        const dateObj = dateStr ? new Date(dateStr) : null;
+        const isValidDate = dateObj && !isNaN(dateObj.getTime());
+        
+        return (
+          <span className="text-muted-foreground text-sm">
+            {isValidDate ? format(dateObj, 'dd MMM yyyy, HH:mm') : '—'}
+          </span>
+        );
+      }
     }
   ];
 
