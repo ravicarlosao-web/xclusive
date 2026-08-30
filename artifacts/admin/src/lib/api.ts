@@ -86,6 +86,13 @@ export const adminApi = {
   updateSettings: (data: any) =>
     adminFetch('/admin/settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  getCommissionOverview: () => adminFetch('/admin/users/commission-overview'),
+  setCreatorCommission: (id: number, comissaoPersonalizada: number | null) =>
+    adminFetch('/admin/users/' + id + '/commission', {
+      method: 'PATCH',
+      body: JSON.stringify({ comissaoPersonalizada }),
+    }),
+
   getAuditLog: (params?: Record<string, string>) =>
     adminFetch('/admin/audit-log?' + new URLSearchParams(params)),
 };
