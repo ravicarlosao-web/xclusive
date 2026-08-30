@@ -461,6 +461,109 @@ router.get("/admin/users", async (req, res) => {
   }
 });
 
+// Commission routes MUST be registered BEFORE /admin/users/:id, otherwise
+// Express matches "commission-overview" as the :id dynamic segment.
+
+/**
+ * PATCH /api/admin/users/:id/commission
+ * Define ou remove a taxa de comissão personalizada de um criador.
+ *
+ * Body: { comissaoPersonalizada: number | null }
+ *   - number (0-100): define o override para este criador
+ *   - null: remove o override (volta à taxa global)
+ */
+router.patch("/admin/users/:id/commission", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const userId = parseInt(String(req.params.id), 10);
+    if (isNaN(userId)) { res.status(400).json({ error: "ID inválido." }); return; }
+
+    const { comissaoPersonalizada } = req.body as { comissaoPersonalizada: number | null };
+
+    // Validar: null (remover override) ou número entre 0 e 100
+    if (comissaoPersonalizada !== null) {
+      if (typeof comissaoPersonalizada !== "number" || !isFinite(comissaoPersonalizada)
+          || comissaoPersonalizada < 0 || comissaoPersonalizada > 100) {
+        res.status(400).json({ error: "comissaoPersonalizada deve ser null ou um número entre 0 e 100." });
+        return;
+      }
+    }
+
+    const [user] = await db.select({ id: usersTable.id, username: usersTable.username })
+      .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
+
+    await db.update(usersTable)
+      .set({ comissaoPersonalizada: comissaoPersonalizada !== null ? String(comissaoPersonalizada) : null })
+      .where(eq(usersTable.id, userId));
+
+    await logAudit(req, "set_commission_override", "user", userId, {
+      username: user.username,
+      comissaoPersonalizada,
+    });
+
+    res.json({
+      userId,
+      username: user.username,
+      comissaoPersonalizada,
+    });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao definir comissão personalizada");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * GET /api/admin/users/commission-overview
+ * Lista todos os criadores com a sua taxa efectiva actual.
+ */
+router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const [globalRow] = await db
+      .select({ value: platformSettingsTable.value })
+      .from(platformSettingsTable)
+      .where(eq(platformSettingsTable.key, "commission_rate"))
+      .limit(1);
+    const globalRate: number = (typeof (globalRow?.value as any)?.value === "number")
+      ? (globalRow.value as any).value
+      : 20;
+
+    const creators = await db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        nomeExibicao: usersTable.nomeExibicao,
+        tipoConta: usersTable.tipoConta,
+        verificado: usersTable.verificado,
+        comissaoPersonalizada: usersTable.comissaoPersonalizada,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.tipoConta, "criador"))
+      .orderBy(asc(usersTable.username));
+
+    const result = creators.map((c) => {
+      const override = c.comissaoPersonalizada !== null && c.comissaoPersonalizada !== undefined
+        ? Number(c.comissaoPersonalizada)
+        : null;
+      const taxaEfectiva = override !== null ? override : globalRate;
+      return {
+        id: c.id,
+        username: c.username,
+        nomeExibicao: c.nomeExibicao,
+        verificado: c.verificado,
+        comissaoPersonalizada: override,
+        taxaEfectiva,
+        fonte: override !== null ? "personalizada" : "global",
+        taxaGlobal: globalRate,
+      };
+    });
+
+    res.json({ taxaGlobal: globalRate, criadores: result });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao obter commission overview");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 router.get("/admin/users/:id", async (req, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
@@ -1500,112 +1603,5 @@ router.get("/admin/audit-log", async (req, res) => {
   }
 });
 
-// ── Comissão personalizada por criador ───────────────────────────────────────
-
-/**
- * PATCH /api/admin/users/:id/commission
- * Define ou remove a taxa de comissão personalizada de um criador.
- *
- * Body: { comissaoPersonalizada: number | null }
- *   - number (0-100): define o override para este criador
- *   - null: remove o override (volta à taxa global)
- */
-router.patch("/admin/users/:id/commission", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
-  try {
-    const userId = parseInt(String(req.params.id), 10);
-    if (isNaN(userId)) { res.status(400).json({ error: "ID inválido." }); return; }
-
-    const { comissaoPersonalizada } = req.body as { comissaoPersonalizada: number | null };
-
-    // Validar: null (remover override) ou número entre 0 e 100
-    if (comissaoPersonalizada !== null) {
-      if (typeof comissaoPersonalizada !== "number" || !isFinite(comissaoPersonalizada)
-          || comissaoPersonalizada < 0 || comissaoPersonalizada > 100) {
-        res.status(400).json({ error: "comissaoPersonalizada deve ser null ou um número entre 0 e 100." });
-        return;
-      }
-    }
-
-    const [user] = await db.select({ id: usersTable.id, username: usersTable.username })
-      .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    if (!user) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
-
-    await db.update(usersTable)
-      .set({ comissaoPersonalizada: comissaoPersonalizada !== null ? String(comissaoPersonalizada) : null })
-      .where(eq(usersTable.id, userId));
-
-    await logAudit(req, "set_commission_override", "user", userId, {
-      username: user.username,
-      comissaoPersonalizada,
-    });
-
-    res.json({
-      userId,
-      username: user.username,
-      comissaoPersonalizada,
-    });
-  } catch (err) {
-    (req as any).log?.error({ err }, "Erro ao definir comissão personalizada");
-    res.status(500).json({ error: "Erro interno." });
-  }
-});
-
-/**
- * GET /api/admin/users/commission-overview
- * Lista todos os criadores com a sua taxa efectiva actual.
- *
- * Resposta por criador:
- *   - comissaoPersonalizada: number | null (override definido, ou null)
- *   - taxaEfectiva: number (personalizada se definida, global como fallback)
- *   - fonte: "personalizada" | "global"
- */
-router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
-  try {
-    // Leitura da taxa global fora de transacção (não é pagamento, não precisa de lock)
-    const [globalRow] = await db
-      .select({ value: platformSettingsTable.value })
-      .from(platformSettingsTable)
-      .where(eq(platformSettingsTable.key, "commission_rate"))
-      .limit(1);
-    const globalRate: number = (typeof (globalRow?.value as any)?.value === "number")
-      ? (globalRow.value as any).value
-      : 20;
-
-    const creators = await db
-      .select({
-        id: usersTable.id,
-        username: usersTable.username,
-        nomeExibicao: usersTable.nomeExibicao,
-        tipoConta: usersTable.tipoConta,
-        verificado: usersTable.verificado,
-        comissaoPersonalizada: usersTable.comissaoPersonalizada,
-      })
-      .from(usersTable)
-      .where(eq(usersTable.tipoConta, "criador"))
-      .orderBy(asc(usersTable.username));
-
-    const result = creators.map((c) => {
-      const override = c.comissaoPersonalizada !== null && c.comissaoPersonalizada !== undefined
-        ? Number(c.comissaoPersonalizada)
-        : null;
-      const taxaEfectiva = override !== null ? override : globalRate;
-      return {
-        id: c.id,
-        username: c.username,
-        nomeExibicao: c.nomeExibicao,
-        verificado: c.verificado,
-        comissaoPersonalizada: override,
-        taxaEfectiva,
-        fonte: override !== null ? "personalizada" : "global",
-        taxaGlobal: globalRate,
-      };
-    });
-
-    res.json({ taxaGlobal: globalRate, criadores: result });
-  } catch (err) {
-    (req as any).log?.error({ err }, "Erro ao obter commission overview");
-    res.status(500).json({ error: "Erro interno." });
-  }
-});
 
 export default router;

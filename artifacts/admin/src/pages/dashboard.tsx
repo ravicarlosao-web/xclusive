@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Star, DollarSign, Activity, AlertCircle, ShieldAlert, CreditCard } from 'lucide-react';
+import { Users, Star, DollarSign, Activity, AlertCircle, ShieldAlert, CreditCard, Percent } from 'lucide-react';
 import { LineChart } from '@/components/charts/LineChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { cn } from '@/lib/utils';
+import { useLocation } from 'wouter';
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
+
   const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ['dashboard', 'kpis'],
     queryFn: adminApi.getDashboardKpis
@@ -22,6 +25,17 @@ export default function Dashboard() {
     queryFn: adminApi.getActivityFeed,
     refetchInterval: 15000
   });
+
+  // Reutiliza o mesmo query key que Settings usa — sem chamada duplicada
+  const { data: commissionData, isLoading: isLoadingCommission } = useQuery({
+    queryKey: ['commission-overview'],
+    queryFn: adminApi.getCommissionOverview,
+    staleTime: 60_000,
+  });
+
+  const totalComPersonalizada = (commissionData as any)?.criadores?.filter(
+    (c: any) => c.comissaoPersonalizada !== null
+  ).length ?? 0;
 
   const kpiCards = [
     { title: 'Total Utilizadores', value: kpis?.totalUtilizadores, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -56,6 +70,40 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ))}
+
+        {/* ── Card de Comissão — clicável, leva para Definições ─────── */}
+        <Card
+          id="commission-summary-card"
+          className="border-border cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+          onClick={() => setLocation('/settings')}
+          title="Ir para Definições → Comissões por Criador"
+        >
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Global</CardTitle>
+            <div className="p-2 rounded-md bg-violet-500/10">
+              <Percent className="h-4 w-4 text-violet-500" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {isLoadingCommission ? (
+              <>
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+                <div className="h-3 w-28 bg-muted animate-pulse rounded mt-1" />
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold font-mono">
+                  {(commissionData as any)?.taxaGlobal ?? '—'}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {totalComPersonalizada > 0
+                    ? `${totalComPersonalizada} criador${totalComPersonalizada > 1 ? 'es' : ''} com taxa personalizada`
+                    : 'Todos os criadores na taxa global'}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -67,8 +115,8 @@ export default function Dashboard() {
             {isLoadingCharts ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">A carregar gráfico...</div>
             ) : (
-              <BarChart 
-                data={charts?.dias30 || []} 
+              <BarChart
+                data={charts?.dias30 || []}
                 xAxisKey="data"
                 bars={[
                   { dataKey: 'novosUtilizadores', color: 'hsl(var(--primary))', name: 'Novos Users' },
@@ -87,8 +135,8 @@ export default function Dashboard() {
             {isLoadingCharts ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">A carregar gráfico...</div>
             ) : (
-              <LineChart 
-                data={charts?.dias30 || []} 
+              <LineChart
+                data={charts?.dias30 || []}
                 xAxisKey="data"
                 lines={[
                   { dataKey: 'gorjetas', color: 'hsl(var(--chart-4))', name: 'Gorjetas' }
