@@ -174,7 +174,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       }
 
       // 2b. Ler taxa de comissão activa (FOR SHARE).
-      const commissionRate = await getCommissionRate(tx);
+      const commissionRate = await getCommissionRate(tx, stream.criadorId);
       const { valorCriador, comissao } = calcComissao(valor, commissionRate);
 
       // 3. Debitar remetente (valor total — o fã paga sempre o valor cheio)

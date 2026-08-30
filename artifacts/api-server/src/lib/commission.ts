@@ -1,17 +1,44 @@
-import { db, platformSettingsTable } from "@workspace/db";
+import { db, platformSettingsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 // Tipo de transacção derivado do db — sem imports circulares
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * Lê a commission_rate activa dentro de uma transacção existente (FOR SHARE),
- * garantindo que o valor não muda durante o processamento do pagamento.
+ * Lê a commission_rate efectiva para um criador dentro de uma transacção existente.
+ *
+ * Lógica de resolução (prioridade decrescente):
+ *   1. Se `criadorId` for fornecido e o criador tiver `comissao_personalizada`
+ *      definida (não NULL), usa esse valor.
+ *   2. Caso contrário, lê `commission_rate` de `platform_settings` (FOR SHARE),
+ *      garantindo que o valor não muda durante o processamento do pagamento.
+ *   3. Se nem o override nem a chave global existirem, usa o default de 20.
+ *
+ * @param tx        - Transacção Drizzle activa.
+ * @param criadorId - ID do criador que vai receber o pagamento (opcional).
+ *                    Se omitido, usa sempre a taxa global.
  *
  * Devolve a percentagem como número (ex: 20 para 20%).
- * Default: 20 (se a chave não existir na tabela).
  */
-export async function getCommissionRate(tx: Tx): Promise<number> {
+export async function getCommissionRate(tx: Tx, criadorId?: number): Promise<number> {
+  // 1. Verificar override por criador (sem lock adicional — a linha do utilizador
+  //    já foi bloqueada em FOR UPDATE no início da transacção pelo handler de
+  //    pagamento, pelo que a leitura aqui é segura e consistente).
+  if (criadorId !== undefined) {
+    const [creator] = await tx
+      .select({ comissaoPersonalizada: usersTable.comissaoPersonalizada })
+      .from(usersTable)
+      .where(eq(usersTable.id, criadorId))
+      .limit(1);
+
+    const override = creator?.comissaoPersonalizada;
+    if (override !== null && override !== undefined) {
+      const overrideNum = parseFloat(String(override));
+      if (overrideNum >= 0 && overrideNum <= 100) return overrideNum;
+    }
+  }
+
+  // 2. Fallback: taxa global (FOR SHARE — impede alteração durante a transação).
   const [row] = await tx
     .select({ value: platformSettingsTable.value })
     .from(platformSettingsTable)

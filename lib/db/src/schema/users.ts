@@ -34,6 +34,12 @@ export const usersTable = pgTable("users", {
    * Ganhos acumulados do criador (créditos recebidos de gorjetas e subscrições).
    */
   ganhos: numeric("ganhos", { precision: 12, scale: 2 }).notNull().default("0"),
+  /**
+   * Taxa de comissão personalizada para este criador (percentagem, 0-100).
+   * NULL = usa a taxa global definida em platform_settings.commission_rate.
+   * Quando definida, sobrepõe a taxa global exclusivamente para este criador.
+   */
+  comissaoPersonalizada: numeric("comissao_personalizada", { precision: 5, scale: 2 }),
 }, (table) => [
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
 ]);

@@ -120,7 +120,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
       if (Number(comprador.saldo) < precoNumber) throw new PaymentError("Saldo insuficiente. Carrega a tua carteira primeiro.", 402);
 
       // b) Calcular comissões
-      const commissionRate = await getCommissionRate(tx);
+      const commissionRate = await getCommissionRate(tx, post.autorId);
       const { valorCriador, comissao } = calcComissao(precoNumber, commissionRate);
 
       // c) Debitar o comprador

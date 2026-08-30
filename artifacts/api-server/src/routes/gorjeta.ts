@@ -64,7 +64,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
       }
 
       // 2b. Ler taxa de comissão activa (FOR SHARE — impede alteração durante a transação).
-      const commissionRate = await getCommissionRate(tx);
+      const commissionRate = await getCommissionRate(tx, post.autorId);
       const { valorCriador, comissao } = calcComissao(valor, commissionRate);
 
       // 3. Debitar saldo do remetente (valor total — o fã paga sempre o valor cheio).

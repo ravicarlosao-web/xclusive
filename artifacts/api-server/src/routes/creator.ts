@@ -325,7 +325,7 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
         .where(eq(usersTable.id, req.userId!));
 
       // 4. Calcular comissão e creditar ganhos líquidos ao criador.
-      const commissionRate = await getCommissionRate(tx);
+      const commissionRate = await getCommissionRate(tx, plan.criadorId);
       const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
 
       await tx
