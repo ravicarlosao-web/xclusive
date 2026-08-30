@@ -1494,9 +1494,6 @@ router.get("/admin/settings", async (req, res) => {
 });
 
 router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
-  if (req.adminRole !== "superadmin") {
-    return void res.status(403).json({ error: "Apenas superadmin pode alterar as definições da plataforma" });
-  }
 
   try {
     const erros: string[] = [];
