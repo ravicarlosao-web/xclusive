@@ -47,18 +47,7 @@ export async function getCommissionRate(tx: Tx, criadorId?: number): Promise<num
     .limit(1);
 
   const rate = (row?.value as { value?: number } | null)?.value;
-  const finalRate = typeof rate === "number" && rate >= 0 && rate <= 100 ? rate : 20;
-
-  // [DIAGNOSTIC LOG]
-  console.log("[DIAGNÓSTICO COMISSÃO] getCommissionRate lido:", {
-    rawRowValue: row?.value,
-    extractedRate: rate,
-    typeofRate: typeof rate,
-    finalRateAplicada: finalRate,
-    criadorId: criadorId,
-  });
-
-  return finalRate;
+  return typeof rate === "number" && rate >= 0 && rate <= 100 ? rate : 20;
 }
 
 /**

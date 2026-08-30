@@ -253,12 +253,12 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       db.select({ levantamentosPendentes: count() }).from(withdrawalRequestsTable)
         .where(eq(withdrawalRequestsTable.status, "pending")),
       db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
-      db.select({ comissaoMes: sum(purchasesTable.valor) }).from(purchasesTable)
+      db.select({ comissaoMes: sum(purchasesTable.comissao) }).from(purchasesTable)
         .where(gte(purchasesTable.criadoEm, new Date(hoje.getFullYear(), hoje.getMonth(), 1))),
     ]);
 
     const receitaTotalNum = Number(receitaTotal ?? 0);
-    const comissaoMesNum = Number(comissaoMes ?? 0) * 0.2; // 20% comissão
+    const comissaoMesNum = Number(comissaoMes ?? 0);
 
     res.json({
       totalUtilizadores: Number(totalUtilizadores),
@@ -1055,25 +1055,28 @@ router.get("/admin/finance/kpis", async (req, res) => {
     inicioMes.setHours(0, 0, 0, 0);
 
     const [
-      [{ receitaTotal }],
+      [{ receitaTotal, comissaoTotal }],
       [{ receitaMes }],
       [{ totalTransacoes }],
     ] = await Promise.all([
-      db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
+      db.select({
+        receitaTotal: sum(purchasesTable.valor),
+        comissaoTotal: sum(purchasesTable.comissao)
+      }).from(purchasesTable),
       db.select({ receitaMes: sum(purchasesTable.valor) }).from(purchasesTable)
         .where(gte(purchasesTable.criadoEm, inicioMes)),
       db.select({ totalTransacoes: count() }).from(purchasesTable),
     ]);
 
     const total = Number(receitaTotal ?? 0);
+    const comissao = Number(comissaoTotal ?? 0);
     const mes = Number(receitaMes ?? 0);
     const txCount = Number(totalTransacoes);
-    const COMISSAO = 0.20;
 
     res.json({
       receitaTotal: total,
-      comissaoRetida: total * COMISSAO,
-      pagoCriadores: total * (1 - COMISSAO),
+      comissaoRetida: comissao,
+      pagoCriadores: total - comissao,
       ticketMedio: txCount > 0 ? Math.round(total / txCount) : 0,
       receitaMes: mes,
       crescimentoMes: 0, // requereria dados do mês anterior
@@ -1103,6 +1106,7 @@ router.get("/admin/finance/transactions", async (req, res) => {
         id: purchasesTable.id,
         tipo: purchasesTable.tipo,
         valor: purchasesTable.valor,
+        comissao: purchasesTable.comissao,
         compradorId: purchasesTable.compradorId,
         vendedorId: purchasesTable.vendedorId,
         descricao: purchasesTable.descricao,
@@ -1117,7 +1121,7 @@ router.get("/admin/finance/transactions", async (req, res) => {
     ]);
 
     res.json(paginate(
-      rows.map(r => ({ ...r, valor: Number(r.valor), comissao: Number(r.valor) * 0.20 })),
+      rows.map(r => ({ ...r, valor: Number(r.valor), comissao: Number(r.comissao ?? 0) })),
       Number(total), pageNum, limitNum
     ));
   } catch (err) {
