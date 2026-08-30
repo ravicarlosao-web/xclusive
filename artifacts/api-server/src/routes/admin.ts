@@ -1531,7 +1531,7 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
     // Upsert cada definição
     for (const upd of updates) {
       await db.insert(platformSettingsTable)
-        .values({ key: upd.key, value: upd as any, updatedBy: req.adminId ?? undefined })
+        .values({ key: upd.key, value: upd.value as any, updatedBy: req.adminId ?? undefined })
         .onConflictDoUpdate({
           target: platformSettingsTable.key,
           set: { value: upd.value as any, updatedBy: req.adminId ?? undefined, updatedAt: new Date() },
