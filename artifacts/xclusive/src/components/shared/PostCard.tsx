@@ -95,9 +95,11 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   // Check if user already has access
   const hasSubscription = localSubscribed || isSubscribed(post.autor.username);
   const hasUnlocked = localUnlocked || isPostUnlocked(post.id);
-  const isLocked = post.bloqueado ?? (post.exclusivo && !isOwnPost && (
-    post.precoDesbloqueio ? !hasUnlocked : !hasSubscription
-  ));
+  
+  let isLocked = post.bloqueado ?? (post.exclusivo && !isOwnPost);
+  if (post.precoDesbloqueio ? hasUnlocked : hasSubscription) {
+    isLocked = false;
+  }
   const feedVideoRef = useRef<HTMLVideoElement>(null);
 
   // For video previews in the feed: play only when card is visible and post is not locked
