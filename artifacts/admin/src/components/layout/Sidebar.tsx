@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, 
   Flag, TrendingUp, Wallet, Bell, Settings, ClipboardList,
-  PanelLeftClose, PanelLeftOpen, ArrowDownToLine
+  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/content', label: 'Conteúdo', icon: ImageIcon },
     { href: '/reports', label: 'Denúncias', icon: Flag, badge: kpis?.denunciasPendentes || undefined },
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
+    { href: '/commissions', label: 'Comissões', icon: Percent },
     { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine },
     { href: '/withdrawals', label: 'Levantamentos', icon: Wallet, badge: kpis?.levantamentosPendentes || undefined },
     { href: '/broadcast', label: 'Broadcast', icon: Bell },

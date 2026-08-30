@@ -16,6 +16,7 @@ import KycQueue from '@/pages/creators/kyc';
 import Content from '@/pages/content/index';
 import Reports from '@/pages/reports/index';
 import Finance from '@/pages/finance/index';
+import Commissions from '@/pages/commissions/index';
 import Withdrawals from '@/pages/withdrawals/index';
 import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
@@ -62,6 +63,7 @@ function Router() {
             <Route path="/content"><ProtectedRoute component={Content} /></Route>
             <Route path="/reports"><ProtectedRoute component={Reports} /></Route>
             <Route path="/finance"><ProtectedRoute component={Finance} /></Route>
+            <Route path="/commissions"><ProtectedRoute component={Commissions} /></Route>
             <Route path="/topups"><ProtectedRoute component={TopUps} /></Route>
             <Route path="/withdrawals"><ProtectedRoute component={Withdrawals} /></Route>
             <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>

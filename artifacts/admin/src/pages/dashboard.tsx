@@ -71,12 +71,12 @@ export default function Dashboard() {
           </Card>
         ))}
 
-        {/* ── Card de Comissão — clicável, leva para Definições ─────── */}
+        {/* ── Card de Comissão — clicável, leva para Comissões ─────── */}
         <Card
           id="commission-summary-card"
           className="border-border cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
-          onClick={() => setLocation('/settings')}
-          title="Ir para Definições → Comissões por Criador"
+          onClick={() => setLocation('/commissions')}
+          title="Ir para Comissões e Taxas"
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Global</CardTitle>
