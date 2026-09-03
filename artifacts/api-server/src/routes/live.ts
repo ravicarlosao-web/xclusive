@@ -247,4 +247,94 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
   }
 });
 
+// ── POST /api/live/admission ──────────────────────────────────────────────
+router.post("/live/admission", async (req, res): Promise<void> => {
+  try {
+    // 1. Validar autenticação do webhook via header secreto partilhado
+    const configuredSecret = process.env.LIVE_ADMISSION_SECRET;
+    const providedSecret = req.headers["x-webhook-secret"];
+
+    if (!configuredSecret || !providedSecret || providedSecret !== configuredSecret) {
+      res.status(401).json({ error: "Unauthorized: Invalid or missing webhook secret." });
+      return;
+    }
+
+    const payload = req.body ?? {};
+    const requestInfo = payload.request ?? {};
+    const url = String(requestInfo.url ?? "");
+    const status = String(requestInfo.status ?? "opening").toLowerCase();
+    const direction = String(requestInfo.direction ?? "incoming").toLowerCase();
+
+    // 2. Extrair o streamKey do URL (ex: "rtmp://host:1935/app/streamKey" ou query string)
+    // Remove qualquer query string primeiro e obtém o último segmento do caminho
+    const urlWithoutQuery = url.split("?")[0].trim();
+    const streamKey = urlWithoutQuery.substring(urlWithoutQuery.lastIndexOf("/") + 1);
+
+    if (!streamKey) {
+      (req as any).log?.warn?.({ url }, "Live admission: streamKey em falta no URL");
+      res.json({ allowed: false });
+      return;
+    }
+
+    // 3. Consultar a stream na base de dados
+    const [stream] = await db
+      .select()
+      .from(liveStreamsTable)
+      .where(eq(liveStreamsTable.streamKey, streamKey))
+      .limit(1);
+
+    if (!stream) {
+      (req as any).log?.info?.({ streamKey }, "Live admission negada: streamKey inexistente");
+      res.json({ allowed: false });
+      return;
+    }
+
+    // Tratar evento de encerramento do OvenMediaEngine (quando o encoder desliga ou a sessão fecha)
+    if (status === "closing") {
+      if (stream.status !== "terminado") {
+        await db
+          .update(liveStreamsTable)
+          .set({
+            status: "terminado",
+            terminadoEm: new Date(),
+          })
+          .where(eq(liveStreamsTable.id, stream.id));
+
+        try {
+          getIO().to(`live:${stream.id}`).emit("stream:ended", { streamId: stream.id });
+        } catch {
+          // Socket.io pode não estar inicializado em testes
+        }
+      }
+      res.json({});
+      return;
+    }
+
+    // Para requisições de publicação/abertura (opening):
+    // Se o status já for 'terminado', não permitir reutilização da chave
+    if (stream.status === "terminado") {
+      (req as any).log?.info?.({ streamId: stream.id }, "Live admission negada: live já terminada");
+      res.json({ allowed: false });
+      return;
+    }
+
+    // Se estiver 'agendado', actualizar para 'ao_vivo' e definir iniciadoEm
+    if (stream.status === "agendado") {
+      await db
+        .update(liveStreamsTable)
+        .set({
+          status: "ao_vivo",
+          iniciadoEm: new Date(),
+        })
+        .where(eq(liveStreamsTable.id, stream.id));
+    }
+
+    (req as any).log?.info?.({ streamId: stream.id, direction, status }, "Live admission autorizada");
+    res.json({ allowed: true });
+  } catch (err) {
+    (req as any).log?.error?.({ err }, "Erro no admission webhook de live");
+    res.status(500).json({ allowed: false, error: "Internal server error." });
+  }
+});
+
 export default router;
