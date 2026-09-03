@@ -270,8 +270,10 @@ router.post("/live/admission", async (req, res): Promise<void> => {
     const urlWithoutQuery = url.split("?")[0].trim();
     const streamKey = urlWithoutQuery.substring(urlWithoutQuery.lastIndexOf("/") + 1);
 
-    if (!streamKey) {
-      (req as any).log?.warn?.({ url }, "Live admission: streamKey em falta no URL");
+    // Validação de formato UUID (v1-v5) antes de consultar o banco para evitar erro de sintaxe Postgres (HTTP 500)
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!streamKey || !UUID_REGEX.test(streamKey)) {
+      (req as any).log?.warn?.({ streamKey, url }, "Live admission negada: streamKey inválida ou não é UUID");
       res.json({ allowed: false });
       return;
     }
