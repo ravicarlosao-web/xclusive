@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
+import Hls from 'hls.js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/hooks/useSocket';
 import { Button } from '@/components/ui/button';
@@ -10,11 +11,208 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Radio, Send, Gift, ArrowLeft, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Users, Radio, Send, Gift, ArrowLeft, AlertTriangle, Wifi, WifiOff, Loader2, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { getFreshAuthToken } from '@workspace/api-client-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// ─── Configuração CDN ─────────────────────────────────────────────────────────
+// Hostname padrão da Pull Zone Bunny CDN para entrega LL-HLS.
+// Pode ser substituído via variável de ambiente VITE_BUNNY_LIVE_CDN_HOSTNAME.
+const BUNNY_LIVE_CDN_HOSTNAME =
+  import.meta.env.VITE_BUNNY_LIVE_CDN_HOSTNAME || 'xclusivelive.b-cdn.net';
+
+// ─── Componente do Player de Vídeo HLS ────────────────────────────────────────
+
+interface LiveVideoPlayerProps {
+  streamKey?: string;
+  viewers: number;
+}
+
+function LiveVideoPlayer({ streamKey, viewers }: LiveVideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+
+  const streamUrl = streamKey
+    ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/llhls.m3u8`
+    : null;
+
+  const initPlayer = () => {
+    const video = videoRef.current;
+    if (!video || !streamUrl) return;
+
+    setIsLoading(true);
+    setHasError(false);
+    setErrorMessage(null);
+
+    // Limpar instância anterior do Hls se existir
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 2000,
+      });
+
+      hlsRef.current = hls;
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsLoading(false);
+        setHasError(false);
+        video.play().catch(() => {
+          // Autoplay com som bloqueado pelo browser; mantém mudo e tenta novamente
+          video.muted = true;
+          video.play().catch(() => {
+            // Utilizador pode clicar no botão de play nativo
+          });
+        });
+      });
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              // Erro de rede (ex: 404 se o criador ainda não começou a transmitir)
+              setIsLoading(true);
+              setErrorMessage('A aguardar o início da transmissão...');
+              if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+              retryTimeoutRef.current = setTimeout(() => {
+                hls.startLoad();
+              }, 3000);
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              setHasError(true);
+              setErrorMessage('Não foi possível carregar o vídeo.');
+              hls.destroy();
+              break;
+          }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Suporte nativo para HLS (Safari / iOS WebKit)
+      video.src = streamUrl;
+      video.addEventListener('loadedmetadata', () => {
+        setIsLoading(false);
+        setHasError(false);
+        video.play().catch(() => {
+          video.muted = true;
+          video.play().catch(() => {});
+        });
+      });
+
+      video.addEventListener('error', () => {
+        setHasError(true);
+        setErrorMessage('A aguardar o início da transmissão...');
+      });
+    } else {
+      setHasError(true);
+      setErrorMessage('O teu navegador não suporta reprodução HLS.');
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    initPlayer();
+
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [streamUrl]);
+
+  return (
+    <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+      {/* Elemento de vídeo nativo com controlos */}
+      <video
+        ref={videoRef}
+        controls
+        playsInline
+        muted
+        autoPlay
+        onPlaying={() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+          setHasError(false);
+        }}
+        onWaiting={() => setIsLoading(true)}
+        className="w-full h-full object-contain"
+      />
+
+      {/* Estado: Sem streamKey ou a carregar */}
+      {!isPlaying && (isLoading || !streamKey) && !hasError && (
+        <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 gap-3 z-10">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm font-medium text-white/90">
+            {errorMessage || 'A ligar à transmissão ao vivo...'}
+          </p>
+          <p className="text-xs text-muted-foreground max-w-xs">
+            A preparar o fluxo de vídeo com ultra-baixa latência (LL-HLS).
+          </p>
+        </div>
+      )}
+
+      {/* Estado: Erro / stream ainda não iniciada */}
+      {!isPlaying && hasError && (
+        <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 gap-3 z-10">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+            <Radio className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">
+              {errorMessage || 'A aguardar o início da transmissão...'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+              O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={initPlayer}
+            className="gap-2 text-xs border-white/20 hover:bg-white/10"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {/* Badges sobrepostos no vídeo */}
+      <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 pointer-events-none z-20">
+        <Users className="w-4 h-4 text-white" />
+        <span className="text-white text-sm font-medium">{viewers}</span>
+      </div>
+
+      <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-red-600 rounded-full px-3 py-1 pointer-events-none z-20">
+        <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+        <span className="text-white text-xs font-bold">AO VIVO</span>
+      </div>
+    </div>
+  );
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -230,37 +428,9 @@ export default function LivePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Área de vídeo (placeholder) */}
+        {/* Área de vídeo com player HLS */}
         <div className="lg:col-span-2 space-y-3">
-          <div className="relative aspect-video rounded-2xl overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 border border-white/10 flex flex-col items-center justify-center gap-4">
-            {/* Efeito de fundo animado */}
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-red-500 blur-3xl animate-pulse" />
-              <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-purple-500 blur-3xl animate-pulse delay-700" />
-            </div>
-
-            <div className="relative z-10 text-center space-y-2 px-6">
-              <div className="w-16 h-16 mx-auto rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center mb-2">
-                <Radio className="w-8 h-8 text-red-400 animate-pulse" />
-              </div>
-              <p className="text-lg font-semibold text-white">Stream ao vivo em breve</p>
-              <p className="text-sm text-white/60">
-                O player de vídeo será activado quando a integração RTMP estiver disponível.
-              </p>
-            </div>
-
-            {/* Badge de viewers sobreposto */}
-            <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5">
-              <Users className="w-4 h-4 text-white" />
-              <span className="text-white text-sm font-medium">{viewers}</span>
-            </div>
-
-            {/* Badge AO VIVO sobreposto */}
-            <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-red-600 rounded-full px-3 py-1">
-              <span className="w-2 h-2 bg-white rounded-full animate-ping" />
-              <span className="text-white text-xs font-bold">AO VIVO</span>
-            </div>
-          </div>
+          <LiveVideoPlayer streamKey={stream?.streamKey} viewers={viewers} />
 
           {/* Contador de viewers (abaixo do vídeo em mobile) */}
           <div className="flex items-center gap-4 px-1 lg:hidden">
