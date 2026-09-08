@@ -76,15 +76,21 @@ function LiveVideoPlayer({ streamKey, viewers }: LiveVideoPlayerProps) {
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        // lowLatencyMode:false — o OvenMediaEngine emite HLS standard (segmentos ~3s, sem EXT-X-PART).
+        // Com lowLatencyMode:true, o HLS.js pedia ficheiros "part_*_llhls.m3u8" que a Bunny CDN
+        // não consegue entregar a tempo via pull, causando 404 contínuos e bufferStalledError.
+        lowLatencyMode: false,
         backBufferLength: 30,
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 2000,
-        // Parâmetros para tratar correctamente conteúdo live (evitar comportamento VOD)
-        liveDurationInfinity: true,       // força duração Infinity em vez de somar fragmentos
-        liveSyncDurationCount: 3,         // nº de segmentos atrás do live edge para sincronizar
-        liveMaxLatencyDurationCount: 10,  // limite antes de seek forçado para o live edge
+        // Força duração Infinity para evitar comportamento VOD (barra de progresso fixa).
+        liveDurationInfinity: true,
+        // Com lowLatencyMode:false, estas unidades são em segmentos completos (não partes LL-HLS).
+        // liveSyncDurationCount:3  → sincroniza ~9s atrás do live edge (3 × ~3s de segmento)
+        // liveMaxLatencyDurationCount:8 → faz seek forçado se atraso > ~24s (8 × ~3s)
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 8,
       });
 
       hlsRef.current = hls;
