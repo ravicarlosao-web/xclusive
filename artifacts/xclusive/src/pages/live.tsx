@@ -43,8 +43,24 @@ function LiveVideoPlayer({ streamKey, viewers }: LiveVideoPlayerProps) {
     ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/llhls.m3u8`
     : null;
 
+  console.log('[LiveVideoPlayer RENDER]', {
+    streamKey,
+    streamKeyType: typeof streamKey,
+    streamUrl,
+    hasVideoRef: !!videoRef.current,
+    isLoading,
+    hasError,
+    errorMessage,
+    hlsSupported: Hls.isSupported(),
+  });
+
   const initPlayer = () => {
     const video = videoRef.current;
+    console.log('[LiveVideoPlayer initPlayer]', {
+      videoExists: !!video,
+      streamUrl,
+      streamKey,
+    });
     if (!video || !streamUrl) return;
 
     setIsLoading(true);
@@ -65,25 +81,68 @@ function LiveVideoPlayer({ streamKey, viewers }: LiveVideoPlayerProps) {
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 2000,
+        // Parâmetros para tratar correctamente conteúdo live (evitar comportamento VOD)
+        liveDurationInfinity: true,       // força duração Infinity em vez de somar fragmentos
+        liveSyncDurationCount: 3,         // nº de segmentos atrás do live edge para sincronizar
+        liveMaxLatencyDurationCount: 10,  // limite antes de seek forçado para o live edge
       });
 
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_LOADED, (_event, data) => {
+        console.log('[LiveVideoPlayer] MANIFEST_LOADED', {
+          levels: data.levels,
+          networkDetails: data.networkDetails,
+        });
+      });
+
+      hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+        console.log('[LiveVideoPlayer] LEVEL_LOADED', {
+          live: data.details.live,
+          totalduration: data.details.totalduration,
+          fragmentsCount: data.details.fragments.length,
+          targetduration: data.details.targetduration,
+          partTargetDuration: (data.details as any).partTargetDuration,
+          hasEndList: (data.details as any).endList,
+          startSeq: data.details.startSN,
+          endSeq: data.details.endSN,
+          edge: data.details.edge,
+        });
+      });
+
+      hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+        console.log('[LiveVideoPlayer] FRAG_LOADED', {
+          sn: data.frag.sn,
+          relurl: data.frag.relurl,
+          duration: data.frag.duration,
+        });
+      });
+
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        console.log('[LiveVideoPlayer] MANIFEST_PARSED', { event, data });
         setIsLoading(false);
         setHasError(false);
-        video.play().catch(() => {
+        video.play().catch((err) => {
+          console.warn('[LiveVideoPlayer] Autoplay unmuted failed:', err);
           // Autoplay com som bloqueado pelo browser; mantém mudo e tenta novamente
           video.muted = true;
-          video.play().catch(() => {
+          video.play().catch((e) => {
+            console.warn('[LiveVideoPlayer] Autoplay muted failed:', e);
             // Utilizador pode clicar no botão de play nativo
           });
         });
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        console.error('[LiveVideoPlayer] Hls.Events.ERROR', {
+          fatal: data.fatal,
+          type: data.type,
+          details: data.details,
+          response: data.response,
+          error: data.error,
+        });
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -317,6 +376,20 @@ export default function LivePage() {
   });
 
   const stream = activeStreams?.find((s) => s.id === streamId);
+
+  console.log('[LivePage DEBUG]', {
+    rawParam: params?.streamId,
+    streamId,
+    streamIdType: typeof streamId,
+    activeStreamsCount: activeStreams?.length,
+    activeStreams,
+    firstStream: activeStreams?.[0],
+    firstStreamId: activeStreams?.[0]?.id,
+    firstStreamIdType: typeof activeStreams?.[0]?.id,
+    foundStream: stream,
+    foundStreamKey: stream?.streamKey,
+  });
+
   const isCreator = stream?.criadorId === user?.id;
 
   // Modal de gorjeta
