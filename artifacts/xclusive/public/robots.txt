@@ -1,2 +1,15 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /home
+Disallow: /mensagens
+Disallow: /notificacoes
+Disallow: /definicoes
+Disallow: /carteira
+Disallow: /onboarding
+Disallow: /tornar-criador
+
+Sitemap: https://xclusive.ao/sitemap.xml
+
+# Xclusive — Plataforma de conteúdo exclusivo para criadores angolanos
+# https://xclusive.ao
