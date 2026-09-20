@@ -252,48 +252,63 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
 // O OvenMediaEngine envia X-OME-Signature: HMAC-SHA1 do raw body JSON,
 // codificado em base64 url-safe, usando o <SecretKey> configurado no VHostDefault.xml.
 // Referência: https://airensoft.gitbook.io/ovenmediaengine/access-control/admission-webhooks
+//
+// IMPORTANTE — raw body:
+//   O app.ts regista express.raw({ type: "application/json" }) especificamente
+//   para esta rota, ANTES do express.json() global. Por isso req.body chega aqui
+//   como um Buffer com os bytes exactos enviados pelo OME — não um objecto JS
+//   reconstruído. O HMAC é calculado sobre esse Buffer, garantindo correspondência
+//   exacta com a assinatura que o OME gerou.
 router.post("/live/admission", async (req, res): Promise<void> => {
   try {
-    // 1. Validar assinatura do OME via HMAC-SHA1 no header X-OME-Signature
+    // 1. Garantir que LIVE_ADMISSION_SECRET está configurado — nunca aceitar sem segredo
     const configuredSecret = process.env.LIVE_ADMISSION_SECRET;
-    const receivedSig = req.headers["x-ome-signature"] as string | undefined;
-
-    if (configuredSecret) {
-      // O body chega como objecto porque o express.json() já fez parse.
-      // Para verificar a assinatura precisamos do raw JSON exatamente como o OME o enviou.
-      // Express com express.json() não preserva o raw body por defeito — usamos
-      // JSON.stringify(req.body) como aproximação segura (OME serializa JSON de forma
-      // consistente; se no futuro houver problemas com ordem de chaves, usar rawBody middleware).
-      const rawBody = JSON.stringify(req.body);
-      const expectedSig = crypto
-        .createHmac("sha1", configuredSecret)
-        .update(rawBody)
-        .digest("base64url"); // base64 url-safe, sem padding '=' — comportamento do OME
-
-      if (!receivedSig || receivedSig !== expectedSig) {
-        (req as any).log?.warn?.(
-          { receivedSig, expectedSig: expectedSig.slice(0, 8) + "..." },
-          "Live admission 401: assinatura X-OME-Signature inválida ou ausente"
-        );
-        res.status(401).json({ error: "Unauthorized: Invalid X-OME-Signature." });
-        return;
-      }
-    } else {
-      // Sem secret configurado: aceitar mas registar aviso (útil em dev)
-      (req as any).log?.warn?.(
-        "LIVE_ADMISSION_SECRET não definido — admission webhook sem verificação de assinatura!"
+    if (!configuredSecret) {
+      // Erro de configuração de servidor — não é culpa do cliente
+      (req as any).log?.error?.(
+        "LIVE_ADMISSION_SECRET não definido em produção — admission webhook recusado por segurança"
       );
+      res.status(500).json({ error: "Server misconfiguration: admission secret not configured." });
+      return;
     }
 
-    const payload = req.body ?? {};
+    // 2. Verificar X-OME-Signature: HMAC-SHA1 do raw body, base64url
+    //    req.body é um Buffer (graças ao express.raw() registado em app.ts antes do express.json())
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+    const receivedSig = req.headers["x-ome-signature"] as string | undefined;
+
+    const expectedSig = crypto
+      .createHmac("sha1", configuredSecret)
+      .update(rawBody)
+      .digest("base64url"); // base64 url-safe sem padding '=' — comportamento do OME
+
+    if (!receivedSig || receivedSig !== expectedSig) {
+      (req as any).log?.warn?.(
+        { receivedSig, expectedSigPrefix: expectedSig.slice(0, 8) + "..." },
+        "Live admission 401: assinatura X-OME-Signature inválida ou ausente"
+      );
+      res.status(401).json({ error: "Unauthorized: Invalid X-OME-Signature." });
+      return;
+    }
+
+    // 3. Parse manual do body (que chegou como Buffer, não como objecto JS)
+    let payload: Record<string, any>;
+    try {
+      payload = JSON.parse(rawBody.toString("utf8"));
+    } catch {
+      res.status(400).json({ error: "Bad request: invalid JSON body." });
+      return;
+    }
+
     const requestInfo = payload.request ?? {};
     const url = String(requestInfo.url ?? "");
     const status = String(requestInfo.status ?? "opening").toLowerCase();
     const direction = String(requestInfo.direction ?? "incoming").toLowerCase();
 
-    // 2. Extrair o streamKey do URL (ex: "rtmp://host:1935/app/streamKey" ou query string)
+    // 4. Extrair o streamKey do URL (ex: "rtmp://host:1935/app/streamKey" ou query string)
     // Remove qualquer query string primeiro e obtém o último segmento do caminho
     const urlWithoutQuery = url.split("?")[0].trim();
+
     const streamKey = urlWithoutQuery.substring(urlWithoutQuery.lastIndexOf("/") + 1);
 
     // Validação de formato UUID (v1-v5) antes de consultar o banco para evitar erro de sintaxe Postgres (HTTP 500)

@@ -228,6 +228,12 @@ app.use(
 );
 
 // ─── Body parsers (com limite explícito) ──────────────────────────────────────
+// NOTA: /api/live/admission precisa do raw body (Buffer) para verificar a assinatura
+// HMAC-SHA1 enviada pelo OvenMediaEngine no header X-OME-Signature. O middleware
+// express.raw() é registado ANTES do express.json() global para esta rota específica,
+// para que o body chegue ao handler como Buffer intacto (bytes exactos enviados pelo OME).
+// Todas as outras rotas continuam a usar express.json() normalmente.
+app.use("/api/live/admission", express.raw({ type: "application/json", limit: "1mb" }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 app.use(cookieParser());
