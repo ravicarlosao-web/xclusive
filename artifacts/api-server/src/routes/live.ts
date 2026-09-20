@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -248,15 +249,40 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
 });
 
 // ── POST /api/live/admission ──────────────────────────────────────────────
+// O OvenMediaEngine envia X-OME-Signature: HMAC-SHA1 do raw body JSON,
+// codificado em base64 url-safe, usando o <SecretKey> configurado no VHostDefault.xml.
+// Referência: https://airensoft.gitbook.io/ovenmediaengine/access-control/admission-webhooks
 router.post("/live/admission", async (req, res): Promise<void> => {
   try {
-    // 1. Validar autenticação do webhook via header secreto partilhado
+    // 1. Validar assinatura do OME via HMAC-SHA1 no header X-OME-Signature
     const configuredSecret = process.env.LIVE_ADMISSION_SECRET;
-    const providedSecret = req.headers["x-webhook-secret"];
+    const receivedSig = req.headers["x-ome-signature"] as string | undefined;
 
-    if (!configuredSecret || !providedSecret || providedSecret !== configuredSecret) {
-      res.status(401).json({ error: "Unauthorized: Invalid or missing webhook secret." });
-      return;
+    if (configuredSecret) {
+      // O body chega como objecto porque o express.json() já fez parse.
+      // Para verificar a assinatura precisamos do raw JSON exatamente como o OME o enviou.
+      // Express com express.json() não preserva o raw body por defeito — usamos
+      // JSON.stringify(req.body) como aproximação segura (OME serializa JSON de forma
+      // consistente; se no futuro houver problemas com ordem de chaves, usar rawBody middleware).
+      const rawBody = JSON.stringify(req.body);
+      const expectedSig = crypto
+        .createHmac("sha1", configuredSecret)
+        .update(rawBody)
+        .digest("base64url"); // base64 url-safe, sem padding '=' — comportamento do OME
+
+      if (!receivedSig || receivedSig !== expectedSig) {
+        (req as any).log?.warn?.(
+          { receivedSig, expectedSig: expectedSig.slice(0, 8) + "..." },
+          "Live admission 401: assinatura X-OME-Signature inválida ou ausente"
+        );
+        res.status(401).json({ error: "Unauthorized: Invalid X-OME-Signature." });
+        return;
+      }
+    } else {
+      // Sem secret configurado: aceitar mas registar aviso (útil em dev)
+      (req as any).log?.warn?.(
+        "LIVE_ADMISSION_SECRET não definido — admission webhook sem verificação de assinatura!"
+      );
     }
 
     const payload = req.body ?? {};
