@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
@@ -48,11 +48,15 @@ router.get("/live/active", async (req, res): Promise<void> => {
 });
 
 // ── POST /api/live/start ──────────────────────────────────────────────────
-// Criador inicia ou recupera uma live ativa
+// Prepara a live do criador e devolve os dados necessários para o encoder ligar.
+// O status inicial é "agendado" — a transição para "ao_vivo" só ocorre quando
+// o OvenMediaEngine confirmar um publisher real através do admission webhook
+// (POST /api/live/admission). Desta forma, a live só aparece para espectadores
+// em /api/live/active DEPOIS de existir uma ligação real de publisher.
 router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   try {
     const creatorId = req.userId!;
-    
+
     // Verificar se o utilizador é criador
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, creatorId)).limit(1);
     if (user?.tipoConta !== "criador") {
@@ -60,23 +64,30 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
       return;
     }
 
-    // Verificar se já existe uma live ativa
+    // Reutilizar live existente se já estiver em curso (ao_vivo) ou preparada (agendado).
+    // Incluir "agendado" evita criar duplicados se o criador carregar em "iniciar"
+    // várias vezes antes de ligar o encoder.
     let [stream] = await db
       .select()
       .from(liveStreamsTable)
-      .where(and(eq(liveStreamsTable.criadorId, creatorId), eq(liveStreamsTable.status, "ao_vivo")))
+      .where(
+        and(
+          eq(liveStreamsTable.criadorId, creatorId),
+          inArray(liveStreamsTable.status, ["agendado", "ao_vivo"])
+        )
+      )
       .limit(1);
 
     if (!stream) {
-      // Criar nova live
+      // Criar nova live em estado "agendado".
+      // iniciadoEm é definido pelo admission webhook quando o OME confirmar publisher real.
       const newStreamId = crypto.randomUUID();
       [stream] = await db
         .insert(liveStreamsTable)
         .values({
           criadorId: creatorId,
           streamKey: newStreamId,
-          status: "ao_vivo",
-          iniciadoEm: new Date(),
+          status: "agendado",
         })
         .returning();
     }
