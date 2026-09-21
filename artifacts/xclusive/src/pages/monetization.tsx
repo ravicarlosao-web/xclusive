@@ -324,11 +324,11 @@ export default function Monetization() {
           {activeStreamId ? (
             <>
               <Button
-                onClick={() => setLocation(`/live/${activeStreamId}`)}
-                className="gap-2 bg-red-600 hover:bg-red-700 border-0 text-white"
+                onClick={() => setLocation('/ir-em-direto')}
+                className="gap-2 bg-red-600 hover:bg-red-700 border-0 text-white font-semibold"
               >
-                <Radio className="w-4 h-4" />
-                Ir para a Live
+                <Radio className="w-4 h-4 animate-pulse" />
+                Ir para o Estúdio de Transmissão
               </Button>
               <Button
                 onClick={handleEndLive}
@@ -342,20 +342,15 @@ export default function Monetization() {
             </>
           ) : (
             <Button
-              onClick={handleStartLive}
-              disabled={liveLoading}
+              onClick={() => setLocation('/ir-em-direto')}
               className="gap-2 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 border-0 text-white font-semibold"
             >
-              {liveLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Radio className="w-4 h-4" />
-              )}
-              {liveLoading ? 'A iniciar...' : 'Iniciar Live'}
+              <Radio className="w-4 h-4" />
+              Ir em Direto
             </Button>
           )}
           <p className="w-full text-xs text-muted-foreground mt-1">
-            O player de vídeo (RTMP) será activado numa próxima fase. Por agora, a live permite gorjetas e comunicação em tempo real com os teus fãs.
+            Transmissão WebRTC nativa com ultra baixa latência (~1s), preview em tempo real e receção de gorjetas em Kz.
           </p>
         </CardContent>
       </Card>

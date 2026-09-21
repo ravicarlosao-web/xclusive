@@ -28,6 +28,7 @@ import Carteira from '@/pages/carteira';
 import EsquecestePassword from '@/pages/esqueceste-password';
 import LivePage from '@/pages/live';
 import LivePublishTest from '@/pages/live-publish-test';
+import IrEmDireto from '@/pages/ir-em-direto';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,6 +120,7 @@ function Router() {
       <Route path="/definicoes">{(params) => <ProtectedRoute component={Settings} path="/definicoes" />}</Route>
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
       <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
+      <Route path="/ir-em-direto">{() => <ProtectedRoute component={IrEmDireto} path="/ir-em-direto" />}</Route>
       <Route path="/live/:streamId">{() => <ProtectedRoute component={LivePage} path="/live/:streamId" />}</Route>
       <Route path="/live-publish-test">{() => <ProtectedRoute component={LivePublishTest} path="/live-publish-test" />}</Route>
 

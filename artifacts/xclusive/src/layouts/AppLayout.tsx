@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus
+  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -104,6 +104,33 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <PlusSquare className={cn("w-6 h-6 stroke-[1.5px]", user.verificado && "group-hover:scale-110 transition-transform")} />
               <span className="hidden lg:block text-[15px]">Criar</span>
             </button>
+          )}
+
+          {user?.tipoConta === 'criador' && (
+            user.verificado ? (
+              <Link href="/ir-em-direto">
+                <div className={cn(
+                  "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
+                  location.startsWith('/ir-em-direto') ? "text-primary font-semibold" : "text-foreground"
+                )}>
+                  <Radio className={cn(
+                    "w-6 h-6",
+                    location.startsWith('/ir-em-direto')
+                      ? "stroke-[2.5px] text-red-500 animate-pulse"
+                      : "stroke-[1.5px] text-red-500 group-hover:scale-110 transition-transform"
+                  )} />
+                  <span className="hidden lg:block text-[15px]">Ir em Direto</span>
+                </div>
+              </Link>
+            ) : (
+              <div
+                title="A tua conta está pendente de aprovação do administrador"
+                className="flex items-center gap-4 p-3 rounded-xl opacity-50 cursor-not-allowed text-foreground"
+              >
+                <Radio className="w-6 h-6 stroke-[1.5px] text-muted-foreground" />
+                <span className="hidden lg:block text-[15px]">Ir em Direto</span>
+              </div>
+            )
           )}
 
           <Link href={user ? `/perfil/${user.username}` : '/login'}>
