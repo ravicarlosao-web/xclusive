@@ -558,6 +558,9 @@ importers:
       hls.js:
         specifier: ^1.7.2
         version: 1.7.2
+      ovenlivekit:
+        specifier: ^1.5.8
+        version: 1.5.8
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
@@ -3333,6 +3336,9 @@ packages:
     peerDependenciesMeta:
       prettier:
         optional: true
+
+  ovenlivekit@1.5.8:
+    resolution: {integrity: sha512-HNzhGAgMiR+DgGGbNQz5ST7lVTcCXIs40r1luWY2O1Gg3gIrKBLIFeQD/b6WtQ9QYuXWmKwdEOpI6Q6eXKdb2A==}
 
   p-limit@4.0.0:
     resolution: {integrity: sha512-5b0R4txpzjPWVw/cXXUResoD4hb6U/x9BH08L7nw+GN1sezDzPdxeRvpc9c433fZhBan/wusjbCsqwqm4EIBIQ==}
@@ -6526,6 +6532,8 @@ snapshots:
       - '@faker-js/faker'
       - supports-color
       - typescript
+
+  ovenlivekit@1.5.8: {}
 
   p-limit@4.0.0:
     dependencies:

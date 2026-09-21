@@ -320,7 +320,19 @@ router.post("/live/admission", async (req, res): Promise<void> => {
     // Remove qualquer query string primeiro e obtém o último segmento do caminho
     const urlWithoutQuery = url.split("?")[0].trim();
 
-    const streamKey = urlWithoutQuery.substring(urlWithoutQuery.lastIndexOf("/") + 1);
+    let rawStreamKey = urlWithoutQuery.substring(urlWithoutQuery.lastIndexOf("/") + 1).trim();
+    try {
+      rawStreamKey = decodeURIComponent(rawStreamKey);
+    } catch {}
+    try {
+      rawStreamKey = decodeURIComponent(rawStreamKey);
+    } catch {}
+    // Remove chavetas {}, %7B, %7D, aspas ou barras remanescentes para garantir UUID puro
+    const streamKey = rawStreamKey
+      .replace(/%7B/gi, "")
+      .replace(/%7D/gi, "")
+      .replace(/[{}[\]()"'`\\/]/g, "")
+      .trim();
 
     // Validação de formato UUID (v1-v5) antes de consultar o banco para evitar erro de sintaxe Postgres (HTTP 500)
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

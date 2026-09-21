@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "hls.js": "^1.7.2",
+    "ovenlivekit": "^1.5.8",
     "socket.io-client": "^4.8.3"
   }
 }

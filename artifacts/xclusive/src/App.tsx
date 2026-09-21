@@ -27,6 +27,7 @@ import KYCPage from '@/pages/kyc';
 import Carteira from '@/pages/carteira';
 import EsquecestePassword from '@/pages/esqueceste-password';
 import LivePage from '@/pages/live';
+import LivePublishTest from '@/pages/live-publish-test';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,6 +120,7 @@ function Router() {
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
       <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
       <Route path="/live/:streamId">{() => <ProtectedRoute component={LivePage} path="/live/:streamId" />}</Route>
+      <Route path="/live-publish-test">{() => <ProtectedRoute component={LivePublishTest} path="/live-publish-test" />}</Route>
 
       {/* Redirects */}
       <Route path="/feed">{() => <RedirectTo to="/home" />}</Route>
