@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLivePublisher, sanitizeStreamKey } from '@/hooks/useLivePublisher';
-import { useSocket, TipEvent } from '@/hooks/useSocket';
+import { useSocket, type LiveFeedItem, type TipEvent } from '@/hooks/useSocket';
 import { getFreshAuthToken } from '@workspace/api-client-react';
 
 import { Button } from '@/components/ui/button';
@@ -43,9 +43,13 @@ import {
   Sparkles,
   RefreshCw,
   Eye,
+  MessageSquare,
+  Send,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 function formatKz(valor: number): string {
   return `${valor.toLocaleString('pt-PT')} Kz`;
@@ -59,6 +63,18 @@ function formatDuration(seconds: number): string {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function timeAgo(iso: string): string {
+  try {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 10) return 'agora';
+    if (diff < 60) return `há ${diff}s`;
+    if (diff < 3600) return `há ${Math.floor(diff / 60)}m`;
+    return `há ${Math.floor(diff / 3600)}h`;
+  } catch {
+    return '';
+  }
 }
 
 function getHumanFriendlyError(rawError: string | null): string {
@@ -89,6 +105,100 @@ function getHumanFriendlyError(rawError: string | null): string {
   return rawError;
 }
 
+// ─── Componente de Item do Feed para o Criador (Overlay / Painel) ──────────────
+
+function CreatorFeedRow({ item, isPanel = false }: { item: LiveFeedItem; isPanel?: boolean }) {
+  if (item.type === 'joined') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.18 }}
+        className={cn(
+          'flex items-center gap-1.5 py-0.5 px-2 rounded-full text-[10px] sm:text-[11px] w-fit',
+          isPanel
+            ? 'bg-muted/40 border border-border/30 text-muted-foreground'
+            : 'bg-black/50 backdrop-blur-md border border-white/10 text-white/70 shadow-sm'
+        )}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+        <span className={cn('font-semibold', isPanel ? 'text-foreground' : 'text-white/90')}>
+          @{item.username}
+        </span>
+        <span>entrou</span>
+      </motion.div>
+    );
+  }
+
+  if (item.type === 'tip') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8, scale: 0.92 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.22 }}
+        className={cn(
+          'flex items-start gap-2 p-2 rounded-xl text-xs shadow-md border',
+          isPanel
+            ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-500/30'
+            : 'bg-gradient-to-r from-amber-500/35 via-orange-500/25 to-amber-600/20 backdrop-blur-md border-amber-400/40 text-white max-w-[94%] sm:max-w-xs'
+        )}
+      >
+        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+          <Gift className="w-3.5 h-3.5 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+            <span className={cn('font-bold', isPanel ? 'text-amber-400' : 'text-amber-300')}>
+              @{item.username}
+            </span>
+            <span className={cn('text-[10px]', isPanel ? 'text-muted-foreground' : 'text-white/70')}>
+              enviou
+            </span>
+            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-[10px] px-1.5 py-0 border-0 shadow-sm">
+              +{formatKz(item.valor)}
+            </Badge>
+          </div>
+          {item.mensagem && (
+            <p className={cn('text-[11px] font-medium mt-0.5 break-words', isPanel ? 'text-foreground/90' : 'text-amber-100')}>
+              {item.mensagem}
+            </p>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  // item.type === 'chat'
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16 }}
+      className={cn(
+        'flex items-start gap-1.5 py-1 px-2.5 rounded-xl text-xs leading-snug',
+        isPanel
+          ? 'bg-muted/30 hover:bg-muted/50 border border-transparent hover:border-border/30 transition-colors text-foreground'
+          : 'bg-black/60 backdrop-blur-md border border-white/10 text-white max-w-[94%] sm:max-w-xs shadow-md'
+      )}
+    >
+      <Avatar className="w-4 h-4 shrink-0 mt-0.5 border border-white/15">
+        <AvatarImage src={item.avatarUrl ?? undefined} />
+        <AvatarFallback className="text-[8px] bg-primary/30 text-white font-bold">
+          {item.username.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <span className={cn('font-semibold mr-1', isPanel ? 'text-primary' : 'text-amber-200')}>
+          @{item.username}:
+        </span>
+        <span className={cn('break-words', isPanel ? 'text-foreground/90' : 'text-white/95')}>
+          {item.mensagem}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function IrEmDireto() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -102,6 +212,14 @@ export default function IrEmDireto() {
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [showEndDialog, setShowEndDialog] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
+
+  // Totais persistidos para o ecrã final de conclusão
+  const [sessionTipsCount, setSessionTipsCount] = useState<number>(0);
+  const [sessionTipsTotalKz, setSessionTipsTotalKz] = useState<number>(0);
+
+  // Controlo de resposta rápida do criador
+  const [creatorReplyText, setCreatorReplyText] = useState<string>('');
+  const [showQuickReply, setShowQuickReply] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -117,8 +235,76 @@ export default function IrEmDireto() {
     defaultSignallingBaseUrl,
   });
 
-  // Socket para espectadores e gorjetas em tempo real
-  const { viewers, recentTips } = useSocket(streamId);
+  const isLive = publisher.connectionState === 'live';
+  const isConnecting = publisher.connectionState === 'connecting' || isStarting;
+  const isReconnecting = publisher.connectionState === 'reconnecting';
+  const isError = publisher.connectionState === 'error';
+
+  // Liga ao Socket.IO apenas quando a live transita para "live"
+  const activeStreamId = isLive ? streamId : null;
+  const { viewers, feed, sendMessage, isConnected } = useSocket(activeStreamId);
+
+  // Calcula o total acumulado de gorjetas em Kz da sessão
+  const totalTipsKz = useMemo(() => {
+    return feed.reduce((acc, item) => {
+      if (item.type === 'tip') {
+        return acc + (item.valor || 0);
+      }
+      return acc;
+    }, 0);
+  }, [feed]);
+
+  // Atualiza totais para a tela de encerramento
+  useEffect(() => {
+    if (isLive) {
+      const tipCount = feed.filter((i) => i.type === 'tip').length;
+      setSessionTipsCount(tipCount);
+      setSessionTipsTotalKz(totalTipsKz);
+    }
+  }, [feed, isLive, totalTipsKz]);
+
+  // Auto-scroll do chat tanto no overlay da câmara como no painel lateral
+  const chatScrollOverlayRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollSidePanelRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollChatToBottom = useCallback(() => {
+    if (chatScrollOverlayRef.current) {
+      chatScrollOverlayRef.current.scrollTo({
+        top: chatScrollOverlayRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    if (chatScrollSidePanelRef.current) {
+      chatScrollSidePanelRef.current.scrollTo({
+        top: chatScrollSidePanelRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (feed.length > 0) {
+      scrollChatToBottom();
+    }
+  }, [feed.length, scrollChatToBottom]);
+
+  // Envio de mensagem pelo próprio criador
+  const handleSendCreatorMessage = () => {
+    const text = creatorReplyText.trim();
+    if (!text || !streamId) return;
+
+    if (text.length > 300) {
+      toast.error('A mensagem não pode exceder 300 caracteres.');
+      return;
+    }
+
+    const sent = sendMessage(streamId, text);
+    if (sent) {
+      setCreatorReplyText('');
+      setShowQuickReply(false);
+      scrollChatToBottom();
+    }
+  };
 
   // Anexa o elemento de vídeo ao hook do publisher
   useEffect(() => {
@@ -266,6 +452,8 @@ export default function IrEmDireto() {
     setHasEnded(false);
     setDuration(0);
     setFinalDuration(0);
+    setSessionTipsCount(0);
+    setSessionTipsTotalKz(0);
     try {
       await publisher.requestMedia();
     } catch (err) {
@@ -340,11 +528,6 @@ export default function IrEmDireto() {
     );
   }
 
-  const isLive = publisher.connectionState === 'live';
-  const isConnecting = publisher.connectionState === 'connecting' || isStarting;
-  const isReconnecting = publisher.connectionState === 'reconnecting';
-  const isError = publisher.connectionState === 'error';
-
   // ─── ECRÃ DE CONCLUSÃO DA TRANSMISSÃO ─────────────────────────────────────
   if (hasEnded) {
     return (
@@ -382,8 +565,8 @@ export default function IrEmDireto() {
                 <div className="text-xs text-muted-foreground uppercase font-medium flex items-center justify-center gap-1.5 mb-1">
                   <Gift className="w-3.5 h-3.5 text-amber-400" /> Gorjetas
                 </div>
-                <div className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
-                  {recentTips.length}
+                <div className="text-base sm:text-lg font-bold font-mono text-amber-400">
+                  {sessionTipsCount} ({formatKz(sessionTipsTotalKz)})
                 </div>
               </div>
             </div>
@@ -484,7 +667,7 @@ export default function IrEmDireto() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna de Vídeo (Ocupa 2 colunas em telas grandes) */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="relative aspect-[16/9] w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
+          <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
             {/* Elemento de Vídeo Local */}
             <video
               ref={videoRef}
@@ -552,11 +735,21 @@ export default function IrEmDireto() {
                 )}
               </div>
 
-              {/* Direita: Espectadores ao vivo */}
+              {/* Direita: Total de Gorjetas em Kz + Espectadores ao vivo */}
               {isLive && (
-                <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/10 shadow-lg pointer-events-auto">
-                  <Users className="w-3.5 h-3.5 text-blue-400" />
-                  <span>{viewers} {viewers === 1 ? 'espectador' : 'espectadores'}</span>
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  {/* Total acumulado de gorjetas */}
+                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-500/30 shadow-lg">
+                    <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>{formatKz(totalTipsKz)}</span>
+                  </div>
+
+                  {/* Contador de espectadores */}
+                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                    <Eye className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>{viewers}</span>
+                    <span className="hidden sm:inline">{viewers === 1 ? 'espectador' : 'espectadores'}</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -569,20 +762,76 @@ export default function IrEmDireto() {
               </div>
             )}
 
+            {/* ── Overlay de Chat Unificado em Tempo Real sobre o Preview da Câmara ── */}
+            {isLive && (
+              <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm pointer-events-none z-20">
+                <div
+                  ref={chatScrollOverlayRef}
+                  className="max-h-44 sm:max-h-56 overflow-y-auto scrollbar-none flex flex-col gap-1.5 pointer-events-auto pr-1"
+                >
+                  {feed.length === 0 ? (
+                    <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
+                      A aguardar comentários dos espectadores... 💬
+                    </div>
+                  ) : (
+                    feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Modal/Popup de Resposta Rápida do Criador no Mobile ── */}
+            {showQuickReply && isLive && (
+              <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm bg-zinc-950/90 backdrop-blur-xl border border-white/20 p-2 rounded-2xl shadow-2xl z-30 flex items-center gap-2">
+                <Input
+                  value={creatorReplyText}
+                  onChange={(e) => setCreatorReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendCreatorMessage();
+                    }
+                  }}
+                  placeholder="Escreve uma resposta rápida..."
+                  maxLength={300}
+                  autoFocus
+                  className="h-8 text-xs bg-black/60 border-white/10 text-white placeholder:text-white/50"
+                />
+                <Button
+                  size="icon"
+                  onClick={handleSendCreatorMessage}
+                  disabled={!creatorReplyText.trim()}
+                  className="h-8 w-8 shrink-0 bg-primary hover:bg-primary/90 text-white rounded-xl"
+                  title="Enviar mensagem"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setShowQuickReply(false)}
+                  className="h-8 w-8 shrink-0 text-white/70 hover:text-white rounded-xl"
+                  title="Fechar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+
             {/* Barra Flutuante de Controlos do Dispositivo (Overlay Inferior) */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 bg-zinc-950/80 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-full shadow-2xl z-20">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 bg-zinc-950/80 backdrop-blur-xl border border-white/10 px-3.5 sm:px-4 py-2 rounded-full shadow-2xl z-20">
               {/* Alternar Microfone */}
               <button
                 type="button"
                 onClick={() => publisher.toggleMicrophone()}
                 title={publisher.isAudioEnabled ? 'Desativar Microfone' : 'Ativar Microfone'}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${
                   publisher.isAudioEnabled
                     ? 'bg-zinc-800/80 text-white hover:bg-zinc-700'
                     : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'
                 }`}
               >
-                {publisher.isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                {publisher.isAudioEnabled ? <Mic className="w-4 sm:w-5 h-4 sm:h-5" /> : <MicOff className="w-4 sm:w-5 h-4 sm:h-5" />}
               </button>
 
               {/* Alternar Câmara */}
@@ -590,13 +839,13 @@ export default function IrEmDireto() {
                 type="button"
                 onClick={() => publisher.toggleCamera()}
                 title={publisher.isVideoEnabled ? 'Desligar Vídeo' : 'Ligar Vídeo'}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${
                   publisher.isVideoEnabled
                     ? 'bg-zinc-800/80 text-white hover:bg-zinc-700'
                     : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'
                 }`}
               >
-                {publisher.isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                {publisher.isVideoEnabled ? <Video className="w-4 sm:w-5 h-4 sm:h-5" /> : <VideoOff className="w-4 sm:w-5 h-4 sm:h-5" />}
               </button>
 
               {/* Trocar Câmara Frontal / Traseira */}
@@ -604,10 +853,27 @@ export default function IrEmDireto() {
                 type="button"
                 onClick={() => publisher.switchCamera()}
                 title={`Alternar para câmara ${publisher.facingMode === 'user' ? 'traseira' : 'frontal'}`}
-                className="w-10 h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all"
+                className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all"
               >
-                <SwitchCamera className="w-5 h-5" />
+                <SwitchCamera className="w-4 sm:w-5 h-4 sm:h-5" />
               </button>
+
+              {/* Botão para abrir input de resposta rápida durante a live */}
+              {isLive && (
+                <button
+                  type="button"
+                  onClick={() => setShowQuickReply((prev) => !prev)}
+                  title="Responder no chat"
+                  className={cn(
+                    'w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all',
+                    showQuickReply
+                      ? 'bg-primary text-white'
+                      : 'bg-zinc-800/80 text-white hover:bg-zinc-700'
+                  )}
+                >
+                  <MessageSquare className="w-4 sm:w-5 h-4 sm:h-5" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -629,7 +895,7 @@ export default function IrEmDireto() {
           </div>
         </div>
 
-        {/* Coluna Lateral: Controlos, Partilha e Gorjetas em Tempo Real */}
+        {/* Coluna Lateral: Controlos, Partilha e Chat Unificado */}
         <div className="space-y-4">
           {!isLive ? (
             /* Card de Preparação Pré-Transmissão */
@@ -657,6 +923,10 @@ export default function IrEmDireto() {
                     <Check className="w-4 h-4 text-emerald-400" />
                     <span>Gorjetas em Kz creditadas diretamente na tua carteira</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Chat interativo em tempo real via WebSocket</span>
+                  </div>
                 </div>
 
                 <Button
@@ -679,7 +949,7 @@ export default function IrEmDireto() {
               </CardContent>
             </Card>
           ) : (
-            /* Card da Live em Curso: Link e Feed de Interação */
+            /* Card da Live em Curso: Link e Painel Unificado de Chat */
             <div className="space-y-4">
               {/* Partilhar Link */}
               <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
@@ -727,47 +997,72 @@ export default function IrEmDireto() {
                 </CardContent>
               </Card>
 
-              {/* Feed de Gorjetas Recebidas ao Vivo */}
-              <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Gift className="w-4 h-4 text-amber-400" />
-                    Gorjetas ao Vivo
+              {/* Feed Unificado de Chat e Gorjetas na Coluna Lateral */}
+              <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl flex flex-col h-[420px]">
+                <CardHeader className="pb-2.5 pt-3.5 border-b border-border/40 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-primary" />
+                    Chat e Gorjetas ao Vivo
                   </CardTitle>
-                  <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                    {recentTips.length}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 gap-1 px-2">
+                      <Gift className="w-3 h-3" />
+                      {formatKz(totalTipsKz)}
+                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] gap-1 px-1.5">
+                      <Users className="w-3 h-3" /> {viewers}
+                    </Badge>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                    {recentTips.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-muted-foreground">
-                        <Gift className="w-6 h-6 mx-auto mb-2 opacity-30 text-amber-400" />
-                        As gorjetas enviadas pelos espectadores aparecerão aqui em tempo real.
+
+                <CardContent className="flex-1 overflow-hidden p-3 flex flex-col">
+                  {/* Lista de Mensagens com Scroll */}
+                  <div
+                    ref={chatScrollSidePanelRef}
+                    className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin"
+                  >
+                    {feed.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full">
+                        <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30 text-primary" />
+                        <p className="font-medium">O chat está pronto e ligado.</p>
+                        <p className="text-[11px] opacity-70 mt-0.5">As mensagens dos espectadores aparecerão aqui.</p>
                       </div>
                     ) : (
-                      <AnimatePresence>
-                        {recentTips.map((tip: TipEvent, idx: number) => (
-                          <motion.div
-                            key={`${tip.enviadoEm}-${idx}`}
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 text-xs"
-                          >
-                            <div className="flex items-center justify-between font-semibold">
-                              <span className="text-amber-400">@{tip.username}</span>
-                              <span className="text-amber-300 font-bold font-mono">
-                                +{formatKz(tip.valor)}
-                              </span>
-                            </div>
-                            {tip.mensagem && (
-                              <p className="mt-1 text-foreground/80 break-words">{tip.mensagem}</p>
-                            )}
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
+                      feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={true} />)
                     )}
+                  </div>
+
+                  {/* Input de Envio do Criador */}
+                  <div className="pt-2 border-t border-border/40 mt-2 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        value={creatorReplyText}
+                        onChange={(e) => setCreatorReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSendCreatorMessage();
+                          }
+                        }}
+                        placeholder="Escreve uma resposta para a live..."
+                        maxLength={300}
+                        className="text-xs h-8 pr-12"
+                      />
+                      {creatorReplyText.length > 0 && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-muted-foreground">
+                          {creatorReplyText.length}/300
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="icon"
+                      onClick={handleSendCreatorMessage}
+                      disabled={!creatorReplyText.trim() || !isConnected}
+                      className="h-8 w-8 shrink-0"
+                      title="Enviar mensagem"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

@@ -43,6 +43,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     { name: 'Notificações', path: '/notificacoes', icon: Heart, badge: notifBadge },
   ];
 
+  const isLiveWatching = location.startsWith('/live/') && !location.startsWith('/live-publish-test');
+
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex">
       {/* Desktop & Tablet Sidebar */}
@@ -214,7 +216,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-[80px] lg:ml-[245px] pb-[60px] md:pb-0 w-full min-h-[100dvh]">
+      <main className={cn(
+        "flex-1 md:ml-[80px] lg:ml-[245px] w-full min-h-[100dvh]",
+        isLiveWatching ? "pb-0" : "pb-[60px] md:pb-0"
+      )}>
         {children}
       </main>
 
@@ -222,27 +227,29 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <TopUpModal open={topUpOpen} onClose={() => setTopUpOpen(false)} />
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-1">
-        {navItems.map((item) => {
-          const isActive = location.startsWith(item.path);
-          return (
-            <Link key={item.path} href={item.path} className="flex-1 flex items-center justify-center py-2 relative">
-              <item.icon className={cn("w-5 h-5 transition-transform", isActive ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground")} />
-              {item.badge && (
-                <span className="absolute top-1 right-2 bg-primary text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center border border-card">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-        <Link href={user ? `/perfil/${user.username}` : '/login'} className="flex-1 flex items-center justify-center py-2">
-          <Avatar className={cn("w-5 h-5 transition-transform", location.startsWith('/perfil') ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : "")}>
-            <AvatarImage src={user?.avatarUrl || ''} />
-            <AvatarFallback className="bg-secondary"><UserIcon className="w-3 h-3" /></AvatarFallback>
-          </Avatar>
-        </Link>
-      </nav>
+      {!isLiveWatching && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-card border-t border-border z-50 flex items-center justify-around px-1">
+          {navItems.map((item) => {
+            const isActive = location.startsWith(item.path);
+            return (
+              <Link key={item.path} href={item.path} className="flex-1 flex items-center justify-center py-2 relative">
+                <item.icon className={cn("w-5 h-5 transition-transform", isActive ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground")} />
+                {item.badge && (
+                  <span className="absolute top-1 right-2 bg-primary text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center border border-card">
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+          <Link href={user ? `/perfil/${user.username}` : '/login'} className="flex-1 flex items-center justify-center py-2">
+            <Avatar className={cn("w-5 h-5 transition-transform", location.startsWith('/perfil') ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : "")}>
+              <AvatarImage src={user?.avatarUrl || ''} />
+              <AvatarFallback className="bg-secondary"><UserIcon className="w-3 h-3" /></AvatarFallback>
+            </Avatar>
+          </Link>
+        </nav>
+      )}
     </div>
   );
 }

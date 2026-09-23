@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { toast } from 'sonner';
 
 // ─── Tipos dos eventos recebidos pelo cliente ──────────────────────────────────
 
@@ -20,18 +21,74 @@ export interface StreamEndedEvent {
   streamId: number;
 }
 
+export interface ChatMessageEvent {
+  id: string;
+  streamId: number;
+  userId: number;
+  username: string;
+  avatarUrl: string | null;
+  mensagem: string;
+  criadoEm: string;
+}
+
+export interface ChatJoinedEvent {
+  streamId: number;
+  username: string;
+  criadoEm: string;
+}
+
+export interface ChatErrorEvent {
+  message: string;
+}
+
+export type LiveFeedItem =
+  | {
+      type: 'chat';
+      id: string;
+      streamId: number;
+      userId: number;
+      username: string;
+      avatarUrl: string | null;
+      mensagem: string;
+      criadoEm: string;
+    }
+  | {
+      type: 'joined';
+      id: string;
+      streamId: number;
+      username: string;
+      criadoEm: string;
+    }
+  | {
+      type: 'tip';
+      id: string;
+      streamId: number;
+      username: string;
+      valor: number;
+      mensagem: string | null;
+      enviadoEm: string;
+    };
+
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 interface UseSocketOptions {
-  /** Número de gorjetas recentes a manter no feed (FIFO) */
+  /** Número de gorjetas recentes a manter no feed de gorjetas isolado (FIFO) */
   maxTips?: number;
+  /** Número máximo de itens no feed unificado em memória (FIFO) */
+  maxFeedItems?: number;
+  /** Callback opcional para quando o servidor emite "chat:error" */
+  onChatError?: (error: ChatErrorEvent) => void;
 }
 
 interface UseSocketReturn {
   viewers: number;
   recentTips: TipEvent[];
+  feed: LiveFeedItem[];
+  messages: LiveFeedItem[];
   streamEnded: boolean;
   isConnected: boolean;
+  sendMessage: (arg1?: number | string, arg2?: string) => boolean;
+  chatError: string | null;
 }
 
 /**
@@ -39,7 +96,8 @@ interface UseSocketReturn {
  *
  * - Emite `viewer:join` ao montar (quando streamId e token estão disponíveis)
  * - Emite `viewer:leave` ao desmontar
- * - Subscreve `viewers:update`, `tip:sent`, `stream:ended`
+ * - Subscreve `viewers:update`, `tip:sent`, `stream:ended`, `chat:message`, `chat:joined`, `chat:error`
+ * - Expõe `sendMessage` para emitir `chat:send`
  *
  * @param streamId  ID numérico do stream (null desliga o socket)
  * @param options   Opções adicionais
@@ -48,13 +106,15 @@ export function useSocket(
   streamId: number | null,
   options: UseSocketOptions = {},
 ): UseSocketReturn {
-  const { maxTips = 20 } = options;
+  const { maxTips = 20, maxFeedItems = 200, onChatError } = options;
 
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [viewers, setViewers] = useState(0);
   const [recentTips, setRecentTips] = useState<TipEvent[]>([]);
+  const [feed, setFeed] = useState<LiveFeedItem[]>([]);
   const [streamEnded, setStreamEnded] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const addTip = useCallback(
     (tip: TipEvent) => {
@@ -66,8 +126,25 @@ export function useSocket(
     [maxTips],
   );
 
+  const addFeedItem = useCallback(
+    (item: LiveFeedItem) => {
+      setFeed((prev) => {
+        const next = [...prev, item];
+        return next.slice(-maxFeedItems);
+      });
+    },
+    [maxFeedItems],
+  );
+
   useEffect(() => {
-    if (streamId === null) return;
+    if (streamId === null) {
+      setFeed([]);
+      setRecentTips([]);
+      setViewers(0);
+      setStreamEnded(false);
+      setChatError(null);
+      return;
+    }
 
     const token = localStorage.getItem('xclusive_token');
     if (!token) return; // Utilizador não autenticado — não conectar
@@ -110,6 +187,52 @@ export function useSocket(
     socket.on('tip:sent', (data: TipEvent) => {
       if (data.streamId === streamId) {
         addTip(data);
+        addFeedItem({
+          type: 'tip',
+          id: `tip-${data.username}-${data.enviadoEm || Date.now()}-${Math.random()}`,
+          streamId: data.streamId,
+          username: data.username,
+          valor: data.valor,
+          mensagem: data.mensagem,
+          enviadoEm: data.enviadoEm || new Date().toISOString(),
+        });
+      }
+    });
+
+    socket.on('chat:message', (data: ChatMessageEvent) => {
+      if (data.streamId === streamId) {
+        addFeedItem({
+          type: 'chat',
+          id: data.id || `chat-${Date.now()}-${Math.random()}`,
+          streamId: data.streamId,
+          userId: data.userId,
+          username: data.username,
+          avatarUrl: data.avatarUrl ?? null,
+          mensagem: data.mensagem,
+          criadoEm: data.criadoEm || new Date().toISOString(),
+        });
+      }
+    });
+
+    socket.on('chat:joined', (data: ChatJoinedEvent) => {
+      if (data.streamId === streamId) {
+        addFeedItem({
+          type: 'joined',
+          id: `joined-${data.username}-${Date.now()}-${Math.random()}`,
+          streamId: data.streamId,
+          username: data.username,
+          criadoEm: data.criadoEm || new Date().toISOString(),
+        });
+      }
+    });
+
+    socket.on('chat:error', (data: ChatErrorEvent) => {
+      const msg = data?.message || 'Erro no chat.';
+      setChatError(msg);
+      if (onChatError) {
+        onChatError(data);
+      } else {
+        toast.error(msg);
       }
     });
 
@@ -126,7 +249,48 @@ export function useSocket(
       socketRef.current = null;
       setIsConnected(false);
     };
-  }, [streamId, addTip]);
+  }, [streamId, addTip, addFeedItem, onChatError]);
 
-  return { viewers, recentTips, streamEnded, isConnected };
+  const sendMessage = useCallback(
+    (arg1?: number | string, arg2?: string): boolean => {
+      let targetStreamId = streamId;
+      let text = '';
+
+      if (typeof arg1 === 'number') {
+        targetStreamId = arg1;
+        text = typeof arg2 === 'string' ? arg2 : '';
+      } else if (typeof arg1 === 'string') {
+        text = arg1;
+      }
+
+      const trimmed = text.trim();
+      if (!targetStreamId || !trimmed) {
+        return false;
+      }
+
+      if (!socketRef.current?.connected) {
+        toast.error('Não estás ligado ao chat da transmissão.');
+        return false;
+      }
+
+      socketRef.current.emit('chat:send', {
+        streamId: targetStreamId,
+        mensagem: trimmed,
+      });
+      return true;
+    },
+    [streamId],
+  );
+
+  return {
+    viewers,
+    recentTips,
+    feed,
+    messages: feed,
+    streamEnded,
+    isConnected,
+    sendMessage,
+    chatError,
+  };
 }
+
