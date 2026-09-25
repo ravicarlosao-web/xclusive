@@ -235,16 +235,12 @@ export default function IrEmDireto() {
     defaultSignallingBaseUrl,
   });
 
-  // Callback ref: chama publisher.attachVideoElement sempre que um <video> monta/desmonta.
-  // Resolve o problema de ter dois <video> (mobile + desktop) partilhando o mesmo ref —
-  // apenas o visível estará montado no DOM e este callback garante que o publisher
-  // recebe sempre o elemento correto.
-  const videoCallbackRef = useCallback(
-    (el: HTMLVideoElement | null) => {
-      publisher.attachVideoElement(el);
-    },
-    [publisher.attachVideoElement]
-  );
+  // ─── Dois refs separados: um para o <video> mobile, outro para o desktop.
+  // Ambos estão no DOM ao mesmo tempo (Tailwind usa display:none, não remove do DOM),
+  // por isso um único ref seria sempre substituído pelo que é renderizado por último.
+  // O effect abaixo usa MediaQueryList para anexar o ref correto consoante o viewport.
+  const mobileVideoRef = useRef<HTMLVideoElement | null>(null);
+  const desktopVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const isLive = publisher.connectionState === 'live';
   const isConnecting = publisher.connectionState === 'connecting' || isStarting;
@@ -317,7 +313,21 @@ export default function IrEmDireto() {
     }
   };
 
-  // (Attach do elemento de vídeo gerido via videoCallbackRef — ver definição acima)
+  // Anexa ao publisher o elemento <video> correto consoante o viewport.
+  // Usa MediaQueryList para detetar mobile (<768px) vs desktop (>=768px)
+  // e re-anexa automaticamente se o utilizador rodar o dispositivo ou redimensionar.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+
+    const attach = () => {
+      const el = mq.matches ? mobileVideoRef.current : desktopVideoRef.current;
+      publisher.attachVideoElement(el);
+    };
+
+    attach(); // executa imediatamente na montagem
+    mq.addEventListener('change', attach);
+    return () => mq.removeEventListener('change', attach);
+  }, [publisher.attachVideoElement]);
 
   // Inicializa a câmara para preview assim que carrega
   useEffect(() => {
@@ -607,7 +617,7 @@ export default function IrEmDireto() {
         >
           {/* Vídeo fullscreen em fundo */}
           <video
-            ref={videoCallbackRef}
+            ref={mobileVideoRef}
             autoPlay
             playsInline
             muted
@@ -973,7 +983,7 @@ export default function IrEmDireto() {
           <div className="lg:col-span-2 space-y-4">
             <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
               <video
-                ref={videoCallbackRef}
+                ref={desktopVideoRef}
                 autoPlay
                 playsInline
                 muted
