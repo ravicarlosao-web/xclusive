@@ -241,6 +241,7 @@ export default function IrEmDireto() {
   // O effect abaixo usa MediaQueryList para anexar o ref correto consoante o viewport.
   const mobileVideoRef = useRef<HTMLVideoElement | null>(null);
   const desktopVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState<boolean>(false);
 
   const isLive = publisher.connectionState === 'live';
   const isConnecting = publisher.connectionState === 'connecting' || isStarting;
@@ -313,21 +314,85 @@ export default function IrEmDireto() {
     }
   };
 
-  // Anexa ao publisher o elemento <video> correto consoante o viewport.
-  // Usa MediaQueryList para detetar mobile (<768px) vs desktop (>=768px)
-  // e re-anexa automaticamente se o utilizador rodar o dispositivo ou redimensionar.
+  // Alternância suave de câmara com prevenção de múltiplos cliques
+  const handleSwitchCamera = useCallback(async () => {
+    if (isSwitchingCamera) return;
+    setIsSwitchingCamera(true);
+    try {
+      await publisher.switchCamera();
+    } catch (err: any) {
+      console.warn('[ir-em-direto] Erro ao alternar câmara:', err);
+      toast.error('Não foi possível alternar de câmara.');
+    } finally {
+      setIsSwitchingCamera(false);
+    }
+  }, [isSwitchingCamera, publisher.switchCamera]);
+
+  // Vincula o MediaStream atual a um elemento <video> de forma segura
+  const attachStreamToElement = useCallback((videoEl: HTMLVideoElement | null) => {
+    if (!videoEl || !publisher.mediaStream) return;
+    try {
+      if (videoEl.srcObject !== publisher.mediaStream) {
+        videoEl.srcObject = publisher.mediaStream;
+      }
+      videoEl.playsInline = true;
+      (videoEl as any).webkitPlaysInline = true;
+      videoEl.muted = true;
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('[ir-em-direto] Autoplay bloqueado no elemento de preview:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('[ir-em-direto] Erro ao associar stream ao vídeo:', e);
+    }
+  }, [publisher.mediaStream]);
+
+  // Callback ref para o vídeo mobile: chamado sempre que o elemento monta/desmonta
+  const setMobileVideoRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      mobileVideoRef.current = el;
+      if (el) {
+        attachStreamToElement(el);
+        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+          publisher.attachVideoElement(el);
+        }
+      }
+    },
+    [attachStreamToElement, publisher.attachVideoElement]
+  );
+
+  // Callback ref para o vídeo desktop: chamado sempre que o elemento monta/desmonta
+  const setDesktopVideoRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      desktopVideoRef.current = el;
+      if (el) {
+        attachStreamToElement(el);
+        if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+          publisher.attachVideoElement(el);
+        }
+      }
+    },
+    [attachStreamToElement, publisher.attachVideoElement]
+  );
+
+  // Efeito reativo: sempre que publisher.mediaStream é atualizado (ex: troca de câmara ou início de preview),
+  // vincula instantaneamente aos elementos de vídeo montados e notifica o publisher
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
+    if (publisher.mediaStream) {
+      attachStreamToElement(mobileVideoRef.current);
+      attachStreamToElement(desktopVideoRef.current);
 
-    const attach = () => {
-      const el = mq.matches ? mobileVideoRef.current : desktopVideoRef.current;
-      publisher.attachVideoElement(el);
-    };
-
-    attach(); // executa imediatamente na montagem
-    mq.addEventListener('change', attach);
-    return () => mq.removeEventListener('change', attach);
-  }, [publisher.attachVideoElement]);
+      if (typeof window !== 'undefined') {
+        const isMobile = window.innerWidth < 768;
+        const activeEl = isMobile ? mobileVideoRef.current : desktopVideoRef.current;
+        if (activeEl) {
+          publisher.attachVideoElement(activeEl);
+        }
+      }
+    }
+  }, [publisher.mediaStream, attachStreamToElement, publisher.attachVideoElement]);
 
   // Inicializa a câmara para preview assim que carrega
   useEffect(() => {
@@ -617,7 +682,7 @@ export default function IrEmDireto() {
         >
           {/* Vídeo fullscreen em fundo */}
           <video
-            ref={mobileVideoRef}
+            ref={setMobileVideoRef}
             autoPlay
             playsInline
             muted
@@ -635,12 +700,10 @@ export default function IrEmDireto() {
               <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
                 <VideoOff className="w-10 h-10 text-zinc-500" />
               </div>
-              <p className="text-sm font-medium text-zinc-400">Câmara desativada</p>
-              {publisher.connectionState === 'idle' && (
-                <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-1 border-zinc-700 text-zinc-200">
-                  <Video className="w-4 h-4" /> Ativar Câmara
-                </Button>
-              )}
+              <p className="text-sm font-medium text-zinc-400">Câmara desativada ou sem sinal</p>
+              <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-1 border-zinc-700 text-zinc-200">
+                <Video className="w-4 h-4" /> Ativar Câmara
+              </Button>
             </div>
           )}
 
@@ -846,10 +909,12 @@ export default function IrEmDireto() {
 
                   <button
                     type="button"
-                    onClick={() => publisher.switchCamera()}
-                    className="w-12 h-12 rounded-full bg-white/20 text-white border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                    onClick={handleSwitchCamera}
+                    disabled={isSwitchingCamera}
+                    title="Alternar câmara (frontal/traseira)"
+                    className="w-12 h-12 rounded-full bg-white/20 text-white border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-all disabled:opacity-60"
                   >
-                    <SwitchCamera className="w-5 h-5" />
+                    <SwitchCamera className={`w-5 h-5 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -895,10 +960,12 @@ export default function IrEmDireto() {
 
                 <button
                   type="button"
-                  onClick={() => publisher.switchCamera()}
-                  className="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center transition-all active:scale-95"
+                  onClick={handleSwitchCamera}
+                  disabled={isSwitchingCamera}
+                  title="Alternar câmara (frontal/traseira)"
+                  className="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center transition-all active:scale-95 disabled:opacity-60"
                 >
-                  <SwitchCamera className="w-4 h-4" />
+                  <SwitchCamera className={`w-4 h-4 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
                 </button>
 
                 <button
@@ -983,7 +1050,7 @@ export default function IrEmDireto() {
           <div className="lg:col-span-2 space-y-4">
             <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
               <video
-                ref={desktopVideoRef}
+                ref={setDesktopVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -996,11 +1063,9 @@ export default function IrEmDireto() {
                     <VideoOff className="w-8 h-8 text-zinc-500" />
                   </div>
                   <p className="text-sm font-medium">Câmara desativada ou sem sinal</p>
-                  {publisher.connectionState === 'idle' && (
-                    <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-2">
-                      <Video className="w-4 h-4" /> Ativar Câmara
-                    </Button>
-                  )}
+                  <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-2">
+                    <Video className="w-4 h-4" /> Ativar Câmara
+                  </Button>
                 </div>
               )}
 
@@ -1100,8 +1165,8 @@ export default function IrEmDireto() {
                 <button type="button" onClick={() => publisher.toggleCamera()} title={publisher.isVideoEnabled ? 'Desligar Vídeo' : 'Ligar Vídeo'} className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${publisher.isVideoEnabled ? 'bg-zinc-800/80 text-white hover:bg-zinc-700' : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'}`}>
                   {publisher.isVideoEnabled ? <Video className="w-4 sm:w-5 h-4 sm:h-5" /> : <VideoOff className="w-4 sm:w-5 h-4 sm:h-5" />}
                 </button>
-                <button type="button" onClick={() => publisher.switchCamera()} className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all">
-                  <SwitchCamera className="w-4 sm:w-5 h-4 sm:h-5" />
+                <button type="button" onClick={handleSwitchCamera} disabled={isSwitchingCamera} title="Alternar câmara (frontal/traseira)" className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all disabled:opacity-60">
+                  <SwitchCamera className={`w-4 sm:w-5 h-4 sm:h-5 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
                 </button>
                 {isLive && (
                   <button type="button" onClick={() => setShowQuickReply((prev) => !prev)} title="Responder no chat" className={cn('w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all', showQuickReply ? 'bg-primary text-white' : 'bg-zinc-800/80 text-white hover:bg-zinc-700')}>

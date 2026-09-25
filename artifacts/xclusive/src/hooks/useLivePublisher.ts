@@ -226,19 +226,25 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
     if (!videoEl) return;
 
     if (stream) {
-      videoEl.srcObject = stream;
+      if (videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+      }
       videoEl.playsInline = true;
+      (videoEl as any).webkitPlaysInline = true;
       videoEl.muted = true; // Sempre muted localmente para evitar feedback/eco acústico
-      videoEl.play().catch((err) => {
-        console.warn('[useLivePublisher] Autoplay preview bloqueado:', err);
-      });
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('[useLivePublisher] Autoplay preview bloqueado:', err);
+        });
+      }
     } else {
       videoEl.srcObject = null;
     }
   }, []);
 
   /**
-   * Solicita permissão de câmara e microfone
+   * Solicita permissão de câmara e microfone com fallback resiliente para dispositivos móveis
    */
   const requestMedia = useCallback(
     async (customConstraints?: MediaStreamConstraints): Promise<MediaStream> => {
@@ -252,12 +258,11 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
         setMediaStream(null);
       }
 
-      const constraints: MediaStreamConstraints = customConstraints || {
+      const defaultConstraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          frameRate: { ideal: 30, max: 30 },
         },
         audio: {
           echoCancellation: true,
@@ -267,7 +272,32 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
       };
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        let stream: MediaStream;
+        if (customConstraints) {
+          stream = await navigator.mediaDevices.getUserMedia(customConstraints);
+        } else {
+          try {
+            // Tenta constraints com alta resolução
+            stream = await navigator.mediaDevices.getUserMedia(defaultConstraints);
+          } catch (firstErr) {
+            console.warn('[useLivePublisher] Restrições ideais falharam, a tentar fallback com facingMode:', firstErr);
+            try {
+              // Fallback 1: apenas facingMode e áudio padrão
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: facingMode } },
+                audio: true,
+              });
+            } catch (secondErr) {
+              console.warn('[useLivePublisher] Fallback com facingMode falhou, a tentar media básico:', secondErr);
+              // Fallback 2: media básico
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true,
+              });
+            }
+          }
+        }
+
         streamRef.current = stream;
         setMediaStream(stream);
 
@@ -428,59 +458,98 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
   }, []);
 
   /**
-   * Alterna câmara frontal/traseira
+   * Alterna câmara frontal/traseira com suporte robusto para mobile (iOS/Android)
    */
   const switchCamera = useCallback(async (): Promise<void> => {
-    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    const nextMode: 'user' | 'environment' = facingMode === 'user' ? 'environment' : 'user';
 
     try {
-      // Pede nova track de vídeo com o novo facingMode
-      const newVideoStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: nextMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      const currentStream = streamRef.current;
+      const audioTracks = currentStream ? currentStream.getAudioTracks() : [];
+
+      // 1. Em dispositivos móveis, é CRÍTICO parar as tracks de vídeo antigas
+      // para libertar o lock de hardware do sensor da câmara antes de pedir a nova
+      if (currentStream) {
+        currentStream.getVideoTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+          currentStream.removeTrack(track);
+        });
+      }
+
+      // 2. Solicita a nova track de vídeo com fallback progressivo para compatibilidade mobile
+      let newVideoStream: MediaStream;
+      try {
+        newVideoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: nextMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (err1) {
+        console.warn('[useLivePublisher] Fallback câmara com facingMode simples:', err1);
+        try {
+          newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: nextMode },
+            audio: false,
+          });
+        } catch (err2) {
+          console.warn('[useLivePublisher] Fallback câmara padrão:', err2);
+          newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+      }
 
       const newVideoTrack = newVideoStream.getVideoTracks()[0];
       if (!newVideoTrack) {
         throw new Error('Nenhuma track de vídeo obtida na nova câmara.');
       }
 
-      const currentStream = streamRef.current;
-      if (currentStream) {
-        // Remove e para a track de vídeo antiga
-        const oldVideoTracks = currentStream.getVideoTracks();
-        oldVideoTracks.forEach((track) => {
-          track.stop();
-          currentStream.removeTrack(track);
-        });
+      // 3. CRIA UM NOVO MediaStream!
+      // Criar uma nova instância é obrigatório para:
+      // a) Forçar o React a re-renderizar (nova referência de objeto em setMediaStream)
+      // b) Fazer com que o elemento <video> recarregue o stream limpo
+      const newStream = new MediaStream([newVideoTrack, ...audioTracks]);
+      streamRef.current = newStream;
+      setMediaStream(newStream);
 
-        // Adiciona a nova track ao MediaStream atual
-        currentStream.addTrack(newVideoTrack);
-
-        // Se estiver a transmitir ativamente no WebRTC, substitui a track no sender
-        const peerConnection = kitRef.current?.peerConnection;
-        if (peerConnection) {
+      // 4. Se estiver em transmissão ao vivo ativa, atualiza o RTCPeerConnection sender
+      const peerConnection = kitRef.current?.peerConnection;
+      if (peerConnection) {
+        try {
           const senders = peerConnection.getSenders();
           const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
           if (videoSender) {
             await videoSender.replaceTrack(newVideoTrack);
           }
+        } catch (pcErr) {
+          console.warn('[useLivePublisher] Erro ao substituir track no WebRTC sender:', pcErr);
         }
-
-        // Reanexa a preview local
-        bindStreamToVideoElement(currentStream);
-        setMediaStream(currentStream);
       }
 
+      // Também sincroniza com o OvenLiveKit se disponível
+      if (kitRef.current?.setMediaStream) {
+        try {
+          await kitRef.current.setMediaStream(newStream);
+        } catch (kitErr) {
+          console.warn('[useLivePublisher] Erro ao setMediaStream no OvenLiveKit:', kitErr);
+        }
+      }
+
+      // 5. Reanexa aos elementos de vídeo e atualiza o estado
+      bindStreamToVideoElement(newStream);
       setFacingMode(nextMode);
       setIsVideoEnabled(true);
+      setError(null);
     } catch (err: any) {
       console.error('[useLivePublisher] Erro ao alternar câmara:', err);
       setError(err?.message || 'Não foi possível alternar de câmara.');
+      throw err;
     }
   }, [facingMode, bindStreamToVideoElement]);
 
