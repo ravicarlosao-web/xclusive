@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreatePost } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Image, Film, Type, Send, X, Smile, Hash, AtSign } from 'lucide-react';
+import { Image, Film, Type, Send, X, Smile, Hash, AtSign, Radio } from 'lucide-react';
+import { Link } from 'wouter';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -219,6 +220,16 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
           <Type className="w-5 h-5 text-primary" />
           <span className="hidden sm:inline text-xs">Texto</span>
         </button>
+
+        <Link href="/ir-em-direto">
+          <button
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all text-sm font-medium"
+            title="Ir em Direto"
+          >
+            <Radio className="w-5 h-5 text-red-500" />
+            <span className="hidden sm:inline text-xs">Live</span>
+          </button>
+        </Link>
 
         {/* Submit — appears when there's text */}
         <AnimatePresence>

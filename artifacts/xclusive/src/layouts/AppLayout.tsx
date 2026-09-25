@@ -248,6 +248,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <AvatarFallback className="bg-secondary"><UserIcon className="w-3 h-3" /></AvatarFallback>
             </Avatar>
           </Link>
+
+          {user?.tipoConta === 'criador' && (
+            <Link href="/definicoes/monetizacao" className="flex-1 flex items-center justify-center py-2">
+              <BarChart className={cn(
+                "w-5 h-5 transition-transform",
+                location.startsWith('/definicoes/monetizacao') ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground"
+              )} />
+            </Link>
+          )}
         </nav>
       )}
     </div>
