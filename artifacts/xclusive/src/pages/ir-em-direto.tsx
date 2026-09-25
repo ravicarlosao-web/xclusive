@@ -221,7 +221,16 @@ export default function IrEmDireto() {
   const [creatorReplyText, setCreatorReplyText] = useState<string>('');
   const [showQuickReply, setShowQuickReply] = useState<boolean>(false);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Callback ref: chama publisher.attachVideoElement sempre que um <video> monta/desmonta.
+  // Resolve o problema de ter dois <video> (mobile + desktop) partilhando o mesmo ref —
+  // apenas o visível estará montado no DOM e este callback garante que o publisher
+  // recebe sempre o elemento correto.
+  const videoCallbackRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      publisher.attachVideoElement(el);
+    },
+    [publisher.attachVideoElement]
+  );
 
   // Configuração de sinalização: WSS na porta 443 em produção para evitar Mixed Content,
   // ou ws://live.xclusive.ao:3333/live em desenvolvimento local
@@ -306,12 +315,7 @@ export default function IrEmDireto() {
     }
   };
 
-  // Anexa o elemento de vídeo ao hook do publisher
-  useEffect(() => {
-    if (videoRef.current) {
-      publisher.attachVideoElement(videoRef.current);
-    }
-  }, [publisher.attachVideoElement]);
+  // (Attach do elemento de vídeo gerido via videoCallbackRef — ver definição acima)
 
   // Inicializa a câmara para preview assim que carrega
   useEffect(() => {
@@ -601,11 +605,11 @@ export default function IrEmDireto() {
         >
           {/* Vídeo fullscreen em fundo */}
           <video
-            ref={videoRef}
+            ref={videoCallbackRef}
             autoPlay
             playsInline
             muted
-            className={`absolute inset-0 w-full h-full object-cover ${
+            className={`absolute inset-0 w-full h-full object-cover transition-transform ${
               publisher.facingMode === 'user' ? 'scale-x-[-1]' : ''
             }`}
           />
@@ -967,7 +971,7 @@ export default function IrEmDireto() {
           <div className="lg:col-span-2 space-y-4">
             <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
               <video
-                ref={videoRef}
+                ref={videoCallbackRef}
                 autoPlay
                 playsInline
                 muted
