@@ -139,14 +139,16 @@ function LiveVideoPlayer({
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 30,
+        lowLatencyMode: true,
+        backBufferLength: 15,
+        maxBufferLength: 10,
+        maxMaxBufferLength: 20,
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 2000,
         liveDurationInfinity: true,
-        liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 8,
+        liveSyncDuration: 2.0,
+        liveMaxLatencyDuration: 6.0,
       });
 
       hlsRef.current = hls;
