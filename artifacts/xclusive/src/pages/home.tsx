@@ -8,6 +8,7 @@ import { StoryViewer } from '@/components/shared/StoryViewer';
 import { PostSkeleton, StorySkeleton, SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { InlineComposer } from '@/components/shared/InlineComposer';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
+import { StoryPreviewModal } from '@/components/shared/StoryPreviewModal';
 import { MobileDataWarningDialog } from '@/components/shared/MobileDataWarningDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -81,6 +82,10 @@ export default function Home() {
   const [pendingStoryFile, setPendingStoryFile] = useState<File | null>(null);
   const [showStoryDataWarning, setShowStoryDataWarning] = useState(false);
 
+  // Story preview modal state
+  const [storyPreviewFile, setStoryPreviewFile] = useState<File | null>(null);
+  const [storyPreviewUrl, setStoryPreviewUrl] = useState<string | null>(null);
+
   // Queries
   const { data: feedData, isLoading: isLoadingFeed } = useGetFeed(
     { page: 1, limit: 10 },
@@ -144,21 +149,25 @@ export default function Home() {
   });
   const liveStreams = activeStreams ?? [];
 
-  // Em modo mock sem DB, usa stories demonstrativos de outros utilizadores
-  const otherGroups: StoryGroup[] = isMockMode && !storiesData?.length
-    ? MOCK_STORY_GROUPS
-    : (storiesData ?? []);
-
   // O meu grupo de stories: apenas para criadores
   const isCriador = user?.tipoConta === 'criador';
-  const myStories = useMemo(
-    () => (user && isCriador ? getLocalStoriesForUser(user.id).map(s => localStoryToStory(s, user)) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, isCriador, localStoriesVersion]
-  );
+  const serverMyGroup = storiesData?.find(g => g.utilizador?.id === user?.id);
+  const serverMyStories = serverMyGroup?.stories ?? [];
+  const localMyStories = user && isCriador ? getLocalStoriesForUser(user.id).map(s => localStoryToStory(s, user)) : [];
+  const myStories = serverMyStories.length > 0 ? serverMyStories : localMyStories;
+
   const myGroup: StoryGroup | null = user && isCriador
-    ? { utilizador: user, stories: myStories, hasNaoVisto: false }
+    ? {
+        utilizador: user,
+        stories: myStories,
+        hasNaoVisto: serverMyGroup?.hasNaoVisto ?? (myStories.length > 0),
+      }
     : null;
+
+  // Em modo mock sem DB, usa stories demonstrativos de outros utilizadores (excluindo eu próprio)
+  const otherGroups: StoryGroup[] = (isMockMode && !storiesData?.length
+    ? MOCK_STORY_GROUPS
+    : (storiesData ?? [])).filter(g => g.utilizador?.id !== user?.id);
 
   // Lista usada pelo viewer: apenas grupos com pelo menos 1 story (eu primeiro, se tiver)
   const viewableGroups: StoryGroup[] = [
@@ -170,14 +179,16 @@ export default function Home() {
     fileInputRef.current?.click();
   }, []);
 
-  async function uploadStory(file: File) {
+  async function uploadStory(file: File, audiencia: 'todos' | 'proximos' = 'todos') {
     if (!user) return;
     const tipo = file.type.startsWith('video/') ? 'video' : 'imagem';
 
     if (isMockMode) {
       addLocalStory(user.id, URL.createObjectURL(file), tipo);
       setLocalStoriesVersion(v => v + 1);
-      toast.success('Story adicionado! Visível apenas nesta sessão.');
+      toast.success('Story publicado com sucesso!', {
+        description: audiencia === 'proximos' ? 'Visível para Amigos Chegados' : 'Visível para todos os seguidores',
+      });
       return;
     }
 
@@ -222,6 +233,7 @@ export default function Home() {
         body: JSON.stringify({
           mediaUrl: uploadedFile.url,
           tipo: uploadedFile.tipo === 'video' ? 'video' : tipo,
+          audiencia,
         }),
       });
       const storyBody = await storyResponse.json().catch(() => null) as { error?: string } | null;
@@ -229,11 +241,18 @@ export default function Home() {
         throw new Error(storyBody?.error || `Criação da story falhou: ${storyResponse.status}`);
       }
 
+      // Adiciona também localmente para feedback instantâneo no círculo do criador
+      addLocalStory(user.id, uploadedFile.url, tipo);
+      setLocalStoriesVersion(v => v + 1);
+
       await queryClient.invalidateQueries({ queryKey: ['/api/stories/feed'] });
-      toast.success('Story publicado!');
+      toast.success('Story publicado com sucesso!', {
+        description: audiencia === 'proximos' ? 'Visível para Amigos Chegados' : 'Visível para todos os teus seguidores',
+      });
     } catch (error) {
       console.error('[Stories] creation error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao publicar story. Tenta novamente.');
+      throw error;
     }
   }
 
@@ -257,7 +276,10 @@ export default function Home() {
       return;
     }
 
-    void uploadStory(file);
+    // Open preview modal instead of uploading directly
+    const url = URL.createObjectURL(file);
+    setStoryPreviewFile(file);
+    setStoryPreviewUrl(url);
   }
 
   function handleDeleteStory(userId: number, storyId: number) {
@@ -625,6 +647,23 @@ export default function Home() {
         initialFiles={modalInitialFiles}
       />
 
+      {/* Story Preview Modal — Instagram-style editor before publishing */}
+      {storyPreviewFile && storyPreviewUrl && user && (
+        <StoryPreviewModal
+          file={storyPreviewFile}
+          previewUrl={storyPreviewUrl}
+          user={user}
+          onPublish={async (file, _legenda, audiencia) => {
+            await uploadStory(file, audiencia);
+          }}
+          onClose={() => {
+            if (storyPreviewUrl) URL.revokeObjectURL(storyPreviewUrl);
+            setStoryPreviewFile(null);
+            setStoryPreviewUrl(null);
+          }}
+        />
+      )}
+
       {/* Story Video Mobile Data Warning */}
       <MobileDataWarningDialog
         open={showStoryDataWarning}
@@ -632,7 +671,9 @@ export default function Home() {
         onConfirm={() => {
           setShowStoryDataWarning(false);
           if (pendingStoryFile) {
-            void uploadStory(pendingStoryFile);
+            const url = URL.createObjectURL(pendingStoryFile);
+            setStoryPreviewFile(pendingStoryFile);
+            setStoryPreviewUrl(url);
             setPendingStoryFile(null);
           }
         }}
