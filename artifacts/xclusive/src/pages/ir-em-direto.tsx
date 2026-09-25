@@ -585,489 +585,632 @@ export default function IrEmDireto() {
         </Card>
       </div>
     );
-  }
-
   // ─── ECRÃ PRINCIPAL DE TRANSMISSÃO ─────────────────────────────────────────
   return (
-    <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6">
-      {/* Header do Estúdio */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/40">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
-              <Radio className="w-7 h-7 text-primary" />
-              Estúdio de Transmissão
-            </h1>
-            {isLive && (
-              <Badge className="bg-red-600 hover:bg-red-600 text-white font-bold px-2.5 py-0.5 animate-pulse text-xs tracking-wider">
-                AO VIVO
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Transmite em direto para os teus subscritores e seguidores com ultra baixa latência.
-          </p>
-        </div>
+    <div className="w-full max-w-6xl mx-auto">
 
-        {/* Informação do Criador e Ação de Término */}
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-2.5">
-            <Avatar className="w-9 h-9 border border-border">
-              <AvatarImage src={user.avatarUrl || ''} />
-              <AvatarFallback className="text-xs font-bold">
-                {user.nomeExibicao?.charAt(0) || 'C'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="hidden sm:flex flex-col text-left text-xs leading-tight">
-              <span className="font-semibold">{user.nomeExibicao}</span>
-              <span className="text-muted-foreground">@{user.username}</span>
-            </div>
-          </div>
-
-          {isLive && (
-            <Button
-              onClick={() => setShowEndDialog(true)}
-              disabled={isEnding}
-              variant="destructive"
-              className="gap-2 font-semibold shadow-lg shadow-red-950/40"
-            >
-              <Square className="w-4 h-4 fill-current" />
-              Terminar Live
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Alerta de erro amigável se aplicável */}
-      {isError && publisher.error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3 text-destructive"
+      {/* ═══════════════════════════════════════════════════════════════════════
+          MOBILE: Layout fullscreen tipo Instagram Live (apenas < md)
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="md:hidden -mx-3 sm:-mx-4">
+        <div
+          className="relative w-full bg-black overflow-hidden"
+          style={{ height: 'calc(100dvh - 60px)' }}
         >
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="flex-1 text-sm">
-            <p className="font-semibold">Erro no dispositivo ou conexão</p>
-            <p className="mt-0.5 text-destructive/90">{getHumanFriendlyError(publisher.error)}</p>
-            <div className="mt-3">
-              <Button
-                onClick={() => publisher.requestMedia()}
-                variant="outline"
-                size="sm"
-                className="gap-2 border-destructive/40 hover:bg-destructive/10"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Tentar Reativar Câmara
-              </Button>
+          {/* Vídeo fullscreen em fundo */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`absolute inset-0 w-full h-full object-cover ${
+              publisher.facingMode === 'user' ? 'scale-x-[-1]' : ''
+            }`}
+          />
+
+          {/* Gradiente para legibilidade */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-transparent via-40% to-black/85 pointer-events-none z-10" />
+
+          {/* Placeholder câmara off */}
+          {(!publisher.isVideoEnabled || !publisher.mediaStream) && !isConnecting && (
+            <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center gap-3 z-10">
+              <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                <VideoOff className="w-10 h-10 text-zinc-500" />
+              </div>
+              <p className="text-sm font-medium text-zinc-400">Câmara desativada</p>
+              {publisher.connectionState === 'idle' && (
+                <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-1 border-zinc-700 text-zinc-200">
+                  <Video className="w-4 h-4" /> Ativar Câmara
+                </Button>
+              )}
             </div>
-          </div>
-        </motion.div>
-      )}
+          )}
 
-      {/* Grid Principal: Vídeo na esquerda/centro, Painel lateral na direita */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna de Vídeo (Ocupa 2 colunas em telas grandes) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
-            {/* Elemento de Vídeo Local */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`w-full h-full object-cover transition-transform ${
-                publisher.facingMode === 'user' ? 'scale-x-[-1]' : ''
-              }`}
-            />
-
-            {/* Placeholder quando a câmara está desativada ou sem stream */}
-            {(!publisher.isVideoEnabled || !publisher.mediaStream) && !isConnecting && (
-              <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center gap-3 text-muted-foreground z-10">
-                <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                  <VideoOff className="w-8 h-8 text-zinc-500" />
-                </div>
-                <p className="text-sm font-medium">Câmara desativada ou sem sinal</p>
-                {publisher.connectionState === 'idle' && (
-                  <Button
-                    onClick={() => publisher.requestMedia()}
-                    variant="outline"
-                    className="gap-2 mt-2"
-                  >
-                    <Video className="w-4 h-4" /> Ativar Câmara
-                  </Button>
-                )}
+          {/* Overlay conectando */}
+          {isConnecting && (
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center gap-4 text-white z-30">
+              <div className="relative">
+                <Loader2 className="w-14 h-14 animate-spin text-primary" />
+                <Radio className="w-7 h-7 text-white absolute inset-0 m-auto" />
               </div>
-            )}
-
-            {/* Overlay de Conexão (Connecting) */}
-            {isConnecting && (
-              <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center gap-4 text-white z-20">
-                <div className="relative">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                  <Radio className="w-6 h-6 text-white absolute inset-0 m-auto" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-bold text-lg">A estabelecer transmissão ao vivo...</h3>
-                  <p className="text-xs text-zinc-300 mt-1">A ligar ao servidor WebRTC seguro</p>
-                </div>
+              <div className="text-center">
+                <h3 className="font-bold text-lg">A entrar em direto...</h3>
+                <p className="text-xs text-zinc-300 mt-1">A ligar ao servidor seguro</p>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Badges Superiores no Vídeo */}
-            <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-20">
-              {/* Esquerda: Status + Cronómetro */}
-              <div className="flex items-center gap-2 pointer-events-auto">
-                {isLive ? (
-                  <>
-                    <div className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
-                      <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                      AO VIVO
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-mono font-medium px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
-                      <Clock className="w-3.5 h-3.5 text-zinc-300" />
-                      {formatDuration(duration)}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
-                    <span className="w-2 h-2 rounded-full bg-blue-400" />
-                    PREVIEW
-                  </div>
-                )}
+          {/* Alerta de erro mobile */}
+          {isError && publisher.error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute top-20 left-3 right-3 z-30 p-3 rounded-xl bg-destructive/90 backdrop-blur-md border border-destructive/50 flex items-start gap-2 text-white text-xs"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold">Erro no dispositivo</p>
+                <p className="opacity-90 mt-0.5">{getHumanFriendlyError(publisher.error)}</p>
+                <button onClick={() => publisher.requestMedia()} className="mt-1.5 flex items-center gap-1 underline opacity-80 text-[11px]">
+                  <RefreshCw className="w-3 h-3" /> Tentar novamente
+                </button>
               </div>
+            </motion.div>
+          )}
 
-              {/* Direita: Total de Gorjetas em Kz + Espectadores ao vivo */}
-              {isLive && (
-                <div className="flex items-center gap-2 pointer-events-auto">
-                  {/* Total acumulado de gorjetas */}
-                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-500/30 shadow-lg">
-                    <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>{formatKz(totalTipsKz)}</span>
-                  </div>
+          {/* ── TOP BAR: Avatar + Nome + Badges + Fechar ── */}
+          <div className="absolute top-0 left-0 right-0 z-20 px-4 pt-4 pb-2 flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className={`shrink-0 ${isLive ? 'ring-2 ring-red-500 ring-offset-1 ring-offset-black rounded-full p-0.5' : ''}`}>
+                <Avatar className="w-9 h-9 border border-white/20">
+                  <AvatarImage src={user.avatarUrl || ''} />
+                  <AvatarFallback className="text-sm font-bold bg-zinc-800 text-white">
+                    {user.nomeExibicao?.charAt(0) || 'C'}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-white font-semibold text-[13px] truncate leading-tight drop-shadow">
+                  {user.nomeExibicao || user.username}
+                </span>
+                <span className="text-white/55 text-[10px] leading-tight">@{user.username}</span>
+              </div>
+            </div>
 
-                  {/* Contador de espectadores */}
-                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
-                    <Eye className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    <span>{viewers}</span>
-                    <span className="hidden sm:inline">{viewers === 1 ? 'espectador' : 'espectadores'}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isLive ? (
+                <>
+                  <div className="flex items-center gap-1 bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-lg">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    AO VIVO
                   </div>
+                  <div className="flex items-center gap-1 bg-black/50 backdrop-blur-md text-white text-[11px] px-2 py-1 rounded-full border border-white/15">
+                    <Eye className="w-3 h-3 text-blue-300" />
+                    {viewers}
+                  </div>
+                  <div className="flex items-center gap-1 bg-black/50 backdrop-blur-md text-white text-[11px] font-mono px-2 py-1 rounded-full border border-white/15">
+                    <Clock className="w-3 h-3 text-zinc-300" />
+                    {formatDuration(duration)}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-1 bg-black/50 backdrop-blur-md text-zinc-200 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-white/15">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  PREVIEW
                 </div>
               )}
             </div>
 
-            {/* Banner de Reconexão se houver oscilação de rede */}
-            {isReconnecting && (
-              <div className="absolute top-16 left-4 right-4 bg-amber-500/90 backdrop-blur-md text-black px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg z-20 animate-pulse">
-                <AlertTriangle className="w-4 h-4" />
-                Ligação instável. A reconectar ao servidor...
-              </div>
-            )}
+            <button
+              onClick={() => setLocation('/home')}
+              className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/15 flex items-center justify-center text-white shrink-0 ml-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            {/* ── Overlay de Chat Unificado em Tempo Real sobre o Preview da Câmara ── */}
-            {isLive && (
-              <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm pointer-events-none z-20">
-                <div
-                  ref={chatScrollOverlayRef}
-                  className="max-h-44 sm:max-h-56 overflow-y-auto scrollbar-none flex flex-col gap-1.5 pointer-events-auto pr-1"
-                >
-                  {feed.length === 0 ? (
-                    <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
-                      A aguardar comentários dos espectadores... 💬
-                    </div>
-                  ) : (
-                    feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
-                  )}
-                </div>
-              </div>
-            )}
+          {/* Banner reconexão */}
+          {isReconnecting && (
+            <div className="absolute top-16 left-4 right-4 bg-amber-500/90 text-black px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg z-20 animate-pulse">
+              <AlertTriangle className="w-4 h-4" />
+              Ligação instável. A reconectar...
+            </div>
+          )}
 
-            {/* ── Modal/Popup de Resposta Rápida do Criador no Mobile ── */}
+          {/* ── CHAT OVERLAY (em live, sem reply aberto) ── */}
+          {isLive && !showQuickReply && (
+            <div className="absolute left-3 right-3 z-20 pointer-events-none" style={{ bottom: '96px' }}>
+              <div
+                ref={chatScrollOverlayRef}
+                className="max-h-56 overflow-y-auto scrollbar-none flex flex-col gap-1.5 pointer-events-auto"
+              >
+                {feed.length === 0 ? (
+                  <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
+                    A aguardar comentários... 💬
+                  </div>
+                ) : (
+                  feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Gorjetas acumuladas */}
+          {isLive && totalTipsKz > 0 && (
+            <div className="absolute right-3 z-20" style={{ bottom: '100px' }}>
+              <div className="flex items-center gap-1 bg-amber-500/25 backdrop-blur-md text-amber-300 text-[10px] font-bold px-2.5 py-1.5 rounded-full border border-amber-500/30 shadow-lg">
+                <Gift className="w-3 h-3 text-amber-400" />
+                {formatKz(totalTipsKz)}
+              </div>
+            </div>
+          )}
+
+          {/* ── INPUT REPLY RÁPIDO ── */}
+          <AnimatePresence>
             {showQuickReply && isLive && (
-              <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm bg-zinc-950/90 backdrop-blur-xl border border-white/20 p-2 rounded-2xl shadow-2xl z-30 flex items-center gap-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                transition={{ duration: 0.18 }}
+                className="absolute left-3 right-3 z-30 flex items-center gap-2"
+                style={{ bottom: '96px' }}
+              >
                 <Input
                   value={creatorReplyText}
                   onChange={(e) => setCreatorReplyText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSendCreatorMessage();
-                    }
-                  }}
-                  placeholder="Escreve uma resposta rápida..."
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendCreatorMessage(); } }}
+                  placeholder="Escreve um comentário..."
                   maxLength={300}
                   autoFocus
-                  className="h-8 text-xs bg-black/60 border-white/10 text-white placeholder:text-white/50"
+                  className="h-10 text-sm bg-zinc-950/80 backdrop-blur-xl border-white/20 text-white placeholder:text-white/40 rounded-full px-4"
                 />
-                <Button
-                  size="icon"
+                <button
                   onClick={handleSendCreatorMessage}
                   disabled={!creatorReplyText.trim()}
-                  className="h-8 w-8 shrink-0 bg-primary hover:bg-primary/90 text-white rounded-xl"
-                  title="Enviar mensagem"
+                  className="w-10 h-10 shrink-0 rounded-full bg-primary flex items-center justify-center disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setShowQuickReply(false)}
-                  className="h-8 w-8 shrink-0 text-white/70 hover:text-white rounded-xl"
-                  title="Fechar"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            )}
-
-            {/* Barra Flutuante de Controlos do Dispositivo (Overlay Inferior) */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 bg-zinc-950/80 backdrop-blur-xl border border-white/10 px-3.5 sm:px-4 py-2 rounded-full shadow-2xl z-20">
-              {/* Alternar Microfone */}
-              <button
-                type="button"
-                onClick={() => publisher.toggleMicrophone()}
-                title={publisher.isAudioEnabled ? 'Desativar Microfone' : 'Ativar Microfone'}
-                className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${
-                  publisher.isAudioEnabled
-                    ? 'bg-zinc-800/80 text-white hover:bg-zinc-700'
-                    : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'
-                }`}
-              >
-                {publisher.isAudioEnabled ? <Mic className="w-4 sm:w-5 h-4 sm:h-5" /> : <MicOff className="w-4 sm:w-5 h-4 sm:h-5" />}
-              </button>
-
-              {/* Alternar Câmara */}
-              <button
-                type="button"
-                onClick={() => publisher.toggleCamera()}
-                title={publisher.isVideoEnabled ? 'Desligar Vídeo' : 'Ligar Vídeo'}
-                className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${
-                  publisher.isVideoEnabled
-                    ? 'bg-zinc-800/80 text-white hover:bg-zinc-700'
-                    : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'
-                }`}
-              >
-                {publisher.isVideoEnabled ? <Video className="w-4 sm:w-5 h-4 sm:h-5" /> : <VideoOff className="w-4 sm:w-5 h-4 sm:h-5" />}
-              </button>
-
-              {/* Trocar Câmara Frontal / Traseira */}
-              <button
-                type="button"
-                onClick={() => publisher.switchCamera()}
-                title={`Alternar para câmara ${publisher.facingMode === 'user' ? 'traseira' : 'frontal'}`}
-                className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all"
-              >
-                <SwitchCamera className="w-4 sm:w-5 h-4 sm:h-5" />
-              </button>
-
-              {/* Botão para abrir input de resposta rápida durante a live */}
-              {isLive && (
-                <button
-                  type="button"
-                  onClick={() => setShowQuickReply((prev) => !prev)}
-                  title="Responder no chat"
-                  className={cn(
-                    'w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all',
-                    showQuickReply
-                      ? 'bg-primary text-white'
-                      : 'bg-zinc-800/80 text-white hover:bg-zinc-700'
-                  )}
-                >
-                  <MessageSquare className="w-4 sm:w-5 h-4 sm:h-5" />
+                  <Send className="w-4 h-4 text-white" />
                 </button>
-              )}
-            </div>
-          </div>
+                <button
+                  onClick={() => setShowQuickReply(false)}
+                  className="w-10 h-10 shrink-0 rounded-full bg-white/15 flex items-center justify-center text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* Dica discreta de dispositivos */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-            <span>
-              Câmara: <strong className="text-foreground">{publisher.facingMode === 'user' ? 'Frontal' : 'Traseira'}</strong>
-            </span>
-            <span>
-              Microfone: <strong className={publisher.isAudioEnabled ? 'text-emerald-400' : 'text-red-400'}>
-                {publisher.isAudioEnabled ? 'Ligado' : 'Mutado'}
-              </strong>
-            </span>
-            <span>
-              Vídeo: <strong className={publisher.isVideoEnabled ? 'text-emerald-400' : 'text-red-400'}>
-                {publisher.isVideoEnabled ? 'Ativo' : 'Desligado'}
-              </strong>
-            </span>
-          </div>
-        </div>
-
-        {/* Coluna Lateral: Controlos, Partilha e Chat Unificado */}
-        <div className="space-y-4">
-          {!isLive ? (
-            /* Card de Preparação Pré-Transmissão */
-            <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  Pronto para entrar em direto?
-                </CardTitle>
-                <CardDescription>
-                  Verifica o teu enquadramento, iluminação e som antes de iniciar a emissão.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2 text-xs text-muted-foreground bg-secondary/30 p-3.5 rounded-xl border border-border/30">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Conexão WebRTC com baixa latência (~1s)</span>
+          {/* ── BARRA INFERIOR DE CONTROLOS ── */}
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-5 pt-2">
+            {!isLive ? (
+              /* PRÉ-LIVE */
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-center gap-5 text-[11px] text-white/60">
+                  <div className="flex items-center gap-1">
+                    {publisher.isAudioEnabled ? <Mic className="w-3 h-3 text-emerald-400" /> : <MicOff className="w-3 h-3 text-red-400" />}
+                    <span>{publisher.isAudioEnabled ? 'Mic ativo' : 'Mic mudo'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Notificação automática enviada aos seguidores</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Gorjetas em Kz creditadas diretamente na tua carteira</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Chat interativo em tempo real via WebSocket</span>
+                  <div className="flex items-center gap-1">
+                    {publisher.isVideoEnabled ? <Video className="w-3 h-3 text-emerald-400" /> : <VideoOff className="w-3 h-3 text-red-400" />}
+                    <span>{publisher.isVideoEnabled ? 'Câmara OK' : 'Sem câmara'}</span>
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleStartBroadcast}
-                  disabled={isStarting || !publisher.mediaStream}
-                  className="w-full h-12 text-base font-bold bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-xl shadow-red-950/40 gap-2.5 transition-all group"
+                <div className="flex items-center justify-center gap-6">
+                  <button
+                    type="button"
+                    onClick={() => publisher.toggleMicrophone()}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all ${
+                      publisher.isAudioEnabled ? 'bg-white/20 text-white border border-white/20' : 'bg-red-600 text-white'
+                    }`}
+                  >
+                    {publisher.isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                  </button>
+
+                  {/* Botão LIVE central */}
+                  <button
+                    type="button"
+                    onClick={handleStartBroadcast}
+                    disabled={isStarting || !publisher.mediaStream}
+                    className="w-[76px] h-[76px] rounded-full bg-gradient-to-br from-red-600 to-pink-600 text-white flex flex-col items-center justify-center gap-0.5 shadow-2xl shadow-red-950/60 active:scale-95 transition-transform disabled:opacity-60 disabled:cursor-not-allowed border-[3px] border-white/25"
+                  >
+                    {isStarting ? (
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    ) : (
+                      <>
+                        <Radio className="w-7 h-7" />
+                        <span className="text-[9px] font-black tracking-widest leading-none">LIVE</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => publisher.switchCamera()}
+                    className="w-12 h-12 rounded-full bg-white/20 text-white border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                  >
+                    <SwitchCamera className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* EM LIVE: barra tipo Instagram */
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => publisher.toggleMicrophone()}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 ${publisher.isAudioEnabled ? 'bg-white/20 text-white' : 'bg-red-600 text-white'}`}
                 >
-                  {isStarting ? (
+                  {publisher.isAudioEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => publisher.toggleCamera()}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 ${publisher.isVideoEnabled ? 'bg-white/20 text-white' : 'bg-red-600 text-white'}`}
+                >
+                  {publisher.isVideoEnabled ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                </button>
+
+                {/* Caixa "Comentar" — estilo Instagram */}
+                <button
+                  type="button"
+                  onClick={() => setShowQuickReply((prev) => !prev)}
+                  className={cn(
+                    'flex-1 h-10 rounded-full border px-4 text-left transition-all',
+                    showQuickReply ? 'bg-white/25 border-white/30' : 'bg-white/10 border-white/20'
+                  )}
+                >
+                  <span className="text-[12px] text-white/60">Comentar...</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyShareLink}
+                  className="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center transition-all active:scale-95"
+                  title="Copiar link"
+                >
+                  {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => publisher.switchCamera()}
+                  className="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center transition-all active:scale-95"
+                >
+                  <SwitchCamera className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowEndDialog(true)}
+                  disabled={isEnding}
+                  className="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-950/50 active:scale-95 transition-all disabled:opacity-60"
+                  title="Terminar live"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          DESKTOP / TABLET (md+): Layout original preservado em 2 colunas
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="hidden md:block px-3 sm:px-6 py-4 sm:py-6 space-y-6">
+        {/* Header do Estúdio */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/40">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
+                <Radio className="w-7 h-7 text-primary" />
+                Estúdio de Transmissão
+              </h1>
+              {isLive && (
+                <Badge className="bg-red-600 hover:bg-red-600 text-white font-bold px-2.5 py-0.5 animate-pulse text-xs tracking-wider">
+                  AO VIVO
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Transmite em direto para os teus subscritores e seguidores com ultra baixa latência.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-2.5">
+              <Avatar className="w-9 h-9 border border-border">
+                <AvatarImage src={user.avatarUrl || ''} />
+                <AvatarFallback className="text-xs font-bold">
+                  {user.nomeExibicao?.charAt(0) || 'C'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden sm:flex flex-col text-left text-xs leading-tight">
+                <span className="font-semibold">{user.nomeExibicao}</span>
+                <span className="text-muted-foreground">@{user.username}</span>
+              </div>
+            </div>
+            {isLive && (
+              <Button onClick={() => setShowEndDialog(true)} disabled={isEnding} variant="destructive" className="gap-2 font-semibold shadow-lg shadow-red-950/40">
+                <Square className="w-4 h-4 fill-current" />
+                Terminar Live
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Alerta de erro desktop */}
+        {isError && publisher.error && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3 text-destructive">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold">Erro no dispositivo ou conexão</p>
+              <p className="mt-0.5 text-destructive/90">{getHumanFriendlyError(publisher.error)}</p>
+              <div className="mt-3">
+                <Button onClick={() => publisher.requestMedia()} variant="outline" size="sm" className="gap-2 border-destructive/40 hover:bg-destructive/10">
+                  <RefreshCw className="w-3.5 h-3.5" /> Tentar Reativar Câmara
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Grid Principal */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Coluna de Vídeo */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover transition-transform ${publisher.facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+              />
+
+              {(!publisher.isVideoEnabled || !publisher.mediaStream) && !isConnecting && (
+                <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center gap-3 text-muted-foreground z-10">
+                  <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                    <VideoOff className="w-8 h-8 text-zinc-500" />
+                  </div>
+                  <p className="text-sm font-medium">Câmara desativada ou sem sinal</p>
+                  {publisher.connectionState === 'idle' && (
+                    <Button onClick={() => publisher.requestMedia()} variant="outline" className="gap-2 mt-2">
+                      <Video className="w-4 h-4" /> Ativar Câmara
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {isConnecting && (
+                <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center gap-4 text-white z-20">
+                  <div className="relative">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                    <Radio className="w-6 h-6 text-white absolute inset-0 m-auto" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-bold text-lg">A estabelecer transmissão ao vivo...</h3>
+                    <p className="text-xs text-zinc-300 mt-1">A ligar ao servidor WebRTC seguro</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-20">
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  {isLive ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      A Preparar Live...
+                      <div className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        AO VIVO
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-mono font-medium px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                        <Clock className="w-3.5 h-3.5 text-zinc-300" />
+                        {formatDuration(duration)}
+                      </div>
                     </>
                   ) : (
-                    <>
-                      <Radio className="w-5 h-5 animate-pulse group-hover:scale-110 transition-transform" />
-                      Iniciar Live Agora
-                    </>
+                    <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                      <span className="w-2 h-2 rounded-full bg-blue-400" />
+                      PREVIEW
+                    </div>
                   )}
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            /* Card da Live em Curso: Link e Painel Unificado de Chat */
-            <div className="space-y-4">
-              {/* Partilhar Link */}
-              <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Share2 className="w-4 h-4 text-primary" />
-                    Partilhar Live
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Envia este link para os teus amigos ou redes sociais para assistirem.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      value={
-                        streamId
-                          ? `${typeof window !== 'undefined' ? window.location.origin : ''}/live/${streamId}`
-                          : ''
-                      }
-                      className="bg-secondary/50 font-mono text-xs h-9 select-all"
-                    />
-                    <Button
-                      onClick={handleCopyShareLink}
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 h-9 shrink-0"
-                    >
-                      {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      <span className="hidden sm:inline">{copiedLink ? 'Copiado' : 'Copiar'}</span>
-                    </Button>
+                </div>
+                {isLive && (
+                  <div className="flex items-center gap-2 pointer-events-auto">
+                    <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-500/30 shadow-lg">
+                      <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{formatKz(totalTipsKz)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                      <Eye className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <span>{viewers}</span>
+                      <span className="hidden sm:inline">{viewers === 1 ? 'espectador' : 'espectadores'}</span>
+                    </div>
                   </div>
+                )}
+              </div>
 
-                  {streamId && (
-                    <a
-                      href={`/live/${streamId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" /> Abrir visualização do espectador numa nova aba
-                    </a>
-                  )}
-                </CardContent>
-              </Card>
+              {isReconnecting && (
+                <div className="absolute top-16 left-4 right-4 bg-amber-500/90 backdrop-blur-md text-black px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg z-20 animate-pulse">
+                  <AlertTriangle className="w-4 h-4" />
+                  Ligação instável. A reconectar ao servidor...
+                </div>
+              )}
 
-              {/* Feed Unificado de Chat e Gorjetas na Coluna Lateral */}
-              <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl flex flex-col h-[420px]">
-                <CardHeader className="pb-2.5 pt-3.5 border-b border-border/40 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-primary" />
-                    Chat e Gorjetas ao Vivo
-                  </CardTitle>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 gap-1 px-2">
-                      <Gift className="w-3 h-3" />
-                      {formatKz(totalTipsKz)}
-                    </Badge>
-                    <Badge variant="secondary" className="text-[10px] gap-1 px-1.5">
-                      <Users className="w-3 h-3" /> {viewers}
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="flex-1 overflow-hidden p-3 flex flex-col">
-                  {/* Lista de Mensagens com Scroll */}
-                  <div
-                    ref={chatScrollSidePanelRef}
-                    className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin"
-                  >
+              {isLive && (
+                <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm pointer-events-none z-20">
+                  <div ref={chatScrollOverlayRef} className="max-h-44 sm:max-h-56 overflow-y-auto scrollbar-none flex flex-col gap-1.5 pointer-events-auto pr-1">
                     {feed.length === 0 ? (
-                      <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full">
-                        <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30 text-primary" />
-                        <p className="font-medium">O chat está pronto e ligado.</p>
-                        <p className="text-[11px] opacity-70 mt-0.5">As mensagens dos espectadores aparecerão aqui.</p>
+                      <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
+                        A aguardar comentários dos espectadores... 💬
                       </div>
                     ) : (
-                      feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={true} />)
+                      feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
                     )}
                   </div>
+                </div>
+              )}
 
-                  {/* Input de Envio do Criador */}
-                  <div className="pt-2 border-t border-border/40 mt-2 flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        value={creatorReplyText}
-                        onChange={(e) => setCreatorReplyText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleSendCreatorMessage();
-                          }
-                        }}
-                        placeholder="Escreve uma resposta para a live..."
-                        maxLength={300}
-                        className="text-xs h-8 pr-12"
-                      />
-                      {creatorReplyText.length > 0 && (
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-muted-foreground">
-                          {creatorReplyText.length}/300
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      size="icon"
-                      onClick={handleSendCreatorMessage}
-                      disabled={!creatorReplyText.trim() || !isConnected}
-                      className="h-8 w-8 shrink-0"
-                      title="Enviar mensagem"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                    </Button>
+              {showQuickReply && isLive && (
+                <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:max-w-sm bg-zinc-950/90 backdrop-blur-xl border border-white/20 p-2 rounded-2xl shadow-2xl z-30 flex items-center gap-2">
+                  <Input
+                    value={creatorReplyText}
+                    onChange={(e) => setCreatorReplyText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendCreatorMessage(); } }}
+                    placeholder="Escreve uma resposta rápida..."
+                    maxLength={300}
+                    autoFocus
+                    className="h-8 text-xs bg-black/60 border-white/10 text-white placeholder:text-white/50"
+                  />
+                  <Button size="icon" onClick={handleSendCreatorMessage} disabled={!creatorReplyText.trim()} className="h-8 w-8 shrink-0 bg-primary hover:bg-primary/90 text-white rounded-xl" title="Enviar mensagem">
+                    <Send className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setShowQuickReply(false)} className="h-8 w-8 shrink-0 text-white/70 hover:text-white rounded-xl" title="Fechar">
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 bg-zinc-950/80 backdrop-blur-xl border border-white/10 px-3.5 sm:px-4 py-2 rounded-full shadow-2xl z-20">
+                <button type="button" onClick={() => publisher.toggleMicrophone()} title={publisher.isAudioEnabled ? 'Desativar Microfone' : 'Ativar Microfone'} className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${publisher.isAudioEnabled ? 'bg-zinc-800/80 text-white hover:bg-zinc-700' : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'}`}>
+                  {publisher.isAudioEnabled ? <Mic className="w-4 sm:w-5 h-4 sm:h-5" /> : <MicOff className="w-4 sm:w-5 h-4 sm:h-5" />}
+                </button>
+                <button type="button" onClick={() => publisher.toggleCamera()} title={publisher.isVideoEnabled ? 'Desligar Vídeo' : 'Ligar Vídeo'} className={`w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all ${publisher.isVideoEnabled ? 'bg-zinc-800/80 text-white hover:bg-zinc-700' : 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-950/40'}`}>
+                  {publisher.isVideoEnabled ? <Video className="w-4 sm:w-5 h-4 sm:h-5" /> : <VideoOff className="w-4 sm:w-5 h-4 sm:h-5" />}
+                </button>
+                <button type="button" onClick={() => publisher.switchCamera()} className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 flex items-center justify-center transition-all">
+                  <SwitchCamera className="w-4 sm:w-5 h-4 sm:h-5" />
+                </button>
+                {isLive && (
+                  <button type="button" onClick={() => setShowQuickReply((prev) => !prev)} title="Responder no chat" className={cn('w-9 sm:w-10 h-9 sm:h-10 rounded-full flex items-center justify-center transition-all', showQuickReply ? 'bg-primary text-white' : 'bg-zinc-800/80 text-white hover:bg-zinc-700')}>
+                    <MessageSquare className="w-4 sm:w-5 h-4 sm:h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+              <span>Câmara: <strong className="text-foreground">{publisher.facingMode === 'user' ? 'Frontal' : 'Traseira'}</strong></span>
+              <span>Microfone: <strong className={publisher.isAudioEnabled ? 'text-emerald-400' : 'text-red-400'}>{publisher.isAudioEnabled ? 'Ligado' : 'Mutado'}</strong></span>
+              <span>Vídeo: <strong className={publisher.isVideoEnabled ? 'text-emerald-400' : 'text-red-400'}>{publisher.isVideoEnabled ? 'Ativo' : 'Desligado'}</strong></span>
+            </div>
+          </div>
+
+          {/* Coluna Lateral desktop */}
+          <div className="space-y-4">
+            {!isLive ? (
+              <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Pronto para entrar em direto?
+                  </CardTitle>
+                  <CardDescription>
+                    Verifica o teu enquadramento, iluminação e som antes de iniciar a emissão.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2 text-xs text-muted-foreground bg-secondary/30 p-3.5 rounded-xl border border-border/30">
+                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Conexão WebRTC com baixa latência (~1s)</span></div>
+                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Notificação automática enviada aos seguidores</span></div>
+                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Gorjetas em Kz creditadas diretamente na tua carteira</span></div>
+                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Chat interativo em tempo real via WebSocket</span></div>
                   </div>
+                  <Button
+                    onClick={handleStartBroadcast}
+                    disabled={isStarting || !publisher.mediaStream}
+                    className="w-full h-12 text-base font-bold bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-xl shadow-red-950/40 gap-2.5 transition-all group"
+                  >
+                    {isStarting ? (
+                      <><Loader2 className="w-5 h-5 animate-spin" />A Preparar Live...</>
+                    ) : (
+                      <><Radio className="w-5 h-5 animate-pulse group-hover:scale-110 transition-transform" />Iniciar Live Agora</>
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-4">
+                <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Share2 className="w-4 h-4 text-primary" />
+                      Partilhar Live
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Envia este link para os teus amigos ou redes sociais para assistirem.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={streamId ? `${typeof window !== 'undefined' ? window.location.origin : ''}/live/${streamId}` : ''} className="bg-secondary/50 font-mono text-xs h-9 select-all" />
+                      <Button onClick={handleCopyShareLink} variant="outline" size="sm" className="gap-1.5 h-9 shrink-0">
+                        {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        <span className="hidden sm:inline">{copiedLink ? 'Copiado' : 'Copiar'}</span>
+                      </Button>
+                    </div>
+                    {streamId && (
+                      <a href={`/live/${streamId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <ExternalLink className="w-3.5 h-3.5" /> Abrir visualização do espectador numa nova aba
+                      </a>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-xl flex flex-col h-[420px]">
+                  <CardHeader className="pb-2.5 pt-3.5 border-b border-border/40 flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-primary" />
+                      Chat e Gorjetas ao Vivo
+                    </CardTitle>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 gap-1 px-2">
+                        <Gift className="w-3 h-3" />{formatKz(totalTipsKz)}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px] gap-1 px-1.5">
+                        <Users className="w-3 h-3" /> {viewers}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-1 overflow-hidden p-3 flex flex-col">
+                    <div ref={chatScrollSidePanelRef} className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                      {feed.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full">
+                          <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30 text-primary" />
+                          <p className="font-medium">O chat está pronto e ligado.</p>
+                          <p className="text-[11px] opacity-70 mt-0.5">As mensagens dos espectadores aparecerão aqui.</p>
+                        </div>
+                      ) : (
+                        feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={true} />)
+                      )}
+                    </div>
+                    <div className="pt-2 border-t border-border/40 mt-2 flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          value={creatorReplyText}
+                          onChange={(e) => setCreatorReplyText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendCreatorMessage(); } }}
+                          placeholder="Escreve uma resposta para a live..."
+                          maxLength={300}
+                          className="text-xs h-8 pr-12"
+                        />
+                        {creatorReplyText.length > 0 && (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-muted-foreground">{creatorReplyText.length}/300</span>
+                        )}
+                      </div>
+                      <Button size="icon" onClick={handleSendCreatorMessage} disabled={!creatorReplyText.trim() || !isConnected} className="h-8 w-8 shrink-0" title="Enviar mensagem">
+                        <Send className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1091,10 +1234,7 @@ export default function IrEmDireto() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
             >
               {isEnding ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  A Encerrar...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" />A Encerrar...</>
               ) : (
                 'Sim, Terminar Live'
               )}
