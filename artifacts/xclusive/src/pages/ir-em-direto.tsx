@@ -221,16 +221,7 @@ export default function IrEmDireto() {
   const [creatorReplyText, setCreatorReplyText] = useState<string>('');
   const [showQuickReply, setShowQuickReply] = useState<boolean>(false);
 
-  // Callback ref: chama publisher.attachVideoElement sempre que um <video> monta/desmonta.
-  // Resolve o problema de ter dois <video> (mobile + desktop) partilhando o mesmo ref —
-  // apenas o visível estará montado no DOM e este callback garante que o publisher
-  // recebe sempre o elemento correto.
-  const videoCallbackRef = useCallback(
-    (el: HTMLVideoElement | null) => {
-      publisher.attachVideoElement(el);
-    },
-    [publisher.attachVideoElement]
-  );
+
 
   // Configuração de sinalização: WSS na porta 443 em produção para evitar Mixed Content,
   // ou ws://live.xclusive.ao:3333/live em desenvolvimento local
@@ -243,6 +234,17 @@ export default function IrEmDireto() {
   const publisher = useLivePublisher({
     defaultSignallingBaseUrl,
   });
+
+  // Callback ref: chama publisher.attachVideoElement sempre que um <video> monta/desmonta.
+  // Resolve o problema de ter dois <video> (mobile + desktop) partilhando o mesmo ref —
+  // apenas o visível estará montado no DOM e este callback garante que o publisher
+  // recebe sempre o elemento correto.
+  const videoCallbackRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      publisher.attachVideoElement(el);
+    },
+    [publisher.attachVideoElement]
+  );
 
   const isLive = publisher.connectionState === 'live';
   const isConnecting = publisher.connectionState === 'connecting' || isStarting;
