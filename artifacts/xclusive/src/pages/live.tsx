@@ -160,18 +160,7 @@ function LiveVideoPlayer({
       // ─── [AUDITORIA] Listeners de diagnóstico HLS.js ─────────────────────
       // Só logging — nenhum parâmetro ou comportamento do HLS.js é alterado.
 
-      // 4.3a — Buffer Stalled: regista quando o buffer esgota e quanto tempo durou
-      hls.on(Hls.Events.BUFFER_STALLED, () => {
-        auditStallCountRef.current += 1;
-        auditStallStartRef.current = performance.now();
-        const elapsed = ((Date.now() - auditSessionStartRef.current) / 1000).toFixed(1);
-        console.warn(
-          `[AUDIT][HLS-Player] ⚠️ BUFFER_STALLED #${auditStallCountRef.current} ` +
-          `| t+${elapsed}s na sessão | totalStalls=${auditStallCountRef.current}`
-        );
-      });
-
-      // Quando o vídeo retoma após stall, calcula a duração do freeze
+      // 4.3a — Quando o vídeo retoma após stall, calcula a duração do freeze
       video.addEventListener('playing', () => {
         if (auditStallStartRef.current !== null) {
           const stallDurationMs = performance.now() - auditStallStartRef.current;
@@ -244,6 +233,17 @@ function LiveVideoPlayer({
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        // [AUDITORIA] Deteta stall de buffer via ErrorDetails (não-fatal)
+        if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+          auditStallCountRef.current += 1;
+          auditStallStartRef.current = performance.now();
+          const elapsed = ((Date.now() - auditSessionStartRef.current) / 1000).toFixed(1);
+          console.warn(
+            `[AUDIT][HLS-Player] ⚠️ BUFFER_STALLED #${auditStallCountRef.current} ` +
+            `| t+${elapsed}s na sessão | totalStalls=${auditStallCountRef.current}`
+          );
+        }
+
         // [AUDITORIA] Log detalhado para todos os erros, fatais ou não
         console.error('[AUDIT][HLS-Player] HLS.Events.ERROR', {
           fatal: data.fatal,
