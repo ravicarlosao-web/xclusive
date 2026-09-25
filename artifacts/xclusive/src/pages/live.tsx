@@ -112,7 +112,7 @@ function LiveVideoPlayer({
   const auditLevelSwitchesRef = useRef(0);
 
   const streamUrl = streamKey
-    ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/llhls.m3u8`
+    ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/playlist.m3u8`
     : null;
 
   // Sincronizar estado de mute do vídeo com a prop
@@ -139,16 +139,16 @@ function LiveVideoPlayer({
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 15,
-        maxBufferLength: 10,
-        maxMaxBufferLength: 20,
+        lowLatencyMode: false,
+        backBufferLength: 30,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 2000,
         liveDurationInfinity: true,
-        liveSyncDuration: 2.0,
-        liveMaxLatencyDuration: 6.0,
+        liveSyncDuration: 10.0,
+        liveMaxLatencyDuration: 22.0,
       });
 
       hlsRef.current = hls;
