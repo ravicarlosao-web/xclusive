@@ -119,6 +119,13 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const isStoppingRef = useRef<boolean>(false);
 
+  // ─── [AUDITORIA] Diagnóstico WebRTC getStats() ────────────────────────────
+  // Intervalo de polling para captura de métricas de publicação.
+  // NÃO altera nenhum comportamento — só logging na consola.
+  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Acumula bytes anteriores para calcular bitrate diferencial entre amostras
+  const prevBytesSentRef = useRef<number>(0);
+
   // Determina o URL de sinalização garantindo o formato ws://host:porta/live/{streamKey}?direction=send
   const resolveSignallingUrl = useCallback(
     (streamKey: string, customUrl?: string): string => {
@@ -371,6 +378,61 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
       const wsUrl = resolveSignallingUrl(pureKey, customSignallingUrl);
       console.info('[useLivePublisher] A conectar ao OvenMediaEngine:', wsUrl);
 
+      // ─── [AUDITORIA] Inicia polling de getStats() após ligação ────────────
+      // Intervalo de 5 s — só logging, zero impacto no stream.
+      const startWebRtcStatsPoll = (pc: RTCPeerConnection) => {
+        if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+        prevBytesSentRef.current = 0;
+        let sampleIndex = 0;
+
+        statsIntervalRef.current = setInterval(async () => {
+          try {
+            const statsReport = await pc.getStats();
+            let bytesSent = 0;
+            let packetsLost = 0;
+            let jitter = 0;
+            let roundTripTime: number | null = null;
+            let framesEncoded = 0;
+            let framesSent = 0;
+            let encoderImplementation = '';
+
+            statsReport.forEach((stat) => {
+              // Outbound RTP — bitrate, frames, encoder
+              if (stat.type === 'outbound-rtp' && stat.kind === 'video') {
+                bytesSent = stat.bytesSent ?? 0;
+                framesEncoded = stat.framesEncoded ?? 0;
+                framesSent = stat.framesSent ?? 0;
+                encoderImplementation = stat.encoderImplementation ?? '';
+              }
+              // Remote inbound RTP — packetsLost, jitter, RTT
+              if (stat.type === 'remote-inbound-rtp' && stat.kind === 'video') {
+                packetsLost = stat.packetsLost ?? 0;
+                jitter = stat.jitter ?? 0;
+                roundTripTime = stat.roundTripTime ?? null;
+              }
+            });
+
+            // Bitrate diferencial (bytes delta / intervalo 5 s → kbps)
+            const bytesDelta = bytesSent - prevBytesSentRef.current;
+            const bitrateKbps = Math.round((bytesDelta * 8) / 5 / 1000);
+            prevBytesSentRef.current = bytesSent;
+
+            // ⚠️ Só logging — não altera nenhum parâmetro ou comportamento
+            console.info(
+              `[AUDIT][WebRTC-Publisher] sample=${sampleIndex++} | ` +
+              `bitrate=${bitrateKbps} kbps | ` +
+              `packetsLost=${packetsLost} | ` +
+              `jitter=${(jitter * 1000).toFixed(1)} ms | ` +
+              `rtt=${roundTripTime !== null ? (roundTripTime * 1000).toFixed(1) + ' ms' : 'N/D'} | ` +
+              `framesEncoded=${framesEncoded} | framesSent=${framesSent} | ` +
+              `encoder=${encoderImplementation || 'N/D'}`
+            );
+          } catch (statsErr) {
+            console.warn('[AUDIT][WebRTC-Publisher] getStats() falhou:', statsErr);
+          }
+        }, 5000);
+      };
+
       // Cria a nova instância do OvenLiveKit com os callbacks do ciclo de vida
       const kitInstance = OvenLiveKit.create({
         callbacks: {
@@ -378,6 +440,19 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             console.info('[useLivePublisher] ✅ Transmissão WebRTC conectada com sucesso ao OME!');
             setConnectionState('live');
             setError(null);
+            // [AUDITORIA] Arranca o polling de getStats() assim que a ligação WebRTC está ativa
+            const pc = kitRef.current?.peerConnection as RTCPeerConnection | undefined;
+            if (pc) {
+              startWebRtcStatsPoll(pc);
+              // Inventaria todos os campos disponíveis no primeiro report (útil para Chrome vs Safari)
+              pc.getStats().then((report) => {
+                const types = new Set<string>();
+                report.forEach((s) => types.add(s.type));
+                console.info('[AUDIT][WebRTC-Publisher] Tipos de stats disponíveis neste ambiente:', [...types]);
+              }).catch(() => {});
+            } else {
+              console.warn('[AUDIT][WebRTC-Publisher] peerConnection não acessível via kitRef — getStats() não arrancou.');
+            }
           },
           iceStateChange: (state: string) => {
             console.info('[useLivePublisher] Estado ICE:', state);
@@ -443,6 +518,11 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
    */
   const stopPublishing = useCallback(async (): Promise<void> => {
     isStoppingRef.current = true;
+    // [AUDITORIA] Para o polling de getStats() antes de encerrar
+    if (statsIntervalRef.current) {
+      clearInterval(statsIntervalRef.current);
+      statsIntervalRef.current = null;
+    }
     try {
       if (kitRef.current) {
         await kitRef.current.stopStreaming();
@@ -605,6 +685,12 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
    */
   const cleanup = useCallback(() => {
     isStoppingRef.current = true;
+
+    // [AUDITORIA] Para o polling de getStats() na limpeza
+    if (statsIntervalRef.current) {
+      clearInterval(statsIntervalRef.current);
+      statsIntervalRef.current = null;
+    }
 
     if (kitRef.current) {
       try {

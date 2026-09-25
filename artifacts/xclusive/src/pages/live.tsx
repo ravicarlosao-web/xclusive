@@ -102,6 +102,15 @@ function LiveVideoPlayer({
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
+  // ─── [AUDITORIA] Diagnóstico HLS.js ───────────────────────────────────
+  // Refs de estado interno para instrumentação. Só logging — zero impacto.
+  const auditStallCountRef = useRef(0);
+  const auditStallStartRef = useRef<number | null>(null);
+  const auditFragCountRef = useRef(0);
+  const auditBufferPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const auditSessionStartRef = useRef<number>(Date.now());
+  const auditLevelSwitchesRef = useRef(0);
+
   const streamUrl = streamKey
     ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/llhls.m3u8`
     : null;
@@ -148,6 +157,80 @@ function LiveVideoPlayer({
       hls.on(Hls.Events.LEVEL_LOADED, (_event, _data) => {});
       hls.on(Hls.Events.FRAG_LOADED, (_event, _data) => {});
 
+      // ─── [AUDITORIA] Listeners de diagnóstico HLS.js ─────────────────────
+      // Só logging — nenhum parâmetro ou comportamento do HLS.js é alterado.
+
+      // 4.3a — Buffer Stalled: regista quando o buffer esgota e quanto tempo durou
+      hls.on(Hls.Events.BUFFER_STALLED, () => {
+        auditStallCountRef.current += 1;
+        auditStallStartRef.current = performance.now();
+        const elapsed = ((Date.now() - auditSessionStartRef.current) / 1000).toFixed(1);
+        console.warn(
+          `[AUDIT][HLS-Player] ⚠️ BUFFER_STALLED #${auditStallCountRef.current} ` +
+          `| t+${elapsed}s na sessão | totalStalls=${auditStallCountRef.current}`
+        );
+      });
+
+      // Quando o vídeo retoma após stall, calcula a duração do freeze
+      video.addEventListener('playing', () => {
+        if (auditStallStartRef.current !== null) {
+          const stallDurationMs = performance.now() - auditStallStartRef.current;
+          auditStallStartRef.current = null;
+          console.warn(
+            `[AUDIT][HLS-Player] ✅ Retomado após stall ` +
+            `| duração=${stallDurationMs.toFixed(0)} ms ` +
+            `| stallsTotal=${auditStallCountRef.current}`
+          );
+        }
+      });
+
+      // 4.3b — Fragmento carregado: tamanho e tempo de download
+      hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+        auditFragCountRef.current += 1;
+        const loadDurationMs = data.frag.stats?.loading
+          ? data.frag.stats.loading.end - data.frag.stats.loading.start
+          : null;
+        const sizeKb = data.frag.stats?.total
+          ? (data.frag.stats.total / 1024).toFixed(1)
+          : 'N/D';
+        // Log apenas a cada 5 fragmentos para não poluir a consola
+        if (auditFragCountRef.current % 5 === 0) {
+          console.info(
+            `[AUDIT][HLS-Player] FRAG_LOADED #${auditFragCountRef.current} ` +
+            `| sn=${data.frag.sn} level=${data.frag.level} ` +
+            `| size=${sizeKb} KB ` +
+            `| loadTime=${loadDurationMs !== null ? loadDurationMs.toFixed(0) + ' ms' : 'N/D'}`
+          );
+        }
+      });
+
+      // 4.3c — Mudança de qualidade (adaptive bitrate)
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+        auditLevelSwitchesRef.current += 1;
+        console.info(
+          `[AUDIT][HLS-Player] LEVEL_SWITCHED #${auditLevelSwitchesRef.current} ` +
+          `| novoNível=${data.level}`
+        );
+      });
+
+      // 4.3d — Polling do nível de buffer a cada 5 s
+      auditSessionStartRef.current = Date.now();
+      if (auditBufferPollRef.current) clearInterval(auditBufferPollRef.current);
+      auditBufferPollRef.current = setInterval(() => {
+        const bufInfo = hls.mainForwardBufferInfo;
+        const videoEl = videoRef.current;
+        const elapsed = ((Date.now() - auditSessionStartRef.current) / 1000).toFixed(0);
+        const currentTime = videoEl ? videoEl.currentTime.toFixed(2) : 'N/D';
+        console.info(
+          `[AUDIT][HLS-Player] BUFFER_STATUS t+${elapsed}s ` +
+          `| bufferAhead=${bufInfo ? bufInfo.len.toFixed(2) + ' s' : 'N/D'} ` +
+          `| currentTime=${currentTime} s ` +
+          `| stalls=${auditStallCountRef.current} ` +
+          `| levelSwitches=${auditLevelSwitchesRef.current} ` +
+          `| fragsLoaded=${auditFragCountRef.current}`
+        );
+      }, 5000);
+
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, _data) => {
         setIsLoading(false);
         setHasError(false);
@@ -161,12 +244,17 @@ function LiveVideoPlayer({
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        console.error('[LiveVideoPlayer] Hls.Events.ERROR', {
+        // [AUDITORIA] Log detalhado para todos os erros, fatais ou não
+        console.error('[AUDIT][HLS-Player] HLS.Events.ERROR', {
           fatal: data.fatal,
           type: data.type,
           details: data.details,
-          response: data.response,
-          error: data.error,
+          networkDetails: (data as any).networkDetails ? {
+            url: (data as any).networkDetails?.url,
+            status: (data as any).networkDetails?.code,
+          } : undefined,
+          bufferAhead: hls.mainForwardBufferInfo?.len?.toFixed(2) + ' s',
+          stallCount: auditStallCountRef.current,
         });
         if (data.fatal) {
           switch (data.type) {
@@ -217,6 +305,11 @@ function LiveVideoPlayer({
     return () => {
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
+      }
+      // [AUDITORIA] Para o polling de buffer ao destruir o player
+      if (auditBufferPollRef.current) {
+        clearInterval(auditBufferPollRef.current);
+        auditBufferPollRef.current = null;
       }
       if (hlsRef.current) {
         hlsRef.current.destroy();
