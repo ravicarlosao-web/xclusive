@@ -112,7 +112,7 @@ function LiveVideoPlayer({
   const auditLevelSwitchesRef = useRef(0);
 
   const streamUrl = streamKey
-    ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/playlist.m3u8`
+    ? `https://${BUNNY_LIVE_CDN_HOSTNAME}/live/${streamKey}/ts:playlist.m3u8`
     : null;
 
   // Sincronizar estado de mute do vídeo com a prop
