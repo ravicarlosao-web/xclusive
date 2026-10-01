@@ -147,8 +147,9 @@ function LiveVideoPlayer({
         manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 2000,
         liveDurationInfinity: true,
-        liveSyncDuration: 10.0,
-        liveMaxLatencyDuration: 22.0,
+        liveSyncDuration: 6.0,
+        liveMaxLatencyDuration: 12.0,
+        maxLiveSyncPlaybackRate: 1.1,
       });
 
       hlsRef.current = hls;
