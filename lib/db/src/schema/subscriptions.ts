@@ -2,7 +2,7 @@ import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, in
 import { usersTable } from "./users";
 
 export const subscriptionEstadoEnum = pgEnum("subscription_estado", ["ativa", "cancelada"]);
-export const purchaseTipoEnum = pgEnum("purchase_tipo", ["subscricao", "ppv", "gorjeta"]);
+export const purchaseTipoEnum = pgEnum("purchase_tipo", ["subscricao", "ppv", "gorjeta", "bilhete_live"]);
 
 export const subscriptionPlansTable = pgTable("subscription_plans", {
   id: serial("id").primaryKey(),
