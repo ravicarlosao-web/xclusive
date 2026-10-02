@@ -5,6 +5,7 @@ import { verifyToken } from "./auth";
 import { db, liveStreamsTable, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { userHasLiveAccess } from "./liveAccess";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ declare module "socket.io" {
     avatarUrl: string | null;
     /** streamId da sala em que o socket está actualmente */
     currentStreamId: number | null;
+    /** Sala a que o socket está a tentar entrar (evita contar dois joins simultâneos) */
+    joiningStreamId?: number | null;
     /** Timestamps das mensagens recentes para rate-limiting em memória */
     recentMessageTimestamps?: number[];
   }
@@ -110,23 +113,36 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     socket.on("viewer:join", async (streamId: number) => {
       if (!streamId || typeof streamId !== "number") return;
 
-      const isNewRoom = socket.data.currentStreamId !== streamId;
+      // Join duplicado (já na sala, ou a entrar): não conta outra vez.
+      if (socket.data.currentStreamId === streamId || socket.data.joiningStreamId === streamId) return;
+      socket.data.joiningStreamId = streamId;
 
       // Sair de qualquer sala anterior antes de entrar numa nova
-      if (socket.data.currentStreamId !== null && isNewRoom) {
+      if (socket.data.currentStreamId !== null) {
         await handleLeave(socket, socket.data.currentStreamId);
       }
 
       try {
         // Verificar se a live existe e está activa
         const [stream] = await db
-          .select({ id: liveStreamsTable.id, status: liveStreamsTable.status })
+          .select({
+            id: liveStreamsTable.id,
+            status: liveStreamsTable.status,
+            criadorId: liveStreamsTable.criadorId,
+            tipo: liveStreamsTable.tipo,
+          })
           .from(liveStreamsTable)
           .where(eq(liveStreamsTable.id, streamId))
           .limit(1);
 
         if (!stream || stream.status !== "ao_vivo") {
           socket.emit("error", { message: "Live não encontrada ou já terminada." });
+          return;
+        }
+
+        // Mesma regra de acesso do /playback: sem acesso não entra na sala nem conta.
+        if (!(await userHasLiveAccess(socket.data.userId, stream))) {
+          socket.emit("error", { message: "Precisas de bilhete para entrar nesta live.", code: "ACCESS_DENIED" });
           return;
         }
 
@@ -143,7 +159,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         await emitViewerCount(streamId);
 
         // Notificar os outros espectadores na sala que este utilizador entrou
-        if (isNewRoom && socket.data.username) {
+        if (socket.data.username) {
           socket.to(`live:${streamId}`).emit("chat:joined", {
             streamId,
             username: socket.data.username,
@@ -154,6 +170,8 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         logger.debug({ userId: socket.data.userId, streamId }, "viewer:join");
       } catch (err) {
         logger.error({ err, streamId }, "Erro ao processar viewer:join");
+      } finally {
+        socket.data.joiningStreamId = null;
       }
     });
 
@@ -165,6 +183,12 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         const streamId = Number(data.streamId);
         if (!streamId || isNaN(streamId)) {
           socket.emit("chat:error", { message: "ID de live inválido." });
+          return;
+        }
+
+        // Só quem entrou na sala (viewer:join já verificou o acesso) pode escrever.
+        if (socket.data.currentStreamId !== streamId) {
+          socket.emit("chat:error", { message: "Não tens acesso ao chat desta live." });
           return;
         }
 

@@ -38,7 +38,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getFreshAuthToken } from '@workspace/api-client-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -406,11 +406,16 @@ function LiveVideoPlayer({
 
 interface ActiveStream {
   id: number;
-  streamKey: string;
   criadorId: number;
   iniciadoEm: string;
   totalVisualizadores: number;
   status?: string;
+  /** Live gratuita ou paga (bilhete) — fixo desde a abertura */
+  tipo: 'gratuita' | 'paga';
+  /** Preço do bilhete em Kz (0 se gratuita) */
+  preco: number;
+  /** Se o utilizador atual pode ver (gratuita, bilhete, criadora ou admin) */
+  temAcesso: boolean;
   criador: {
     username: string;
     nomeExibicao: string | null;
@@ -536,16 +541,107 @@ function StreamEndedScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+// ─── Ecrã de compra do bilhete (live paga, sem acesso) ────────────────────────
+
+function LiveTicketGate({
+  stream,
+  saldo,
+  durationSeconds,
+  isBuying,
+  onBuy,
+  onTopUp,
+  onBack,
+}: {
+  stream: ActiveStream;
+  saldo: number | null;
+  durationSeconds: number;
+  isBuying: boolean;
+  onBuy: () => void;
+  onTopUp: () => void;
+  onBack: () => void;
+}) {
+  const insuficiente = saldo !== null && saldo < stream.preco;
+  const nome = stream.criador.nomeExibicao || stream.criador.username;
+  return (
+    <div className="fixed inset-0 z-50 bg-black overflow-y-auto">
+      <div className="min-h-full flex flex-col items-center justify-center gap-6 text-center px-4 py-10">
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white"
+          aria-label="Voltar"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <Avatar className="w-20 h-20 border-2 border-primary/60">
+          <AvatarImage src={stream.criador.avatarUrl ?? undefined} alt={nome} />
+          <AvatarFallback>{nome.charAt(0).toUpperCase()}</AvatarFallback>
+        </Avatar>
+
+        <div>
+          <Badge className="bg-red-600 text-white gap-1 mb-3">
+            <Radio className="w-3 h-3" /> AO VIVO · live paga
+          </Badge>
+          <h2 className="text-2xl font-bold text-white">{nome}</h2>
+          <p className="text-sm text-white/60 flex items-center justify-center gap-1.5 mt-1">
+            <Clock className="w-3.5 h-3.5" /> A decorrer há {formatDuration(durationSeconds)}
+          </p>
+        </div>
+
+        <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-white/5 p-5 space-y-4">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm text-white/60">Preço do bilhete</span>
+            <span className="text-2xl font-extrabold text-white">{formatKz(stream.preco)}</span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm text-white/60">O teu saldo</span>
+            <span className={cn('text-sm font-semibold', insuficiente ? 'text-red-400' : 'text-white')}>
+              {saldo !== null ? formatKz(saldo) : '—'}
+            </span>
+          </div>
+
+          <p className="text-xs text-white/70 leading-relaxed">
+            Esta live já começou. O bilhete tem o preço inteiro e dá acesso até ao fim.
+          </p>
+
+          {insuficiente && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-left text-xs text-red-300">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Saldo insuficiente: faltam {formatKz(stream.preco - (saldo ?? 0))}. Carrega a tua carteira para comprar o bilhete.
+              </span>
+            </div>
+          )}
+
+          {insuficiente ? (
+            <Button onClick={onTopUp} className="w-full h-11 font-bold">
+              Carregar carteira
+            </Button>
+          ) : (
+            <Button onClick={onBuy} disabled={isBuying} className="w-full h-11 font-bold gap-2">
+              {isBuying ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> A comprar...</>
+              ) : (
+                <>Comprar bilhete · {formatKz(stream.preco)}</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
 export default function LivePage() {
   const [, params] = useRoute('/live/:streamId');
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, saldo, refreshSaldo } = useAuth();
+  const queryClient = useQueryClient();
 
   const streamId = params?.streamId ? Number(params.streamId) : null;
-
-  const { viewers, feed, streamEnded, isConnected, sendMessage } = useSocket(streamId);
 
   // Dados do stream
   const { data: activeStreams, isLoading } = useQuery<ActiveStream[]>({
@@ -563,6 +659,53 @@ export default function LivePage() {
 
   const stream = activeStreams?.find((s) => s.id === streamId);
   const isCreator = !!user && stream?.criadorId === user.id;
+
+  // Só entra na sala do socket quem tem acesso (o servidor volta a verificar sempre).
+  const { viewers, feed, streamEnded, isConnected, sendMessage } = useSocket(
+    stream && !stream.temAcesso ? null : streamId,
+  );
+
+  // A streamKey só chega a quem tem acesso (GET /api/live/:id/playback).
+  const { data: playback } = useQuery<{ streamKey: string }>({
+    queryKey: ['/api/live', streamId, 'playback'],
+    enabled: streamId !== null && !!stream?.temAcesso,
+    staleTime: Infinity,
+    retry: 1,
+    queryFn: async () => {
+      const token = await getFreshAuthToken();
+      const res = await fetch(`/api/live/${streamId}/playback`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Sem acesso à live');
+      return res.json();
+    },
+  });
+
+  // Compra do bilhete (live paga)
+  const [isBuyingTicket, setIsBuyingTicket] = useState(false);
+  const handleBuyTicket = async () => {
+    if (!stream) return;
+    setIsBuyingTicket(true);
+    try {
+      const token = await getFreshAuthToken();
+      const res = await fetch(`/api/live/${stream.id}/ticket`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Não foi possível comprar o bilhete.');
+        return;
+      }
+      toast.success(data.jaTinha ? 'Já tinhas bilhete para esta live.' : 'Bilhete comprado! Bom espetáculo.');
+      refreshSaldo();
+      await queryClient.invalidateQueries({ queryKey: ['/api/live/active'] });
+    } catch {
+      toast.error('Erro de ligação. Tenta novamente.');
+    } finally {
+      setIsBuyingTicket(false);
+    }
+  };
 
   // Contador de duração decorrida da transmissão
   const [durationSeconds, setDurationSeconds] = useState(0);
@@ -725,6 +868,21 @@ export default function LivePage() {
     return <StreamEndedScreen onBack={() => navigate('/home')} />;
   }
 
+  // Live paga sem acesso: ecrã de compra (preço, saldo, botão).
+  if (stream && !stream.temAcesso) {
+    return (
+      <LiveTicketGate
+        stream={stream}
+        saldo={saldo}
+        durationSeconds={durationSeconds}
+        isBuying={isBuyingTicket}
+        onBuy={handleBuyTicket}
+        onTopUp={() => navigate('/carteira')}
+        onBack={() => navigate('/home')}
+      />
+    );
+  }
+
   return (
     <>
       {/* ══════════════════════════════════════════════════════════════════════════
@@ -735,7 +893,7 @@ export default function LivePage() {
         <div className="absolute inset-0 w-full h-full">
           {!isDesktop && (
             <LiveVideoPlayer
-              streamKey={stream?.streamKey}
+              streamKey={playback?.streamKey}
               viewers={viewers}
               className="w-full h-full border-0 rounded-none"
               hideOverlayBadges={true}
@@ -985,7 +1143,7 @@ export default function LivePage() {
             <div className="relative group">
               {isDesktop && (
                 <LiveVideoPlayer
-                  streamKey={stream?.streamKey}
+                  streamKey={playback?.streamKey}
                   viewers={viewers}
                   className="aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl"
                   hideOverlayBadges={false}
