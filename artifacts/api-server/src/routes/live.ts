@@ -524,6 +524,18 @@ async function admitWebrtcViewer(
   return userHasLiveAccess(claims.userId, stream);
 }
 
+// Comparação da assinatura em tempo constante. Comprimentos diferentes → false
+// (timingSafeEqual lançaria erro), sem revelar nada pelo tempo de resposta.
+function signaturesMatch(received: string, expected: string): boolean {
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) {
+    crypto.timingSafeEqual(b, b);
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
+}
+
 // ── POST /api/live/admission ──────────────────────────────────────────────
 // O OvenMediaEngine envia X-OME-Signature: HMAC-SHA1 do raw body JSON,
 // codificado em base64 url-safe, usando o <SecretKey> configurado no VHostDefault.xml.
@@ -558,7 +570,7 @@ router.post("/live/admission", async (req, res): Promise<void> => {
       .update(rawBody)
       .digest("base64url"); // base64 url-safe sem padding '=' — comportamento do OME
 
-    if (!receivedSig || receivedSig !== expectedSig) {
+    if (!receivedSig || !signaturesMatch(receivedSig, expectedSig)) {
       (req as any).log?.warn?.(
         { receivedSig, expectedSigPrefix: expectedSig.slice(0, 8) + "..." },
         "Live admission 401: assinatura X-OME-Signature inválida ou ausente"
