@@ -1,12 +1,14 @@
 import { Router } from "express";
 import crypto from "node:crypto";
-import { requireAuth, type AuthRequest } from "../lib/auth";
-import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable } from "@workspace/db";
+import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
 import { getCommissionRate, calcComissao } from "../lib/commission";
+import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
+import { liveStartSchema } from "../lib/liveTicket";
 
 class PaymentError extends Error {
   statusCode: number;
@@ -20,16 +22,19 @@ class PaymentError extends Error {
 const router = Router();
 
 // ── GET /api/live/active ──────────────────────────────────────────────────
-// Retorna a lista de lives ativas
-router.get("/live/active", async (req, res): Promise<void> => {
+// Retorna a lista de lives ativas (só metadados). NUNCA devolve a streamKey:
+// quem tem acesso obtém-na em GET /api/live/:streamId/playback.
+// optionalAuth: sem sessão → temAcesso:false.
+router.get("/live/active", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
   try {
     const activeStreams = await db
       .select({
         id: liveStreamsTable.id,
-        streamKey: liveStreamsTable.streamKey,
         criadorId: liveStreamsTable.criadorId,
         iniciadoEm: liveStreamsTable.iniciadoEm,
         totalVisualizadores: liveStreamsTable.totalVisualizadores,
+        tipo: liveStreamsTable.tipo,
+        preco: liveStreamsTable.preco,
         criador: {
           username: usersTable.username,
           nomeExibicao: usersTable.nomeExibicao,
@@ -40,7 +45,15 @@ router.get("/live/active", async (req, res): Promise<void> => {
       .innerJoin(usersTable, eq(usersTable.id, liveStreamsTable.criadorId))
       .where(eq(liveStreamsTable.status, "ao_vivo"));
 
-    res.json(activeStreams);
+    const allowed = await liveIdsWithAccess(req.userId, activeStreams);
+
+    res.json(
+      activeStreams.map((s) => ({
+        ...s,
+        preco: Number(s.preco),
+        temAcesso: allowed.has(s.id),
+      })),
+    );
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao obter lives ativas");
     res.status(500).json({ error: "Erro interno do servidor." });
@@ -78,7 +91,18 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
       )
       .limit(1);
 
+    // Tipo e preço ficam fixos desde a abertura: se já existe live, o corpo é ignorado.
     if (!stream) {
+      const parsed = liveStartSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({
+          error: parsed.error.issues[0]?.message ?? "Dados inválidos",
+          details: parsed.error.issues.map((i) => ({ campo: i.path.join("."), mensagem: i.message })),
+        });
+        return;
+      }
+      const { tipo, preco } = parsed.data;
+
       // Criar nova live em estado "agendado".
       // iniciadoEm é definido pelo admission webhook quando o OME confirmar publisher real.
       const newStreamId = crypto.randomUUID();
@@ -88,11 +112,13 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
           criadorId: creatorId,
           streamKey: newStreamId,
           status: "agendado",
+          tipo,
+          preco: String(tipo === "paga" ? preco : 0),
         })
         .returning();
     }
 
-    res.status(201).json(stream);
+    res.status(201).json({ ...stream, preco: Number(stream.preco) });
   } catch (err) {
     req.log?.error({ err }, "Erro ao iniciar live");
     res.status(500).json({ error: "Erro interno do servidor." });
@@ -167,6 +193,12 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
 
     if (stream.criadorId === senderId) {
       res.status(400).json({ error: "Não podes dar gorjeta à tua própria live." });
+      return;
+    }
+
+    // Numa live paga, só quem tem acesso (bilhete/admin) pode dar gorjeta.
+    if (!(await userHasLiveAccess(senderId, stream))) {
+      res.status(403).json({ error: "Precisas de bilhete para participar nesta live." });
       return;
     }
 
@@ -255,6 +287,197 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       return;
     }
     req.log?.error({ err: err instanceof Error ? err.message : String(err) }, "Erro ao processar gorjeta na live");
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
+
+// ── GET /api/live/:streamId/playback ──────────────────────────────────────
+// Devolve a streamKey SÓ a quem tem acesso (gratuita: qualquer sessão; paga:
+// bilhete, criadora ou admin). O acesso é verificado sempre na base de dados.
+router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const streamId = Number(req.params.streamId);
+    if (!Number.isInteger(streamId) || streamId <= 0) {
+      res.status(400).json({ error: "ID de live inválido." });
+      return;
+    }
+
+    const [stream] = await db.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, streamId)).limit(1);
+    if (!stream) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    if (stream.status !== "ao_vivo") {
+      res.status(409).json({ error: "Esta live não está ativa." });
+      return;
+    }
+
+    if (!(await userHasLiveAccess(req.userId, stream))) {
+      res.status(403).json({
+        error: "Precisas de bilhete para ver esta live.",
+        tipo: stream.tipo,
+        preco: Number(stream.preco),
+      });
+      return;
+    }
+
+    res.set("Cache-Control", "no-store");
+    res.json({ streamKey: stream.streamKey });
+  } catch (err) {
+    req.log?.error({ err }, "Erro ao obter playback da live");
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
+
+// ── POST /api/live/:streamId/ticket ───────────────────────────────────────
+// Compra do bilhete de uma live paga com o saldo da plataforma.
+// Preço = o da live (base de dados), nunca do pedido; paga-se sempre o valor
+// inteiro, mesmo a meio da live. Comissão e crédito como nas gorjetas.
+// Idempotente e seguro em pedidos simultâneos: a linha do comprador é bloqueada
+// (FOR UPDATE), o que serializa pedidos do mesmo utilizador; unique(live_id,
+// user_id) é a segunda barreira, e se o INSERT não inserir nada faz-se rollback
+// de tudo (nunca fica débito sem bilhete).
+class TicketNotInsertedError extends Error {}
+
+router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const streamId = Number(req.params.streamId);
+    const buyerId = req.userId!;
+    if (!Number.isInteger(streamId) || streamId <= 0) {
+      res.status(400).json({ error: "ID de live inválido." });
+      return;
+    }
+
+    const [stream0] = await db.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, streamId)).limit(1);
+    if (!stream0) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    if (stream0.status !== "ao_vivo") {
+      res.status(409).json({ error: "Esta live já não está ativa." });
+      return;
+    }
+    if (stream0.tipo !== "paga") {
+      res.status(400).json({ error: "Esta live é gratuita." });
+      return;
+    }
+    if (stream0.criadorId === buyerId) {
+      res.status(400).json({ error: "És a criadora desta live." });
+      return;
+    }
+    const [buyerRow] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, buyerId)).limit(1);
+    if (isAdminRole(buyerRow?.role)) {
+      res.status(400).json({ error: "Já tens acesso a esta live." });
+      return;
+    }
+
+    const attempt = async () =>
+      db.transaction(async (tx) => {
+        // 1. Estado da live fixado até ao fim da transação (o /end espera).
+        const [stream] = await tx
+          .select()
+          .from(liveStreamsTable)
+          .where(eq(liveStreamsTable.id, streamId))
+          .for("share");
+        if (!stream) throw new PaymentError("Live não encontrada.", 404);
+        if (stream.status !== "ao_vivo") throw new PaymentError("Esta live já não está ativa.", 409);
+        if (stream.tipo !== "paga") throw new PaymentError("Esta live é gratuita.", 400);
+
+        // 2. Bloquear a linha do comprador (serializa pedidos simultâneos dele).
+        const [buyer] = await tx
+          .select({ saldo: usersTable.saldo })
+          .from(usersTable)
+          .where(eq(usersTable.id, buyerId))
+          .for("update");
+        if (!buyer) throw new PaymentError("Utilizador não encontrado.", 404);
+
+        // 3. Já tem bilhete → idempotente, não cobra.
+        const [existing] = await tx
+          .select({ id: liveTicketsTable.id })
+          .from(liveTicketsTable)
+          .where(and(eq(liveTicketsTable.liveId, streamId), eq(liveTicketsTable.userId, buyerId)))
+          .limit(1);
+        if (existing) return { jaTinha: true as const, saldo: Number(buyer.saldo) };
+
+        // 4. Saldo
+        const preco = Number(stream.preco);
+        if (Number(buyer.saldo) < preco) {
+          throw new PaymentError("Saldo insuficiente para comprar este bilhete.", 402);
+        }
+
+        // 5. Comissão (mesma lógica das gorjetas)
+        const commissionRate = await getCommissionRate(tx, stream.criadorId);
+        const { valorCriador, comissao } = calcComissao(preco, commissionRate);
+
+        // 6. Registo na carteira
+        const [purchase] = await tx
+          .insert(purchasesTable)
+          .values({
+            compradorId: buyerId,
+            vendedorId: stream.criadorId,
+            tipo: "bilhete_live",
+            valor: String(preco),
+            comissao: String(comissao),
+            conteudoId: streamId,
+            descricao: `Bilhete da Live #${streamId}`,
+          })
+          .returning({ id: purchasesTable.id });
+
+        // 7. Bilhete: se não inserir nenhuma linha → rollback de TUDO.
+        const inserted = await tx
+          .insert(liveTicketsTable)
+          .values({
+            liveId: streamId,
+            userId: buyerId,
+            valor: String(preco),
+            comissao: String(comissao),
+            purchaseId: purchase.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: liveTicketsTable.id });
+        if (inserted.length === 0) throw new TicketNotInsertedError();
+
+        // 8. Debitar o comprador (valor inteiro) e creditar a criadora (líquido)
+        const [updated] = await tx
+          .update(usersTable)
+          .set({ saldo: sql`${usersTable.saldo} - ${preco}` })
+          .where(eq(usersTable.id, buyerId))
+          .returning({ saldo: usersTable.saldo });
+        await tx
+          .update(usersTable)
+          .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
+          .where(eq(usersTable.id, stream.criadorId));
+
+        return { jaTinha: false as const, saldo: Number(updated.saldo), ticketId: inserted[0].id };
+      });
+
+    let result;
+    try {
+      result = await attempt();
+    } catch (err) {
+      // Transação revertida (nada foi cobrado). Se entretanto o bilhete existe, é um repetido.
+      if (!(err instanceof TicketNotInsertedError)) throw err;
+      const [existing] = await db
+        .select({ id: liveTicketsTable.id })
+        .from(liveTicketsTable)
+        .where(and(eq(liveTicketsTable.liveId, streamId), eq(liveTicketsTable.userId, buyerId)))
+        .limit(1);
+      if (!existing) throw err;
+      const [u] = await db.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, buyerId)).limit(1);
+      result = { jaTinha: true as const, saldo: Number(u?.saldo ?? 0) };
+    }
+
+    res.status(result.jaTinha ? 200 : 201).json({
+      temAcesso: true,
+      jaTinha: result.jaTinha,
+      saldo: result.saldo,
+    });
+  } catch (err) {
+    if (err instanceof PaymentError) {
+      res.status(err.statusCode).json({ error: err.message });
+      return;
+    }
+    req.log?.error({ err: err instanceof Error ? err.message : String(err) }, "Erro ao comprar bilhete da live");
     res.status(500).json({ error: "Erro interno do servidor." });
   }
 });
