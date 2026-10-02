@@ -9,6 +9,7 @@ import { getIO } from "../lib/socket";
 import { getCommissionRate, calcComissao } from "../lib/commission";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
 import { liveStartSchema } from "../lib/liveTicket";
+import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl } from "../lib/liveViewerToken";
 
 class PaymentError extends Error {
   statusCode: number;
@@ -322,7 +323,24 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
     }
 
     res.set("Cache-Control", "no-store");
-    res.json({ streamKey: stream.streamKey });
+
+    // WebRTC (OvenMediaEngine): URL com token de vida curta, novo a cada pedido
+    // (uma reconexão volta a chamar este endpoint). Sem LIVE_VIEWER_TOKEN_SECRET
+    // a resposta é a de sempre, só com a streamKey.
+    const viewerToken = req.userId
+      ? signViewerToken({ userId: req.userId, liveId: stream.id, streamKey: stream.streamKey })
+      : null;
+    res.json(
+      viewerToken
+        ? {
+            streamKey: stream.streamKey,
+            webrtc: {
+              url: buildWebrtcViewerUrl(stream.streamKey, viewerToken.token),
+              expiresAt: viewerToken.expiresAt.toISOString(),
+            },
+          }
+        : { streamKey: stream.streamKey },
+    );
   } catch (err) {
     req.log?.error({ err }, "Erro ao obter playback da live");
     res.status(500).json({ error: "Erro interno do servidor." });
@@ -482,6 +500,30 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
   }
 });
 
+// Valida o pedido WebRTC de um espectador: token (assinatura, expiração, streamKey
+// e live coincidem com a URL) e acesso verificado de novo na base de dados.
+async function admitWebrtcViewer(
+  url: string,
+  streamKey: string,
+  stream: { id: number; criadorId: number; tipo: "gratuita" | "paga"; status: string },
+): Promise<boolean> {
+  let token: string | null;
+  try {
+    token = new URL(url).searchParams.get("token");
+  } catch {
+    return false;
+  }
+  if (!token) return false;
+
+  const claims = verifyViewerToken(token);
+  if (!claims) return false;
+  if (claims.streamKey.toLowerCase() !== streamKey.toLowerCase()) return false;
+  if (claims.liveId !== stream.id) return false;
+  if (stream.status !== "ao_vivo") return false;
+
+  return userHasLiveAccess(claims.userId, stream);
+}
+
 // ── POST /api/live/admission ──────────────────────────────────────────────
 // O OvenMediaEngine envia X-OME-Signature: HMAC-SHA1 do raw body JSON,
 // codificado em base64 url-safe, usando o <SecretKey> configurado no VHostDefault.xml.
@@ -538,6 +580,14 @@ router.post("/live/admission", async (req, res): Promise<void> => {
     const url = String(requestInfo.url ?? "");
     const status = String(requestInfo.status ?? "opening").toLowerCase();
     const direction = String(requestInfo.direction ?? "incoming").toLowerCase();
+    const protocol = String(requestInfo.protocol ?? "").toLowerCase();
+
+    // Espectador a sair (outgoing + closing): no-op. Nunca termina a live nem
+    // escreve na base de dados.
+    if (direction === "outgoing" && status === "closing") {
+      res.json({});
+      return;
+    }
 
     // 4. Extrair o streamKey do URL (ex: "rtmp://host:1935/app/streamKey" ou query string)
     // Remove qualquer query string primeiro e obtém o último segmento do caminho
@@ -560,7 +610,8 @@ router.post("/live/admission", async (req, res): Promise<void> => {
     // Validação de formato UUID (v1-v5) antes de consultar o banco para evitar erro de sintaxe Postgres (HTTP 500)
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!streamKey || !UUID_REGEX.test(streamKey)) {
-      (req as any).log?.warn?.({ streamKey, url }, "Live admission negada: streamKey inválida ou não é UUID");
+      // URL sem query string: nunca registar o token de espectador.
+      (req as any).log?.warn?.({ streamKey, url: urlWithoutQuery }, "Live admission negada: streamKey inválida ou não é UUID");
       res.json({ allowed: false });
       return;
     }
@@ -575,6 +626,21 @@ router.post("/live/admission", async (req, res): Promise<void> => {
     if (!stream) {
       (req as any).log?.info?.({ streamKey }, "Live admission negada: streamKey inexistente");
       res.json({ allowed: false });
+      return;
+    }
+
+    // Espectador WebRTC (outgoing + webrtc): exige token válido e acesso na BD.
+    // Falha fechada: qualquer problema → allowed:false (nunca 500).
+    // Outros protocolos em outgoing (hls, llhls) mantêm o comportamento permissivo abaixo.
+    if (direction === "outgoing" && protocol === "webrtc") {
+      let allowed = false;
+      try {
+        allowed = await admitWebrtcViewer(url, streamKey, stream);
+      } catch {
+        allowed = false;
+      }
+      (req as any).log?.info?.({ streamId: stream.id, allowed }, "Live admission WebRTC espectador");
+      res.json({ allowed });
       return;
     }
 
