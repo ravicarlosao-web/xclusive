@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import { usePageMeta } from '@/hooks/usePageMeta';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -63,23 +64,28 @@ const BENEFITS = [
 const FAQ_ITEMS = [
   {
     q: 'O que é o Xclusive?',
-    a: 'O Xclusive é a primeira plataforma angolana de conteúdo exclusivo. Criadores publicam conteúdo para os seus fãs pagantes e recebem diretamente, sem intermediários.',
+    a: 'O Xclusive é a primeira plataforma angolana de conteúdo exclusivo. Permite que criadores de conteúdo — músicos, artistas, fotógrafos, influencers — monetizem o seu trabalho publicando conteúdo exclusivo para os seus fãs pagantes, sem intermediários.',
   },
   {
-    q: 'Como funciona a monetização?',
-    a: 'Defines um preço de subscripção mensal. Os teus fãs pagam via Multicaixa Express ou referência bancária e têm acesso ao teu conteúdo exclusivo. Tu recebes o valor na tua carteira Xclusive.',
+    q: 'Como posso ganhar dinheiro no Xclusive?',
+    a: 'Como criador no Xclusive, podes ganhar dinheiro através de subscripções mensais dos teus fãs, venda de conteúdo individual, gorjetas diretas e transmissões ao vivo exclusivas. Os pagamentos são processados diretamente para a tua conta.',
   },
   {
-    q: 'O Xclusive aceita pagamentos em Kwanza?',
-    a: 'Sim! O Xclusive foi desenvolvido de raiz para Angola e aceita pagamentos em Kwanza (AOA) através de Multicaixa Express e referências bancárias angolanas.',
+    q: 'O Xclusive está disponível em Angola?',
+    a: 'Sim! O Xclusive foi criado especificamente para criadores e fãs angolanos. Aceitamos pagamentos em Kwanza (AOA) através de Multicaixa Express e referências bancárias angolanas.',
   },
   {
-    q: 'Posso começar como fã e depois tornar-me criador?',
-    a: 'Absolutamente. Qualquer conta pode ser atualizada para criador a qualquer momento, bastando completar a verificação de identidade.',
+    q: 'Quais são as comissões do Xclusive?',
+    a: 'O Xclusive cobra uma comissão competitiva sobre as receitas dos criadores, permitindo que estes fiquem com a maior parte dos seus ganhos. Os criadores recebem os seus ganhos diretamente na sua carteira Xclusive, com levantamentos disponíveis quando quiserem.',
+  },
+  {
+    q: 'Como me torno criador no Xclusive?',
+    a: 'Para te tornares criador no Xclusive, basta criar uma conta gratuita, completar o processo de verificação de identidade (KYC) e configurar o teu perfil de criador. Todo o processo é feito online e leva poucos minutos.',
   },
 ];
 
 export default function Landing() {
+  usePageMeta({ title: 'Xclusive — Conteúdo Exclusivo para Criadores Angolanos', path: '/' });
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
 
@@ -111,8 +117,6 @@ export default function Landing() {
         <section
           aria-labelledby="hero-heading"
           className="flex flex-col items-center justify-center text-center px-4 sm:px-6 py-16 sm:py-24 lg:py-32"
-          itemScope
-          itemType="https://schema.org/WPHeader"
         >
           <div className="bg-secondary text-primary font-bold text-xs uppercase tracking-wider px-4 py-1.5 rounded-full mb-8 border border-border" aria-label="Destaque">
             Sem intermediários. Feito em Angola.
@@ -291,8 +295,6 @@ export default function Landing() {
         <section
           aria-labelledby="faq-heading"
           className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24"
-          itemScope
-          itemType="https://schema.org/FAQPage"
         >
           <div className="max-w-3xl mx-auto">
             <h2 id="faq-heading" className="text-2xl sm:text-3xl font-bold text-center mb-12">
@@ -300,17 +302,9 @@ export default function Landing() {
             </h2>
             <div className="flex flex-col gap-6">
               {FAQ_ITEMS.map((item) => (
-                <div
-                  key={item.q}
-                  className="border border-border rounded-xl p-6"
-                  itemScope
-                  itemType="https://schema.org/Question"
-                  itemProp="mainEntity"
-                >
-                  <h3 className="font-bold text-base mb-2" itemProp="name">{item.q}</h3>
-                  <div itemScope itemType="https://schema.org/Answer" itemProp="acceptedAnswer">
-                    <p className="text-muted-foreground text-sm leading-relaxed" itemProp="text">{item.a}</p>
-                  </div>
+                <div key={item.q} className="border border-border rounded-xl p-6">
+                  <h3 className="font-bold text-base mb-2">{item.q}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{item.a}</p>
                 </div>
               ))}
             </div>

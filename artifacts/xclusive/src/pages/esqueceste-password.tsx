@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePageMeta } from '@/hooks/usePageMeta';
 import { Link } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +23,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function EsquecestePassword() {
+  usePageMeta({ title: 'Recuperar palavra-passe — Xclusive', path: '/esqueceste-password', noindex: true });
   const [submitted, setSubmitted] = useState(false);
 
   const form = useForm<FormValues>({

@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form';
+import { usePageMeta } from '@/hooks/usePageMeta';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'wouter';
@@ -45,6 +46,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function Register() {
+  usePageMeta({ title: 'Criar conta grátis — Xclusive', description: 'Cria a tua conta gratuita no Xclusive: segue criadores angolanos ou começa a monetizar o teu conteúdo em Kwanzas via Multicaixa Express.', path: '/registo' });
   const { register } = useAuth();
   const { toast } = useToast();
   const [passwordStrength, setPasswordStrength] = useState(0);

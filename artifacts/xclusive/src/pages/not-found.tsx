@@ -1,23 +1,24 @@
-import { Card, CardContent } from '@/components/ui/card';
-import { AlertCircle } from 'lucide-react';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
+import { usePageMeta } from '@/hooks/usePageMeta';
 
 export default function NotFound() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
-          <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">
-              404 Page Not Found
-            </h1>
-          </div>
+  usePageMeta({
+    title: 'Página não encontrada — Xclusive',
+    description: 'A página que procuras não existe ou foi movida.',
+    noindex: true,
+  });
 
-          <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
-          </p>
-        </CardContent>
-      </Card>
+  return (
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background text-foreground px-4 text-center">
+      <p className="text-sm font-bold uppercase tracking-wider text-primary mb-3">Erro 404</p>
+      <h1 className="text-3xl sm:text-4xl font-extrabold mb-4">Página não encontrada</h1>
+      <p className="text-muted-foreground max-w-md mb-8">
+        A página que procuras não existe ou foi movida. Volta ao início para continuares a explorar o Xclusive.
+      </p>
+      <Link href="/">
+        <Button className="rounded-full px-8">Voltar ao início</Button>
+      </Link>
     </div>
   );
 }

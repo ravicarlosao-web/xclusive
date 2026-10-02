@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form';
+import { usePageMeta } from '@/hooks/usePageMeta';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'wouter';
@@ -19,6 +20,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
+  usePageMeta({ title: 'Entrar — Xclusive', description: 'Entra na tua conta Xclusive e acede ao conteúdo exclusivo dos teus criadores angolanos favoritos.', path: '/login' });
   const { login } = useAuth();
   const { toast } = useToast();
 

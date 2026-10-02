@@ -1,0 +1,18 @@
+# Xclusive
+
+> Xclusive é uma plataforma angolana de conteúdo exclusivo. Criadores de conteúdo (músicos, artistas, fotógrafos, influencers) monetizam o seu trabalho diretamente com os fãs, em Kwanzas (AOA), com pagamentos via Multicaixa Express e referência bancária.
+
+- Website: https://xclusive.ao/
+- Idioma: Português (Angola)
+- País: Angola
+- Instagram: https://www.instagram.com/xclusive.xe/
+
+## Páginas públicas
+- [Início](https://xclusive.ao/): apresentação da plataforma, como funciona e perguntas frequentes.
+- [Criar conta](https://xclusive.ao/registo): registo gratuito para fãs e criadores.
+- [Entrar](https://xclusive.ao/login): acesso à conta.
+
+## Resumo
+- Criadores ganham com subscrições mensais, venda de conteúdo, gorjetas e transmissões em direto.
+- Para se tornar criador é necessário criar conta e completar a verificação de identidade (KYC).
+- As áreas de conteúdo (feed, perfis, diretos, mensagens, carteira) exigem sessão iniciada.

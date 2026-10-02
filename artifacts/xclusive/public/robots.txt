@@ -1,13 +1,20 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /uploads/
 Disallow: /home
+Disallow: /explorar
+Disallow: /reels
 Disallow: /mensagens
 Disallow: /notificacoes
+Disallow: /perfil/
+Disallow: /live/
+Disallow: /ir-em-direto
 Disallow: /definicoes
 Disallow: /carteira
 Disallow: /onboarding
 Disallow: /tornar-criador
+Disallow: /esqueceste-password
 
 Sitemap: https://xclusive.ao/sitemap.xml
 

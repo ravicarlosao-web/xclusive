@@ -5,28 +5,21 @@
   <!-- Homepage / Landing -->
   <url>
     <loc>https://xclusive.ao/</loc>
-    <lastmod>2026-09-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-10-02</lastmod>
     <xhtml:link rel="alternate" hreflang="pt-AO" href="https://xclusive.ao/" />
-    <xhtml:link rel="alternate" hreflang="pt" href="https://xclusive.ao/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://xclusive.ao/" />
   </url>
 
   <!-- Login -->
   <url>
     <loc>https://xclusive.ao/login</loc>
-    <lastmod>2026-09-20</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <lastmod>2026-10-02</lastmod>
   </url>
 
   <!-- Register -->
   <url>
     <loc>https://xclusive.ao/registo</loc>
-    <lastmod>2026-09-20</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <lastmod>2026-10-02</lastmod>
   </url>
 
 </urlset>
