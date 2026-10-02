@@ -292,6 +292,21 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
   }
 });
 
+// Interruptor do WebRTC dos espectadores: LIVE_WEBRTC_VIEWER_MODE = off | admin | all.
+// Lido a cada pedido (basta editar o .env e reiniciar o processo). Por defeito, ou
+// com um valor inválido, é "off" (falha fechada): o campo `webrtc` não é emitido.
+type WebrtcViewerMode = "off" | "admin" | "all";
+let warnedInvalidWebrtcMode = false;
+function getWebrtcViewerMode(log?: { warn?: (msg: string) => void }): WebrtcViewerMode {
+  const raw = (process.env.LIVE_WEBRTC_VIEWER_MODE ?? "").trim().toLowerCase();
+  if (raw === "off" || raw === "admin" || raw === "all") return raw;
+  if (raw !== "" && !warnedInvalidWebrtcMode) {
+    warnedInvalidWebrtcMode = true;
+    log?.warn?.("LIVE_WEBRTC_VIEWER_MODE inválido (esperado off, admin ou all) — a usar off.");
+  }
+  return "off";
+}
+
 // ── GET /api/live/:streamId/playback ──────────────────────────────────────
 // Devolve a streamKey SÓ a quem tem acesso (gratuita: qualquer sessão; paga:
 // bilhete, criadora ou admin). O acesso é verificado sempre na base de dados.
@@ -325,10 +340,19 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
     res.set("Cache-Control", "no-store");
 
     // WebRTC (OvenMediaEngine): URL com token de vida curta, novo a cada pedido
-    // (uma reconexão volta a chamar este endpoint). Sem LIVE_VIEWER_TOKEN_SECRET
-    // a resposta é a de sempre, só com a streamKey.
-    const viewerToken = req.userId
-      ? signViewerToken({ userId: req.userId, liveId: stream.id, streamKey: stream.streamKey })
+    // (uma reconexão volta a chamar este endpoint). Só é emitido se o modo o permitir
+    // (off: ninguém; admin: admin/superadmin; all: todos) e houver segredo configurado.
+    // Caso contrário a resposta é a de sempre, só com a streamKey.
+    const webrtcMode = getWebrtcViewerMode(req.log);
+    let webrtcAllowed = false;
+    if (req.userId && webrtcMode === "all") {
+      webrtcAllowed = true;
+    } else if (req.userId && webrtcMode === "admin") {
+      const [me] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, req.userId)).limit(1);
+      webrtcAllowed = isAdminRole(me?.role);
+    }
+    const viewerToken = webrtcAllowed
+      ? signViewerToken({ userId: req.userId!, liveId: stream.id, streamKey: stream.streamKey })
       : null;
     res.json(
       viewerToken
