@@ -579,6 +579,19 @@ export default function LivePage() {
     return () => clearInterval(interval);
   }, [stream?.iniciadoEm]);
 
+  // Breakpoint lg (Tailwind, 1024px): só um <LiveVideoPlayer> montado de cada vez,
+  // para não criar duas instâncias do hls.js a pedir os mesmos segmentos.
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px)');
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
   // Controlo de som
   const [isMuted, setIsMuted] = useState(true);
   const toggleMute = () => {
@@ -720,14 +733,16 @@ export default function LivePage() {
       <div className="lg:hidden fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden touch-manipulation">
         {/* Vídeo em fundo full-bleed */}
         <div className="absolute inset-0 w-full h-full">
-          <LiveVideoPlayer
-            streamKey={stream?.streamKey}
-            viewers={viewers}
-            className="w-full h-full border-0 rounded-none"
-            hideOverlayBadges={true}
-            isMuted={isMuted}
-            onToggleMute={toggleMute}
-          />
+          {!isDesktop && (
+            <LiveVideoPlayer
+              streamKey={stream?.streamKey}
+              viewers={viewers}
+              className="w-full h-full border-0 rounded-none"
+              hideOverlayBadges={true}
+              isMuted={isMuted}
+              onToggleMute={toggleMute}
+            />
+          )}
         </div>
 
         {/* ── Top Bar sobreposta (fundo semi-transparente) ──────────────────────── */}
@@ -968,14 +983,16 @@ export default function LivePage() {
           {/* Coluna Esquerda: Player de Vídeo HLS */}
           <div className="col-span-8 space-y-3">
             <div className="relative group">
-              <LiveVideoPlayer
-                streamKey={stream?.streamKey}
-                viewers={viewers}
-                className="aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl"
-                hideOverlayBadges={false}
-                isMuted={isMuted}
-                onToggleMute={toggleMute}
-              />
+              {isDesktop && (
+                <LiveVideoPlayer
+                  streamKey={stream?.streamKey}
+                  viewers={viewers}
+                  className="aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl"
+                  hideOverlayBadges={false}
+                  isMuted={isMuted}
+                  onToggleMute={toggleMute}
+                />
+              )}
 
               {/* Botão flutuante de mute no player desktop */}
               <button
