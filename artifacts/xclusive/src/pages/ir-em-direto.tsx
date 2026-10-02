@@ -199,6 +199,77 @@ function CreatorFeedRow({ item, isPanel = false }: { item: LiveFeedItem; isPanel
   );
 }
 
+// Limites do bilhete (espelho de api-server/src/lib/liveTicket.ts — o servidor é a autoridade).
+const LIVE_TICKET_MIN_KZ = 500;
+const LIVE_TICKET_MAX_KZ = 100_000;
+
+type LiveAcesso = 'gratuita' | 'paga';
+
+/** Escolha gratuita/paga + preço ao abrir a live (fica fixo até a live acabar). */
+function LiveAccessPicker({
+  tipo,
+  preco,
+  onTipo,
+  onPreco,
+  disabled,
+  dark,
+}: {
+  tipo: LiveAcesso;
+  preco: string;
+  onTipo: (t: LiveAcesso) => void;
+  onPreco: (v: string) => void;
+  disabled?: boolean;
+  dark?: boolean;
+}) {
+  const precoNum = Number(preco);
+  const precoInvalido =
+    tipo === 'paga' &&
+    preco !== '' &&
+    (!Number.isInteger(precoNum) || precoNum < LIVE_TICKET_MIN_KZ || precoNum > LIVE_TICKET_MAX_KZ);
+  const btn = (active: boolean) =>
+    cn(
+      'flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60',
+      active
+        ? 'border-primary bg-primary/20 text-primary'
+        : dark
+          ? 'border-white/20 bg-white/5 text-white/80'
+          : 'border-border bg-secondary/30 text-muted-foreground',
+    );
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button type="button" disabled={disabled} onClick={() => onTipo('gratuita')} className={btn(tipo === 'gratuita')}>
+          Gratuita
+        </button>
+        <button type="button" disabled={disabled} onClick={() => onTipo('paga')} className={btn(tipo === 'paga')}>
+          Paga (bilhete)
+        </button>
+      </div>
+      {tipo === 'paga' && (
+        <div className="space-y-1">
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={LIVE_TICKET_MIN_KZ}
+            max={LIVE_TICKET_MAX_KZ}
+            step={1}
+            value={preco}
+            disabled={disabled}
+            onChange={(e) => onPreco(e.target.value)}
+            placeholder={`Preço do bilhete em Kz (${LIVE_TICKET_MIN_KZ} a ${LIVE_TICKET_MAX_KZ.toLocaleString('pt-PT')})`}
+            className={cn('h-10 text-sm', dark && 'bg-zinc-950/70 border-white/20 text-white placeholder:text-white/40')}
+          />
+          <p className={cn('text-[11px]', precoInvalido ? 'text-red-400' : dark ? 'text-white/60' : 'text-muted-foreground')}>
+            {precoInvalido
+              ? `O preço deve ser um inteiro entre ${LIVE_TICKET_MIN_KZ} e ${LIVE_TICKET_MAX_KZ.toLocaleString('pt-PT')} Kz.`
+              : 'O tipo e o preço ficam fixos até a live terminar.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function IrEmDireto() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -206,6 +277,8 @@ export default function IrEmDireto() {
   const [streamId, setStreamId] = useState<number | null>(null);
   const [streamKey, setStreamKey] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState<boolean>(false);
+  const [liveTipo, setLiveTipo] = useState<LiveAcesso>('gratuita');
+  const [livePreco, setLivePreco] = useState<string>('');
   const [isEnding, setIsEnding] = useState<boolean>(false);
   const [hasEnded, setHasEnded] = useState<boolean>(false);
   const [finalDuration, setFinalDuration] = useState<number>(0);
@@ -446,6 +519,15 @@ export default function IrEmDireto() {
    * Iniciar transmissão nativa
    */
   const handleStartBroadcast = async () => {
+    // Validação no cliente (o servidor valida sempre): paga exige preço inteiro dentro dos limites.
+    const precoNum = Number(livePreco);
+    if (
+      liveTipo === 'paga' &&
+      (livePreco === '' || !Number.isInteger(precoNum) || precoNum < LIVE_TICKET_MIN_KZ || precoNum > LIVE_TICKET_MAX_KZ)
+    ) {
+      toast.error(`Define um preço inteiro entre ${LIVE_TICKET_MIN_KZ} e ${LIVE_TICKET_MAX_KZ.toLocaleString('pt-PT')} Kz.`);
+      return;
+    }
     setIsStarting(true);
     try {
       // 1. Garantir que a câmara e áudio estão prontos
@@ -463,6 +545,7 @@ export default function IrEmDireto() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify(liveTipo === 'paga' ? { tipo: 'paga', preco: precoNum } : { tipo: 'gratuita' }),
       });
 
       if (!res.ok) {
@@ -528,6 +611,8 @@ export default function IrEmDireto() {
    * Reiniciar para uma nova transmissão
    */
   const handleResetForNewLive = async () => {
+    setLiveTipo('gratuita');
+    setLivePreco('');
     setStreamId(null);
     setStreamKey(null);
     setHasEnded(false);
@@ -879,6 +964,15 @@ export default function IrEmDireto() {
                   </div>
                 </div>
 
+                <LiveAccessPicker
+                  tipo={liveTipo}
+                  preco={livePreco}
+                  onTipo={setLiveTipo}
+                  onPreco={setLivePreco}
+                  disabled={isStarting}
+                  dark
+                />
+
                 <div className="flex items-center justify-center gap-6">
                   <button
                     type="button"
@@ -1203,6 +1297,13 @@ export default function IrEmDireto() {
                     <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Gorjetas em Kz creditadas diretamente na tua carteira</span></div>
                     <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Chat interativo em tempo real via WebSocket</span></div>
                   </div>
+                  <LiveAccessPicker
+                    tipo={liveTipo}
+                    preco={livePreco}
+                    onTipo={setLiveTipo}
+                    onPreco={setLivePreco}
+                    disabled={isStarting}
+                  />
                   <Button
                     onClick={handleStartBroadcast}
                     disabled={isStarting || !publisher.mediaStream}
