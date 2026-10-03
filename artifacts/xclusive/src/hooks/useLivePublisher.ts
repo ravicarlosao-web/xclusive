@@ -445,6 +445,10 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             let framesEncoded = 0;
             let framesSent = 0;
             let encoderImplementation = '';
+            let frameWidth = 0;
+            let frameHeight = 0;
+            let framesPerSecond = 0;
+            let qualityLimitationReason = '';
 
             statsReport.forEach((stat) => {
               // Outbound RTP — bitrate, frames, encoder
@@ -453,6 +457,10 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
                 framesEncoded = stat.framesEncoded ?? 0;
                 framesSent = stat.framesSent ?? 0;
                 encoderImplementation = stat.encoderImplementation ?? '';
+                frameWidth = stat.frameWidth ?? 0;
+                frameHeight = stat.frameHeight ?? 0;
+                framesPerSecond = stat.framesPerSecond ?? 0;
+                qualityLimitationReason = stat.qualityLimitationReason ?? '';
               }
               // Remote inbound RTP — packetsLost, jitter, RTT
               if (stat.type === 'remote-inbound-rtp' && stat.kind === 'video') {
@@ -475,6 +483,9 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
               `jitter=${(jitter * 1000).toFixed(1)} ms | ` +
               `rtt=${roundTripTime !== null ? (roundTripTime * 1000).toFixed(1) + ' ms' : 'N/D'} | ` +
               `framesEncoded=${framesEncoded} | framesSent=${framesSent} | ` +
+              `res=${frameWidth && frameHeight ? `${frameWidth}x${frameHeight}` : 'N/D'} | ` +
+              `fps=${framesPerSecond ? Math.round(framesPerSecond) : 'N/D'} | ` +
+              `limit=${qualityLimitationReason || 'N/D'} | ` +
               `encoder=${encoderImplementation || 'N/D'}`
             );
           } catch (statsErr) {
