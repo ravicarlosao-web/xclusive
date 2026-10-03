@@ -7,6 +7,53 @@ import OvenLiveKitPackage, {
 // Suporte para interoperabilidade CJS/ESM do Vite
 const OvenLiveKit = (OvenLiveKitPackage as any)?.default || OvenLiveKitPackage;
 
+/**
+ * Bitrate máximo de vídeo da criadora, em kbps. 0 desativa o limite (as duas camadas).
+ * Cada espectador por WebRTC recebe este fluxo, por isso o bitrate multiplica-se pelos
+ * espectadores (transferência e CPU da VPS). Um `connectionConfig.maxVideoBitrate`
+ * explícito de quem chama tem prioridade sobre esta constante.
+ *
+ * Duas camadas:
+ *  1. `connectionConfig.maxVideoBitrate` → o OvenLiveKit escreve `b=AS:<kbps>` no offer do OME;
+ *  2. `RTCRtpSender.setParameters({ encodings[0].maxBitrate })` depois de ligar (reforço).
+ */
+const LIVE_PUBLISHER_MAX_VIDEO_BITRATE_KBPS = 1500;
+
+/**
+ * Dica de conteúdo da track de vídeo: 'motion' = maintain-framerate. Com o bitrate limitado,
+ * se o browser tiver de adaptar (rede/CPU) baixa a resolução antes dos fps. (O
+ * `degradationPreference` do setParameters não é suportado no Chrome/Safari; esta é a alavanca.)
+ */
+function applyVideoContentHint(track: MediaStreamTrack | undefined): void {
+  if (!track || track.kind !== 'video') return;
+  try {
+    (track as MediaStreamTrack & { contentHint?: string }).contentHint = 'motion';
+  } catch {
+    /* navegador sem contentHint: ignora */
+  }
+}
+
+/**
+ * Camada 2: fixa o máximo no sender de vídeo. Idempotente (reaplica-se a cada `connected`);
+ * os `encodings` persistem numa renegociação do mesmo pc e no `replaceTrack` da troca de
+ * câmara; uma reconexão cria um pc novo, que volta a passar por aqui.
+ */
+async function applySenderMaxBitrate(pc: RTCPeerConnection, maxKbps: number): Promise<void> {
+  if (!(maxKbps > 0)) return;
+  try {
+    const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+    if (!sender) return;
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings[0].maxBitrate = maxKbps * 1000;
+    await sender.setParameters(params);
+    console.info(`[AUDIT][WebRTC-Publisher] maxBitrate aplicado: ${maxKbps} kbps (SDP + sender)`);
+  } catch (err: any) {
+    // Só o nome do erro (nunca mensagens, que podem incluir URLs).
+    console.warn('[AUDIT][WebRTC-Publisher] setParameters(maxBitrate) falhou:', err?.name ?? 'erro');
+  }
+}
+
 export type LiveConnectionState =
   | 'idle'
   | 'requesting-permission'
@@ -270,6 +317,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
           facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
+          frameRate: { ideal: 30, max: 30 },
         },
         audio: {
           echoCancellation: true,
@@ -304,6 +352,8 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             }
           }
         }
+
+        applyVideoContentHint(stream.getVideoTracks()[0]);
 
         streamRef.current = stream;
         setMediaStream(stream);
@@ -395,6 +445,10 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             let framesEncoded = 0;
             let framesSent = 0;
             let encoderImplementation = '';
+            let frameWidth = 0;
+            let frameHeight = 0;
+            let framesPerSecond = 0;
+            let qualityLimitationReason = '';
 
             statsReport.forEach((stat) => {
               // Outbound RTP — bitrate, frames, encoder
@@ -403,6 +457,10 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
                 framesEncoded = stat.framesEncoded ?? 0;
                 framesSent = stat.framesSent ?? 0;
                 encoderImplementation = stat.encoderImplementation ?? '';
+                frameWidth = stat.frameWidth ?? 0;
+                frameHeight = stat.frameHeight ?? 0;
+                framesPerSecond = stat.framesPerSecond ?? 0;
+                qualityLimitationReason = stat.qualityLimitationReason ?? '';
               }
               // Remote inbound RTP — packetsLost, jitter, RTT
               if (stat.type === 'remote-inbound-rtp' && stat.kind === 'video') {
@@ -425,6 +483,9 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
               `jitter=${(jitter * 1000).toFixed(1)} ms | ` +
               `rtt=${roundTripTime !== null ? (roundTripTime * 1000).toFixed(1) + ' ms' : 'N/D'} | ` +
               `framesEncoded=${framesEncoded} | framesSent=${framesSent} | ` +
+              `res=${frameWidth && frameHeight ? `${frameWidth}x${frameHeight}` : 'N/D'} | ` +
+              `fps=${framesPerSecond ? Math.round(framesPerSecond) : 'N/D'} | ` +
+              `limit=${qualityLimitationReason || 'N/D'} | ` +
               `encoder=${encoderImplementation || 'N/D'}`
             );
           } catch (statsErr) {
@@ -432,6 +493,9 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
           }
         }, 5000);
       };
+
+      // Limite de bitrate de vídeo: o valor explícito de quem chama tem prioridade.
+      const maxVideoKbps: number = options.connectionConfig?.maxVideoBitrate ?? LIVE_PUBLISHER_MAX_VIDEO_BITRATE_KBPS;
 
       // Cria a nova instância do OvenLiveKit com os callbacks do ciclo de vida
       const kitInstance = OvenLiveKit.create({
@@ -443,6 +507,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             // [AUDITORIA] Arranca o polling de getStats() assim que a ligação WebRTC está ativa
             const pc = kitRef.current?.peerConnection as RTCPeerConnection | undefined;
             if (pc) {
+              void applySenderMaxBitrate(pc, maxVideoKbps);
               startWebRtcStatsPoll(pc);
               // Inventaria todos os campos disponíveis no primeiro report (útil para Chrome vs Safari)
               pc.getStats().then((report) => {
@@ -458,6 +523,8 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             console.info('[useLivePublisher] Estado ICE:', state);
             if (state === 'connected' || state === 'completed') {
               setConnectionState('live');
+              const livePc = kitRef.current?.peerConnection as RTCPeerConnection | undefined;
+              if (livePc) void applySenderMaxBitrate(livePc, maxVideoKbps);
             } else if (state === 'disconnected') {
               setConnectionState('reconnecting');
             } else if (state === 'failed') {
@@ -502,7 +569,10 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
         await kitInstance.setMediaStream(stream);
 
         // Inicia a negociação SDP via WebSocket
-        kitInstance.startStreaming(wsUrl, options.connectionConfig);
+        kitInstance.startStreaming(wsUrl, {
+          ...options.connectionConfig,
+          ...(maxVideoKbps > 0 ? { maxVideoBitrate: maxVideoKbps } : {}),
+        });
       } catch (err: any) {
         const msg = err?.message || 'Falha ao iniciar streaming no OvenLiveKit.';
         setError(msg);
@@ -566,6 +636,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             facingMode: { ideal: nextMode },
             width: { ideal: 1280 },
             height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
           },
           audio: false,
         });
@@ -589,6 +660,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
       if (!newVideoTrack) {
         throw new Error('Nenhuma track de vídeo obtida na nova câmara.');
       }
+      applyVideoContentHint(newVideoTrack);
 
       // 3. CRIA UM NOVO MediaStream!
       // Criar uma nova instância é obrigatório para:
