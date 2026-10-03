@@ -85,8 +85,8 @@ function timeAgo(iso: string): string {
 
 /** Resposta de GET /api/live/:id/playback já reduzida ao que o player precisa. */
 type PlaybackResult =
-  | { ok: true; streamKey: string; webrtcUrl: string | null }
-  | { ok: false; status: number | null }; // null = erro de rede
+  | { ok: true; streamKey: string | null; webrtcUrl: string | null } // streamKey null = HLS desligado
+  | { ok: false; status: number | null; code?: 'live_full' | 'webrtc_unavailable' }; // status null = erro de rede
 
 const WEBRTC_MAX_ATTEMPTS = 3;
 const WEBRTC_RETRY_DELAYS_MS = [0, 1500, 4000];
@@ -99,10 +99,15 @@ const WEBRTC_STABLE_MS = 30_000;
 /** Falha de ICE (timeout) memorizada neste dispositivo, para não pagar o atraso em cada live. */
 const WEBRTC_ICE_FAIL_MEMORY_MS = 15 * 60 * 1000;
 const WEBRTC_ICE_FAIL_KEY = 'xclusive_webrtc_ice_fail_until';
+/** Transporte TCP (relay) que funcionou neste dispositivo: as lives seguintes começam por ele. */
+const WEBRTC_TCP_MEMORY_MS = 15 * 60 * 1000;
+const WEBRTC_TCP_KEY = 'xclusive_webrtc_tcp_until';
+/** Intervalo mínimo entre cliques em "Tentar novamente". */
+const WEBRTC_RETRY_BUTTON_MIN_INTERVAL_MS = 3000;
 
-/** Lives (por streamKey) em que o WebRTC já não volta a ser tentado nesta sessão da página. */
+/** Lives (por id, "live:<id>") em que o WebRTC já não volta a ser tentado nesta sessão da página (só com HLS). */
 const webrtcGivenUp = new Set<string>();
-/** Pedidos a /playback já feitos por live nesta sessão da página. */
+/** Pedidos a /playback já feitos por live ("live:<id>") nesta sessão da página. */
 const webrtcPlaybackCalls = new Map<string, number>();
 
 function isIceFailureRemembered(): boolean {
@@ -117,6 +122,23 @@ function isIceFailureRemembered(): boolean {
 function rememberIceFailure(): void {
   try {
     localStorage.setItem(WEBRTC_ICE_FAIL_KEY, String(Date.now() + WEBRTC_ICE_FAIL_MEMORY_MS));
+  } catch {
+    /* localStorage indisponível: ignora */
+  }
+}
+
+function isTcpRemembered(): boolean {
+  try {
+    const until = Number(localStorage.getItem(WEBRTC_TCP_KEY));
+    return Number.isFinite(until) && until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function rememberTcpWorked(): void {
+  try {
+    localStorage.setItem(WEBRTC_TCP_KEY, String(Date.now() + WEBRTC_TCP_MEMORY_MS));
   } catch {
     /* localStorage indisponível: ignora */
   }
@@ -141,6 +163,12 @@ interface LiveVideoPlayerProps {
    * desde o pedido). Sem esta função, o player usa só o HLS.
    */
   fetchPlayback?: () => Promise<PlaybackResult>;
+  /** Id da live: chave do estado do WebRTC (a streamKey, do HLS, pode não existir). */
+  liveId?: number | null;
+  /** A consulta da página a /playback já respondeu (sucesso ou erro): já se sabe se há HLS. */
+  playbackSettled?: boolean;
+  /** Pede à página que volte a consultar /playback (ex.: o HLS foi religado). */
+  onRefreshPlayback?: () => void;
 }
 
 function LiveVideoPlayer({
@@ -151,6 +179,9 @@ function LiveVideoPlayer({
   isMuted = true,
   onToggleMute,
   fetchPlayback,
+  liveId = null,
+  playbackSettled = true,
+  onRefreshPlayback,
 }: LiveVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -171,6 +202,16 @@ function LiveVideoPlayer({
   const webrtcDeniedRef = useRef(false);
   /** Já houve primeiro frame nesta fase de ligação (o teto de 12 s só vale antes dele). */
   const webrtcHadFrameRef = useRef(false);
+  /** Fase TCP (transport=tcp + relay): só corre quando não há HLS. */
+  const webrtcTcpPhaseRef = useRef(false);
+  /** Caminho ICE reportado pela ligação atual (udp | tcp_relay | other). */
+  const webrtcPathRef = useRef<'udp' | 'tcp_relay' | 'other' | null>(null);
+  const retryBlockedUntilRef = useRef(0);
+  const [retryCooling, setRetryCooling] = useState(false);
+  const [errorKind, setErrorKind] = useState<'generic' | 'live_full' | 'unavailable' | 'unsupported' | 'denied' | null>(null);
+  /** Há HLS? (o /playback devolve a streamKey só com LIVE_HLS_ENABLED=true) */
+  const hlsAvailable = !!streamKey;
+  const liveKey = liveId !== null ? `live:${liveId}` : null;
 
   // ─── [AUDITORIA] Diagnóstico HLS.js ───────────────────────────────────
   // Refs de estado interno para instrumentação. Só logging — zero impacto.
@@ -372,7 +413,7 @@ function LiveVideoPlayer({
     }
   };
 
-  // ─── WebRTC primeiro; HLS (initPlayer) como reserva ───────────────────────
+  // ─── WebRTC primeiro; HLS (initPlayer) como reserva — ou só WebRTC, sem HLS ─────────
 
   const clearWebrtc = () => {
     if (webrtcRetryTimerRef.current) clearTimeout(webrtcRetryTimerRef.current);
@@ -383,9 +424,28 @@ function LiveVideoPlayer({
     webrtcSessionRef.current = null;
   };
 
-  /** Desmonta o WebRTC e arranca o HLS atual (o mesmo <video>, sem dois players). */
+  /** Estado de erro claro (sem HLS para onde cair): mensagem + "Tentar novamente". */
+  const showWebrtcError = (kind: 'generic' | 'live_full' | 'unavailable' | 'unsupported' | 'denied', message: string) => {
+    clearWebrtc();
+    auditWebrtc('ERROR_STATE', { kind });
+    setIsPlaying(false);
+    setIsLoading(false);
+    setHasError(true);
+    setErrorKind(kind);
+    setErrorMessage(message);
+  };
+
+  /**
+   * Desmonta o WebRTC e, se há HLS, arranca o HLS atual (o mesmo <video>, sem dois players).
+   * Sem HLS (LIVE_HLS_ENABLED=false) mostra o estado de erro: nunca chama o hls.js nem o Safari nativo.
+   */
   const fallbackToHls = (reason: string) => {
-    if (streamKey) webrtcGivenUp.add(streamKey);
+    if (!hlsAvailable) {
+      auditWebrtc('NO_HLS_FALLBACK', { reason });
+      showWebrtcError('generic', 'Não foi possível ligar à transmissão.');
+      return;
+    }
+    if (liveKey) webrtcGivenUp.add(liveKey);
     clearWebrtc();
     auditWebrtc('FALLBACK_HLS', { reason });
     initPlayer();
@@ -395,44 +455,62 @@ function LiveVideoPlayer({
     startSeqRef.current += 1;
     clearWebrtc();
     webrtcDeniedRef.current = false;
-    if (!streamUrl || !streamKey) return;
+    if (liveId === null || !liveKey || !playbackSettled) return;
 
-    if (
-      !fetchPlayback ||
-      webrtcGivenUp.has(streamKey) ||
-      !isWebrtcViewerSupported() ||
-      isIceFailureRemembered()
-    ) {
-      initPlayer();
-      return;
+    if (hlsAvailable) {
+      if (
+        !fetchPlayback ||
+        webrtcGivenUp.has(liveKey) ||
+        !isWebrtcViewerSupported() ||
+        isIceFailureRemembered()
+      ) {
+        initPlayer();
+        return;
+      }
+    } else {
+      if (!fetchPlayback) return;
+      if (!isWebrtcViewerSupported()) {
+        showWebrtcError('unsupported', 'O teu navegador não suporta esta transmissão ao vivo.');
+        return;
+      }
     }
 
     webrtcAttemptsRef.current = 0;
     webrtcHadFrameRef.current = false;
     webrtcPhaseStartRef.current = Date.now();
+    // Sem HLS, uma rede em que o UDP já falhou começa logo pelo TCP (relay).
+    webrtcTcpPhaseRef.current = !hlsAvailable && isTcpRemembered();
     setIsPlaying(false);
+    setErrorKind(null);
     void attemptWebrtc(startSeqRef.current);
   };
 
   const attemptWebrtc = async (seq: number) => {
     const video = videoRef.current;
-    if (!video || !streamKey || !fetchPlayback || seq !== startSeqRef.current) return;
+    if (!video || !liveKey || !fetchPlayback || seq !== startSeqRef.current) return;
 
     setIsLoading(true);
     setHasError(false);
+    setErrorKind(null);
     setErrorMessage(null);
 
     const attemptNo = webrtcAttemptsRef.current + 1;
     webrtcAttemptsRef.current = attemptNo;
-    auditWebrtc('ATTEMPT', { n: attemptNo, of: WEBRTC_MAX_ATTEMPTS });
+    const tcpPhase = webrtcTcpPhaseRef.current;
+    auditWebrtc('ATTEMPT', { n: attemptNo, of: WEBRTC_MAX_ATTEMPTS, transport: tcpPhase ? 'tcp' : 'udp' });
 
     // Cada ligação pede um /playback novo e usa o token já (os 90 s contam desde o pedido).
-    const calls = webrtcPlaybackCalls.get(streamKey) ?? 0;
+    const calls = webrtcPlaybackCalls.get(liveKey) ?? 0;
     if (calls >= WEBRTC_MAX_PLAYBACK_CALLS) {
-      fallbackToHls('playback_calls_exhausted');
+      if (hlsAvailable) {
+        fallbackToHls('playback_calls_exhausted');
+      } else {
+        auditWebrtc('PLAYBACK_CALLS_EXHAUSTED');
+        showWebrtcError('generic', 'Demasiadas tentativas. Aguarda um momento e tenta novamente.');
+      }
       return;
     }
-    webrtcPlaybackCalls.set(streamKey, calls + 1);
+    webrtcPlaybackCalls.set(liveKey, calls + 1);
 
     const pb = await fetchPlayback();
     if (seq !== startSeqRef.current) return;
@@ -442,9 +520,17 @@ function LiveVideoPlayer({
         // Sem acesso / não encontrada / terminada: não cai para o HLS.
         auditWebrtc('PLAYBACK_REFUSED', { status: pb.status });
         webrtcDeniedRef.current = true;
-        setIsLoading(false);
-        setHasError(true);
-        setErrorMessage(pb.status === 409 ? 'A transmissão terminou.' : 'Não tens acesso a esta transmissão.');
+        showWebrtcError('denied', pb.status === 409 ? 'A transmissão terminou.' : 'Não tens acesso a esta transmissão.');
+        return;
+      }
+      if (pb.status === 503 && !hlsAvailable && (pb.code === 'live_full' || pb.code === 'webrtc_unavailable')) {
+        // HLS desligado: live cheia (teto duro) ou WebRTC indisponível.
+        auditWebrtc('PLAYBACK_UNAVAILABLE', { code: pb.code });
+        if (pb.code === 'live_full') {
+          showWebrtcError('live_full', 'Esta live está cheia. Tenta novamente dentro de instantes.');
+        } else {
+          showWebrtcError('unavailable', 'A transmissão ao vivo não está disponível neste momento.');
+        }
         return;
       }
       auditWebrtc('PLAYBACK_ERROR', { status: pb.status ?? 0 });
@@ -452,17 +538,30 @@ function LiveVideoPlayer({
       return;
     }
 
-    // Sem campo webrtc (modo off, sem segredo…): HLS direto, sem erro.
+    // O HLS foi religado entretanto: a página volta a consultar /playback e o player reinicia com a chave.
+    if (pb.streamKey && !hlsAvailable) {
+      auditWebrtc('HLS_AVAILABLE_AGAIN');
+      onRefreshPlayback?.();
+      return;
+    }
+
+    // Sem campo webrtc (modo off, sem segredo…): HLS direto, sem erro; sem HLS, estado de erro.
     if (!pb.webrtcUrl) {
       auditWebrtc('NO_WEBRTC_OFFERED');
       fallbackToHls('not_offered');
       return;
     }
 
-    // Nunca liga a um URL sem token.
+    // Nunca liga a um URL sem token. Fase TCP: acrescenta transport=tcp (token novo, pedido agora).
+    let connectUrl = pb.webrtcUrl;
     let hasToken = false;
     try {
-      hasToken = !!new URL(pb.webrtcUrl).searchParams.get('token');
+      const u = new URL(pb.webrtcUrl);
+      hasToken = !!u.searchParams.get('token');
+      if (hasToken && tcpPhase) {
+        u.searchParams.set('transport', 'tcp');
+        connectUrl = u.toString();
+      }
     } catch {
       hasToken = false;
     }
@@ -472,18 +571,28 @@ function LiveVideoPlayer({
       return;
     }
 
+    webrtcPathRef.current = null;
     const t0 = performance.now();
     webrtcSessionRef.current = connectOvenWebrtcViewer({
-      url: pb.webrtcUrl,
+      url: connectUrl,
       video,
+      // UDP primeiro (política 'all' + ice_servers do offer); na fase TCP só relay.
+      iceTransportPolicy: tcpPhase ? 'relay' : 'all',
       callbacks: {
         onState: (state) => {
           if (seq !== startSeqRef.current) return;
-          if (state === 'first_frame') {
+          if (state === 'path_udp' || state === 'path_tcp_relay' || state === 'path_other') {
+            const path = state === 'path_udp' ? 'udp' : state === 'path_tcp_relay' ? 'tcp_relay' : 'other';
+            webrtcPathRef.current = path;
+            auditWebrtc('PATH', { path });
+          } else if (state === 'first_frame') {
             auditWebrtc('FIRST_FRAME', { ms: Math.round(performance.now() - t0) });
             webrtcHadFrameRef.current = true;
             setIsLoading(false);
             setHasError(false);
+            setErrorKind(null);
+            // Só memoriza o TCP se foi o TCP (relay) que funcionou, e só sem HLS.
+            if (!hlsAvailable && webrtcPathRef.current === 'tcp_relay') rememberTcpWorked();
             if (webrtcStableTimerRef.current) clearTimeout(webrtcStableTimerRef.current);
             webrtcStableTimerRef.current = setTimeout(() => {
               webrtcAttemptsRef.current = 0;
@@ -517,10 +626,23 @@ function LiveVideoPlayer({
       webrtcPhaseStartRef.current = Date.now();
     }
 
-    // Só o timeout de ICE (rede sem UDP, p. ex.) é memorizado neste dispositivo.
-    if (reason === 'ice_timeout') {
-      rememberIceFailure();
-      fallbackToHls(reason);
+    const iceFailure = reason === 'ice_timeout' || reason === 'ice_failed';
+    if (hlsAvailable) {
+      // Com HLS: só o timeout de ICE (rede sem UDP, p. ex.) é memorizado e vai ao HLS.
+      if (reason === 'ice_timeout') {
+        rememberIceFailure();
+        fallbackToHls(reason);
+        return;
+      }
+    } else if (iceFailure) {
+      // Sem HLS: UDP falhou → uma tentativa por TCP (relay) com token novo; se já era TCP, erro.
+      if (!webrtcTcpPhaseRef.current) {
+        webrtcTcpPhaseRef.current = true;
+        auditWebrtc('TCP_PHASE');
+        webrtcRetryTimerRef.current = setTimeout(() => void attemptWebrtc(seq), 0);
+        return;
+      }
+      showWebrtcError('generic', 'Não foi possível ligar à transmissão.');
       return;
     }
     if (reason === 'unsupported') {
@@ -540,8 +662,24 @@ function LiveVideoPlayer({
   };
 
   const handleRetry = () => {
-    // Recusa do /playback (sem acesso/terminada): volta a verificar em vez de ir ao HLS.
-    if (webrtcDeniedRef.current) {
+    // Intervalo mínimo de 3 s entre cliques.
+    const now = Date.now();
+    if (now < retryBlockedUntilRef.current) return;
+    retryBlockedUntilRef.current = now + WEBRTC_RETRY_BUTTON_MIN_INTERVAL_MS;
+    setRetryCooling(true);
+    setTimeout(() => setRetryCooling(false), WEBRTC_RETRY_BUTTON_MIN_INTERVAL_MS);
+
+    if (!hlsAvailable) {
+      // Sem HLS: pedido novo (token novo), contadores a zero; e a página volta a perguntar pela chave
+      // (se o HLS foi religado, o player passa a usá-lo).
+      if (liveKey) {
+        webrtcPlaybackCalls.delete(liveKey);
+        webrtcGivenUp.delete(liveKey);
+      }
+      onRefreshPlayback?.();
+      startPlayback();
+    } else if (webrtcDeniedRef.current) {
+      // Recusa do /playback (sem acesso/terminada): volta a verificar em vez de ir ao HLS.
       webrtcAttemptsRef.current = 0;
       startPlayback();
     } else {
@@ -568,7 +706,7 @@ function LiveVideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [streamUrl]);
+  }, [streamUrl, liveId, playbackSettled]);
 
   return (
     <div
@@ -595,7 +733,7 @@ function LiveVideoPlayer({
       />
 
       {/* Estado: Sem streamKey ou a carregar */}
-      {!isPlaying && (isLoading || !streamKey) && !hasError && (
+      {!isPlaying && (isLoading || !playbackSettled) && !hasError && (
         <div className="absolute inset-0 bg-zinc-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 gap-3 z-10">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <p className="text-sm font-medium text-white/90">
@@ -615,18 +753,27 @@ function LiveVideoPlayer({
               {errorMessage || 'A aguardar o início da transmissão...'}
             </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-              O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.
+              {errorKind === 'live_full'
+                ? 'Há muitos espectadores neste momento.'
+                : errorKind === 'unsupported'
+                  ? 'Abre o link no Chrome ou no Safari para ver a transmissão.'
+                  : errorKind
+                    ? 'Verifica a tua ligação à internet e tenta novamente.'
+                    : 'O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.'}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleRetry}
-            className="gap-2 text-xs border-white/20 hover:bg-white/10 text-white"
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-            Tentar novamente
-          </Button>
+          {errorKind !== 'unsupported' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRetry}
+              disabled={retryCooling}
+              className="gap-2 text-xs border-white/20 hover:bg-white/10 text-white"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              Tentar novamente
+            </Button>
+          )}
         </div>
       )}
 
@@ -912,7 +1059,8 @@ export default function LivePage() {
   );
 
   // A streamKey só chega a quem tem acesso (GET /api/live/:id/playback).
-  const { data: playback } = useQuery<{ streamKey: string }>({
+  // Com LIVE_HLS_ENABLED=false a resposta não traz streamKey (streamKey ausente = sem HLS).
+  const { data: playback, isPending: playbackPending } = useQuery<{ streamKey?: string | null }>({
     queryKey: ['/api/live', streamId, 'playback'],
     enabled: streamId !== null && !!stream?.temAcesso,
     staleTime: Infinity,
@@ -922,10 +1070,17 @@ export default function LivePage() {
       const res = await fetch(`/api/live/${streamId}/playback`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      // 503 (live cheia / WebRTC indisponível, só sem HLS): sem chave; o player mostra o estado.
+      if (res.status === 503) return { streamKey: null };
       if (!res.ok) throw new Error('Sem acesso à live');
       return res.json();
     },
   });
+  // A consulta já respondeu (com sucesso ou erro): já se sabe se existe HLS.
+  const playbackSettled = !playbackPending;
+  const refreshPlayback = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['/api/live', streamId, 'playback'] });
+  }, [queryClient, streamId]);
 
   // Pedido fresco a /playback para cada ligação WebRTC (token de 90 s, nunca reutilizado).
   const fetchPlayback = useCallback(async (): Promise<PlaybackResult> => {
@@ -935,11 +1090,15 @@ export default function LivePage() {
         cache: 'no-store',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) return { ok: false, status: res.status };
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const code = body?.code === 'live_full' || body?.code === 'webrtc_unavailable' ? body.code : undefined;
+        return { ok: false, status: res.status, code };
+      }
       const data = await res.json();
       return {
         ok: true,
-        streamKey: data.streamKey,
+        streamKey: typeof data?.streamKey === 'string' ? data.streamKey : null,
         webrtcUrl: typeof data?.webrtc?.url === 'string' ? data.webrtc.url : null,
       };
     } catch {
@@ -1159,8 +1318,11 @@ export default function LivePage() {
         <div className="absolute inset-0 w-full h-full">
           {!isDesktop && (
             <LiveVideoPlayer
-              streamKey={playback?.streamKey}
+              streamKey={playback?.streamKey ?? undefined}
               fetchPlayback={fetchPlayback}
+              liveId={streamId}
+              playbackSettled={playbackSettled}
+              onRefreshPlayback={refreshPlayback}
               viewers={viewers}
               className="w-full h-full border-0 rounded-none"
               hideOverlayBadges={true}
@@ -1410,8 +1572,11 @@ export default function LivePage() {
             <div className="relative group">
               {isDesktop && (
                 <LiveVideoPlayer
-                  streamKey={playback?.streamKey}
+                  streamKey={playback?.streamKey ?? undefined}
                   fetchPlayback={fetchPlayback}
+                  liveId={streamId}
+                  playbackSettled={playbackSettled}
+                  onRefreshPlayback={refreshPlayback}
                   viewers={viewers}
                   className="aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl"
                   hideOverlayBadges={false}
