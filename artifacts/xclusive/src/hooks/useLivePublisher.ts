@@ -20,6 +20,20 @@ const OvenLiveKit = (OvenLiveKitPackage as any)?.default || OvenLiveKitPackage;
 const LIVE_PUBLISHER_MAX_VIDEO_BITRATE_KBPS = 1500;
 
 /**
+ * Dica de conteúdo da track de vídeo: 'motion' = maintain-framerate. Com o bitrate limitado,
+ * se o browser tiver de adaptar (rede/CPU) baixa a resolução antes dos fps. (O
+ * `degradationPreference` do setParameters não é suportado no Chrome/Safari; esta é a alavanca.)
+ */
+function applyVideoContentHint(track: MediaStreamTrack | undefined): void {
+  if (!track || track.kind !== 'video') return;
+  try {
+    (track as MediaStreamTrack & { contentHint?: string }).contentHint = 'motion';
+  } catch {
+    /* navegador sem contentHint: ignora */
+  }
+}
+
+/**
  * Camada 2: fixa o máximo no sender de vídeo. Idempotente (reaplica-se a cada `connected`);
  * os `encodings` persistem numa renegociação do mesmo pc e no `replaceTrack` da troca de
  * câmara; uma reconexão cria um pc novo, que volta a passar por aqui.
@@ -303,6 +317,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
           facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
+          frameRate: { ideal: 30, max: 30 },
         },
         audio: {
           echoCancellation: true,
@@ -337,6 +352,8 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             }
           }
         }
+
+        applyVideoContentHint(stream.getVideoTracks()[0]);
 
         streamRef.current = stream;
         setMediaStream(stream);
@@ -608,6 +625,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             facingMode: { ideal: nextMode },
             width: { ideal: 1280 },
             height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
           },
           audio: false,
         });
@@ -631,6 +649,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
       if (!newVideoTrack) {
         throw new Error('Nenhuma track de vídeo obtida na nova câmara.');
       }
+      applyVideoContentHint(newVideoTrack);
 
       // 3. CRIA UM NOVO MediaStream!
       // Criar uma nova instância é obrigatório para:
