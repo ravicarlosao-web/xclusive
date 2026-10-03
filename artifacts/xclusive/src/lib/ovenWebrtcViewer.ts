@@ -32,7 +32,11 @@ export type WebrtcViewerState =
   | 'ice_checking'
   | 'ice_connected'
   | 'track'
-  | 'first_frame';
+  | 'first_frame'
+  /** Caminho do par ICE escolhido (só o tipo — nunca IPs ou portas). */
+  | 'path_udp'
+  | 'path_tcp_relay'
+  | 'path_other';
 
 export interface WebrtcViewerStats {
   fps: number;
@@ -139,6 +143,32 @@ export function connectOvenWebrtcViewer(options: WebrtcViewerOptions): WebrtcVie
   let lastTickAt = Date.now();
   let graceUntil = 0;
   let tickCount = 0;
+
+  /** Lê o par de candidatos escolhido e reporta só o tipo de caminho (udp | tcp_relay | other). */
+  const reportPath = async (conn: RTCPeerConnection) => {
+    try {
+      const report = await conn.getStats();
+      const byId = new Map<string, any>();
+      report.forEach((st: any) => byId.set(st.id, st));
+      let pair: any = null;
+      report.forEach((st: any) => {
+        if (st.type === 'transport' && st.selectedCandidatePairId) pair = byId.get(st.selectedCandidatePairId);
+      });
+      if (!pair) {
+        report.forEach((st: any) => {
+          if (st.type === 'candidate-pair' && st.nominated && st.state === 'succeeded') pair = st;
+        });
+      }
+      const local = pair ? byId.get(pair.localCandidateId) : null;
+      if (closed || !local) return;
+      const viaTcp = local.protocol === 'tcp' || local.relayProtocol === 'tcp' || local.relayProtocol === 'tls';
+      if (local.candidateType === 'relay' && viaTcp) callbacks.onState?.('path_tcp_relay');
+      else if (local.protocol === 'udp') callbacks.onState?.('path_udp');
+      else callbacks.onState?.('path_other');
+    } catch {
+      /* sem estatísticas: não reporta o caminho */
+    }
+  };
 
   const clearTimers = () => {
     for (const h of [offerTimer, iceTimer, firstFrameTimer, disconnectTimer]) {
@@ -306,6 +336,7 @@ export function connectOvenWebrtcViewer(options: WebrtcViewerOptions): WebrtcVie
         if (disconnectTimer) clearTimeout(disconnectTimer);
         disconnectTimer = null;
         callbacks.onState?.('ice_connected');
+        void reportPath(conn);
         if (!firstFrameSeen && !firstFrameTimer) {
           firstFrameTimer = setTimeout(() => fail('no_first_frame'), t.firstFrameTimeoutMs);
         }
