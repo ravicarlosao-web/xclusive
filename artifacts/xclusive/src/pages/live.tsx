@@ -102,6 +102,11 @@ const WEBRTC_ICE_FAIL_KEY = 'xclusive_webrtc_ice_fail_until';
 /** Transporte TCP (relay) que funcionou neste dispositivo: as lives seguintes começam por ele. */
 const WEBRTC_TCP_MEMORY_MS = 15 * 60 * 1000;
 const WEBRTC_TCP_KEY = 'xclusive_webrtc_tcp_until';
+/**
+ * Valor de `transport` na URL de sinalização durante a fase TCP. No OME recente `transport=tcp` é TCP ICE
+ * direto (RFC 6544); o relé TURN embutido (que traz ice_servers no offer) pede-se com `transport=relay`.
+ */
+const TCP_PHASE_TRANSPORT = 'relay';
 /** Intervalo mínimo entre cliques em "Tentar novamente". */
 const WEBRTC_RETRY_BUTTON_MIN_INTERVAL_MS = 3000;
 
@@ -202,7 +207,7 @@ function LiveVideoPlayer({
   const webrtcDeniedRef = useRef(false);
   /** Já houve primeiro frame nesta fase de ligação (o teto de 12 s só vale antes dele). */
   const webrtcHadFrameRef = useRef(false);
-  /** Fase TCP (transport=tcp + relay): só corre quando não há HLS. */
+  /** Fase TCP (transport=TCP_PHASE_TRANSPORT + política relay): só corre quando não há HLS. */
   const webrtcTcpPhaseRef = useRef(false);
   /** Caminho ICE reportado pela ligação atual (udp | tcp_relay | other). */
   const webrtcPathRef = useRef<'udp' | 'tcp_relay' | 'other' | null>(null);
@@ -552,14 +557,14 @@ function LiveVideoPlayer({
       return;
     }
 
-    // Nunca liga a um URL sem token. Fase TCP: acrescenta transport=tcp (token novo, pedido agora).
+    // Nunca liga a um URL sem token. Fase TCP: acrescenta transport=<TCP_PHASE_TRANSPORT> (token novo, pedido agora).
     let connectUrl = pb.webrtcUrl;
     let hasToken = false;
     try {
       const u = new URL(pb.webrtcUrl);
       hasToken = !!u.searchParams.get('token');
       if (hasToken && tcpPhase) {
-        u.searchParams.set('transport', 'tcp');
+        u.searchParams.set('transport', TCP_PHASE_TRANSPORT);
         connectUrl = u.toString();
       }
     } catch {
