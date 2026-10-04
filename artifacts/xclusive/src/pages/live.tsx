@@ -145,7 +145,7 @@ function rememberTcpWorked(): void {
 }
 
 /** Só estados e códigos fixos — nunca URL, token, SDP, candidatos, IPs ou error.message. */
-function auditWebrtc(event: string, data?: Record<string, string | number>): void {
+function auditWebrtc(event: string, data?: Record<string, string | number | boolean>): void {
   console.info(`[AUDIT][WebRTC-Player] ${event}`, data ?? '');
 }
 
@@ -579,6 +579,13 @@ function LiveVideoPlayer({
       // UDP primeiro (política 'all' + ice_servers do offer); na fase TCP só relay.
       iceTransportPolicy: tcpPhase ? 'relay' : 'all',
       callbacks: {
+        // Só contagens, booleanos e nomes de chaves — nunca URLs, utilizador, credencial, IPs, SDP ou candidatos.
+        onIceInfo: (info) => {
+          if (seq !== startSeqRef.current) return;
+          auditWebrtc('ICE_SERVERS', { shape: info.shape, count: info.count, usable: info.usable, turn: info.turn });
+          auditWebrtc('OFFER_KEYS', { top: JSON.stringify(info.topKeys), ice: JSON.stringify(info.iceKeys) });
+          if (info.relayRequested && !info.relayApplied) auditWebrtc('NO_TURN_SERVERS', { code: 'no_turn_servers', relay: false });
+        },
         onState: (state) => {
           if (seq !== startSeqRef.current) return;
           if (state === 'path_udp' || state === 'path_tcp_relay' || state === 'path_other') {

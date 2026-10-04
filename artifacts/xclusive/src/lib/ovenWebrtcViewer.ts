@@ -50,6 +50,23 @@ export interface WebrtcViewerCallbacks {
   onFailed: (reason: WebrtcFailReason) => void;
   /** De 5 em 5 s depois do primeiro frame. */
   onStats?: (stats: WebrtcViewerStats) => void;
+  /** Uma vez por offer: só contagens, booleanos e NOMES de chaves (nunca valores). */
+  onIceInfo?: (info: WebrtcIceInfo) => void;
+}
+
+export interface WebrtcIceInfo {
+  /** Como veio o campo ice_servers: ausente, array ou outro formato. */
+  shape: 'absent' | 'array' | 'non_array';
+  /** Entradas recebidas e entradas utilizáveis (com `urls`). */
+  count: number;
+  usable: number;
+  /** Algum URL é turn: ou turns:. */
+  turn: boolean;
+  relayRequested: boolean;
+  relayApplied: boolean;
+  /** Nomes das chaves de topo do offer e dos campos das entradas de ice_servers. */
+  topKeys: string[];
+  iceKeys: string[];
 }
 
 export interface WebrtcViewerTimings {
@@ -98,11 +115,31 @@ export function isWebrtcViewerSupported(): boolean {
   );
 }
 
+/** Só nomes simples de chaves: um nome estranho nunca é registado (podia esconder um valor). */
+function safeKeyNames(keys: string[]): string[] {
+  const out = new Set<string>();
+  for (const k of keys) out.add(/^[A-Za-z0-9_]{1,32}$/.test(k) ? k : '?');
+  return [...out].sort().slice(0, 20);
+}
+
+interface BuiltIceServers {
+  servers: RTCIceServer[];
+  shape: WebrtcIceInfo['shape'];
+  count: number;
+  usable: number;
+  turn: boolean;
+  iceKeys: string[];
+}
+
 /** Adiciona ao TURN do OME uma cópia com o IP substituído pelo host da WebSocket (como o OvenPlayer). */
-function buildIceServers(raw: any, wsHost: string): RTCIceServer[] {
-  if (!Array.isArray(raw)) return [];
+function buildIceServers(raw: any, wsHost: string): BuiltIceServers {
   const out: RTCIceServer[] = [];
+  const keys: string[] = [];
+  if (raw === undefined || raw === null) return { servers: out, shape: 'absent', count: 0, usable: 0, turn: false, iceKeys: [] };
+  if (!Array.isArray(raw)) return { servers: out, shape: 'non_array', count: 0, usable: 0, turn: false, iceKeys: [] };
+  let turn = false;
   for (const s of raw) {
+    if (s && typeof s === 'object') keys.push(...Object.keys(s));
     if (!s || !s.urls) continue;
     const urls: string[] = (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u: unknown) => typeof u === 'string');
     if (urls.length === 0) continue;
@@ -110,13 +147,14 @@ function buildIceServers(raw: any, wsHost: string): RTCIceServer[] {
       const ip = urls[0].match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/)?.[0];
       if (ip) urls.push(urls[0].replace(ip, wsHost));
     }
+    if (urls.some((u) => /^turns?:/i.test(u))) turn = true;
     const server: RTCIceServer = { urls };
     const username = s.username ?? s.user_name;
     if (username) server.username = username;
     if (s.credential) server.credential = s.credential;
     out.push(server);
   }
-  return out;
+  return { servers: out, shape: 'array', count: raw.length, usable: out.length, turn, iceKeys: safeKeyNames(keys) };
 }
 
 export function connectOvenWebrtcViewer(options: WebrtcViewerOptions): WebrtcViewerSession {
@@ -307,10 +345,29 @@ export function connectOvenWebrtcViewer(options: WebrtcViewerOptions): WebrtcVie
       /* sem host */
     }
 
+    const ice = buildIceServers(msg.ice_servers ?? msg.iceServers, wsHost);
+    // 'relay' sem nenhum servidor TURN não recolhe candidatos e o ICE nunca arranca: nesse caso fica 'all'.
+    const relayRequested = options.iceTransportPolicy === 'relay';
+    const relayApplied = relayRequested && ice.turn;
+    try {
+      callbacks.onIceInfo?.({
+        shape: ice.shape,
+        count: ice.count,
+        usable: ice.usable,
+        turn: ice.turn,
+        relayRequested,
+        relayApplied,
+        topKeys: msg && typeof msg === 'object' ? safeKeyNames(Object.keys(msg)) : [],
+        iceKeys: ice.iceKeys,
+      });
+    } catch {
+      /* o registo nunca interrompe a ligação */
+    }
+
     try {
       pc = new RTCPeerConnection({
-        iceServers: buildIceServers(msg.ice_servers ?? msg.iceServers, wsHost),
-        iceTransportPolicy: options.iceTransportPolicy ?? 'all',
+        iceServers: ice.servers,
+        iceTransportPolicy: relayRequested ? (relayApplied ? 'relay' : 'all') : (options.iceTransportPolicy ?? 'all'),
       });
     } catch {
       fail('unsupported');
