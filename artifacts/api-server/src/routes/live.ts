@@ -326,78 +326,19 @@ function getHlsEnabled(log?: { warn?: (msg: string) => void }): boolean {
   return true;
 }
 
-// ── Limites de capacidade do WebRTC dos espectadores ──────────────────────────
-// O /playback só inclui `webrtc` se, além do modo, houver capacidade:
-//   • espectadores da live < LIVE_WEBRTC_MAX_VIEWERS_PER_LIVE (defeito 15)
-//   • espectadores em todas as lives ativas < LIVE_WEBRTC_MAX_VIEWERS_TOTAL (defeito 30)
-// Atingido o limite o espectador recebe só { streamKey } e usa o HLS (HTTP 200, sem erro).
-// admin e superadmin ignoram os limites. Variáveis lidas a cada pedido; inteiros ≥ 0
-// (0 = ninguém, exceto admin); por definir ou inválidas → defeito. Um limite por live
-// maior do que o total fica limitado pelo total.
-//
-// ATENÇÃO — como se conta: pelas salas do socket.io em memória (nunca pela coluna
-// total_visualizadores, que deriva após reinícios). A contagem INCLUI os espectadores
-// do HLS (os sockets não distinguem o transporte), por isso estes limites são valores
-// CONSERVADORES, a rever depois do teste de carga. Fora da contagem: a criadora da
-// live e o próprio pedido (um socket do próprio utilizador; uma 2.ª aba conta).
-// Só é válido com uma instância (PM2 em fork); em cluster seria preciso o adaptador Redis.
-const WEBRTC_DEFAULT_MAX_PER_LIVE = 15;
-const WEBRTC_DEFAULT_MAX_TOTAL = 30;
-/**
- * Com LIVE_HLS_ENABLED=false os limites acima são MOLES (só avisam). Só se recusa (live cheia)
- * quando o total de espectadores atinge LIVE_WEBRTC_HARD_CEILING_TOTAL (defeito 120).
- */
-const WEBRTC_DEFAULT_HARD_CEILING_TOTAL = 120;
-/** Quem acabou de receber `webrtc` mantém-no (reconexões) durante este tempo. */
-const WEBRTC_REGRANT_GRACE_MS = 2 * 60 * 1000;
-/** No máximo um aviso de "limite atingido" por este intervalo. */
-const WEBRTC_CAPACITY_WARN_INTERVAL_MS = 60 * 1000;
+// ── Disponibilidade do WebRTC dos espectadores ────────────────────────────────
+// Decisão de produto: NUNCA se limita o número de espectadores de uma live. Não há contagem de
+// espectadores, reservas nem teto: o /playback só depende do modo (LIVE_WEBRTC_VIEWER_MODE) e do
+// segredo do token.
 
-const warnedInvalidLimitVars = new Set<string>();
-function readLimit(name: string, fallback: number): number {
-  const raw = (process.env[name] ?? "").trim();
-  if (raw === "") return fallback;
-  if (/^\d{1,7}$/.test(raw)) return Number(raw);
-  if (!warnedInvalidLimitVars.has(name)) {
-    warnedInvalidLimitVars.add(name);
-    logger.warn({ variable: name, default: fallback }, "Variável de limite WebRTC inválida (esperado inteiro ≥ 0) — a usar o defeito.");
-  }
-  return fallback;
-}
-
-/** Limites efetivos: o limite por live nunca excede o total. */
-function getWebrtcLimits(): { perLive: number; total: number } {
-  const total = readLimit("LIVE_WEBRTC_MAX_VIEWERS_TOTAL", WEBRTC_DEFAULT_MAX_TOTAL);
-  const perLive = Math.min(readLimit("LIVE_WEBRTC_MAX_VIEWERS_PER_LIVE", WEBRTC_DEFAULT_MAX_PER_LIVE), total);
-  return { perLive, total };
-}
-
-/** Teto duro (só vale com o HLS desligado). */
-function getWebrtcHardCeiling(): number {
-  return readLimit("LIVE_WEBRTC_HARD_CEILING_TOTAL", WEBRTC_DEFAULT_HARD_CEILING_TOTAL);
-}
-
-// Regista uma vez, no arranque, os limites efetivos (só números). O setTimeout garante
-// que o .env já foi carregado quando as variáveis são lidas.
+// Regista uma vez, no arranque, a configuração efetiva (só o interruptor do HLS e o modo; nunca
+// segredos). O setTimeout garante que o .env já foi carregado quando as variáveis são lidas.
 setTimeout(() => {
-  const { perLive, total } = getWebrtcLimits();
-  logger.info(
-    { perLive, total, regrantGraceSeconds: WEBRTC_REGRANT_GRACE_MS / 1000 },
-    "Limites WebRTC de espectadores (a contagem inclui espectadores HLS: valores conservadores, rever após o teste de carga)",
-  );
-
   const hlsEnabled = getHlsEnabled({ warn: (m) => logger.warn(m) });
-  logger.info({ hlsEnabled, hardCeilingTotal: getWebrtcHardCeiling() }, "Interruptor do HLS (LIVE_HLS_ENABLED) e teto duro WebRTC");
+  const mode = getWebrtcViewerMode({ warn: (m) => logger.warn(m) });
+  logger.info({ hlsEnabled, webrtcViewerMode: mode }, "Configuração das lives (LIVE_HLS_ENABLED, LIVE_WEBRTC_VIEWER_MODE)");
   if (!hlsEnabled) {
-    const rawCeiling = (process.env.LIVE_WEBRTC_HARD_CEILING_TOTAL ?? "").trim();
-    if (!/^\d{1,7}$/.test(rawCeiling)) {
-      logger.warn(
-        { default: WEBRTC_DEFAULT_HARD_CEILING_TOTAL },
-        "LIVE_HLS_ENABLED=false e LIVE_WEBRTC_HARD_CEILING_TOTAL não definido: a valer o defeito de 120.",
-      );
-    }
-    // Sem HLS não há reserva: uma configuração que não deixe ninguém ver é um erro grave.
-    const mode = getWebrtcViewerMode({ warn: (m) => logger.warn(m) });
+    // Sem HLS não há alternativa: uma configuração que não deixe ninguém ver é um erro grave.
     if (mode === "off") {
       logger.error("LIVE_HLS_ENABLED=false com LIVE_WEBRTC_VIEWER_MODE=off: NINGUÉM consegue ver as lives (503 webrtc_unavailable).");
     } else if (mode === "admin") {
@@ -409,168 +350,21 @@ setTimeout(() => {
   }
 }, 0);
 
-/** Concessões recentes de `webrtc` (utilizador+live): tolerância de reconexão e reserva de vaga. */
-const webrtcGrants = new Map<string, { userId: number; liveId: number; until: number }>();
-
-let lastCapacityWarnAt = 0;
-let capacityDenialsSuppressed = 0;
-type CapacityNote = {
-  scope: "per_live" | "total" | "count_unavailable";
-  /** limit: recusa (HLS ligado) · soft: limite mole ultrapassado (HLS desligado) · ceiling: teto duro */
-  kind: "limit" | "soft" | "ceiling";
-  liveId: number;
-  count: number;
-  limit: number;
-};
-/** Um aviso por minuto (todos os tipos), sem dados pessoais (nem req.log, que inclui o IP). */
-function noteWebrtcCapacityReached(info: CapacityNote): void {
-  const now = Date.now();
-  if (now - lastCapacityWarnAt >= WEBRTC_CAPACITY_WARN_INTERVAL_MS) {
-    const msg =
-      info.kind === "soft"
-        ? "Limite WebRTC de espectadores ultrapassado (limite mole, HLS desligado) — a emitir WebRTC na mesma"
-        : info.kind === "ceiling"
-          ? "Teto duro WebRTC de espectadores atingido (HLS desligado) — live cheia"
-          : "Limite WebRTC de espectadores atingido — novos espectadores usam HLS";
-    logger.warn({ ...info, suppressed: capacityDenialsSuppressed }, msg);
-    lastCapacityWarnAt = now;
-    capacityDenialsSuppressed = 0;
-  } else {
-    capacityDenialsSuppressed += 1;
-  }
-}
-
-type WebrtcDecision =
-  | { allowed: true; reservedNew: boolean }
-  | { allowed: false; code: "live_full" | "webrtc_unavailable" };
-
-/** Liberta uma vaga reservada (compra que não chegou a cobrar). */
-function releaseWebrtcSlot(userId: number, liveId: number): void {
-  webrtcGrants.delete(`${liveId}:${userId}`);
-}
-
 /**
- * Há capacidade WebRTC para este pedido? A contagem e a reserva da vaga são síncronas
- * (sem await entre elas), por isso pedidos simultâneos não ultrapassam o limite.
- *  • HLS ligado: limites duros (acima → só HLS); falha da contagem → só admin/superadmin.
- *  • HLS desligado: limites MOLES (avisa e emite na mesma); só o teto duro recusa (live_full);
- *    falha da contagem → emite na mesma (não há HLS para onde cair).
- * admin e superadmin ignoram limites e teto.
+ * Este utilizador pode receber WebRTC? Só o modo (off | admin | all) e o segredo do token contam.
+ * Usado pelo /playback e, antes de cobrar, pela compra do bilhete.
  */
-async function webrtcCapacityDecision(userId: number, liveId: number, hlsEnabled: boolean): Promise<WebrtcDecision> {
-  const now = Date.now();
-  for (const [k, g] of webrtcGrants) if (g.until <= now) webrtcGrants.delete(k);
-
-  const grantKey = `${liveId}:${userId}`;
-  const grant = () => webrtcGrants.set(grantKey, { userId, liveId, until: now + WEBRTC_REGRANT_GRACE_MS });
-
-  // Tolerância: quem acabou de receber webrtc nesta live mantém-no (não renova a validade).
-  if (webrtcGrants.has(grantKey)) return { allowed: true, reservedNew: false };
-
-  const { perLive: maxPerLive, total: maxTotal } = getWebrtcLimits();
-  const ceiling = getWebrtcHardCeiling();
-  let blockedBy: CapacityNote | null = null;
-
-  try {
-    const active = await db
-      .select({ id: liveStreamsTable.id, criadorId: liveStreamsTable.criadorId })
-      .from(liveStreamsTable)
-      .where(eq(liveStreamsTable.status, "ao_vivo"));
-
-    // ── secção síncrona: contar + decidir + reservar ──
-    const io = getIO();
-    const rooms = io.sockets.adapter.rooms;
-    const sockets = io.sockets.sockets;
-    const activeIds = new Set(active.map((l) => l.id));
-    let perLive = 0;
-    let total = 0;
-    const presentByLive = new Map<number, Set<number>>();
-
-    for (const live of active) {
-      const room = rooms.get(`live:${live.id}`);
-      const present = new Set<number>();
-      presentByLive.set(live.id, present);
-      if (!room) continue;
-      let n = 0;
-      let skippedSelf = false;
-      for (const sid of room) {
-        const uid = sockets.get(sid)?.data.userId;
-        if (uid === undefined) continue;
-        if (uid === live.criadorId) continue; // a criadora fica fora da contagem
-        present.add(uid);
-        if (live.id === liveId && uid === userId && !skippedSelf) {
-          skippedSelf = true; // o próprio pedido não conta
-          continue;
-        }
-        n += 1;
-      }
-      total += n;
-      if (live.id === liveId) perLive = n;
-    }
-    // Reservas: concessões recentes de outros utilizadores que ainda não estão na sala.
-    for (const g of webrtcGrants.values()) {
-      if (g.userId === userId || !activeIds.has(g.liveId)) continue;
-      if (presentByLive.get(g.liveId)?.has(g.userId)) continue;
-      total += 1;
-      if (g.liveId === liveId) perLive += 1;
-    }
-
-    if (hlsEnabled) {
-      if (perLive >= maxPerLive) blockedBy = { scope: "per_live", kind: "limit", liveId, count: perLive, limit: maxPerLive };
-      else if (total >= maxTotal) blockedBy = { scope: "total", kind: "limit", liveId, count: total, limit: maxTotal };
-    } else if (total >= ceiling) {
-      blockedBy = { scope: "total", kind: "ceiling", liveId, count: total, limit: ceiling };
-    } else if (perLive >= maxPerLive) {
-      noteWebrtcCapacityReached({ scope: "per_live", kind: "soft", liveId, count: perLive, limit: maxPerLive });
-    } else if (total >= maxTotal) {
-      noteWebrtcCapacityReached({ scope: "total", kind: "soft", liveId, count: total, limit: maxTotal });
-    }
-
-    if (!blockedBy) {
-      grant();
-      return { allowed: true, reservedNew: true };
-    }
-  } catch {
-    if (!hlsEnabled) {
-      // Contagem indisponível e sem HLS: não bloqueia ninguém (só avisa).
-      noteWebrtcCapacityReached({ scope: "count_unavailable", kind: "soft", liveId, count: -1, limit: ceiling });
-      grant();
-      return { allowed: true, reservedNew: true };
-    }
-    // Contagem indisponível com HLS ligado: falha fechada (o espectador usa o HLS).
-    blockedBy = { scope: "count_unavailable", kind: "limit", liveId, count: -1, limit: maxTotal };
-  }
-
-  // Excedido: admin e superadmin ignoram os limites.
-  const [me] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  if (isAdminRole(me?.role)) return { allowed: true, reservedNew: false };
-  noteWebrtcCapacityReached(blockedBy);
-  return { allowed: false, code: "live_full" };
-}
-
-/**
- * Este utilizador pode receber WebRTC agora? Modo (off | admin | all), segredo do token e
- * capacidade. Usado pelo /playback e, antes de cobrar, pela compra do bilhete.
- */
-async function evaluateWebrtcAccess(
-  userId: number,
-  liveId: number,
-  hlsEnabled: boolean,
-  log?: { warn?: (msg: string) => void },
-): Promise<WebrtcDecision> {
+async function isWebrtcAvailableFor(userId: number, log?: { warn?: (msg: string) => void }): Promise<boolean> {
   const mode = getWebrtcViewerMode(log);
-  if (mode === "off" || !isViewerTokenConfigured()) return { allowed: false, code: "webrtc_unavailable" };
+  if (mode === "off" || !isViewerTokenConfigured()) return false;
   if (mode === "admin") {
     const [me] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    return isAdminRole(me?.role) ? { allowed: true, reservedNew: false } : { allowed: false, code: "webrtc_unavailable" };
+    return isAdminRole(me?.role);
   }
-  return webrtcCapacityDecision(userId, liveId, hlsEnabled);
+  return true;
 }
 
-const WEBRTC_UNAVAILABLE_MESSAGES = {
-  live_full: "Esta live está cheia. Tenta novamente dentro de instantes.",
-  webrtc_unavailable: "A transmissão ao vivo não está disponível neste momento.",
-} as const;
+const WEBRTC_UNAVAILABLE_MESSAGE = "A transmissão ao vivo não está disponível neste momento.";
 
 // ── GET /api/live/:streamId/playback ──────────────────────────────────────
 // Devolve a streamKey SÓ a quem tem acesso (gratuita: qualquer sessão; paga:
@@ -606,12 +400,11 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
 
     // WebRTC (OvenMediaEngine): URL com token de vida curta, novo a cada pedido
     // (uma reconexão volta a chamar este endpoint). Só é emitido se o modo o permitir
-    // (off: ninguém; admin: admin/superadmin; all: todos, dentro dos limites de capacidade)
-    // e houver segredo configurado.
+    // (off: ninguém; admin: admin/superadmin; all: todos) e houver segredo configurado.
     // Caso contrário a resposta é a de sempre, só com a streamKey.
     const hlsEnabled = getHlsEnabled(req.log);
-    const decision = await evaluateWebrtcAccess(req.userId!, stream.id, hlsEnabled, req.log);
-    const viewerToken = decision.allowed
+    const webrtcAllowed = await isWebrtcAvailableFor(req.userId!, req.log);
+    const viewerToken = webrtcAllowed
       ? signViewerToken({ userId: req.userId!, liveId: stream.id, streamKey: stream.streamKey })
       : null;
     const webrtc = viewerToken
@@ -621,10 +414,7 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
     if (!hlsEnabled) {
       // Sem HLS: nunca se devolve o campo streamKey; sem WebRTC não há nada para ver (503).
       if (!webrtc) {
-        const code = decision.allowed ? "webrtc_unavailable" : decision.code;
-        if (decision.allowed && decision.reservedNew) releaseWebrtcSlot(req.userId!, stream.id);
-        if (code === "live_full") res.set("Retry-After", "5");
-        res.status(503).json({ code, error: WEBRTC_UNAVAILABLE_MESSAGES[code] });
+        res.status(503).json({ code: "webrtc_unavailable", error: WEBRTC_UNAVAILABLE_MESSAGE });
         return;
       }
       res.json({ webrtc });
@@ -649,8 +439,6 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
 class TicketNotInsertedError extends Error {}
 
 router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  // Vaga WebRTC reservada para este comprador (só com o HLS desligado); libertada se não cobrar.
-  let reservedSlot: { userId: number; liveId: number } | null = null;
   try {
     const streamId = Number(req.params.streamId);
     const buyerId = req.userId!;
@@ -682,26 +470,18 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       return;
     }
 
-    // Com o HLS desligado, quem compra só pode ver por WebRTC: verifica a capacidade e RESERVA a vaga
-    // ANTES de qualquer débito. Sem vaga (ou com o WebRTC indisponível) responde 503 sem cobrar.
-    // Quem já tem bilhete não reserva nem paga de novo (a transação devolve `jaTinha`).
+    // Com o HLS desligado, quem compra só pode ver por WebRTC: verifica a disponibilidade (modo e segredo)
+    // ANTES de qualquer débito. Se não estiver disponível responde 503 sem cobrar. Quem já tem bilhete
+    // não é bloqueado nem paga de novo (a transação devolve `jaTinha`). Com o HLS ligado nunca bloqueia.
     if (!getHlsEnabled(req.log)) {
       const [owned] = await db
         .select({ id: liveTicketsTable.id })
         .from(liveTicketsTable)
         .where(and(eq(liveTicketsTable.liveId, streamId), eq(liveTicketsTable.userId, buyerId)))
         .limit(1);
-      if (!owned) {
-        const decision = await evaluateWebrtcAccess(buyerId, streamId, false, req.log);
-        if (!decision.allowed) {
-          if (decision.code === "live_full") res.set("Retry-After", "5");
-          res.status(503).json({
-            code: decision.code,
-            error: `${WEBRTC_UNAVAILABLE_MESSAGES[decision.code]} Não foste cobrado.`,
-          });
-          return;
-        }
-        if (decision.reservedNew) reservedSlot = { userId: buyerId, liveId: streamId };
+      if (!owned && !(await isWebrtcAvailableFor(buyerId, req.log))) {
+        res.status(503).json({ code: "webrtc_unavailable", error: `${WEBRTC_UNAVAILABLE_MESSAGE} Não foste cobrado.` });
+        return;
       }
     }
 
@@ -801,17 +581,12 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       result = { jaTinha: true as const, saldo: Number(u?.saldo ?? 0) };
     }
 
-    // Já tinha bilhete: nada foi cobrado, não fica vaga reservada por esta compra.
-    if (result.jaTinha && reservedSlot) releaseWebrtcSlot(reservedSlot.userId, reservedSlot.liveId);
-
     res.status(result.jaTinha ? 200 : 201).json({
       temAcesso: true,
       jaTinha: result.jaTinha,
       saldo: result.saldo,
     });
   } catch (err) {
-    // A compra não se concluiu (nada cobrado): liberta a vaga reservada.
-    if (reservedSlot) releaseWebrtcSlot(reservedSlot.userId, reservedSlot.liveId);
     if (err instanceof PaymentError) {
       res.status(err.statusCode).json({ error: err.message });
       return;
