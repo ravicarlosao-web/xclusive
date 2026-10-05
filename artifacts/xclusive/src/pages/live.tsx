@@ -86,7 +86,7 @@ function timeAgo(iso: string): string {
 /** Resposta de GET /api/live/:id/playback já reduzida ao que o player precisa. */
 type PlaybackResult =
   | { ok: true; streamKey: string | null; webrtcUrl: string | null } // streamKey null = HLS desligado
-  | { ok: false; status: number | null; code?: 'live_full' | 'webrtc_unavailable' }; // status null = erro de rede
+  | { ok: false; status: number | null; code?: 'webrtc_unavailable' }; // status null = erro de rede
 
 const WEBRTC_MAX_ATTEMPTS = 3;
 const WEBRTC_RETRY_DELAYS_MS = [0, 1500, 4000];
@@ -213,7 +213,7 @@ function LiveVideoPlayer({
   const webrtcPathRef = useRef<'udp' | 'tcp_relay' | 'other' | null>(null);
   const retryBlockedUntilRef = useRef(0);
   const [retryCooling, setRetryCooling] = useState(false);
-  const [errorKind, setErrorKind] = useState<'generic' | 'live_full' | 'unavailable' | 'unsupported' | 'denied' | null>(null);
+  const [errorKind, setErrorKind] = useState<'generic' | 'unavailable' | 'unsupported' | 'denied' | null>(null);
   /** Há HLS? (o /playback devolve a streamKey só com LIVE_HLS_ENABLED=true) */
   const hlsAvailable = !!streamKey;
   const liveKey = liveId !== null ? `live:${liveId}` : null;
@@ -430,7 +430,7 @@ function LiveVideoPlayer({
   };
 
   /** Estado de erro claro (sem HLS para onde cair): mensagem + "Tentar novamente". */
-  const showWebrtcError = (kind: 'generic' | 'live_full' | 'unavailable' | 'unsupported' | 'denied', message: string) => {
+  const showWebrtcError = (kind: 'generic' | 'unavailable' | 'unsupported' | 'denied', message: string) => {
     clearWebrtc();
     auditWebrtc('ERROR_STATE', { kind });
     setIsPlaying(false);
@@ -528,14 +528,10 @@ function LiveVideoPlayer({
         showWebrtcError('denied', pb.status === 409 ? 'A transmissão terminou.' : 'Não tens acesso a esta transmissão.');
         return;
       }
-      if (pb.status === 503 && !hlsAvailable && (pb.code === 'live_full' || pb.code === 'webrtc_unavailable')) {
-        // HLS desligado: live cheia (teto duro) ou WebRTC indisponível.
+      if (pb.status === 503 && !hlsAvailable && pb.code === 'webrtc_unavailable') {
+        // HLS desligado e WebRTC indisponível (modo off ou segredo em falta).
         auditWebrtc('PLAYBACK_UNAVAILABLE', { code: pb.code });
-        if (pb.code === 'live_full') {
-          showWebrtcError('live_full', 'Esta live está cheia. Tenta novamente dentro de instantes.');
-        } else {
-          showWebrtcError('unavailable', 'A transmissão ao vivo não está disponível neste momento.');
-        }
+        showWebrtcError('unavailable', 'A transmissão ao vivo não está disponível neste momento.');
         return;
       }
       auditWebrtc('PLAYBACK_ERROR', { status: pb.status ?? 0 });
@@ -765,13 +761,11 @@ function LiveVideoPlayer({
               {errorMessage || 'A aguardar o início da transmissão...'}
             </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-              {errorKind === 'live_full'
-                ? 'Há muitos espectadores neste momento.'
-                : errorKind === 'unsupported'
-                  ? 'Abre o link no Chrome ou no Safari para ver a transmissão.'
-                  : errorKind
-                    ? 'Verifica a tua ligação à internet e tenta novamente.'
-                    : 'O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.'}
+              {errorKind === 'unsupported'
+                ? 'Abre o link no Chrome ou no Safari para ver a transmissão.'
+                : errorKind
+                  ? 'Verifica a tua ligação à internet e tenta novamente.'
+                  : 'O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.'}
             </p>
           </div>
           {errorKind !== 'unsupported' && (
@@ -1082,7 +1076,7 @@ export default function LivePage() {
       const res = await fetch(`/api/live/${streamId}/playback`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // 503 (live cheia / WebRTC indisponível, só sem HLS): sem chave; o player mostra o estado.
+      // 503 (WebRTC indisponível, só sem HLS): sem chave; o player mostra o estado.
       if (res.status === 503) return { streamKey: null };
       if (!res.ok) throw new Error('Sem acesso à live');
       return res.json();
@@ -1104,7 +1098,7 @@ export default function LivePage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        const code = body?.code === 'live_full' || body?.code === 'webrtc_unavailable' ? body.code : undefined;
+        const code = body?.code === 'webrtc_unavailable' ? body.code : undefined;
         return { ok: false, status: res.status, code };
       }
       const data = await res.json();
