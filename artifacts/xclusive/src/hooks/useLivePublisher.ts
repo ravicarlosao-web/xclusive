@@ -33,24 +33,50 @@ function applyVideoContentHint(track: MediaStreamTrack | undefined): void {
   }
 }
 
+/** pc com uma aplicação do teto em curso (o ICE `connected` dispara dois callbacks no mesmo instante). */
+const senderCapInFlight = new WeakSet<RTCPeerConnection>();
+
 /**
  * Camada 2: fixa o máximo no sender de vídeo. Idempotente (reaplica-se a cada `connected`);
  * os `encodings` persistem numa renegociação do mesmo pc e no `replaceTrack` da troca de
  * câmara; uma reconexão cria um pc novo, que volta a passar por aqui.
+ *
+ * Uma só aplicação de cada vez por pc (duas chamadas seguidas invalidavam o getParameters da
+ * primeira e a outra falhava com InvalidStateError). Só aplica com a negociação estável e o
+ * sender com encodings; lê getParameters() de fresco e chama setParameters uma vez; se falhar
+ * com InvalidStateError repete uma vez após um pequeno atraso. Nunca propaga erros: a camada 1
+ * (SDP) já limita o bitrate.
  */
 async function applySenderMaxBitrate(pc: RTCPeerConnection, maxKbps: number): Promise<void> {
-  if (!(maxKbps > 0)) return;
+  if (!(maxKbps > 0) || senderCapInFlight.has(pc)) return;
+  senderCapInFlight.add(pc);
   try {
     const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
     if (!sender) return;
-    const params = sender.getParameters();
-    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
-    params.encodings[0].maxBitrate = maxKbps * 1000;
-    await sender.setParameters(params);
-    console.info(`[AUDIT][WebRTC-Publisher] maxBitrate aplicado: ${maxKbps} kbps (SDP + sender)`);
-  } catch (err: any) {
+    let failure = 'nao_pronto';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (pc.signalingState === 'stable') {
+          const params = sender.getParameters();
+          if (params.encodings && params.encodings.length > 0) {
+            params.encodings[0].maxBitrate = maxKbps * 1000;
+            await sender.setParameters(params);
+            console.info(`[AUDIT][WebRTC-Publisher] maxBitrate aplicado: ${maxKbps} kbps (SDP + sender)`);
+            return;
+          }
+        }
+      } catch (err: any) {
+        failure = err?.name ?? 'erro';
+        if (failure !== 'InvalidStateError') break;
+      }
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 500));
+    }
     // Só o nome do erro (nunca mensagens, que podem incluir URLs).
+    console.warn('[AUDIT][WebRTC-Publisher] setParameters(maxBitrate) falhou:', failure);
+  } catch (err: any) {
     console.warn('[AUDIT][WebRTC-Publisher] setParameters(maxBitrate) falhou:', err?.name ?? 'erro');
+  } finally {
+    senderCapInFlight.delete(pc);
   }
 }
 
