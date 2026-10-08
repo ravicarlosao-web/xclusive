@@ -153,8 +153,18 @@ export function useSocket(
     const socket = io({
       path: '/socket.io',
       transports: ['websocket', 'polling'],
-      // Lê o token a cada tentativa (pode ter sido renovado durante uma queda longa)
-      auth: (cb) => cb({ token: localStorage.getItem('xclusive_token') ?? token }),
+      // Lê o token a cada tentativa (pode ter sido renovado durante uma queda longa). Sem token (logout
+      // noutro separador) envia {} e o servidor rejeita (connect_error, o socket.io não volta a tentar);
+      // se o localStorage estiver indisponível usa o token do arranque.
+      auth: (cb) => {
+        let current: string | null = token;
+        try {
+          current = localStorage.getItem('xclusive_token');
+        } catch {
+          /* mantém o token do arranque */
+        }
+        cb(current ? { token: current } : {});
+      },
       // Reconectar sempre (um deploy pode deixar o backend em baixo durante minutos), com intervalo
       // crescente e jitter para não martelar o servidor quando muitos clientes voltam ao mesmo tempo.
       reconnectionAttempts: Infinity,
