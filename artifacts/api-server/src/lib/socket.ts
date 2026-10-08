@@ -26,6 +26,8 @@ declare module "socket.io" {
 // ─── Singleton ────────────────────────────────────────────────────────────────
 
 let io: SocketServer | null = null;
+/** Reposição do contador no arranque; as escritas do contador esperam por ela (nunca rejeita). */
+let startupReset: Promise<void> = Promise.resolve();
 
 export function getIO(): SocketServer {
   if (!io) throw new Error("Socket.io não foi inicializado. Chama initSocket() primeiro.");
@@ -264,11 +266,16 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 
   // Depois de um reinício não há ninguém ligado: o valor guardado pelo processo anterior está desactualizado.
   // Os clientes reconectam, voltam a emitir viewer:join e o número converge para o real.
-  void db
+  startupReset = db
     .update(liveStreamsTable)
     .set({ totalVisualizadores: 0 })
     .where(eq(liveStreamsTable.status, "ao_vivo"))
-    .catch((err) => logger.error({ err }, "Erro ao repor o contador de espectadores no arranque"));
+    .then(
+      () => undefined,
+      (err) => {
+        logger.error({ err }, "Erro ao repor o contador de espectadores no arranque");
+      },
+    );
 
   logger.info("Socket.io inicializado");
   return io;
@@ -309,6 +316,7 @@ function countRoomViewers(streamId: number, criadorId: number): number {
 /** Recalcula o número de espectadores a partir da sala, guarda-o na BD e emite-o para toda a sala */
 async function emitViewerCount(streamId: number): Promise<void> {
   if (!io) return;
+  await startupReset; // o reset do arranque nunca ultrapassa (nem apaga) uma contagem real
   const [stream] = await db
     .select({ criadorId: liveStreamsTable.criadorId })
     .from(liveStreamsTable)
