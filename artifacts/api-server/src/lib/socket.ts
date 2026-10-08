@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { Server as SocketServer, type Socket } from "socket.io";
 import { verifyToken } from "./auth";
 import { db, liveStreamsTable, usersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { userHasLiveAccess } from "./liveAccess";
 
@@ -149,13 +149,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         await socket.join(`live:${streamId}`);
         socket.data.currentStreamId = streamId;
 
-        // Incrementar contador de visualizadores na BD
-        await db
-          .update(liveStreamsTable)
-          .set({ totalVisualizadores: sql`${liveStreamsTable.totalVisualizadores} + 1` })
-          .where(eq(liveStreamsTable.id, streamId));
-
-        // Emitir contagem actualizada para todos na sala
+        // Emitir contagem actualizada (derivada das ligações reais da sala) para todos na sala
         await emitViewerCount(streamId);
 
         // Notificar os outros espectadores na sala que este utilizador entrou
@@ -268,6 +262,14 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     });
   });
 
+  // Depois de um reinício não há ninguém ligado: o valor guardado pelo processo anterior está desactualizado.
+  // Os clientes reconectam, voltam a emitir viewer:join e o número converge para o real.
+  void db
+    .update(liveStreamsTable)
+    .set({ totalVisualizadores: 0 })
+    .where(eq(liveStreamsTable.status, "ao_vivo"))
+    .catch((err) => logger.error({ err }, "Erro ao repor o contador de espectadores no arranque"));
+
   logger.info("Socket.io inicializado");
   return io;
 }
@@ -279,14 +281,6 @@ async function handleLeave(socket: Socket, streamId: number): Promise<void> {
     await socket.leave(`live:${streamId}`);
     socket.data.currentStreamId = null;
 
-    // Decrementar, mas nunca ficar negativo
-    await db
-      .update(liveStreamsTable)
-      .set({
-        totalVisualizadores: sql`GREATEST(${liveStreamsTable.totalVisualizadores} - 1, 0)`,
-      })
-      .where(eq(liveStreamsTable.id, streamId));
-
     await emitViewerCount(streamId);
     logger.debug({ userId: socket.data.userId, streamId }, "viewer:leave");
   } catch (err) {
@@ -294,17 +288,36 @@ async function handleLeave(socket: Socket, streamId: number): Promise<void> {
   }
 }
 
-/** Lê o totalVisualizadores actualizado e emite para toda a sala */
+/**
+ * Espectadores reais da sala: utilizadores únicos com pelo menos um socket ligado, sem a criadora.
+ * Derivado do estado actual das ligações (nunca incrementado/decrementado por eventos), por isso
+ * repetir ou perder um evento não o desvia e um reinício converge no primeiro join.
+ */
+function countRoomViewers(streamId: number, criadorId: number): number {
+  if (!io) return 0;
+  const room = io.sockets.adapter.rooms.get(`live:${streamId}`);
+  const users = new Set<number>();
+  if (room) {
+    for (const sid of room) {
+      const uid = io.sockets.sockets.get(sid)?.data.userId;
+      if (uid !== undefined && uid !== criadorId) users.add(uid);
+    }
+  }
+  return users.size;
+}
+
+/** Recalcula o número de espectadores a partir da sala, guarda-o na BD e emite-o para toda a sala */
 async function emitViewerCount(streamId: number): Promise<void> {
   if (!io) return;
   const [stream] = await db
-    .select({ totalVisualizadores: liveStreamsTable.totalVisualizadores })
+    .select({ criadorId: liveStreamsTable.criadorId })
     .from(liveStreamsTable)
     .where(eq(liveStreamsTable.id, streamId))
     .limit(1);
+  if (!stream) return;
 
-  io.to(`live:${streamId}`).emit("viewers:update", {
-    streamId,
-    count: stream?.totalVisualizadores ?? 0,
-  });
+  const count = countRoomViewers(streamId, stream.criadorId);
+  await db.update(liveStreamsTable).set({ totalVisualizadores: count }).where(eq(liveStreamsTable.id, streamId));
+
+  io.to(`live:${streamId}`).emit("viewers:update", { streamId, count });
 }
