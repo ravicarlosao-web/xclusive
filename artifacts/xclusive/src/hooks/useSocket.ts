@@ -153,10 +153,14 @@ export function useSocket(
     const socket = io({
       path: '/socket.io',
       transports: ['websocket', 'polling'],
-      auth: { token },
-      // Reconectar automaticamente até 5 vezes antes de desistir
-      reconnectionAttempts: 5,
+      // Lê o token a cada tentativa (pode ter sido renovado durante uma queda longa)
+      auth: (cb) => cb({ token: localStorage.getItem('xclusive_token') ?? token }),
+      // Reconectar sempre (um deploy pode deixar o backend em baixo durante minutos), com intervalo
+      // crescente e jitter para não martelar o servidor quando muitos clientes voltam ao mesmo tempo.
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      randomizationFactor: 0.5,
     });
 
     socketRef.current = socket;
@@ -168,9 +172,21 @@ export function useSocket(
       socket.emit('viewer:join', streamId);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       setIsConnected(false);
+      // O socket.io não reconecta sozinho quando é o servidor a fechar a ligação
+      if (reason === 'io server disconnect') socket.connect();
     });
+
+    // Voltou a rede: tenta já em vez de esperar pelo próximo intervalo (connect() sozinho não
+    // interrompe a espera do backoff; disconnect() + connect() reinicia-o)
+    const onOnline = () => {
+      if (!socket.connected) {
+        socket.disconnect();
+        socket.connect();
+      }
+    };
+    window.addEventListener('online', onOnline);
 
     socket.on('connect_error', (err) => {
       console.error('[Socket] Erro de conexão:', err.message);
@@ -244,6 +260,7 @@ export function useSocket(
 
     // ── Limpeza ──────────────────────────────────────────────────────────────
     return () => {
+      window.removeEventListener('online', onOnline);
       socket.emit('viewer:leave', streamId);
       socket.disconnect();
       socketRef.current = null;
