@@ -11,9 +11,7 @@ const ADMIN_ROLES = new Set(["admin", "superadmin"]);
 
 /**
  * Middleware that protects all /api/admin/* routes.
- * In mock mode (no real DB), a special mock token is accepted:
- *   Authorization: Bearer mock-admin-token
- * In production, a real JWT with role=admin|superadmin is required.
+ * A real JWT with role=admin|superadmin is always required (sem atalhos de desenvolvimento).
  */
 export function requireAdmin(
   req: AdminRequest,
@@ -29,16 +27,7 @@ export function requireAdmin(
 
   const token = authHeader.slice(7);
 
-  // ── Mock mode: accept a well-known mock token (desenvolvimento apenas) ────────
-  if (process.env.NODE_ENV !== "production" && token === "mock-admin-token") {
-    req.adminId = 1;
-    req.adminUsername = "admin";
-    req.adminRole = "admin";
-    next();
-    return;
-  }
-
-  // ── Production: validate JWT and check role ────────────────────────────────
+  // ── Validar o JWT e o papel ────────────────────────────────
   try {
     const payload = verifyToken(token) as { userId: number; username: string; role?: string };
 

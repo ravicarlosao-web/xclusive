@@ -10,8 +10,9 @@ import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 
 if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = "development";
-  logger.info("NODE_ENV não definido — definido automaticamente como 'development'.");
+  // Falha fechada: sem NODE_ENV o servidor corre como produção (nunca como desenvolvimento).
+  process.env.NODE_ENV = "production";
+  logger.warn("NODE_ENV não definido — a assumir 'production'. Define NODE_ENV=development só em desenvolvimento local.");
 }
 
 const rawPort = process.env["PORT"] || "8080";

@@ -1,9 +1,10 @@
 /**
  * Script de seed — apenas para desenvolvimento/teste.
- * Cria 3 contas de teste: utilizador, criador e administrador.
- * É idempotente: usa ON CONFLICT DO NOTHING, seguro de correr várias vezes.
+ * Cria 2 contas de teste (utilizador e criador). Uma conta de administrador só é criada se
+ * SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD estiverem definidas (nunca há admin com password fixa).
+ * Recusa correr fora de NODE_ENV=development. É idempotente (ON CONFLICT DO NOTHING).
  *
- * Executado automaticamente pelo scripts/post-merge.sh após `drizzle push`.
+ * Executado pelo scripts/post-merge.sh só quando NODE_ENV=development.
  */
 
 import "dotenv/config";
@@ -16,6 +17,12 @@ dotenv.config({ path: path.resolve(import.meta.dirname, "../../.env") });
 
 import { db, pool } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
+
+// Fail-closed: o seed cria contas com password conhecida, por isso só corre com NODE_ENV=development explícito.
+if (process.env.NODE_ENV !== "development") {
+  console.error("❌ Seed recusado: só corre com NODE_ENV=development (valor atual: " + (process.env.NODE_ENV ?? "não definido") + ").");
+  process.exit(1);
+}
 
 const PASSWORD = "password123";
 const SALT_ROUNDS = 10;
@@ -39,29 +46,49 @@ const SEED_USERS = [
     role: "user",
     bio: "Conta de criador verificado para testes.",
   },
-  {
-    username: "admin_teste",
-    email: "admin@xclusive.ao",
-    nomeExibicao: "Administrador",
-    tipoConta: "pessoal" as const,
-    verificado: true,
-    role: "admin",
-    bio: "Conta de administrador para testes.",
-  },
 ];
+
+// Admin opcional, só com credenciais vindas do ambiente (nunca com password fixa no código).
+const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim();
+const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+if (Boolean(adminEmail) !== Boolean(adminPassword)) {
+  console.error("❌ Seed recusado: define SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD juntas (ou nenhuma).");
+  process.exit(1);
+}
+if (adminPassword && adminPassword.length < 12) {
+  console.error("❌ Seed recusado: SEED_ADMIN_PASSWORD deve ter pelo menos 12 caracteres.");
+  process.exit(1);
+}
 
 async function seed() {
   console.log("🌱 A iniciar seed da base de dados...");
 
   const passwordHash = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
 
-  for (const u of SEED_USERS) {
+  const adminHash = adminEmail && adminPassword ? await bcrypt.hash(adminPassword, SALT_ROUNDS) : null;
+  const users = adminHash
+    ? [
+        ...SEED_USERS.map((u) => ({ ...u, hash: passwordHash })),
+        {
+          username: "admin_dev",
+          email: adminEmail!,
+          nomeExibicao: "Administrador",
+          tipoConta: "pessoal" as const,
+          verificado: true,
+          role: "admin",
+          bio: "Conta de administrador de desenvolvimento.",
+          hash: adminHash,
+        },
+      ]
+    : SEED_USERS.map((u) => ({ ...u, hash: passwordHash }));
+
+  for (const u of users) {
     await db
       .insert(usersTable)
       .values({
         username: u.username,
         email: u.email,
-        passwordHash,
+        passwordHash: u.hash,
         nomeExibicao: u.nomeExibicao,
         tipoConta: u.tipoConta,
         verificado: u.verificado,
@@ -81,7 +108,7 @@ async function seed() {
   console.log("✅ Seed concluído! Contas de teste (password: password123):");
   console.log("   fan@xclusive.ao     — utilizador/fã");
   console.log("   criador@xclusive.ao — criador verificado");
-  console.log("   admin@xclusive.ao   — administrador");
+  console.log(adminHash ? "   administrador criado com SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD" : "   (sem administrador: define SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD se precisares)");
 
   await pool.end();
 }

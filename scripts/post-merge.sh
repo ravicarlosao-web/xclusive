@@ -9,8 +9,13 @@ echo "🗄️  A sincronizar schema da base de dados..."
 pnpm --filter @workspace/db run push
 
 echo ""
-echo "🌱 A inserir dados de teste..."
-pnpm --filter @workspace/scripts run seed
+# O seed cria contas de teste: só em desenvolvimento (NODE_ENV=development explícito).
+if [ "${NODE_ENV:-}" = "development" ]; then
+  echo "🌱 A inserir dados de teste (desenvolvimento)..."
+  pnpm --filter @workspace/scripts run seed
+else
+  echo "⏭️  Seed ignorado (só corre com NODE_ENV=development)."
+fi
 
 echo ""
 echo "✅ Setup concluído!"
