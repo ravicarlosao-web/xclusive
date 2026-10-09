@@ -20,6 +20,8 @@
  *   de expirar, para evitar chamadas desnecessárias ao token endpoint.
  */
 
+import crypto from "node:crypto";
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 /**
@@ -247,7 +249,8 @@ export async function getCharge(chargeId: string): Promise<AppyPayChargeResponse
   const url = `${getBaseUrl()}/charges/${chargeId}`;
   const headers = await buildHeaders();
 
-  const res = await fetch(url, { method: "GET", headers });
+  // Timeout: o webhook não pode ficar pendurado à espera da AppyPay (falha → responde erro e ela repete).
+  const res = await fetch(url, { method: "GET", headers, signal: AbortSignal.timeout(10_000) });
   const data = await res.json().catch(() => ({})) as AppyPayChargeResponse;
 
   if (!res.ok) {
@@ -259,49 +262,50 @@ export async function getCharge(chargeId: string): Promise<AppyPayChargeResponse
   return data;
 }
 
+/** O segredo do webhook está configurado? Sem ele o webhook recusa tudo (falha fechada). */
+export function isWebhookSecretConfigured(): boolean {
+  return Boolean(process.env["APPYPAY_WEBHOOK_SECRET"]);
+}
+
+/** Comparação em tempo constante (os digests têm sempre o mesmo comprimento). */
+function safeEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 /**
- * Valida (best-effort) a autenticidade de um webhook recebido.
+ * Valida a autenticidade de um webhook recebido (falha fechada).
  *
- * LIMITAÇÃO CONHECIDA: A documentação pública do AppyPay não especifica um
- * mecanismo de assinatura HMAC. Esta função verifica o header
- * X-AppyPay-Webhook-Secret contra APPYPAY_WEBHOOK_SECRET se estiver definido.
+ * A documentação pública da AppyPay não especifica uma assinatura HMAC; verificamos o segredo
+ * partilhado APPYPAY_WEBHOOK_SECRET num dos headers X-AppyPay-Webhook-Secret, X-Webhook-Secret
+ * ou Authorization (com ou sem "Bearer "), em tempo constante. Sem segredo configurado devolve
+ * false: nada é processado. A autenticidade do pagamento vem sempre da confirmação com getCharge.
  *
- * TODO_CONFIRM: Quando tivermos acesso ao suporte AppyPay sandbox, confirmar:
- *   1. Nome exacto do header de assinatura
- *   2. Algoritmo (HMAC-SHA256? Bearer token? Basic Auth?)
- *   3. Como computar/verificar a assinatura
- * Actualizar esta função em conformidade.
+ * TODO_CONFIRM: confirmar com o suporte da AppyPay o nome do header e o algoritmo.
  *
- * @returns true se válido (ou se verificação não configurada), false se inválido
+ * @returns true só se o segredo estiver configurado e coincidir
  */
 export function validateWebhookSignature(
-  rawBody: Buffer,
+  _rawBody: Buffer,
   headers: Record<string, string | string[] | undefined>
 ): boolean {
   const secret = process.env["APPYPAY_WEBHOOK_SECRET"];
+  if (!secret) return false;
 
-  if (!secret) {
-    // Sem secret configurado — aceitar mas registar aviso
-    // (em produção deve sempre estar configurado)
-    console.warn(
-      "[AppyPay] APPYPAY_WEBHOOK_SECRET não definido. " +
-      "A aceitar webhook sem verificação de autenticidade. " +
-      "TODO_CONFIRM: Configurar secret após confirmação com suporte AppyPay."
-    );
-    return true;
+  const candidates = [
+    headers["x-appypay-webhook-secret"],
+    headers["x-webhook-secret"],
+    headers["authorization"],
+  ].flatMap((h) => (Array.isArray(h) ? h : h === undefined ? [] : [h]));
+
+  // Avalia todos os candidatos (sem curto-circuito) para não vazar qual coincidiu.
+  let ok = false;
+  for (const received of candidates) {
+    if (safeEqual(received, secret)) ok = true;
+    if (safeEqual(received, `Bearer ${secret}`)) ok = true;
   }
-
-  // Verificação simples por header secret (modelo mais comum em gateways angolanos)
-  // TODO_CONFIRM: Substituir por HMAC-SHA256 quando algoritmo confirmado
-  const receivedSecret = headers["x-appypay-webhook-secret"] ??
-    headers["x-webhook-secret"] ??
-    headers["authorization"];
-
-  if (Array.isArray(receivedSecret)) {
-    return receivedSecret.includes(secret) || receivedSecret.includes(`Bearer ${secret}`);
-  }
-
-  return receivedSecret === secret || receivedSecret === `Bearer ${secret}`;
+  return ok;
 }
 
 /** Statuses de charge que indicam pagamento confirmado */
