@@ -1,14 +1,63 @@
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, XCircle, FileImage, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 
+// Documento aberto no visualizador. O URL assinado (60 s) vive só aqui, em memória: nunca é
+// guardado, registado na consola nem reutilizado (cada abertura pede um novo).
+type Viewer = { label: string; status: 'loading' | 'ready' | 'error'; src?: string; kind?: 'image' | 'video'; blob?: boolean };
+
+function kindFromUrl(url: string): 'image' | 'video' {
+  try {
+    return /\.(mp4|webm|mov)$/i.test(new URL(url).pathname) ? 'video' : 'image';
+  } catch {
+    return 'image';
+  }
+}
+
 export default function KycQueue() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const openSeq = useRef(0);
+
+  // Liberta o objeto blob (registos antigos) quando o visualizador muda ou fecha.
+  useEffect(() => () => {
+    if (viewer?.blob && viewer.src) URL.revokeObjectURL(viewer.src);
+  }, [viewer]);
+
+  // `ref` vem da fila: caminho do endpoint de URL assinado (documentos novos) ou, nos registos
+  // antigos, o proxy assinado /api/admin/media (que exige o token e por isso é pedido como blob).
+  const openDocument = async (label: string, ref: string) => {
+    const seq = ++openSeq.current;
+    setViewer({ label, status: 'loading' });
+    try {
+      let url = ref;
+      if (ref.startsWith('/api/admin/kyc/')) {
+        url = (await adminApi.getKycDocumentUrl(ref)).url;
+      }
+      let next: Viewer;
+      if (url.startsWith('/api/admin/media?')) {
+        const blob = await adminApi.getAdminMediaBlob(url);
+        next = { label, status: 'ready', src: URL.createObjectURL(blob), kind: blob.type.startsWith('video/') ? 'video' : 'image', blob: true };
+      } else {
+        next = { label, status: 'ready', src: url, kind: kindFromUrl(url) };
+      }
+      if (seq !== openSeq.current) {
+        if (next.blob && next.src) URL.revokeObjectURL(next.src);
+        return;
+      }
+      setViewer(next);
+    } catch {
+      if (seq === openSeq.current) setViewer({ label, status: 'error' });
+    }
+  };
+  const failViewer = () => setViewer((v) => (v ? { label: v.label, status: 'error' } : v));
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['kyc-queue'],
@@ -64,7 +113,7 @@ export default function KycQueue() {
               <CardContent className="flex-1">
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(req.kycSubmissao || {}).filter(([k, v]) => k !== 'submissaoEm' && v).map(([k, v], i) => (
-                    <div key={i} className="aspect-video bg-muted rounded-md border border-border flex flex-col items-center justify-center group relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
+                    <div key={i} role="button" tabIndex={0} onClick={() => openDocument(`${req.username} — ${k.replace(/([A-Z])/g, ' $1')}`, v as string)} onKeyDown={(e) => { if (e.key === 'Enter') openDocument(`${req.username} — ${k.replace(/([A-Z])/g, ' $1')}`, v as string); }} className="aspect-video bg-muted rounded-md border border-border flex flex-col items-center justify-center group relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
                       <FileImage className="h-6 w-6 text-muted-foreground mb-1 group-hover:text-primary transition-colors" />
                       <span className="text-[10px] text-muted-foreground capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
                       <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -95,6 +144,28 @@ export default function KycQueue() {
           ))}
         </div>
       )}
+
+      <Dialog open={viewer !== null} onOpenChange={(open) => { if (!open) { openSeq.current++; setViewer(null); } }}>
+        <DialogContent className="max-w-3xl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="capitalize">{viewer?.label}</DialogTitle>
+          </DialogHeader>
+          {viewer?.status === 'loading' && (
+            <div className="py-12 text-center text-muted-foreground">A obter o documento…</div>
+          )}
+          {viewer?.status === 'error' && (
+            <div role="alert" className="py-12 text-center text-red-500">
+              Não foi possível mostrar o documento. Fecha e abre de novo (o link expira em 60 s).
+            </div>
+          )}
+          {viewer?.status === 'ready' && viewer.kind === 'video' && (
+            <video src={viewer.src} controls className="w-full max-h-[70vh] rounded-md" onError={failViewer} />
+          )}
+          {viewer?.status === 'ready' && viewer.kind === 'image' && (
+            <img src={viewer.src} alt={viewer.label} className="w-full max-h-[70vh] object-contain rounded-md" onError={failViewer} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
