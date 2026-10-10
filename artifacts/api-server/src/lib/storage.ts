@@ -164,3 +164,98 @@ export function createStorageKey(prefix: string, extension = "bin"): string {
   const safeExtension = extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
   return `${prefix}/${crypto.randomUUID()}.${safeExtension}`;
 }
+
+// ─── Zona PRIVADA (documentos KYC) ────────────────────────────────────────────
+// Storage Zone separada, com Pull Zone própria e Token Authentication. Lida a cada uso
+// (o .env pode ser carregado depois dos imports). Nunca há recurso à zona pública.
+
+const REQUIRED_PRIVATE_ENV = [
+  "BUNNY_PRIVATE_STORAGE_ZONE",
+  "BUNNY_PRIVATE_STORAGE_KEY",
+  "BUNNY_PRIVATE_CDN_URL",
+  "BUNNY_PRIVATE_TOKEN_KEY",
+] as const;
+
+/** Nomes (nunca valores) das variáveis da zona privada que faltam. */
+export function getMissingPrivateStorageEnv(): string[] {
+  return REQUIRED_PRIVATE_ENV.filter((name) => !process.env[name]);
+}
+
+export function isPrivateStorageConfigured(): boolean {
+  return getMissingPrivateStorageEnv().length === 0;
+}
+
+function getPrivateConfig() {
+  const missing = getMissingPrivateStorageEnv();
+  if (missing.length > 0) {
+    throw new Error(`Private object storage is not configured. Missing: ${missing.join(", ")}`);
+  }
+  const strip = (v: string) => v.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return {
+    zone: process.env.BUNNY_PRIVATE_STORAGE_ZONE as string,
+    accessKey: process.env.BUNNY_PRIVATE_STORAGE_KEY as string,
+    host: strip(process.env.BUNNY_PRIVATE_STORAGE_HOST || "storage.bunnycdn.com"),
+    cdnHost: strip(process.env.BUNNY_PRIVATE_CDN_URL as string),
+    tokenKey: process.env.BUNNY_PRIVATE_TOKEN_KEY as string,
+  };
+}
+
+/** Chaves da zona privada começam por "kyc/"; as antigas (zona pública) por "users/". */
+export function isPrivateStorageKey(key: string): boolean {
+  return key.startsWith("kyc/");
+}
+
+function privateStorageUrl(key: string): string {
+  const { host, zone } = getPrivateConfig();
+  return `https://${host}/${encodeURIComponent(zone)}/${publicKeyPath(key)}`;
+}
+
+export async function uploadPrivate(buffer: Buffer, key: string, contentType: string): Promise<void> {
+  const { accessKey } = getPrivateConfig();
+  const response = await fetch(privateStorageUrl(key), {
+    method: "PUT",
+    headers: {
+      AccessKey: accessKey,
+      "Content-Type": contentType || "application/octet-stream",
+      "Content-Length": String(buffer.byteLength),
+    },
+    body: buffer,
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+  await assertSuccessfulResponse(response, "private upload");
+}
+
+export async function deletePrivate(key: string): Promise<void> {
+  const { accessKey } = getPrivateConfig();
+  const response = await fetch(privateStorageUrl(key), {
+    method: "DELETE",
+    headers: { AccessKey: accessKey },
+    signal: AbortSignal.timeout(30 * 1000),
+  });
+  await assertSuccessfulResponse(response, "private delete");
+}
+
+/**
+ * URL de curta duração para um ficheiro da zona privada (Bunny Token Authentication, modo Basic):
+ *   token = base64url( SHA256( chave_de_segurança + caminho + expiração ) )   (sem IP, sem "="),
+ *   URL   = https://<pull zone><caminho>?token=<token>&expires=<expiração unix>
+ * O caminho é o do pedido (começa por "/"). Cada chamada gera um URL novo.
+ */
+export function getPrivateSignedUrl(
+  key: string,
+  ttlSeconds = 60,
+  nowMs: number = Date.now(),
+): { url: string; expiresAt: Date } {
+  const { cdnHost, tokenKey } = getPrivateConfig();
+  const path = `/${publicKeyPath(key)}`;
+  const expires = Math.floor(nowMs / 1000) + ttlSeconds;
+  const token = crypto
+    .createHash("sha256")
+    .update(tokenKey + path + expires)
+    .digest("base64")
+    .replace(/\n/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+  return { url: `https://${cdnHost}${path}?token=${token}&expires=${expires}`, expiresAt: new Date(expires * 1000) };
+}

@@ -4,7 +4,7 @@ import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { createStorageKey, deleteFile, uploadFile } from "../lib/storage";
+import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, uploadPrivate } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 
 const updateProfileSchema = z.object({
@@ -299,17 +299,32 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     return;
   }
 
+  // Os documentos KYC só vão para a zona privada: sem ela configurada falha (nunca usa a pública).
+  if (!isPrivateStorageConfigured()) {
+    req.log?.error({ missing: getMissingPrivateStorageEnv() }, "KYC: armazenamento privado não configurado — submissão recusada.");
+    res.status(503).json({ error: "O envio de documentos está temporariamente indisponível. Tenta mais tarde." });
+    return;
+  }
+
   function decodeCapturedImage(value: string, field: string): { buffer: Buffer; contentType: string; extension: string } {
     const match = value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/);
     if (!match) {
       throw new Error(`${field} tem um formato de imagem inválido.`);
     }
-    const contentType = match[1];
     const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
     if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) {
       throw new Error(`${field} excede o tamanho permitido.`);
     }
-    return { buffer, contentType, extension: contentType.split("/")[1] === "jpeg" ? "jpg" : contentType.split("/")[1] };
+    // Conteúdo real (primeiros bytes), não só o tipo declarado.
+    const detected =
+      buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff ? "jpeg"
+      : buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? "png"
+      : buffer.subarray(0, 4).toString("latin1") === "RIFF" && buffer.subarray(8, 12).toString("latin1") === "WEBP" ? "webp"
+      : null;
+    if (!detected || `image/${detected}` !== match[1]) {
+      throw new Error(`${field} não é uma imagem válida.`);
+    }
+    return { buffer, contentType: `image/${detected}`, extension: detected === "jpeg" ? "jpg" : detected };
   }
 
   const uploadedKeys: string[] = [];
@@ -319,13 +334,12 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
       decodeCapturedImage(req.body.selfieFoto, "selfieFoto"),
       decodeCapturedImage(req.body.livenessFoto, "livenessFoto"),
     ];
-    const prefixes = ["documento", "selfie", "liveness"];
-    const keys = captured.map((file, index) => createStorageKey(`users/${userId}/kyc/${prefixes[index]}`, file.extension));
+    const keys = captured.map((file) => createStorageKey(`kyc/${userId}`, file.extension));
 
     for (let index = 0; index < captured.length; index++) {
       const file = captured[index];
       const key = keys[index];
-      await uploadFile(file.buffer, key, file.contentType);
+      await uploadPrivate(file.buffer, key, file.contentType);
       uploadedKeys.push(key);
     }
 
@@ -349,7 +363,7 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
         .where(eq(usersTable.id, userId));
     });
   } catch (error) {
-    await Promise.allSettled(uploadedKeys.map((key) => deleteFile(key)));
+    await Promise.allSettled(uploadedKeys.map((key) => deletePrivate(key)));
     const message = error instanceof Error ? error.message : "Não foi possível guardar os documentos.";
     res.status(400).json({ error: message });
     return;
