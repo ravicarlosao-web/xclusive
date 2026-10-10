@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, likesTable, postMediaTable, postsTable } from "@workspace/db";
-import { deleteFile, getStorageKeyFromPublicUrl } from "./storage";
+import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
 
 /**
  * Removes all post-owned data and its Bunny media.
@@ -14,11 +14,17 @@ export async function deletePostWithMedia(postId: number): Promise<void> {
     .from(postMediaTable)
     .where(eq(postMediaTable.postId, postId));
 
+  // Chaves "paid/..." vivem na zona privada; URLs antigos na zona pública.
+  const paidKeys = media.map(({ url }) => url).filter(isPaidKey);
   const storageKeys = media
+    .filter(({ url }) => !isPaidKey(url))
     .map(({ url }) => getStorageKeyFromPublicUrl(url))
     .filter((key): key is string => Boolean(key));
 
-  const storageResults = await Promise.allSettled(storageKeys.map((key) => deleteFile(key)));
+  const storageResults = await Promise.allSettled([
+    ...storageKeys.map((key) => deleteFile(key)),
+    ...paidKeys.map((key) => deletePrivate(key)),
+  ]);
   const failedStorageDeletes = storageResults.filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );

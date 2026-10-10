@@ -259,3 +259,46 @@ export function getPrivateSignedUrl(
     .replace(/=/g, "");
   return { url: `https://${cdnHost}${path}?token=${token}&expires=${expires}`, expiresAt: new Date(expires * 1000) };
 }
+
+// ─── Conteúdo pago (posts exclusivos) na zona privada ────────────────────────
+// Ficheiros novos ficam em "paid/<autorId>/<uuid>.<ext>". A BD guarda só a chave;
+// os URLs assinados são gerados a cada resposta, apenas para quem tem acesso.
+
+/** Validade dos URLs assinados de média paga (o <video> faz vários pedidos Range). */
+export const PAID_MEDIA_TTL_SECONDS = 60 * 60;
+
+export function isPaidKey(value: string): boolean {
+  return value.startsWith("paid/");
+}
+
+/**
+ * Devolve o URL a servir para um valor guardado em post_media.url:
+ *  - "paid/..."  → URL assinado da zona privada ("" se a zona não estiver configurada);
+ *  - outro valor → formato antigo (URL público), devolvido tal e qual.
+ * Nunca recorre à zona pública para chaves "paid/".
+ */
+export function resolveMediaUrl(stored: string): string {
+  if (!isPaidKey(stored)) return stored;
+  if (!isPrivateStorageConfigured()) return "";
+  return getPrivateSignedUrl(stored, PAID_MEDIA_TTL_SECONDS).url;
+}
+
+export async function uploadPrivateStream(
+  stream: Readable,
+  key: string,
+  contentType: string,
+  timeoutMs: number = STREAM_UPLOAD_TIMEOUT_MS,
+): Promise<void> {
+  const { accessKey } = getPrivateConfig();
+  const response = await fetch(privateStorageUrl(key), {
+    method: "PUT",
+    headers: {
+      AccessKey: accessKey,
+      "Content-Type": contentType || "application/octet-stream",
+    },
+    body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+    duplex: "half",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  await assertSuccessfulResponse(response, "private stream upload");
+}

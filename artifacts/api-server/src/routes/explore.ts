@@ -3,6 +3,7 @@ import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@work
 import { sql, desc, inArray } from "drizzle-orm";
 import { optionalAuth, type AuthRequest } from "../lib/auth";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
+import { resolveMediaUrl } from "../lib/storage";
 
 const router = Router();
 
@@ -63,7 +64,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
       ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
       : true;
     const mediaSegura = acesso
-      ? media
+      ? media.map(m => ({ ...m, url: resolveMediaUrl(m.url) }))
       : media.map(m => ({ ...m, url: null, bloqueado: true }));
     return {
       id: p.id,

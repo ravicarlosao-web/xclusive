@@ -4,7 +4,7 @@ import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, uploadPrivate } from "../lib/storage";
+import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 
 const updateProfileSchema = z.object({
@@ -524,7 +524,7 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
       ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
       : true;
     const mediaSegura = acesso
-      ? media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }))
+      ? media.map(m => ({ id: m.id, url: resolveMediaUrl(m.url), tipo: m.tipo, ordem: m.ordem }))
       : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
     return {
       id: p.id,

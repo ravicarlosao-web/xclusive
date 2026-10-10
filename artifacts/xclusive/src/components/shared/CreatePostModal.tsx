@@ -389,7 +389,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 
       const uploadJson = await uploadWithProgress(
-        `${base}/api/upload`,
+        `${base}/api/upload${exclusivo ? "?privado=1" : ""}`,
         formData,
         (loaded, total) => {
           const pct = Math.min(99, Math.round((loaded / total) * 100));
