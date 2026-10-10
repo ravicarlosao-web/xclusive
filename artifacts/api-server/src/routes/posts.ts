@@ -6,6 +6,7 @@ import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
+import { resolveMediaUrl } from "../lib/storage";
 import { getCommissionRate, calcComissao } from "../lib/commission";
 
 const createPostSchema = z.object({
@@ -69,6 +70,28 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
 
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
 
+  // Média paga: o upload devolve "private://paid/<autorId>/<ficheiro>"; guardamos só a chave.
+  // Posts exclusivos só aceitam ficheiros privados do próprio autor; posts gratuitos nunca.
+  const PRIVATE_SCHEME = "private://";
+  const ownPrefix = `paid/${userId}/`;
+  const mediaToStore: { url: string; tipo?: "imagem" | "video" }[] = [];
+  for (const m of (media ?? []) as { url: string; tipo?: "imagem" | "video" }[]) {
+    if (m.url.startsWith(PRIVATE_SCHEME)) {
+      const key = m.url.slice(PRIVATE_SCHEME.length);
+      if (!exclusivo || !key.startsWith(ownPrefix) || key.includes("..") || key.includes("?") || key.includes("#")) {
+        res.status(400).json({ error: "Ficheiro privado inválido para este post." });
+        return;
+      }
+      mediaToStore.push({ ...m, url: key });
+    } else {
+      if (exclusivo) {
+        res.status(400).json({ error: "Os ficheiros de um post exclusivo têm de ser enviados como privados. Atualiza a página e tenta novamente." });
+        return;
+      }
+      mediaToStore.push(m);
+    }
+  }
+
   const [post] = await db.insert(postsTable).values({
     autorId: userId,
     legenda: legenda || null,
@@ -78,12 +101,12 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
     precoDesbloqueio: precoDesbloqueio ? String(precoDesbloqueio) : null,
   }).returning();
 
-  if (media && Array.isArray(media)) {
-    for (let i = 0; i < media.length; i++) {
+  {
+    for (let i = 0; i < mediaToStore.length; i++) {
       await db.insert(postMediaTable).values({
         postId: post.id,
-        url: media[i].url,
-        tipo: media[i].tipo || "imagem",
+        url: mediaToStore[i].url,
+        tipo: mediaToStore[i].tipo || "imagem",
         ordem: i,
       });
     }
@@ -318,7 +341,7 @@ async function formatPost(post: any, userId?: number) {
   // Conteúdo exclusivo: ocultar media se utilizador não tem acesso
   const acesso = post.exclusivo ? await temAcessoExclusivo(userId, post.autorId, post.id) : true;
   const mediaSegura = acesso
-    ? media.map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }))
+    ? media.map(m => ({ id: m.id, url: resolveMediaUrl(m.url), tipo: m.tipo, ordem: m.ordem }))
     : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
 
   return {

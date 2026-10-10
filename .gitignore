@@ -52,3 +52,4 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+migrate-paid-media-private.map.jsonl

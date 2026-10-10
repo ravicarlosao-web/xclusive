@@ -13,13 +13,20 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   createStorageKey,
   deleteFile,
+  deletePrivate,
   getPublicUrl,
+  isPaidKey,
+  isPrivateStorageConfigured,
   isStorageConfigured,
   uploadFile,
   uploadFileStream,
+  uploadPrivate,
+  uploadPrivateStream,
 } from "../lib/storage";
 
 const router = Router();
@@ -144,7 +151,39 @@ function transcodeAndFaststart(inputPath: string, outputPath: string): Promise<b
 
 const imageStorage = multer.memoryStorage();
 
-const requireStorage: RequestHandler = (_req, res, next) => {
+/** Apaga um objecto na zona certa: "paid/..." → privada, restantes → pública. */
+function removeObject(key: string): Promise<void> {
+  return isPaidKey(key) ? deletePrivate(key) : deleteFile(key);
+}
+
+/** `?privado=1`: ficheiros de posts exclusivos vão para a zona privada (paid/<userId>/...). */
+const isPrivateUpload = (req: { query: Record<string, unknown> }): boolean => req.query.privado === "1";
+
+const requirePrivateUploadAccess: RequestHandler = async (req, res, next) => {
+  if (!isPrivateUpload(req)) {
+    next();
+    return;
+  }
+  if (!isPrivateStorageConfigured()) {
+    res.status(503).json({ error: "Armazenamento privado de media não está configurado." });
+    return;
+  }
+  const [author] = await db
+    .select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado })
+    .from(usersTable)
+    .where(eq(usersTable.id, (req as AuthRequest).userId!));
+  if (!author || author.tipoConta !== "criador" || !author.verificado) {
+    res.status(403).json({ error: "Apenas criadores verificados podem publicar conteúdo exclusivo." });
+    return;
+  }
+  next();
+};
+
+const requireStorage: RequestHandler = (req, res, next) => {
+  if (isPrivateUpload(req)) {
+    next();
+    return;
+  }
   if (!isStorageConfigured()) {
     res.status(503).json({ error: "Armazenamento de media não está configurado." });
     return;
@@ -169,7 +208,11 @@ const streamingVideoStorage: multer.StorageEngine = {
     const extension = file.mimetype.split("/")[1] ?? "mp4";
     const inputTempPath = path.join(UPLOAD_TMP_DIR, `xclusive_${uuid}_raw.${extension}`);
     const outputTempPath = path.join(UPLOAD_TMP_DIR, `xclusive_${uuid}_faststart.mp4`);
-    const storageKey = createStorageKey(`users/${(req as AuthRequest).userId}/media`, "mp4");
+    const privado = isPrivateUpload(req);
+    const storageKey = createStorageKey(
+      privado ? `paid/${(req as AuthRequest).userId}` : `users/${(req as AuthRequest).userId}/media`,
+      "mp4",
+    );
 
     const writeStream = fs.createWriteStream(inputTempPath);
     let bytesWritten = 0;
@@ -216,7 +259,11 @@ const streamingVideoStorage: multer.StorageEngine = {
         const finalSize = stat.size;
         const uploadReadStream = fs.createReadStream(finalUploadPath);
 
-        await uploadFileStream(uploadReadStream, storageKey, "video/mp4");
+        if (privado) {
+          await uploadPrivateStream(uploadReadStream, storageKey, "video/mp4");
+        } else {
+          await uploadFileStream(uploadReadStream, storageKey, "video/mp4");
+        }
 
         (file as CustomMulterFile).storageKey = storageKey;
         (file as CustomMulterFile).streamBytes = finalSize;
@@ -226,7 +273,7 @@ const streamingVideoStorage: multer.StorageEngine = {
           size: finalSize,
         });
       } catch (uploadError) {
-        void deleteFile(storageKey).catch(() => undefined);
+        void removeObject(storageKey).catch(() => undefined);
         cb(uploadError as Error);
       } finally {
         // Limpeza garantida de todos os ficheiros temporários do disco
@@ -240,7 +287,7 @@ const streamingVideoStorage: multer.StorageEngine = {
   _removeFile: (_req, file, cb) => {
     const key = (file as CustomMulterFile).storageKey;
     if (key) {
-      void deleteFile(key).catch(() => undefined).finally(() => cb(null));
+      void removeObject(key).catch(() => undefined).finally(() => cb(null));
     } else {
       cb(null);
     }
@@ -276,10 +323,12 @@ const upload = multer({
 router.post(
   "/upload",
   requireAuth,
+  requirePrivateUploadAccess,
   requireStorage,
   upload.array("files", 10),
   async (req: AuthRequest, res): Promise<void> => {
-    if (!isStorageConfigured()) {
+    const privado = isPrivateUpload(req);
+    if (!privado && !isStorageConfigured()) {
       res.status(503).json({ error: "Armazenamento de media não está configurado." });
       return;
     }
@@ -306,7 +355,7 @@ router.post(
             throw new Error("Metadata do upload de vídeo não encontrado.");
           }
         } else {
-          key = createStorageKey(`users/${req.userId}/media`, extension);
+          key = createStorageKey(privado ? `paid/${req.userId}` : `users/${req.userId}/media`, extension);
           size = file.size;
         }
         uploadedKeys.push(key);
@@ -315,11 +364,13 @@ router.post(
           // The streaming storage engine already completed this upload while
           // Multer was parsing the request.
         } else {
-          await uploadFile(file.buffer, key, file.mimetype);
+          if (privado) await uploadPrivate(file.buffer, key, file.mimetype);
+          else await uploadFile(file.buffer, key, file.mimetype);
         }
 
         return {
-          url: getPublicUrl(key),
+          // Privado: pseudo-URL; a chave é validada (prefixo do autor) ao criar o post.
+          url: privado ? `private://${key}` : getPublicUrl(key),
           tipo: isVideo ? "video" : "imagem",
           size,
         };
@@ -328,7 +379,7 @@ router.post(
       res.status(201).json({ files: uploaded });
     } catch (error) {
       // Remove objects created by a partially failed multi-file upload.
-      await Promise.allSettled(uploadedKeys.map((key) => deleteFile(key)));
+      await Promise.allSettled(uploadedKeys.map((key) => removeObject(key)));
       throw error;
     }
   },
