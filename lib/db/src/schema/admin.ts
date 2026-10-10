@@ -9,7 +9,10 @@ import {
   jsonb,
   primaryKey,
   boolean,
+  pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 
 // ─── reports ────────────────────────────────────────────────────────────────
@@ -31,19 +34,39 @@ export type Report = typeof reportsTable.$inferSelect;
 
 // ─── withdrawal_requests ─────────────────────────────────────────────────────
 
+export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["pendente", "aprovado", "rejeitado", "pago"]);
+
+/**
+ * Pedidos de levantamento. Máquina de estados rígida (aplicada em routes/admin.ts, sob FOR UPDATE):
+ *   pendente → aprovado → pago      pendente → rejeitado      (pago e rejeitado são finais)
+ * Os ganhos são debitados ao criar o pedido (reserva) e devolvidos UMA vez, na rejeição.
+ */
 export const withdrawalRequestsTable = pgTable("withdrawal_requests", {
   id: serial("id").primaryKey(),
   creatorId: integer("creator_id")
     .notNull()
     .references(() => usersTable.id),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-  method: varchar("method", { length: 30 }).notNull(), // 'bank_transfer' | 'multicaixa_express' | etc.
+  method: varchar("method", { length: 30 }).notNull(), // 'transferencia_bancaria'
+  /** Cópia do IBAN/titular/banco no momento do pedido (nunca em listagens nem logs). */
   destinationDetails: jsonb("destination_details"),
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // 'pending' | 'approved' | 'rejected' | 'paid'
+  status: withdrawalStatusEnum("status").notNull().default("pendente"),
   processedBy: integer("processed_by").references(() => usersTable.id),
   processedAt: timestamp("processed_at"),
   notes: text("notes"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+}, (t) => [
+  // Um só pedido pendente por criadora (clique duplo = conflito).
+  uniqueIndex("withdrawal_requests_um_pendente").on(t.creatorId).where(sql`${t.status} = 'pendente'`),
+]);
+
+/** Dados de pagamento da criadora (uma conta por criadora). */
+export const creatorPayoutAccountsTable = pgTable("creator_payout_accounts", {
+  userId: integer("user_id").primaryKey().references(() => usersTable.id, { onDelete: "cascade" }),
+  iban: varchar("iban", { length: 34 }).notNull(),
+  nomeTitular: varchar("nome_titular", { length: 150 }).notNull(),
+  banco: varchar("banco", { length: 100 }).notNull(),
+  atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
 });
 
 export type WithdrawalRequest = typeof withdrawalRequestsTable.$inferSelect;

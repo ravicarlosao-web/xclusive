@@ -49,6 +49,7 @@ export const usersTable = pgTable("users", {
   tipoSubscricao: tipoSubscricaoEnum("tipo_subscricao").notNull().default("paga"),
 }, (table) => [
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
+  check("users_ganhos_nao_negativo", sql`${table.ganhos} >= 0`),
 ]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, criadoEm: true });

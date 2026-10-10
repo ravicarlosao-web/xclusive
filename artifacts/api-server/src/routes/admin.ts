@@ -251,7 +251,7 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       db.select({ denunciasPendentes: count() }).from(reportsTable)
         .where(eq(reportsTable.status, "pending")),
       db.select({ levantamentosPendentes: count() }).from(withdrawalRequestsTable)
-        .where(eq(withdrawalRequestsTable.status, "pending")),
+        .where(eq(withdrawalRequestsTable.status, "pendente")),
       db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
       db.select({ comissaoMes: sum(purchasesTable.comissao) }).from(purchasesTable)
         .where(gte(purchasesTable.criadoEm, new Date(hoje.getFullYear(), hoje.getMonth(), 1))),
@@ -406,6 +406,10 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "kyc_rejeitar": return `${admin} rejeitou KYC do criador${target}`;
     case "post_delete": return `${admin} eliminou post${target}`;
     case "report_resolve": return `${admin} resolveu denúncia${target}`;
+    case "withdrawal_aprovado": return `${admin} aprovou levantamento${target}`;
+    case "withdrawal_rejeitado": return `${admin} rejeitou levantamento${target}`;
+    case "withdrawal_pago": return `${admin} marcou levantamento${target} como pago`;
+    case "withdrawal_dados_vistos": return `${admin} consultou os dados de pagamento do levantamento${target}`;
     case "withdrawal_approved": return `${admin} aprovou levantamento${target}`;
     case "withdrawal_rejected": return `${admin} rejeitou levantamento${target}`;
     case "withdrawal_paid": return `${admin} marcou levantamento${target} como pago`;
@@ -1193,6 +1197,22 @@ router.get("/admin/finance/transactions/export", async (req, res) => {
   }
 });
 
+const WITHDRAWAL_STATUSES = ["pendente", "aprovado", "rejeitado", "pago"] as const;
+type WithdrawalStatus = typeof WITHDRAWAL_STATUSES[number];
+/** Máquina de estados rígida: pendente→aprovado→pago; pendente→rejeitado; pago e rejeitado são finais. */
+const WITHDRAWAL_TRANSITIONS: Record<WithdrawalStatus, WithdrawalStatus[]> = {
+  pendente: ["aprovado", "rejeitado"],
+  aprovado: ["pago"],
+  rejeitado: [],
+  pago: [],
+};
+
+class WithdrawalHttpError extends Error {
+  constructor(msg: string, public readonly httpStatus: number) {
+    super(msg);
+  }
+}
+
 router.get("/admin/withdrawals", async (req, res) => {
   try {
     const { page = "1", limit = "10", status } = req.query as Record<string, string>;
@@ -1200,8 +1220,11 @@ router.get("/admin/withdrawals", async (req, res) => {
     const limitNum = Math.min(100, Math.max(1, Number(limit)));
     const offset = (pageNum - 1) * limitNum;
 
+    if (status && !WITHDRAWAL_STATUSES.includes(status as WithdrawalStatus)) {
+      return void res.status(400).json({ error: `Estado inválido. Valores permitidos: ${WITHDRAWAL_STATUSES.join(", ")}` });
+    }
     const conditions: any[] = [];
-    if (status) conditions.push(eq(withdrawalRequestsTable.status, status));
+    if (status) conditions.push(eq(withdrawalRequestsTable.status, status as WithdrawalStatus));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [rows, [{ total }]] = await Promise.all([
@@ -1216,7 +1239,7 @@ router.get("/admin/withdrawals", async (req, res) => {
         processedAt: withdrawalRequestsTable.processedAt,
         notes: withdrawalRequestsTable.notes,
         criadoEm: withdrawalRequestsTable.criadoEm,
-        // destinationDetails intencionalmente omitido da listagem (dados bancários sensíveis)
+        // destinationDetails (IBAN) NUNCA em listagens: só no detalhe, com audit_log.
       })
         .from(withdrawalRequestsTable)
         .leftJoin(usersTable, eq(withdrawalRequestsTable.creatorId, usersTable.id))
@@ -1237,37 +1260,100 @@ router.get("/admin/withdrawals", async (req, res) => {
   }
 });
 
+// Detalhe de um pedido, com os dados de pagamento. Cada visualização grava audit_log NA MESMA transação:
+// se o registo falhar, o IBAN não é devolvido.
+router.get("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+
+    const row = await db.transaction(async (tx) => {
+      const [w] = await tx.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.id, id)).limit(1);
+      if (!w) throw new WithdrawalHttpError("Pedido não encontrado", 404);
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!,
+        action: "withdrawal_dados_vistos",
+        targetType: "withdrawal",
+        targetId: id,
+        details: { creatorId: w.creatorId },
+        ipAddress: req.ip ?? null,
+      });
+      return w;
+    });
+
+    res.set("Cache-Control", "no-store");
+    res.json({ ...row, amount: Number(row.amount) });
+  } catch (err) {
+    if (err instanceof WithdrawalHttpError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao obter levantamento");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
-    const [withdrawal] = await db.select().from(withdrawalRequestsTable)
-      .where(eq(withdrawalRequestsTable.id, id)).limit(1);
-    if (!withdrawal) return void res.status(404).json({ error: "Pedido não encontrado" });
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
 
-    const STATUS_VALIDOS = ["pending", "approved", "rejected", "paid"] as const;
-    if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-      return void res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    const novo = req.body?.status;
+    if (!WITHDRAWAL_STATUSES.includes(novo)) {
+      return void res.status(400).json({ error: `Estado inválido. Valores permitidos: ${WITHDRAWAL_STATUSES.join(", ")}` });
     }
+    const notes = typeof req.body.notes === "string" ? req.body.notes.slice(0, 500) : undefined;
 
-    const statusAnterior = withdrawal.status;
-    const updates: Partial<typeof withdrawalRequestsTable.$inferInsert> = {
-      processedBy: req.adminId ?? undefined,
-      processedAt: new Date(),
-    };
-    if (req.body.status !== undefined) updates.status = req.body.status;
-    if (typeof req.body.notes === "string") updates.notes = req.body.notes.slice(0, 500);
+    const updated = await db.transaction(async (tx) => {
+      const [peek] = await tx.select({ creatorId: withdrawalRequestsTable.creatorId }).from(withdrawalRequestsTable)
+        .where(eq(withdrawalRequestsTable.id, id)).limit(1);
+      if (!peek) throw new WithdrawalHttpError("Pedido não encontrado", 404);
 
-    const [updated] = await db.update(withdrawalRequestsTable).set(updates)
-      .where(eq(withdrawalRequestsTable.id, id)).returning();
+      // Ordem de locks igual à do pedido da criadora (utilizador → pedido): sem deadlocks.
+      await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, peek.creatorId)).for("update");
+      const [w] = await tx.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.id, id)).for("update");
+      if (!w) throw new WithdrawalHttpError("Pedido não encontrado", 404);
 
-    await logAudit(req, `withdrawal_${updated.status}`, "withdrawal", id, {
-      before: { status: statusAnterior }, after: { status: updated.status, notes: updated.notes },
+      // O estado é lido DEPOIS do lock: dois PATCH em simultâneo não passam ambos.
+      if (!WITHDRAWAL_TRANSITIONS[w.status].includes(novo)) {
+        throw new WithdrawalHttpError(`Transição inválida: ${w.status} → ${novo}`, 409);
+      }
+
+      // Rejeição: devolve a reserva UMA vez (só se transita de pendente). Aprovar/pagar não mexem em ganhos.
+      if (novo === "rejeitado") {
+        await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${Number(w.amount)}` }).where(eq(usersTable.id, w.creatorId));
+      }
+
+      const [u] = await tx.update(withdrawalRequestsTable)
+        .set({ status: novo, processedBy: req.adminId ?? undefined, processedAt: new Date(), ...(notes !== undefined ? { notes } : {}) })
+        .where(eq(withdrawalRequestsTable.id, id)).returning();
+
+      // Rejeição: notifica a criadora NA MESMA transação (motivo, sem IBAN nem dados bancários).
+      // Se a notificação falhar, reverte tudo (estado, reembolso e auditoria).
+      if (novo === "rejeitado") {
+        const motivo = (u.notes ?? "").trim();
+        await tx.insert(notificationsTable).values({
+          destinatarioId: w.creatorId,
+          tipo: "sistema",
+          alvoId: id,
+          mensagem: `O teu pedido de levantamento de ${Number(w.amount).toLocaleString("pt-PT")} Kz foi rejeitado.${motivo ? ` Motivo: ${motivo}.` : ""} Os ganhos voltaram à tua conta.`,
+        });
+      }
+
+      // Auditoria dentro da transação: se falhar, reverte estado e reembolso.
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!,
+        action: `withdrawal_${novo}`,
+        targetType: "withdrawal",
+        targetId: id,
+        details: { before: { status: w.status }, after: { status: novo, notes: u.notes }, amount: Number(w.amount), reembolso: novo === "rejeitado" },
+        ipAddress: req.ip ?? null,
+      });
+      return u;
     });
 
     // Remover destinationDetails (IBAN) da resposta
     const { destinationDetails: _stripped, ...safeWithdrawal } = updated as any;
     res.json({ ...safeWithdrawal, amount: Number(safeWithdrawal.amount) });
   } catch (err) {
+    if (err instanceof WithdrawalHttpError) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error({ err }, "Erro ao processar levantamento");
     res.status(500).json({ error: "Erro interno." });
   }
