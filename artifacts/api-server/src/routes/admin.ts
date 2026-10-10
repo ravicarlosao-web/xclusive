@@ -739,10 +739,10 @@ router.get("/admin/creators", async (req, res) => {
   }
 });
 
-// Documentos novos (zona privada): a fila só leva o caminho do endpoint que gera o URL de 60 s.
-// Registos antigos (zona pública) mantêm o proxy assinado até à migração.
-function kycAccess(submissionId: number, tipo: string, key: string): string | null {
-  return isPrivateStorageKey(key) ? `/api/admin/kyc/${submissionId}/${tipo}` : signMediaUrl(getPublicUrl(key));
+// A fila só leva o caminho do endpoint que gera o URL (60 s na zona privada, proxy assinado nos
+// registos antigos): qualquer visualização passa por ele e fica no audit_log.
+function kycAccess(submissionId: number, tipo: string, _key: string): string {
+  return `/api/admin/kyc/${submissionId}/${tipo}`;
 }
 
 router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, res) => {
