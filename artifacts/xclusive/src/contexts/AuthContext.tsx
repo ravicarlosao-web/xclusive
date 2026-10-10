@@ -36,6 +36,16 @@ const MOCK_SESSION_KEY = 'xclusive_mock_session';
 export const XCLUSIVE_IBAN = 'AO06 0040 0000 1234 5678 9012 3';
 export const XCLUSIVE_IBAN_RAW = 'AO06004000001234567890123';
 
+export type WithdrawalStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'pago';
+export interface WithdrawalItem {
+  id: number;
+  valor: number;
+  status: WithdrawalStatus;
+  motivo: string | null;
+  criadoEm: string;
+  processadoEm: string | null;
+}
+
 export interface DadosBancarios {
   iban: string;
   nomeTitular: string;
@@ -300,10 +310,16 @@ interface AuthContextType {
   isPostUnlocked: (postId: number) => boolean;
   /** Obtém os dados completos do utilizador (incluindo dados bancários) */
   getMockUserData: () => MockUser | null;
-  /** Guarda dados bancários do criador */
-  saveDadosBancarios: (dados: DadosBancarios) => void;
-  /** Solicita levantamento de ganhos (só dia 29). Lança erro se fora do prazo ou sem dados bancários. */
-  requestWithdrawal: () => Promise<number>;
+  /** Guarda os dados de pagamento (IBAN) da criadora no servidor (modo mock: localStorage). */
+  saveDadosBancarios: (dados: DadosBancarios) => Promise<void>;
+  /** Lê os dados de pagamento da criadora (servidor; modo mock: localStorage). */
+  getPayoutAccount: () => Promise<DadosBancarios | null>;
+  /** Pede um levantamento de `valor` Kz (omitido = todos os ganhos). Os ganhos ficam reservados até o admin decidir. */
+  requestWithdrawal: (valor?: number) => Promise<number>;
+  /** Histórico de levantamentos da utilizadora (servidor). */
+  listWithdrawals: () => Promise<WithdrawalItem[]>;
+  /** Mínimo de levantamento e ganhos disponíveis, lidos do servidor. */
+  getWithdrawalInfo: () => Promise<{ minimo: number; ganhos: number }>;
   /** Historial de transações do utilizador atual */
   getTransactionHistory: () => MockTransaction[];
   /** Força refresh do saldo (ex: após operação externa) */
@@ -780,7 +796,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return getCurrentMockUser();
   }, []);
 
-  const saveDadosBancarios = useCallback((dados: DadosBancarios) => {
+  /** Chamada autenticada ao servidor para o fluxo de levantamentos; lança Error com a mensagem do servidor. */
+  const withdrawalApi = useCallback(async (path: string, init?: RequestInit): Promise<any> => {
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/wallet${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+      credentials: 'same-origin',
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const detail = Array.isArray(body?.details) && body.details[0]?.mensagem;
+      throw new Error(detail || body?.error || 'Erro ao comunicar com o servidor.');
+    }
+    return body;
+  }, [token]);
+
+  const saveDadosBancarios = useCallback(async (dados: DadosBancarios): Promise<void> => {
+    // ── Real API mode: o IBAN fica no servidor (validado), nunca no localStorage ──
+    if (token && !isMockToken) {
+      await withdrawalApi('/payout-account', { method: 'PUT', body: JSON.stringify(dados) });
+      return;
+    }
+    // ── Mock mode ──
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) return;
     const freshUsers = getMockUsers();
@@ -788,13 +826,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (idx === -1) return;
     freshUsers[idx].dadosBancarios = dados;
     saveMockUsers(freshUsers);
-  }, []);
+  }, [token, isMockToken, withdrawalApi]);
 
-  const requestWithdrawal = useCallback(async (): Promise<number> => {
-    const today = new Date();
-    if (today.getDate() !== 29) {
-      throw new Error('Os levantamentos só estão disponíveis no dia 29 de cada mês.');
+  const getPayoutAccount = useCallback(async (): Promise<DadosBancarios | null> => {
+    if (token && !isMockToken) return (await withdrawalApi('/payout-account')) as DadosBancarios | null;
+    return getCurrentMockUser()?.dadosBancarios ?? null;
+  }, [token, isMockToken, withdrawalApi]);
+
+  const listWithdrawals = useCallback(async (): Promise<WithdrawalItem[]> => {
+    if (token && !isMockToken) return (await withdrawalApi('/withdrawals')) as WithdrawalItem[];
+    return [];
+  }, [token, isMockToken, withdrawalApi]);
+
+  const getWithdrawalInfo = useCallback(async (): Promise<{ minimo: number; ganhos: number }> => {
+    if (token && !isMockToken) return (await withdrawalApi('/withdrawals/info')) as { minimo: number; ganhos: number };
+    return { minimo: 1000, ganhos: getCurrentMockUser()?.ganhos ?? 0 }; // demo local
+  }, [token, isMockToken, withdrawalApi]);
+
+  const requestWithdrawal = useCallback(async (valor?: number): Promise<number> => {
+    // ── Real API mode: o servidor reserva os ganhos numa transação; o admin aprova/paga/rejeita ──
+    if (token && !isMockToken) {
+      const amount = valor ?? ganhos ?? 0;
+      const created = await withdrawalApi('/withdrawals', { method: 'POST', body: JSON.stringify({ valor: amount }) });
+      await fetchApiWallet(token); // ganhos já debitados no servidor
+      return created.valor as number;
     }
+
+    // ── Mock mode (demo local) ──
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
@@ -822,7 +880,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     saveTransactions(txs);
     return ganhosDisponiveis;
-  }, []);
+  }, [token, isMockToken, ganhos, withdrawalApi, fetchApiWallet]);
 
   const getTransactionHistory = useCallback((): MockTransaction[] => {
     const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
@@ -917,6 +975,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isPostUnlocked,
       getMockUserData,
       saveDadosBancarios,
+      getPayoutAccount,
+      listWithdrawals,
+      getWithdrawalInfo,
       requestWithdrawal,
       getTransactionHistory,
       refreshSaldo,

@@ -1,11 +1,11 @@
-import { useAuth, DadosBancarios } from '@/contexts/AuthContext';
+import { useAuth, DadosBancarios, WithdrawalItem } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PlanDialog } from '@/components/monetization/PlanDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, CalendarDays, Lock, Loader2, Radio } from 'lucide-react';
+import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, Loader2, Radio } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -41,7 +41,7 @@ const ANGOLAN_BANKS = [
 ];
 
 export default function Monetization() {
-  const { user, ganhos, getMockUserData, saveDadosBancarios, requestWithdrawal } = useAuth();
+  const { user, ganhos, saveDadosBancarios, getPayoutAccount, requestWithdrawal, listWithdrawals, getWithdrawalInfo } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
@@ -52,6 +52,11 @@ export default function Monetization() {
   const [bankForm, setBankForm] = useState<DadosBancarios>({ iban: '', nomeTitular: '', banco: '' });
   const [bankSaved, setBankSaved] = useState(false);
   const [bankError, setBankError] = useState('');
+  const [bankSaving, setBankSaving] = useState(false);
+  // Dados de pagamento e histórico vêm do servidor (não do localStorage)
+  const [dadosBancarios, setDadosBancarios] = useState<DadosBancarios | null>(null);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
+  const [withdrawalInfo, setWithdrawalInfo] = useState<{ minimo: number; ganhos: number } | null>(null);
 
   // Plan dialogs
   const [editPlan, setEditPlan] = useState<SubscriptionPlan | null>(null);
@@ -61,13 +66,12 @@ export default function Monetization() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawalError, setWithdrawalError] = useState('');
   const [withdrawalSuccess, setWithdrawalSuccess] = useState<number | null>(null);
+  const [withdrawalValue, setWithdrawalValue] = useState('');
 
   // Live stream state
   const [activeStreamId, setActiveStreamId] = useState<number | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
 
-  const today = new Date();
-  const isWithdrawalDay = today.getDate() === 29;
 
   // ── API queries ───────────────────────────────────────────────────────────
   const { data: stats, isLoading: statsLoading } = useGetCreatorStats({
@@ -94,10 +98,21 @@ export default function Monetization() {
     if (user && user.tipoConta !== 'criador') setLocation('/home');
   }, [user, setLocation]);
 
+  async function reloadPayout() {
+    try {
+      const [acc, list, info] = await Promise.all([getPayoutAccount(), listWithdrawals(), getWithdrawalInfo()]);
+      setDadosBancarios(acc);
+      if (acc) setBankForm(acc);
+      setWithdrawals(list);
+      setWithdrawalInfo(info); // mínimo e ganhos vêm do servidor
+    } catch { /* sem dados: o formulário fica vazio */ }
+  }
+
   useEffect(() => {
-    const data = getMockUserData();
-    if (data?.dadosBancarios) setBankForm(data.dadosBancarios);
-  }, [getMockUserData]);
+    if (!user || user.tipoConta !== 'criador') return;
+    void reloadPayout();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Verificar live activa ao montar
   useEffect(() => {
@@ -120,19 +135,25 @@ export default function Monetization() {
 
   if (!user || user.tipoConta !== 'criador') return null;
 
-  const dadosBancarios = getMockUserData()?.dadosBancarios;
-
   // ── Handlers ──────────────────────────────────────────────────────────────
-  function handleSaveBank() {
+  async function handleSaveBank() {
     setBankError('');
     if (!bankForm.iban.trim() || !bankForm.nomeTitular.trim() || !bankForm.banco.trim()) {
       setBankError('Preenche todos os campos.');
       return;
     }
-    saveDadosBancarios(bankForm);
-    setBankSaved(true);
-    setEditingBank(false);
-    setTimeout(() => setBankSaved(false), 3000);
+    setBankSaving(true);
+    try {
+      await saveDadosBancarios(bankForm); // o servidor valida o IBAN angolano
+      await reloadPayout();
+      setBankSaved(true);
+      setEditingBank(false);
+      setTimeout(() => setBankSaved(false), 3000);
+    } catch (e: any) {
+      setBankError(e.message || 'Erro ao guardar os dados bancários.');
+    } finally {
+      setBankSaving(false);
+    }
   }
 
   async function handleWithdrawal() {
@@ -140,8 +161,11 @@ export default function Monetization() {
     setWithdrawalError('');
     setWithdrawalSuccess(null);
     try {
-      const amount = await requestWithdrawal();
+      const typed = Number(withdrawalValue.replace(',', '.'));
+      const amount = await requestWithdrawal(withdrawalValue.trim() && Number.isFinite(typed) ? typed : undefined);
       setWithdrawalSuccess(amount);
+      setWithdrawalValue('');
+      await reloadPayout(); // histórico com o novo pedido pendente
     } catch (e: any) {
       setWithdrawalError(e.message || 'Erro ao solicitar levantamento.');
     } finally {
@@ -490,14 +514,24 @@ export default function Monetization() {
           <CardContent className="space-y-4">
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
               <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Disponível para levantar</p>
-              <p className="text-3xl font-extrabold text-green-400">
+              <p className="text-3xl font-extrabold text-green-400" data-testid="withdrawal-ganhos">
                 {(ganhos ?? 0).toLocaleString('pt-PT')} <span className="text-xl font-bold">Kz</span>
               </p>
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary/50 rounded-xl p-3">
-              <CalendarDays className="w-4 h-4 shrink-0 text-yellow-500" />
-              <p>Os levantamentos estão disponíveis <strong className="text-foreground">todos os dias 29</strong> de cada mês.</p>
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Valor a levantar (Kz) — vazio = todos os ganhos</label>
+              <Input
+                inputMode="decimal"
+                placeholder={(ganhos ?? 0).toLocaleString('pt-PT')}
+                value={withdrawalValue}
+                onChange={(e) => setWithdrawalValue(e.target.value)}
+                className="bg-secondary border-border"
+              />
+              {withdrawalInfo && (
+                <p className="text-xs text-muted-foreground mt-1.5" data-testid="withdrawal-min">Mínimo por pedido: <strong className="text-foreground">{withdrawalInfo.minimo.toLocaleString('pt-PT')} Kz</strong></p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1.5">Os ganhos ficam reservados até o pedido ser decidido. Se for rejeitado, voltam à tua conta.</p>
             </div>
 
             {withdrawalError && (
@@ -514,23 +548,31 @@ export default function Monetization() {
             )}
 
             <Button
-              className={cn(
-                'w-full h-12 font-bold rounded-xl gap-2',
-                isWithdrawalDay
-                  ? 'bg-green-500 hover:bg-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                  : 'bg-secondary text-muted-foreground cursor-not-allowed',
-              )}
-              disabled={!isWithdrawalDay || withdrawing || (ganhos ?? 0) < 1000 || !dadosBancarios}
+              className="w-full h-12 font-bold rounded-xl gap-2 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]"
+              disabled={withdrawing || (ganhos ?? 0) <= 0 || !dadosBancarios || withdrawals.some(w => w.status === 'pendente')}
               onClick={handleWithdrawal}
             >
               {withdrawing ? (
                 'A processar...'
-              ) : isWithdrawalDay ? (
-                <><ArrowDownToLine className="w-4 h-4" /> Solicitar Levantamento</>
+              ) : withdrawals.some(w => w.status === 'pendente') ? (
+                'Tens um levantamento pendente'
               ) : (
-                <><Lock className="w-4 h-4" /> Disponível no dia 29</>
+                <><ArrowDownToLine className="w-4 h-4" /> Solicitar Levantamento</>
               )}
             </Button>
+
+            {withdrawals.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Os teus levantamentos</p>
+                {withdrawals.slice(0, 5).map(w => (
+                  <div key={w.id} className="flex items-center justify-between text-sm bg-secondary/50 rounded-lg px-3 py-2">
+                    <span className="font-semibold">{w.valor.toLocaleString('pt-PT')} Kz</span>
+                    <span className="text-xs text-muted-foreground">{new Date(w.criadoEm).toLocaleDateString('pt-PT')}</span>
+                    <span className={cn('text-xs font-bold capitalize', w.status === 'pago' ? 'text-green-400' : w.status === 'rejeitado' ? 'text-destructive' : 'text-yellow-400')}>{w.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {!dadosBancarios && (
               <p className="text-xs text-muted-foreground text-center">
@@ -632,8 +674,8 @@ export default function Monetization() {
                           Cancelar
                         </Button>
                       )}
-                      <Button className="flex-1 rounded-xl font-bold" onClick={handleSaveBank}>
-                        Guardar dados bancários
+                      <Button className="flex-1 rounded-xl font-bold" onClick={handleSaveBank} disabled={bankSaving}>
+                        {bankSaving ? 'A guardar...' : 'Guardar dados bancários'}
                       </Button>
                     </div>
                   </div>
