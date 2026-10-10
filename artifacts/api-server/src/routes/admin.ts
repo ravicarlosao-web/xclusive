@@ -46,7 +46,7 @@ import {
   notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { getPublicUrl } from "../lib/storage.js";
+import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey } from "../lib/storage.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
 import { getCommissionRate } from "../lib/commission.js";
 
@@ -739,6 +739,12 @@ router.get("/admin/creators", async (req, res) => {
   }
 });
 
+// Documentos novos (zona privada): a fila só leva o caminho do endpoint que gera o URL de 60 s.
+// Registos antigos (zona pública) mantêm o proxy assinado até à migração.
+function kycAccess(submissionId: number, tipo: string, key: string): string | null {
+  return isPrivateStorageKey(key) ? `/api/admin/kyc/${submissionId}/${tipo}` : signMediaUrl(getPublicUrl(key));
+}
+
 router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, res) => {
   try {
     const queue = await db
@@ -758,18 +764,54 @@ router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, 
       return {
         ...mapUser(u),
         kycSubmissao: submission ? {
-          documentoFrente: signMediaUrl(getPublicUrl(submission.documentoKey)),
+          documentoFrente: kycAccess(submission.id, "documento", submission.documentoKey),
           documentoVerso: null,
-          selfie: signMediaUrl(getPublicUrl(submission.selfieKey)),
+          selfie: kycAccess(submission.id, "selfie", submission.selfieKey),
           provaDeMorada: null,
           selfieComDocumento: null,
-          videoVerificacao: signMediaUrl(getPublicUrl(submission.livenessKey)),
+          videoVerificacao: kycAccess(submission.id, "liveness", submission.livenessKey),
           submissaoEm: submission.submetidoEm,
         } : null,
       };
     }));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao obter fila KYC");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// URL de curta duração (60 s) para ver um documento KYC. Só admin; cada pedido gera um URL novo e fica
+// registado no audit_log (sem o URL). Se o registo falhar, o acesso é recusado.
+router.get("/admin/kyc/:submissionId/:tipo", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const submissionId = Number(req.params.submissionId);
+  const tipo = String(req.params.tipo);
+  const column = ({ documento: "documentoKey", selfie: "selfieKey", liveness: "livenessKey" } as const)[tipo as "documento"];
+  if (!Number.isInteger(submissionId) || submissionId <= 0 || !column) {
+    return void res.status(400).json({ error: "Pedido inválido." });
+  }
+  try {
+    const [submission] = await db.select().from(kycSubmissionsTable).where(eq(kycSubmissionsTable.id, submissionId)).limit(1);
+    if (!submission) return void res.status(404).json({ error: "Submissão não encontrada." });
+
+    const key = submission[column];
+    const privado = isPrivateStorageKey(key);
+    await db.insert(auditLogTable).values({
+      adminId: req.adminId!,
+      action: "kyc_documento_visto",
+      targetType: "user",
+      targetId: submission.userId,
+      details: { submissionId, tipo, zona: privado ? "privada" : "publica_legada" },
+      ipAddress: req.ip ?? null,
+    });
+
+    res.setHeader("Cache-Control", "no-store");
+    if (privado) {
+      const { url, expiresAt } = getPrivateSignedUrl(key, 60);
+      return void res.json({ url, expiraEm: expiresAt.toISOString() });
+    }
+    res.json({ url: signMediaUrl(getPublicUrl(key)), expiraEm: new Date(Date.now() + 15 * 60_000).toISOString() });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao gerar acesso a documento KYC");
     res.status(500).json({ error: "Erro interno." });
   }
 });
