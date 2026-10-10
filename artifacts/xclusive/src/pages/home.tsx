@@ -631,8 +631,8 @@ export default function Home() {
             <a href="#" className="hover:underline">Imprensa</a>
             <a href="#" className="hover:underline">API</a>
             <a href="#" className="hover:underline">Carreiras</a>
-            <a href="#" className="hover:underline">Privacidade</a>
-            <a href="#" className="hover:underline">Termos</a>
+            <a href="/privacidade" className="hover:underline">Privacidade</a>
+            <a href="/termos" className="hover:underline">Termos</a>
           </div>
           <p className="text-[11px] text-muted-foreground mt-4 uppercase">
             &copy; {new Date().getFullYear()} Xclusive

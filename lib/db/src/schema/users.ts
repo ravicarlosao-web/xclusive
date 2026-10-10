@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -50,6 +50,22 @@ export const usersTable = pgTable("users", {
 }, (table) => [
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
   check("users_ganhos_nao_negativo", sql`${table.ganhos} >= 0`),
+]);
+
+/**
+ * Aceite dos documentos legais no registo (prova do que foi aceite, quando e de onde).
+ * Escrita na MESMA transação da criação do utilizador. O IP nunca é registado em logs.
+ * Uma linha por aceite (um novo aceite de versões futuras acrescenta outra linha).
+ */
+export const userLegalAcceptancesTable = pgTable("user_legal_acceptances", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  termosVersao: varchar("termos_versao", { length: 40 }).notNull(),
+  privacidadeVersao: varchar("privacidade_versao", { length: 40 }).notNull(),
+  aceiteEm: timestamp("aceite_em").notNull().defaultNow(),
+  ip: varchar("ip", { length: 45 }),
+}, (t) => [
+  index("user_legal_acceptances_user_idx").on(t.userId),
 ]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, criadoEm: true });

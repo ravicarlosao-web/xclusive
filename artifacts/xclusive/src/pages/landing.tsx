@@ -368,8 +368,11 @@ export default function Landing() {
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs font-semibold text-foreground uppercase tracking-wide mb-1">Legal</span>
-                <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Termos de uso</a>
-                <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Política de privacidade</a>
+                <Link href="/termos" className="text-sm text-muted-foreground hover:text-primary transition-colors">Termos de uso</Link>
+                <Link href="/privacidade" className="text-sm text-muted-foreground hover:text-primary transition-colors">Política de privacidade</Link>
+                <Link href="/politica-de-conteudo" className="text-sm text-muted-foreground hover:text-primary transition-colors">Política de conteúdo</Link>
+                <Link href="/direitos-de-autor" className="text-sm text-muted-foreground hover:text-primary transition-colors">Direitos de autor</Link>
+                <Link href="/reembolsos" className="text-sm text-muted-foreground hover:text-primary transition-colors">Reembolsos</Link>
                 <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Suporte</a>
               </div>
             </nav>

@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { db, usersTable, followsTable, revokedTokensTable } from "@workspace/db";
+import { db, usersTable, followsTable, revokedTokensTable, userLegalAcceptancesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
@@ -33,6 +33,45 @@ function clearRefreshCookie(res: Response) {
 
 const router = Router();
 
+// ── Documentos legais ────────────────────────────────────────────────────────
+// Versões VIGENTES. Quando o texto jurídico mudar, o advogado/dev altera a versão e a data aqui:
+// o registo passa a exigir o aceite da nova versão e as páginas legais mostram-na.
+// (Os textos são placeholders até haver redação jurídica: ver as páginas /termos, /privacidade, ...)
+export const LEGAL_DOCS = {
+  termos:          { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+  privacidade:     { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+  conteudo:        { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+  direitosAutor:   { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+  reembolsos:      { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+} as const;
+
+/** Idade mínima para criar conta (plataforma de conteúdo adulto). */
+const IDADE_MINIMA = 18;
+
+/**
+ * Valida a data de nascimento (YYYY-MM-DD): formato, data real, não futura e idade >= 18.
+ * Devolve a mensagem de erro (para o utilizador) ou null se estiver tudo bem.
+ * Todos os cálculos em UTC, só com dia/mês/ano, para não dependerem do fuso do servidor.
+ */
+export function validarDataNascimento(valor: string, agora: Date = new Date()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  if (!m) return "Data de nascimento inválida (usa o formato AAAA-MM-DD).";
+  const [ano, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) {
+    return "Data de nascimento inválida.";
+  }
+  const hojeAno = agora.getUTCFullYear(), hojeMes = agora.getUTCMonth() + 1, hojeDia = agora.getUTCDate();
+  if (ano > hojeAno || (ano === hojeAno && (mes > hojeMes || (mes === hojeMes && dia > hojeDia)))) {
+    return "A data de nascimento não pode estar no futuro.";
+  }
+  let idade = hojeAno - ano;
+  if (hojeMes < mes || (hojeMes === mes && hojeDia < dia)) idade -= 1;
+  if (idade < IDADE_MINIMA) return `Tens de ter pelo menos ${IDADE_MINIMA} anos para criar uma conta.`;
+  if (ano < 1900) return "Data de nascimento inválida.";
+  return null;
+}
+
 const registerSchema = z.object({
   nomeCompleto: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
   email: z.email("Email inválido").max(255),
@@ -42,7 +81,13 @@ const registerSchema = z.object({
     .max(50)
     .regex(/^[a-zA-Z0-9_]+$/, "Username só pode conter letras, números e _"),
   password: z.string().min(8, "Password deve ter pelo menos 8 caracteres").max(128),
-  dataNascimento: z.string().max(20).optional(),
+  // Obrigatória; formato, data real, não futura e idade >= 18 são validados no handler (mensagens claras).
+  dataNascimento: z.string().min(1, "Data de nascimento é obrigatória").max(20),
+  // Aceite dos documentos legais: versões que o utilizador viu (têm de ser as vigentes).
+  aceite: z.object({
+    termos: z.string().min(1).max(40),
+    privacidade: z.string().min(1).max(40),
+  }),
   tipoConta: z.enum(["pessoal", "criador"]).optional(),
   pais: z.string().max(10).optional(),
   telefone: z.string().max(20).optional(),
@@ -53,8 +98,25 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password é obrigatória").max(128),
 });
 
+/** Versões vigentes dos documentos legais (público): o registo e as páginas legais usam isto. */
+router.get("/auth/legal-versions", (_req, res): void => {
+  res.json(LEGAL_DOCS);
+});
+
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
-  const { nomeCompleto, email, username, password, dataNascimento, tipoConta } = req.body;
+  const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;
+
+  // Barreira de idade no servidor (o front-end é só feedback): menores, datas inválidas e futuras recusadas.
+  const erroData = validarDataNascimento(dataNascimento);
+  if (erroData) {
+    res.status(400).json({ error: erroData });
+    return;
+  }
+  // O aceite tem de ser das versões vigentes (senão o utilizador aceitou texto desatualizado).
+  if (aceite.termos !== LEGAL_DOCS.termos.versao || aceite.privacidade !== LEGAL_DOCS.privacidade.versao) {
+    res.status(400).json({ error: "Os Termos ou a Política de Privacidade foram atualizados. Recarrega a página e aceita as versões atuais." });
+    return;
+  }
 
   try {
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
@@ -70,15 +132,29 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
     }
 
     const passwordHash = await hashPassword(password);
+    // IP só para o registo do aceite: guardado na BD, nunca escrito em logs.
+    // req.ip respeita "trust proxy" (um salto): não aceita IPs forjados no início do X-Forwarded-For.
+    const aceiteIp = (req.ip ?? "").slice(0, 45) || null;
 
-    const [user] = await db.insert(usersTable).values({
-      nomeExibicao: nomeCompleto,
-      email,
-      username: username.toLowerCase(),
-      passwordHash,
-      dataNascimento: dataNascimento || null,
-      tipoConta: tipoConta || "pessoal",
-    }).returning();
+    // Utilizador + aceite NA MESMA transação: se o aceite falhar, o registo é revertido.
+    const user = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(usersTable).values({
+        nomeExibicao: nomeCompleto,
+        email,
+        username: username.toLowerCase(),
+        passwordHash,
+        dataNascimento,
+        tipoConta: tipoConta || "pessoal",
+      }).returning();
+
+      await tx.insert(userLegalAcceptancesTable).values({
+        userId: created.id,
+        termosVersao: aceite.termos,
+        privacidadeVersao: aceite.privacidade,
+        ip: aceiteIp,
+      });
+      return created;
+    });
 
     const accessToken = signAccessToken({ userId: user.id, username: user.username, role: user.role });
     const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id, user.username, user.role);

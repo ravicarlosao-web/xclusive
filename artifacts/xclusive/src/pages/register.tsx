@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, User, Camera, ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { fetchLegalDocs } from './legal/useLegalDocs';
 
 // ── Country / phone prefix config ──────────────────────────────────────────
 const COUNTRIES = [
@@ -85,7 +86,9 @@ export default function Register() {
 
   const onSubmit = async (data: RegisterFormValues) => {
     try {
-      await register({
+      // O aceite leva as versões vigentes dos documentos (lidas do servidor no momento do envio).
+      const docs = await fetchLegalDocs();
+      const payload: Parameters<typeof register>[0] & { aceite: { termos: string; privacidade: string } } = {
         nomeCompleto: data.nomeCompleto,
         email: data.email,
         username: data.username,
@@ -94,12 +97,15 @@ export default function Register() {
         pais: country.name,
         telefone: data.telefone ? `${country.prefix}${data.telefone}` : undefined,
         tipoConta: data.tipoConta,
-      });
+        aceite: { termos: docs.termos.versao, privacidade: docs.privacidade.versao },
+      };
+      await register(payload);
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Erro ao criar conta',
-        description: error.message || 'Verifica os dados e tenta novamente.',
+        // Mensagem do servidor (ex.: idade mínima, data inválida) quando existir
+        description: error?.data?.error || error.message || 'Verifica os dados e tenta novamente.',
       });
     }
   };
@@ -330,9 +336,9 @@ export default function Register() {
                     <div className="space-y-1 leading-none">
                       <FormLabel className="text-sm font-normal text-muted-foreground">
                         Concordo com os{' '}
-                        <a href="#" className="text-primary hover:underline">Termos de Serviço</a>{' '}
+                        <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Termos de Serviço</a>{' '}
                         e a{' '}
-                        <a href="#" className="text-primary hover:underline">Política de Privacidade</a>.
+                        <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Política de Privacidade</a>.
                       </FormLabel>
                       <FormMessage />
                     </div>
