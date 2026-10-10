@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/layouts/AppLayout';
+import { AgeGate } from '@/components/shared/AgeGate';
 import { useEffect } from 'react';
 
 // Pages
@@ -29,6 +30,11 @@ import EsquecestePassword from '@/pages/esqueceste-password';
 import LivePage from '@/pages/live';
 import LivePublishTest from '@/pages/live-publish-test';
 import IrEmDireto from '@/pages/ir-em-direto';
+import Termos from '@/pages/legal/termos';
+import Privacidade from '@/pages/legal/privacidade';
+import PoliticaConteudo from '@/pages/legal/politica-de-conteudo';
+import DireitosAutor from '@/pages/legal/direitos-de-autor';
+import Reembolsos from '@/pages/legal/reembolsos';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +111,12 @@ function Router() {
       <Route path="/">{(params) => <PublicOnlyRoute component={Landing} path="/" />}</Route>
       <Route path="/login">{(params) => <PublicOnlyRoute component={Login} path="/login" />}</Route>
       <Route path="/registo">{(params) => <PublicOnlyRoute component={Register} path="/registo" />}</Route>
+      {/* Páginas legais: públicas (abrem com ou sem sessão) */}
+      <Route path="/termos" component={Termos} />
+      <Route path="/privacidade" component={Privacidade} />
+      <Route path="/politica-de-conteudo" component={PoliticaConteudo} />
+      <Route path="/direitos-de-autor" component={DireitosAutor} />
+      <Route path="/reembolsos" component={Reembolsos} />
       <Route path="/esqueceste-password">{() => <PublicOnlyRoute component={EsquecestePassword} path="/esqueceste-password" />}</Route>
       
       {/* Protected Routes */}
@@ -143,6 +155,7 @@ function App() {
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <AuthProvider>
             <Router />
+            <AgeGate />
           </AuthProvider>
         </WouterRouter>
         <Toaster />
