@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, reelsTable, followsTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { getCommissionRate, calcComissao } from "../lib/commission";
+import { subscricaoComAcesso } from "../lib/exclusiveAccess";
 
 const createPlanSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório").max(100),
@@ -57,7 +58,7 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
   // Total subscritores ativos
   const [{ totalSubscritores }] = await db.select({ totalSubscritores: sql<number>`count(*)::int` })
     .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.criadorId, userId), eq(subscriptionsTable.estado, "ativa")));
+    .where(and(eq(subscriptionsTable.criadorId, userId), subscricaoComAcesso()));
 
   // Novos subscritores este mês
   const [{ novosSubscritores }] = await db.select({ novosSubscritores: sql<number>`count(*)::int` })
@@ -91,7 +92,7 @@ router.get("/creator/plans", requireAuth, requireCreator, async (req: AuthReques
   const result = await Promise.all(plans.map(async (p) => {
     const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` })
       .from(subscriptionsTable)
-      .where(and(eq(subscriptionsTable.planoId, p.id), eq(subscriptionsTable.estado, "ativa")));
+      .where(and(eq(subscriptionsTable.planoId, p.id), subscricaoComAcesso()));
     return {
       id: p.id,
       nome: p.nome,
@@ -234,12 +235,18 @@ router.get("/users/:username/subscription-plan", async (req, res): Promise<void>
   const { username } = req.params;
 
   const [user] = await db
-    .select({ id: usersTable.id })
+    .select({ id: usersTable.id, tipoSubscricao: usersTable.tipoSubscricao })
     .from(usersTable)
     .where(eq(usersTable.username, username))
     .limit(1);
 
   if (!user) { res.status(404).json({ error: "Criador não encontrado." }); return; }
+
+  // Conta gratuita: não há plano nem preço; o fã subscreve com { criadorId } (POST /subscriptions).
+  if (user.tipoSubscricao === "gratuita") {
+    res.json({ id: null, criadorId: user.id, tipoSubscricao: "gratuita", nome: null, preco: 0, beneficios: null });
+    return;
+  }
 
   const [plan] = await db
     .select()
@@ -252,119 +259,148 @@ router.get("/users/:username/subscription-plan", async (req, res): Promise<void>
 
   res.json({
     id: plan.id,
+    criadorId: user.id,
+    tipoSubscricao: "paga",
     nome: plan.nome,
     preco: parseFloat(String(plan.preco)),
     beneficios: plan.beneficios,
   });
 });
 
-const subscribeSchema = z.object({
-  planoId: z.number().int().positive(),
-  precoEsperado: z.number().positive("precoEsperado deve ser positivo").finite(),
-});
+// Subscrever: paga ({ planoId, precoEsperado }) ou gratuita ({ criadorId })
+const subscribeSchema = z.union([
+  z.object({
+    planoId: z.number().int().positive(),
+    precoEsperado: z.number().positive("precoEsperado deve ser positivo").finite(),
+  }),
+  z.object({ criadorId: z.number().int().positive() }),
+]);
 
+/** Fim do período: daqui a 1 mês, sem transbordar para o mês seguinte (31 Jan + 1 mês = 28/29 Fev). */
+function addOneMonth(from: Date): Date {
+  const d = new Date(from);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  return d;
+}
+
+/** Transação (tx) do drizzle — para partilhar a lógica de pagamento entre subscrever e renovar. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Debita o subscritor, credita o criador (menos comissão) e regista a compra — tudo na transação do chamador. */
+async function cobrarSubscricao(
+  tx: Tx,
+  subscritorId: number,
+  plan: { id: number; nome: string; criadorId: number; preco: string },
+  descricao: string,
+): Promise<void> {
+  const precoReal = Number(plan.preco);
+  await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoReal}` }).where(eq(usersTable.id, subscritorId));
+
+  const commissionRate = await getCommissionRate(tx, plan.criadorId);
+  const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
+  await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` }).where(eq(usersTable.id, plan.criadorId));
+
+  await tx.insert(purchasesTable).values({
+    compradorId: subscritorId,
+    vendedorId: plan.criadorId,
+    tipo: "subscricao",
+    valor: plan.preco,
+    comissao: String(comissao),
+    conteudoId: plan.id,
+    descricao,
+  });
+}
 
 // Subscrever
 router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req: AuthRequest, res): Promise<void> => {
-  const { planoId, precoEsperado } = req.body as { planoId: number; precoEsperado: number };
+  const body = req.body as { planoId: number; precoEsperado: number } | { criadorId: number };
 
   try {
     const sub = await db.transaction(async (tx) => {
       // 1. Bloquear linha do subscritor (FOR UPDATE) para serializar pedidos concorrentes
       //    do mesmo utilizador — evita double-spend e subscrições duplicadas.
-      //    Bloquear o plano (FOR SHARE) em paralelo: impede que o criador altere o
-      //    preço enquanto esta transação está em curso (race condition de preço).
-      const [[subscriber], [plan]] = await Promise.all([
-        tx.select({ saldo: usersTable.saldo })
-          .from(usersTable)
-          .where(eq(usersTable.id, req.userId!))
-          .for("update"),
-        tx.select()
-          .from(subscriptionPlansTable)
-          .where(eq(subscriptionPlansTable.id, planoId))
-          .for("share"),
-      ]);
-
+      const [subscriber] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
       if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
-      if (!plan) throw new PaymentError("Plano não encontrado.", 404);
-      if (!plan.ativo) throw new PaymentError("Este plano não está disponível.", 400);
-      if (plan.criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
 
-      // 2. Validar que o preço não mudou desde que o utilizador o viu no UI.
-      //    Comparação com tolerância de 0.01 Kz para arredondamentos de ponto flutuante.
-      const precoReal = Number(plan.preco);
-      if (Math.abs(precoReal - precoEsperado) > 0.01) {
-        throw new PaymentError(
-          `O preço deste plano foi alterado para ${precoReal.toLocaleString("pt-PT")} Kz. Confirma o novo valor antes de subscrever.`,
-          409,
-        );
+      let plan: typeof subscriptionPlansTable.$inferSelect | null = null;
+      let criadorId: number;
+      let gratuita: boolean;
+
+      if ("planoId" in body) {
+        // Bloquear o plano (FOR SHARE): impede que o criador altere o preço durante a transação.
+        const [p] = await tx.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, body.planoId)).for("share");
+        if (!p) throw new PaymentError("Plano não encontrado.", 404);
+        if (!p.ativo) throw new PaymentError("Este plano não está disponível.", 400);
+        plan = p;
+        criadorId = p.criadorId;
+        gratuita = false;
+      } else {
+        criadorId = body.criadorId;
+        gratuita = true;
+      }
+      if (criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
+
+      // O tipo da conta é lido AGORA: só vale para novas subscrições.
+      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao }).from(usersTable).where(eq(usersTable.id, criadorId));
+      if (!criador || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
+      if (gratuita && criador.tipoSubscricao !== "gratuita") throw new PaymentError("Este criador tem subscrição paga: escolhe um plano.", 409);
+      if (!gratuita && criador.tipoSubscricao === "gratuita") throw new PaymentError("Este criador passou a ter subscrição gratuita: subscreve sem plano.", 409);
+
+      // 2. Preço (só paga): validar que não mudou desde que o utilizador o viu (tolerância de 0,01 Kz).
+      if (plan && "precoEsperado" in body) {
+        const precoReal = Number(plan.preco);
+        if (Math.abs(precoReal - body.precoEsperado) > 0.01) {
+          throw new PaymentError(
+            `O preço deste plano foi alterado para ${precoReal.toLocaleString("pt-PT")} Kz. Confirma o novo valor antes de subscrever.`,
+            409,
+          );
+        }
+        if (Number(subscriber.saldo) < precoReal) {
+          throw new PaymentError("Saldo insuficiente. Carrega a tua carteira primeiro.", 402);
+        }
       }
 
-      if (Number(subscriber.saldo) < precoReal) {
-        throw new PaymentError("Saldo insuficiente para activar esta subscrição.", 402);
-      }
+      // 3. O que já passou da data deixa de contar (o job só o regista mais tarde).
+      const now = new Date();
+      await tx.update(subscriptionsTable).set({ estado: "expirada" }).where(and(
+        eq(subscriptionsTable.subscriitorId, req.userId!),
+        eq(subscriptionsTable.criadorId, criadorId),
+        inArray(subscriptionsTable.estado, ["ativa", "cancelada"]),
+        isNotNull(subscriptionsTable.renovacaoEm),
+        lte(subscriptionsTable.renovacaoEm, now),
+      ));
 
-      // 2. Verificar subscrição activa existente dentro da transação (após o lock),
-      //    para que pedidos simultâneos não criem duplicados.
-      const [existing] = await tx
-        .select({ id: subscriptionsTable.id })
-        .from(subscriptionsTable)
-        .where(and(
-          eq(subscriptionsTable.subscriitorId, req.userId!),
-          eq(subscriptionsTable.criadorId, plan.criadorId),
-          eq(subscriptionsTable.estado, "ativa"),
-        ))
-        .limit(1);
+      // 4. Já tem acesso (ativa, ou cancelada dentro do período)? Não cobrar duas vezes.
+      const [existing] = await tx.select({ id: subscriptionsTable.id }).from(subscriptionsTable).where(and(
+        eq(subscriptionsTable.subscriitorId, req.userId!),
+        eq(subscriptionsTable.criadorId, criadorId),
+        subscricaoComAcesso(now),
+      )).limit(1);
+      if (existing) throw new PaymentError("Já tens uma subscrição activa para este criador. Para prolongar usa Renovar.", 409);
 
-      if (existing) throw new PaymentError("Já tens uma subscrição activa para este criador.", 409);
-
-      // 3. Debitar saldo do subscritor.
-      await tx
-        .update(usersTable)
-        .set({ saldo: sql`${usersTable.saldo} - ${precoReal}` })
-        .where(eq(usersTable.id, req.userId!));
-
-      // 4. Calcular comissão e creditar ganhos líquidos ao criador.
-      const commissionRate = await getCommissionRate(tx, plan.criadorId);
-      const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
-
-      await tx
-        .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
-        .where(eq(usersTable.id, plan.criadorId));
-
-      // 5. Criar subscrição.
-      const renewAt = new Date();
-      renewAt.setMonth(renewAt.getMonth() + 1);
+      // 5. Cobrança (só paga) e criação. Gratuita: sem débito e sem data de fim (renovacao_em NULL).
+      if (plan) await cobrarSubscricao(tx, req.userId!, plan, `Subscrição: ${plan.nome}`);
 
       const [newSub] = await tx.insert(subscriptionsTable).values({
         subscriitorId: req.userId!,
-        criadorId: plan.criadorId,
-        planoId: plan.id,
+        criadorId,
+        planoId: plan?.id ?? null,
         estado: "ativa",
-        renovacaoEm: renewAt,
+        renovacaoEm: plan ? addOneMonth(now) : null,
       }).returning();
-
-      // 6. Registar transação de compra com comissão gravada.
-      await tx.insert(purchasesTable).values({
-        compradorId: req.userId!,
-        vendedorId: plan.criadorId,
-        tipo: "subscricao",
-        valor: plan.preco,
-        comissao: String(comissao),
-        conteudoId: plan.id,
-        descricao: `Subscrição: ${plan.nome}`,
-      });
 
       return { newSub, plan };
     });
 
     res.status(201).json({
       id: sub.newSub.id,
-      plano: {
+      plano: sub.plan ? {
         id: sub.plan.id, nome: sub.plan.nome, preco: parseFloat(String(sub.plan.preco)),
         beneficios: sub.plan.beneficios, ativo: sub.plan.ativo, totalSubscritores: 0, criadoEm: sub.plan.criadoEm.toISOString(),
-      },
+      } : null,
       criador: null,
       estado: sub.newSub.estado,
       inicioEm: sub.newSub.inicioEm.toISOString(),
@@ -375,16 +411,129 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
       res.status(err.httpStatus).json({ error: err.message });
       return;
     }
+    // Índice único (subscriptions_unica_ativa): pedido simultâneo que escapou à verificação.
+    if ((err as { code?: string; cause?: { code?: string } })?.code === "23505" || (err as { cause?: { code?: string } })?.cause?.code === "23505") {
+      res.status(409).json({ error: "Já tens uma subscrição activa para este criador." });
+      return;
+    }
     req.log.error({ err }, "Subscription error");
     res.status(500).json({ error: "Erro interno." });
   }
 });
 
-// Cancelar subscrição
+// Renovar (SEMPRE manual: só este clique debita o saldo; nunca há cobrança automática)
+const renewSchema = z.object({
+  /** Fim de período que o cliente viu (ISO). Protege contra clique duplo / renovação já feita. */
+  periodoAtual: z.string().datetime(),
+  precoEsperado: z.number().positive().finite(),
+});
+
+router.post("/subscriptions/:id/renovar", requireAuth, validate(renewSchema), async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+  const { periodoAtual, precoEsperado } = req.body as z.infer<typeof renewSchema>;
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Serializa por utilizador: dois cliques simultâneos correm um depois do outro.
+      const [subscriber] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
+      if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
+
+      const [sub] = await tx.select().from(subscriptionsTable)
+        .where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.subscriitorId, req.userId!)))
+        .for("update");
+      if (!sub) throw new PaymentError("Subscrição não encontrada.", 404);
+      if (!sub.renovacaoEm) throw new PaymentError("Subscrição gratuita: não precisa de renovação.", 400);
+
+      // Compare-and-swap: só renova se o período ainda for o que o utilizador viu.
+      if (sub.renovacaoEm.getTime() !== new Date(periodoAtual).getTime()) {
+        throw new PaymentError("Esta subscrição já foi renovada ou foi alterada. Atualiza a página.", 409);
+      }
+
+      const [criador] = await tx.select({ tipoSubscricao: usersTable.tipoSubscricao }).from(usersTable).where(eq(usersTable.id, sub.criadorId));
+      if (!criador) throw new PaymentError("Criador não encontrado.", 404);
+      if (criador.tipoSubscricao === "gratuita") throw new PaymentError("Este criador passou a ter subscrição gratuita: subscreve sem custo.", 409);
+      if (!sub.planoId) throw new PaymentError("O plano desta subscrição já não existe.", 400);
+
+      const [plan] = await tx.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, sub.planoId)).for("share");
+      if (!plan || !plan.ativo) throw new PaymentError("O plano desta subscrição já não está disponível.", 400);
+
+      const precoReal = Number(plan.preco);
+      if (Math.abs(precoReal - precoEsperado) > 0.01) {
+        throw new PaymentError(`O preço deste plano é agora ${precoReal.toLocaleString("pt-PT")} Kz. Confirma o novo valor antes de renovar.`, 409);
+      }
+      if (Number(subscriber.saldo) < precoReal) throw new PaymentError("Saldo insuficiente. Carrega a tua carteira primeiro.", 402);
+
+      const now = new Date();
+      // Período novo: a partir do fim atual se ainda não passou (renovação antecipada), senão a partir de agora.
+      const base = sub.renovacaoEm.getTime() > now.getTime() ? sub.renovacaoEm : now;
+      const novaData = addOneMonth(base);
+
+      if (sub.estado !== "ativa") {
+        // Reativar: não pode haver outra 'ativa' do mesmo par (índice único).
+        const [other] = await tx.select({ id: subscriptionsTable.id }).from(subscriptionsTable).where(and(
+          eq(subscriptionsTable.subscriitorId, req.userId!),
+          eq(subscriptionsTable.criadorId, sub.criadorId),
+          eq(subscriptionsTable.estado, "ativa"),
+        )).limit(1);
+        if (other) throw new PaymentError("Já tens uma subscrição activa para este criador.", 409);
+      }
+
+      await cobrarSubscricao(tx, req.userId!, plan, `Renovação: ${plan.nome}`);
+      const [updated] = await tx.update(subscriptionsTable)
+        .set({ estado: "ativa", renovacaoEm: novaData })
+        .where(eq(subscriptionsTable.id, sub.id))
+        .returning();
+      return updated;
+    });
+
+    res.json({ id: result.id, estado: result.estado, renovacaoEm: result.renovacaoEm?.toISOString() ?? null });
+  } catch (err) {
+    if (err instanceof PaymentError) {
+      res.status(err.httpStatus).json({ error: err.message });
+      return;
+    }
+    if ((err as { code?: string; cause?: { code?: string } })?.code === "23505" || (err as { cause?: { code?: string } })?.cause?.code === "23505") {
+      res.status(409).json({ error: "Já tens uma subscrição activa para este criador." });
+      return;
+    }
+    req.log.error({ err }, "Subscription renewal error");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Cancelar subscrição: não renova e mantém o acesso até ao fim do período pago
 router.delete("/subscriptions/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
-  await db.update(subscriptionsTable).set({ estado: "cancelada" }).where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.subscriitorId, req.userId!)));
-  res.json({ ok: true });
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  const [sub] = await db.select().from(subscriptionsTable)
+    .where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.subscriitorId, req.userId!)));
+  // Subscrição inexistente OU de outro utilizador: 404 (não revela a existência).
+  if (!sub) { res.status(404).json({ error: "Subscrição não encontrada." }); return; }
+  if (sub.estado === "expirada") { res.status(409).json({ error: "Esta subscrição já terminou." }); return; }
+
+  if (sub.estado === "ativa") {
+    await db.update(subscriptionsTable).set({ estado: "cancelada" })
+      .where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.subscriitorId, req.userId!), eq(subscriptionsTable.estado, "ativa")));
+  }
+  // Paga: acesso até renovacao_em. Gratuita (sem data): o acesso termina já.
+  res.json({ ok: true, estado: "cancelada", acessoAte: sub.renovacaoEm?.toISOString() ?? null });
+});
+
+// ── Tipo de subscrição da criadora (gratuita | paga) ────────────────────────────
+// Só vale para NOVAS subscrições; as em curso mantêm-se até ao fim do período.
+const subscriptionTypeSchema = z.object({ tipo: z.enum(["gratuita", "paga"]) });
+
+router.get("/creator/subscription-type", requireAuth, requireCreator, async (req: AuthRequest, res): Promise<void> => {
+  const [u] = await db.select({ tipoSubscricao: usersTable.tipoSubscricao }).from(usersTable).where(eq(usersTable.id, req.userId!));
+  res.json({ tipo: u?.tipoSubscricao ?? "paga" });
+});
+
+router.patch("/creator/subscription-type", requireAuth, requireCreator, validate(subscriptionTypeSchema), async (req: AuthRequest, res): Promise<void> => {
+  const { tipo } = req.body as z.infer<typeof subscriptionTypeSchema>;
+  await db.update(usersTable).set({ tipoSubscricao: tipo }).where(eq(usersTable.id, req.userId!));
+  res.json({ tipo });
 });
 
 export default router;

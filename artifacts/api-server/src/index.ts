@@ -8,6 +8,7 @@ dotenv.config();
 import app from "./app";
 import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
+import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 
 if (!process.env.NODE_ENV) {
   // Falha fechada: sem NODE_ENV o servidor corre como produção (nunca como desenvolvimento).
@@ -28,6 +29,9 @@ const server = app.listen(port, () => {
 
 // Inicializar Socket.io (partilha a mesma porta do HTTP)
 initSocket(server);
+
+// Expira subscrições vencidas e notifica (nunca cobra; renovação é manual)
+startSubscriptionExpiryJob();
 
 // Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (40 minutos / 2400s):
 server.requestTimeout = 40 * 60 * 1000; // 2.400.000 ms (alinhado com o Nginx a 2400s)
