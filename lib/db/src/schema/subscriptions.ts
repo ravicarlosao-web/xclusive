@@ -1,7 +1,8 @@
-import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 
-export const subscriptionEstadoEnum = pgEnum("subscription_estado", ["ativa", "cancelada"]);
+export const subscriptionEstadoEnum = pgEnum("subscription_estado", ["ativa", "cancelada", "expirada"]);
 export const purchaseTipoEnum = pgEnum("purchase_tipo", ["subscricao", "ppv", "gorjeta", "bilhete_live"]);
 
 export const subscriptionPlansTable = pgTable("subscription_plans", {
@@ -21,9 +22,16 @@ export const subscriptionsTable = pgTable("subscriptions", {
   planoId: integer("plano_id").references(() => subscriptionPlansTable.id, { onDelete: "set null" }),
   estado: subscriptionEstadoEnum("estado").notNull().default("ativa"),
   inicioEm: timestamp("inicio_em").notNull().defaultNow(),
+  /**
+   * Fim do período pago. NULL = subscrição gratuita (sem data de fim).
+   * Acesso: ver lib/exclusiveAccess.ts. Escrito na criação, na renovação manual e lido pelo job de expiração.
+   */
   renovacaoEm: timestamp("renovacao_em"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
-});
+}, (t) => [
+  // No máximo uma subscrição "ativa" por par subscritor/criador (duplicados e cliques duplos).
+  uniqueIndex("subscriptions_unica_ativa").on(t.subscriitorId, t.criadorId).where(sql`${t.estado} = 'ativa'`),
+]);
 
 export const purchasesTable = pgTable("purchases", {
   id: serial("id").primaryKey(),

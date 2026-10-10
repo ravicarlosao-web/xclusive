@@ -4,6 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const tipoContaEnum = pgEnum("tipo_conta", ["pessoal", "criador"]);
+export const tipoSubscricaoEnum = pgEnum("tipo_subscricao", ["gratuita", "paga"]);
 
 // Roles: 'user' | 'creator' | 'admin' | 'superadmin'
 // Added via: ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user';
@@ -40,6 +41,12 @@ export const usersTable = pgTable("users", {
    * Quando definida, sobrepõe a taxa global exclusivamente para este criador.
    */
   comissaoPersonalizada: numeric("comissao_personalizada", { precision: 5, scale: 2 }),
+  /**
+   * Tipo de subscrição da criadora para NOVAS subscrições: "gratuita" (sem cobrança nem fim)
+   * ou "paga" (plano, 1 mês, renovação manual). Default "paga" = comportamento anterior.
+   * Subscrições em curso não são afetadas por mudanças.
+   */
+  tipoSubscricao: tipoSubscricaoEnum("tipo_subscricao").notNull().default("paga"),
 }, (table) => [
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
 ]);

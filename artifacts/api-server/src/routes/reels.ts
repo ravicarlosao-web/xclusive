@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, reelsTable, likesTable, commentsTable, usersTable, subscriptionsTable } from "@workspace/db";
+import { db, reelsTable, likesTable, commentsTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 
 const router = Router();
 
@@ -57,21 +58,6 @@ router.delete("/reels/:id/like", requireAuth, async (req: AuthRequest, res): Pro
   await db.delete(likesTable).where(and(eq(likesTable.utilizadorId, req.userId!), eq(likesTable.alvoTipo, "reel"), eq(likesTable.alvoId, id)));
   res.json({ ok: true });
 });
-
-/** Verifica se utilizador tem subscrição ativa a um criador */
-async function temSubscricaoAtiva(userId: number | undefined, criadorId: number): Promise<boolean> {
-  if (userId === criadorId) return true;
-  if (!userId) return false;
-  const [sub] = await db.select({ id: subscriptionsTable.id })
-    .from(subscriptionsTable)
-    .where(and(
-      eq(subscriptionsTable.subscriitorId, userId),
-      eq(subscriptionsTable.criadorId, criadorId),
-      eq(subscriptionsTable.estado, "ativa"),
-    ))
-    .limit(1);
-  return !!sub;
-}
 
 async function formatReel(reel: any, userId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, reel.autorId));

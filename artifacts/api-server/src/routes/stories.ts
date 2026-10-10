@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable, subscriptionsTable } from "@workspace/db";
+import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable } from "@workspace/db";
 import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 
 const router = Router();
 
@@ -26,15 +27,8 @@ router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise
   for (const s of allStories) {
     if (s.audiencia === "subscritores" && s.autorId !== userId) {
       if (!userId) continue; // sem sessão → ignorar
-      const [sub] = await db.select({ id: subscriptionsTable.id })
-        .from(subscriptionsTable)
-        .where(and(
-          eq(subscriptionsTable.subscriitorId, userId),
-          eq(subscriptionsTable.criadorId, s.autorId),
-          eq(subscriptionsTable.estado, "ativa"),
-        ))
-        .limit(1);
-      if (!sub) continue; // sem subscrição → ignorar
+      const sub = await temSubscricaoAtiva(userId, s.autorId, now);
+      if (!sub) continue; // sem subscrição com acesso (ou expirada) → ignorar
     }
     stories.push(s);
   }
