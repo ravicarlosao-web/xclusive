@@ -40,6 +40,18 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     queryClient.invalidateQueries({ queryKey: [`/api/users/${post.autor.username}/posts`] });
   }
 
+  // Depois de desbloquear/subscrever, refaz os pedidos para o servidor devolver os URLs assinados
+  // (só para quem tem acesso). Só então o cartão deixa de depender do booleano local.
+  async function refreshAccess() {
+    const keys = [
+      ['/api/feed'],
+      ['/api/explore'],
+      [`/api/users/${post.autor.username}/posts`],
+      [`/api/posts/${post.id}`],
+    ];
+    await Promise.allSettled(keys.map(queryKey => queryClient.invalidateQueries({ queryKey })));
+  }
+
   const handleShare = async () => {
     const url = `${window.location.origin}/perfil/${post.autor.username}`;
     if (navigator.share) {
@@ -469,7 +481,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           creatorUsername={post.autor.username}
           creatorNome={post.autor.nomeExibicao || post.autor.username}
           preco={Number(post.precoDesbloqueio)}
-          onUnlocked={() => setLocalUnlocked(true)}
+          onUnlocked={async () => { await refreshAccess(); setLocalUnlocked(true); }}
         />
       )}
 
@@ -483,7 +495,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           creatorAvatar={post.autor.avatarUrl || null}
           creatorVerificado={post.autor.verificado ?? false}
           preco={4990}
-          onSubscribed={() => setLocalSubscribed(true)}
+          onSubscribed={async () => { await refreshAccess(); setLocalSubscribed(true); }}
         />
       )}
     </>
