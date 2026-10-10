@@ -42,6 +42,22 @@ export const adminApi = {
   getKycQueue: () => adminFetch('/admin/creators/kyc-queue'),
   updateKyc: (id: number, data: any) =>
     adminFetch('/admin/creators/' + id + '/kyc', { method: 'PATCH', body: JSON.stringify(data) }),
+  // Documentos KYC: pede ao backend o URL assinado (60 s); cada pedido fica no audit_log.
+  // Só aceita caminhos do próprio backend (o token de admin nunca vai para outro destino).
+  getKycDocumentUrl: (apiPath: string): Promise<{ url: string; expiraEm: string }> => {
+    if (!/^\/api\/admin\/kyc\/\d+\/(documento|selfie|liveness)$/.test(apiPath)) {
+      return Promise.reject(new Error('Caminho inválido'));
+    }
+    return adminFetch(apiPath.slice(API_BASE.length));
+  },
+  // Registos antigos: o proxy /api/admin/media exige o token de admin, por isso é pedido como blob.
+  getAdminMediaBlob: async (apiPath: string): Promise<Blob> => {
+    if (!apiPath.startsWith('/api/admin/media?')) throw new Error('Caminho inválido');
+    const token = localStorage.getItem('admin_token');
+    const res = await fetch(apiPath, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  },
   getCreatorPlans: (id: number) => adminFetch('/admin/creators/' + id + '/plans'),
   adjustBalance: (id: number, data: any) =>
     adminFetch('/admin/creators/' + id + '/balance-adjustment', { method: 'POST', body: JSON.stringify(data) }),
