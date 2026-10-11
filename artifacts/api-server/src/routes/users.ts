@@ -6,6 +6,7 @@ import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
+import { postVisivel } from "../lib/takedown";
 
 const updateProfileSchema = z.object({
   nomeExibicao: z.string().min(1).max(100).optional(),
@@ -134,7 +135,7 @@ router.get(["/users/top-creators", "/creators/top"], optionalAuth, async (req: A
         totalPosts: sql<number>`count(*)::int`,
       })
       .from(postsTable)
-      .where(inArray(postsTable.autorId, candidateIds))
+      .where(and(inArray(postsTable.autorId, candidateIds), postVisivel()))
       .groupBy(postsTable.autorId);
 
     const postsCountMap = new Map<number, number>();
@@ -145,7 +146,7 @@ router.get(["/users/top-creators", "/creators/top"], optionalAuth, async (req: A
     const allUserPosts = await db
       .select({ id: postsTable.id, autorId: postsTable.autorId })
       .from(postsTable)
-      .where(inArray(postsTable.autorId, candidateIds));
+      .where(and(inArray(postsTable.autorId, candidateIds), postVisivel()));
 
     const postIds = allUserPosts.map(p => p.id);
     const postToAuthorMap = new Map<number, number>();
@@ -384,11 +385,12 @@ router.get("/users/:username", optionalAuth, async (req: AuthRequest, res): Prom
 
   const raw = Array.isArray(username) ? username[0] : username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+  // Conta suspensa (inclui perfis retirados por denúncia): o perfil deixa de ser servido
+  if (!user || !user.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
   const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
   const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
-  const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(eq(postsTable.autorId, user.id));
+  const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivel()));
 
   let estaASeguir = false;
   let segueVoce = false;
@@ -514,7 +516,7 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const posts = await db.select().from(postsTable).where(eq(postsTable.autorId, user.id)).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
+  const posts = await db.select().from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivel())).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
 
   const result = await Promise.all(posts.map(async (p) => {
     const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);

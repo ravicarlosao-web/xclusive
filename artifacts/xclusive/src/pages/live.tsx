@@ -36,7 +36,9 @@ import {
   Copy,
   Clock,
   MessageSquare,
+  Flag,
 } from 'lucide-react';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getFreshAuthToken } from '@workspace/api-client-react';
@@ -1168,6 +1170,7 @@ export default function LivePage() {
 
   // Controlo de som
   const [isMuted, setIsMuted] = useState(true);
+  const [reportLiveOpen, setReportLiveOpen] = useState(false);
   const toggleMute = () => {
     setIsMuted((prev) => !prev);
   };
@@ -1426,10 +1429,19 @@ export default function LivePage() {
                 >
                   <Copy className="w-4 h-4" /> Copiar link
                 </DropdownMenuItem>
+                {!isCreator && streamId !== null && (
+                  <DropdownMenuItem onClick={() => setReportLiveOpen(true)} className="gap-2 cursor-pointer text-red-400">
+                    <Flag className="w-4 h-4" /> Denunciar live
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </header>
+
+        {streamId !== null && (
+          <ReportDialog open={reportLiveOpen} onClose={() => setReportLiveOpen(false)} targetType="live" targetId={streamId} />
+        )}
 
         {/* ── Bottom Overlay: Chat Feed + Input Bar ─────────────────────────────── */}
         <div className="relative z-20 flex flex-col justify-end pointer-events-auto bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-12 pb-safe px-3">

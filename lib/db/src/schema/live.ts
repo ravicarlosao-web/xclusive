@@ -20,6 +20,10 @@ export const liveStreamsTable = pgTable("live_streams", {
   tipo: liveAcessoEnum("tipo").notNull().default("gratuita"),
   // Preço inteiro em Kz; 0 quando gratuita. Limites validados em lib/liveTicket.ts.
   preco: numeric("preco", { precision: 10, scale: 2 }).notNull().default("0"),
+  /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 }, (t) => [
   check(
     "live_streams_tipo_preco_chk",

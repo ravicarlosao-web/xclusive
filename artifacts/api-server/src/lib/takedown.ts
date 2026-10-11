@@ -1,0 +1,150 @@
+import { and, eq, isNull, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import {
+  db, postsTable, postMediaTable, reelsTable, storiesTable, commentsTable, liveStreamsTable,
+  usersTable, notificationsTable,
+} from "@workspace/db";
+import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
+
+/**
+ * Retirada de conteúdo (takedown) e denúncias.
+ *
+ * Retirar = ESCONDER (retirado_em / retirado_motivo / retirado_por). Nada é apagado e os ficheiros no
+ * Bunny ficam retidos; só `apagarFicheiros` (ação explícita e auditada do admin) os remove.
+ * Perfil: "retirar" = suspender a conta (users.ativo = false), que já é reversível.
+ */
+
+export const TARGET_TYPES = ["post", "reel", "story", "comment", "user", "live"] as const;
+export type TargetType = typeof TARGET_TYPES[number];
+
+export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "violencia", "assedio", "spam", "outro"] as const;
+export type ReportReason = typeof REPORT_REASONS[number];
+
+/** E-mail de contacto para denúncias (configurável por REPORTS_CONTACT_EMAIL). */
+export const REPORTS_CONTACT_EMAIL = process.env.REPORTS_CONTACT_EMAIL || "denuncias@xclusive.ao";
+
+export const TARGET_LABEL: Record<TargetType, string> = {
+  post: "publicação", reel: "reel", story: "story", comment: "comentário", user: "perfil", live: "live",
+};
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Q = Tx | typeof db;
+
+// ── Condições de leitura: TODAS as queries que servem conteúdo usam estas (excluem retirados e autores suspensos) ──
+const autorAtivo = (col: unknown): SQL => sql`${col} IN (SELECT id FROM users WHERE ativo)`;
+export const postVisivel = (): SQL => and(isNull(postsTable.retiradoEm), autorAtivo(postsTable.autorId))!;
+export const reelVisivel = (): SQL => and(isNull(reelsTable.retiradoEm), autorAtivo(reelsTable.autorId))!;
+export const storyVisivel = (): SQL => and(isNull(storiesTable.retiradoEm), autorAtivo(storiesTable.autorId))!;
+export const commentVisivel = (): SQL => isNull(commentsTable.retiradoEm);
+export const liveVisivel = (): SQL => and(isNull(liveStreamsTable.retiradoEm), autorAtivo(liveStreamsTable.criadorId))!;
+
+export interface TargetInfo {
+  ownerId: number;
+  removido: boolean;
+  /** Texto curto do alvo (legenda/comentário/nome) para o admin. */
+  resumo: string | null;
+  /** URLs guardados do média (chave "paid/..." ou URL público). */
+  media: { tipo: string; url: string }[];
+  ownerRole?: string;
+}
+
+/** Lê o alvo (existência, dono, estado, resumo e média). null se não existir. */
+export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<TargetInfo | null> {
+  switch (type) {
+    case "post": {
+      const [p] = await q.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
+      if (!p) return null;
+      const media = await q.select().from(postMediaTable).where(eq(postMediaTable.postId, id)).orderBy(postMediaTable.ordem);
+      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })) };
+    }
+    case "reel": {
+      const [r] = await q.select().from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
+      if (!r) return null;
+      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }] };
+    }
+    case "story": {
+      const [s] = await q.select().from(storiesTable).where(eq(storiesTable.id, id)).limit(1);
+      if (!s) return null;
+      return { ownerId: s.autorId, removido: !!s.retiradoEm, resumo: null, media: [{ tipo: s.tipo === "video" ? "video" : "imagem", url: s.mediaUrl }] };
+    }
+    case "comment": {
+      const [c] = await q.select().from(commentsTable).where(eq(commentsTable.id, id)).limit(1);
+      if (!c) return null;
+      return { ownerId: c.autorId, removido: !!c.retiradoEm, resumo: c.texto, media: [] };
+    }
+    case "live": {
+      const [l] = await q.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, id)).limit(1);
+      if (!l) return null;
+      return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [] };
+    }
+    case "user": {
+      const [u] = await q.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      if (!u) return null;
+      return { ownerId: u.id, removido: !u.ativo, resumo: `@${u.username}`, media: [], ownerRole: u.role };
+    }
+  }
+}
+
+/**
+ * Retira (esconde) o alvo. Idempotente: devolve `mudou=false` se já estava retirado.
+ * Perfil → suspende a conta (recusa contas admin/superadmin). Live → termina a transmissão.
+ * NÃO apaga ficheiros.
+ */
+export async function retirarAlvo(tx: Tx, type: TargetType, id: number, porAdminId: number | null, motivo: string): Promise<{ mudou: boolean }> {
+  const marca = { retiradoEm: new Date(), retiradoMotivo: motivo.slice(0, 500), retiradoPor: porAdminId };
+  switch (type) {
+    case "post": return { mudou: (await tx.update(postsTable).set(marca).where(and(eq(postsTable.id, id), isNull(postsTable.retiradoEm))).returning({ id: postsTable.id })).length > 0 };
+    case "reel": return { mudou: (await tx.update(reelsTable).set(marca).where(and(eq(reelsTable.id, id), isNull(reelsTable.retiradoEm))).returning({ id: reelsTable.id })).length > 0 };
+    case "story": return { mudou: (await tx.update(storiesTable).set(marca).where(and(eq(storiesTable.id, id), isNull(storiesTable.retiradoEm))).returning({ id: storiesTable.id })).length > 0 };
+    case "comment": return { mudou: (await tx.update(commentsTable).set(marca).where(and(eq(commentsTable.id, id), isNull(commentsTable.retiradoEm))).returning({ id: commentsTable.id })).length > 0 };
+    case "live": return { mudou: (await tx.update(liveStreamsTable).set({ ...marca, status: "terminado", terminadoEm: new Date() }).where(and(eq(liveStreamsTable.id, id), isNull(liveStreamsTable.retiradoEm))).returning({ id: liveStreamsTable.id })).length > 0 };
+    case "user": {
+      const [u] = await tx.select({ role: usersTable.role, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      if (!u) return { mudou: false };
+      if (u.role === "admin" || u.role === "superadmin") throw new TakedownError("Não é possível suspender uma conta de administrador.", 403);
+      return { mudou: (await tx.update(usersTable).set({ ativo: false }).where(and(eq(usersTable.id, id), eq(usersTable.ativo, true))).returning({ id: usersTable.id })).length > 0 };
+    }
+  }
+}
+
+/** Repõe o alvo (desfaz a retirada). Live fica terminada; perfil volta a ativo. */
+export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promise<{ mudou: boolean }> {
+  const limpa = { retiradoEm: null, retiradoMotivo: null, retiradoPor: null };
+  switch (type) {
+    case "post": return { mudou: (await tx.update(postsTable).set(limpa).where(eq(postsTable.id, id)).returning({ id: postsTable.id })).length > 0 };
+    case "reel": return { mudou: (await tx.update(reelsTable).set(limpa).where(eq(reelsTable.id, id)).returning({ id: reelsTable.id })).length > 0 };
+    case "story": return { mudou: (await tx.update(storiesTable).set(limpa).where(eq(storiesTable.id, id)).returning({ id: storiesTable.id })).length > 0 };
+    case "comment": return { mudou: (await tx.update(commentsTable).set(limpa).where(eq(commentsTable.id, id)).returning({ id: commentsTable.id })).length > 0 };
+    case "live": return { mudou: (await tx.update(liveStreamsTable).set(limpa).where(eq(liveStreamsTable.id, id)).returning({ id: liveStreamsTable.id })).length > 0 };
+    case "user": return { mudou: (await tx.update(usersTable).set({ ativo: true }).where(eq(usersTable.id, id)).returning({ id: usersTable.id })).length > 0 };
+  }
+}
+
+/**
+ * Apaga os FICHEIROS do alvo no Bunny (privado "paid/..." e público). Só para ser chamado por uma ação
+ * explícita e auditada do admin, e apenas sobre conteúdo já retirado. Não toca nas linhas da BD.
+ */
+export async function apagarFicheiros(media: { url: string }[]): Promise<{ apagados: number; falhas: number; ignorados: number }> {
+  let apagados = 0, falhas = 0, ignorados = 0;
+  for (const m of media) {
+    try {
+      if (isPaidKey(m.url)) { await deletePrivate(m.url); apagados++; continue; }
+      const key = getStorageKeyFromPublicUrl(m.url);
+      if (!key) { ignorados++; continue; }
+      await deleteFile(key); apagados++;
+    } catch { falhas++; }
+  }
+  return { apagados, falhas, ignorados };
+}
+
+/** Notificação do sistema (sem ator e sem alvo: não revela quem denunciou nem liga ao conteúdo retirado). */
+export async function notificarSistema(tx: Tx, destinatarioId: number, mensagem: string): Promise<void> {
+  await tx.insert(notificationsTable).values({ destinatarioId, tipo: "sistema", mensagem: mensagem.slice(0, 1000) });
+}
+
+export class TakedownError extends Error {
+  constructor(msg: string, public readonly httpStatus: number) {
+    super(msg);
+    this.name = "TakedownError";
+  }
+}

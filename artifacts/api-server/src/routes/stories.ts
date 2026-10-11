@@ -3,6 +3,7 @@ import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTab
 import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
+import { storyVisivel } from "../lib/takedown";
 
 const router = Router();
 
@@ -19,8 +20,8 @@ router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise
   }
 
   const allStories = authorIds.length > 0
-    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds))).orderBy(desc(storiesTable.criadoEm))
-    : await db.select().from(storiesTable).where(gt(storiesTable.expiraEm, now)).orderBy(desc(storiesTable.criadoEm)).limit(20);
+    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel())).orderBy(desc(storiesTable.criadoEm))
+    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel())).orderBy(desc(storiesTable.criadoEm)).limit(20);
 
   // Filtrar stories de audiência restrita: "subscritores" só visível com subscrição ativa
   const stories: typeof allStories = [];

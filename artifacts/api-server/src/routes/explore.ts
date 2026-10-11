@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
-import { sql, desc, inArray } from "drizzle-orm";
+import { sql, desc, inArray, and, eq } from "drizzle-orm";
+import { postVisivel } from "../lib/takedown";
 import { optionalAuth, type AuthRequest } from "../lib/auth";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl } from "../lib/storage";
@@ -18,7 +19,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
     .from(postsTable)
     // Cast the enum to text so this route also works while older databases
     // still have a post_tipo enum without the newer "texto" value.
-    .where(sql`${postsTable.tipo}::text <> 'texto'`)
+    .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivel()))
     .orderBy(desc(postsTable.criadoEm))
     .limit(limit)
     .offset(offset);
@@ -108,7 +109,7 @@ router.get("/search", optionalAuth, async (req: AuthRequest, res): Promise<void>
 
   if (type === "all" || type === "accounts") {
     const users = await db.select().from(usersTable)
-      .where(sql`lower(${usersTable.username}) like ${pattern} OR lower(${usersTable.nomeExibicao}) like ${pattern}`)
+      .where(and(eq(usersTable.ativo, true), sql`(lower(${usersTable.username}) like ${pattern} OR lower(${usersTable.nomeExibicao}) like ${pattern})`))
       .limit(10);
 
     accounts = users.map(u => ({

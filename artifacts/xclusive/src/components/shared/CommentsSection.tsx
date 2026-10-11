@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Comment, UserSummary } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Heart, Send } from 'lucide-react';
+import { Heart, Send, Flag } from 'lucide-react';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLocalCommentsForPost, addLocalComment } from '@/lib/localComments';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
   const { user } = useAuth();
   const { toast } = useToast();
   const [texto, setTexto] = useState('');
+  const [reportCommentId, setReportCommentId] = useState<number | null>(null);
   const [localComments, setLocalComments] = useState<Comment[]>(() => getLocalCommentsForPost(postId));
 
   // Sincroniza com localStorage sempre que a secção abre (garante persistência entre refresh)
@@ -87,6 +89,7 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
   };
 
   return (
+    <>
     <AnimatePresence initial={false}>
       {open && (
         <motion.div
@@ -122,6 +125,16 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
                       </p>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-[11px] text-muted-foreground">{timeAgo(comment.criadoEm)}</span>
+                        {/* Só comentários do servidor (ids reais) e de outros utilizadores podem ser denunciados */}
+                        {seedComments.some(c => c.id === comment.id) && comment.autor.username !== user?.username && (
+                          <button
+                            onClick={() => setReportCommentId(comment.id)}
+                            className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-0.5"
+                            aria-label="Denunciar comentário"
+                          >
+                            <Flag className="w-3 h-3" /> Denunciar
+                          </button>
+                        )}
                         {(() => {
                           const liked = isLiked(comment);
                           const delta = liked === comment.curtido ? 0 : (liked ? 1 : -1);
@@ -167,5 +180,9 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
         </motion.div>
       )}
     </AnimatePresence>
+    {reportCommentId !== null && (
+      <ReportDialog open onClose={() => setReportCommentId(null)} targetType="comment" targetId={reportCommentId} />
+    )}
+    </>
   );
 }
