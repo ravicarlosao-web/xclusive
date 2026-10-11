@@ -46,7 +46,10 @@ import {
   notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey } from "../lib/storage.js";
+import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured } from "../lib/storage.js";
+import {
+  TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
+} from "../lib/takedown.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
 import { getCommissionRate } from "../lib/commission.js";
 
@@ -249,7 +252,7 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       db.select({ postsHoje: count() }).from(postsTable)
         .where(gte(postsTable.criadoEm, hoje)),
       db.select({ denunciasPendentes: count() }).from(reportsTable)
-        .where(eq(reportsTable.status, "pending")),
+        .where(eq(reportsTable.status, "pendente")),
       db.select({ levantamentosPendentes: count() }).from(withdrawalRequestsTable)
         .where(eq(withdrawalRequestsTable.status, "pendente")),
       db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
@@ -413,6 +416,15 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "withdrawal_approved": return `${admin} aprovou levantamento${target}`;
     case "withdrawal_rejected": return `${admin} rejeitou levantamento${target}`;
     case "withdrawal_paid": return `${admin} marcou levantamento${target} como pago`;
+    case "report_em_analise": return `${admin} pôs a denúncia${target} em análise`;
+    case "report_procedente": return `${admin} deu como procedente a denúncia${target}`;
+    case "report_improcedente": return `${admin} deu como improcedente a denúncia${target}`;
+    case "report_conteudo_visto": return `${admin} consultou o conteúdo denunciado${target}`;
+    case "conteudo_retirado": return `${admin} retirou conteúdo${target}`;
+    case "conteudo_retirado_auto": return `Retirada automática (denúncia de menor)${target}`;
+    case "conteudo_restaurado": return `${admin} repôs conteúdo${target}`;
+    case "conteudo_ficheiros_apagar_pedido": return `${admin} pediu a eliminação dos ficheiros do conteúdo${target}`;
+    case "conteudo_ficheiros_apagados": return `${admin} eliminou os ficheiros do conteúdo${target}`;
     case "settings_update": return `${admin} actualizou definições da plataforma`;
     case "broadcast_send": return `${admin} enviou comunicado: ${details?.titulo ?? ""}`;
     case "balance_adjustment": return `${admin} ajustou saldo do criador${target}`;
@@ -1017,17 +1029,41 @@ router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res): 
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// DENÚNCIAS E RETIRADA DE CONTEÚDO (takedown)
+// Retirar = esconder (nada é apagado, ficheiros retidos). Decisão + retirada + suspensão + notificações +
+// audit_log acontecem na MESMA transação: se qualquer passo falhar, nada fica feito.
+// ────────────────────────────────────────────────────────────────────────────
+
+const REPORT_STATUSES = ["pendente", "em_analise", "procedente", "improcedente"] as const;
+type ReportStatus = typeof REPORT_STATUSES[number];
+/** Máquina de estados rígida: procedente e improcedente são finais. */
+const REPORT_TRANSITIONS: Record<ReportStatus, ReportStatus[]> = {
+  pendente: ["em_analise", "procedente", "improcedente"],
+  em_analise: ["procedente", "improcedente"],
+  procedente: [],
+  improcedente: [],
+};
+
 router.get("/admin/reports", async (req, res) => {
   try {
-    const { page = "1", limit = "10", targetType, status, reason } = req.query as Record<string, string>;
+    const { page = "1", limit = "10", targetType, status, reason, urgente } = req.query as Record<string, string>;
     const pageNum = Math.max(1, Number(page));
     const limitNum = Math.min(100, Math.max(1, Number(limit)));
     const offset = (pageNum - 1) * limitNum;
 
+    if (status && !REPORT_STATUSES.includes(status as ReportStatus)) {
+      return void res.status(400).json({ error: `Estado inválido. Valores permitidos: ${REPORT_STATUSES.join(", ")}` });
+    }
+    if (targetType && !TARGET_TYPES.includes(targetType as TargetType)) {
+      return void res.status(400).json({ error: `Tipo inválido. Valores permitidos: ${TARGET_TYPES.join(", ")}` });
+    }
+
     const conditions: any[] = [];
-    if (targetType) conditions.push(eq(reportsTable.targetType, targetType));
-    if (status) conditions.push(eq(reportsTable.status, status));
+    if (targetType) conditions.push(eq(reportsTable.targetType, targetType as TargetType));
+    if (status) conditions.push(eq(reportsTable.status, status as ReportStatus));
     if (reason) conditions.push(eq(reportsTable.reason, reason));
+    if (urgente === "1") conditions.push(eq(reportsTable.urgente, true));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [rows, [{ total }]] = await Promise.all([
@@ -1035,19 +1071,26 @@ router.get("/admin/reports", async (req, res) => {
         id: reportsTable.id,
         reporterId: reportsTable.reporterId,
         reporterUsername: usersTable.username,
+        anonimo: sql<boolean>`${reportsTable.reporterId} IS NULL`,
         targetType: reportsTable.targetType,
         targetId: reportsTable.targetId,
+        targetOwnerId: reportsTable.targetOwnerId,
         reason: reportsTable.reason,
+        urgente: reportsTable.urgente,
         description: reportsTable.description,
+        adminNotes: reportsTable.adminNotes,
         status: reportsTable.status,
+        acaoRetirou: reportsTable.acaoRetirou,
+        acaoSuspendeu: reportsTable.acaoSuspendeu,
         resolvedBy: reportsTable.resolvedBy,
         resolvedAt: reportsTable.resolvedAt,
         criadoEm: reportsTable.criadoEm,
+        // reporter_contact e reporter_ip só no detalhe / nunca (o IP não sai da BD)
       })
         .from(reportsTable)
         .leftJoin(usersTable, eq(reportsTable.reporterId, usersTable.id))
         .where(where)
-        .orderBy(desc(reportsTable.criadoEm))
+        .orderBy(desc(reportsTable.urgente), desc(reportsTable.criadoEm))
         .limit(limitNum)
         .offset(offset),
       db.select({ total: count() }).from(reportsTable).where(where),
@@ -1060,32 +1103,238 @@ router.get("/admin/reports", async (req, res) => {
   }
 });
 
+// Detalhe: denúncia + conteúdo denunciado (URLs assinados de curta duração para o média privado).
+// Cada visualização grava audit_log na MESMA transação: se o registo falhar, o conteúdo não é devolvido.
+router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+
+    const out = await db.transaction(async (tx) => {
+      const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
+      if (!r) throw new TakedownError("Denúncia não encontrada", 404);
+      const alvo = await lerAlvo(tx, r.targetType, r.targetId);
+      const [dono] = r.targetOwnerId
+        ? await tx.select({ id: usersTable.id, username: usersTable.username, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, r.targetOwnerId))
+        : [];
+      const [{ outras }] = await tx.select({ outras: count() }).from(reportsTable)
+        .where(and(eq(reportsTable.targetType, r.targetType), eq(reportsTable.targetId, r.targetId)));
+
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: "report_conteudo_visto", targetType: "report", targetId: id,
+        details: { alvo: { tipo: r.targetType, id: r.targetId } }, ipAddress: req.ip ?? null,
+      });
+
+      const media = (alvo?.media ?? []).map((m) => {
+        // Média privado ("paid/..."): URL assinado de 5 minutos (nunca guardado nem registado)
+        if (isPaidKey(m.url)) {
+          return { tipo: m.tipo, url: isPrivateStorageConfigured() ? getPrivateSignedUrl(m.url, 300).url : null };
+        }
+        return { tipo: m.tipo, url: m.url };
+      });
+      const { reporterIp: _ip, ...rSemIp } = r;
+      return {
+        ...rSemIp,
+        reporterUsername: r.reporterId ? (await tx.select({ u: usersTable.username }).from(usersTable).where(eq(usersTable.id, r.reporterId)))[0]?.u ?? null : null,
+        totalDenunciasDoAlvo: Number(outras),
+        alvo: alvo ? { existe: true, removido: alvo.removido, resumo: alvo.resumo, media, dono: dono ?? null } : { existe: false },
+      };
+    });
+
+    res.set("Cache-Control", "no-store");
+    res.json(out);
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao obter denúncia");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
-    const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
-    if (!report) return void res.status(404).json({ error: "Denúncia não encontrada" });
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
 
-    const STATUS_VALIDOS = ["pending", "reviewing", "resolved", "dismissed"] as const;
-    if (req.body.status !== undefined && !STATUS_VALIDOS.includes(req.body.status)) {
-      return void res.status(400).json({ error: `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(", ")}` });
+    const novo = req.body?.status as ReportStatus;
+    if (!REPORT_STATUSES.includes(novo) || novo === "pendente") {
+      return void res.status(400).json({ error: "Estado inválido. Valores permitidos: em_analise, procedente, improcedente" });
+    }
+    const notas = typeof req.body.notes === "string" ? req.body.notes.slice(0, 1000) : undefined; // internas
+    const motivo = typeof req.body.motivo === "string" ? req.body.motivo.trim().slice(0, 300) : ""; // visível ao autor
+    const a = req.body.acoes ?? {};
+    const acoes = {
+      retirar: a.retirar === true,
+      suspender: a.suspender === true,
+      avisarAutor: a.avisarAutor === true,
+      avisarDenunciante: a.avisarDenunciante === true,
+    };
+    if (novo !== "procedente" && (acoes.retirar || acoes.suspender)) {
+      return void res.status(400).json({ error: "Só uma denúncia procedente pode retirar conteúdo ou suspender o autor." });
     }
 
-    const statusAnterior = report.status;
-    const updates: Partial<typeof reportsTable.$inferInsert> = {
-      resolvedBy: req.adminId ?? undefined,
-      resolvedAt: new Date(),
-    };
-    if (req.body.status !== undefined) updates.status = req.body.status;
-    if (typeof req.body.description === "string") updates.description = req.body.description.slice(0, 1000);
+    const updated = await db.transaction(async (tx) => {
+      const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).for("update");
+      if (!r) throw new TakedownError("Denúncia não encontrada", 404);
+      // Estado lido DEPOIS do lock: dois PATCH em simultâneo não passam ambos
+      if (!REPORT_TRANSITIONS[r.status].includes(novo)) {
+        throw new TakedownError(`Transição inválida: ${r.status} → ${novo}`, 409);
+      }
 
-    const [updated] = await db.update(reportsTable).set(updates).where(eq(reportsTable.id, id)).returning();
-    await logAudit(req, "report_resolve", "report", id, {
-      before: { status: statusAnterior }, after: { status: updated.status },
+      const final = novo === "procedente" || novo === "improcedente";
+      let retirou = false, suspendeu = false;
+      const ownerId = r.targetOwnerId;
+      const motivoRetirada = motivo || "Violação das regras da plataforma.";
+
+      if (acoes.retirar) {
+        const res1 = await retirarAlvo(tx, r.targetType, r.targetId, req.adminId!, motivoRetirada);
+        retirou = true;
+        if (res1.mudou) {
+          await tx.insert(auditLogTable).values({
+            adminId: req.adminId!, action: "conteudo_retirado", targetType: r.targetType, targetId: r.targetId,
+            details: { reportId: id, motivo: motivoRetirada }, ipAddress: req.ip ?? null,
+          });
+        }
+      }
+      if (acoes.suspender && ownerId && !(acoes.retirar && r.targetType === "user")) {
+        const res2 = await retirarAlvo(tx, "user", ownerId, req.adminId!, motivoRetirada);
+        suspendeu = true;
+        if (res2.mudou) {
+          await tx.insert(auditLogTable).values({
+            adminId: req.adminId!, action: "user_suspend", targetType: "user", targetId: ownerId,
+            details: { reportId: id, motivo: motivoRetirada }, ipAddress: req.ip ?? null,
+          });
+        }
+      }
+      if (r.targetType === "user" && acoes.retirar) suspendeu = true;
+
+      // Notificações (sem dados de quem denunciou)
+      if (ownerId && (acoes.avisarAutor || retirou || suspendeu) && final) {
+        const label = TARGET_LABEL[r.targetType];
+        const partes: string[] = [];
+        if (retirou && r.targetType !== "user") partes.push(`O teu ${label} foi retirado por violar as regras da plataforma.`);
+        if (suspendeu) partes.push("A tua conta foi suspensa por violação das regras da plataforma.");
+        if (!retirou && !suspendeu) partes.push(`Recebemos uma denúncia sobre o teu ${label} e analisámo-la. Lembra-te de cumprir as regras da plataforma.`);
+        if (motivo) partes.push(`Motivo: ${motivo}.`);
+        await notificarSistema(tx, ownerId, partes.join(" "));
+      }
+      if (r.reporterId && acoes.avisarDenunciante && final) {
+        await notificarSistema(tx, r.reporterId, novo === "procedente"
+          ? "Obrigado pela tua denúncia. Analisámos e tomámos medidas sobre o conteúdo."
+          : "Obrigado pela tua denúncia. Analisámos e, neste caso, não foi necessária qualquer ação.");
+      }
+
+      const [u] = await tx.update(reportsTable).set({
+        status: novo,
+        ...(notas !== undefined ? { adminNotes: notas } : {}),
+        ...(final ? { resolvedBy: req.adminId!, resolvedAt: new Date(), acaoRetirou: retirou, acaoSuspendeu: suspendeu } : {}),
+      }).where(eq(reportsTable.id, id)).returning();
+
+      // Auditoria dentro da transação: se falhar, reverte decisão, retirada, suspensão e notificações
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!,
+        action: `report_${novo}`,
+        targetType: "report",
+        targetId: id,
+        details: { before: { status: r.status }, after: { status: novo }, acoes: { retirou, suspendeu, avisarAutor: acoes.avisarAutor, avisarDenunciante: acoes.avisarDenunciante }, alvo: { tipo: r.targetType, id: r.targetId } },
+        ipAddress: req.ip ?? null,
+      });
+      return u;
     });
-    res.json(updated);
+
+    const { reporterIp: _ip, reporterContact: _c, ...seguro } = updated;
+    res.json(seguro);
   } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error({ err }, "Erro ao resolver denúncia");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// ── Retirada direta de conteúdo (sem denúncia): retirar / repor / apagar ficheiros ─────────────────────
+function parseAlvoParams(req: AdminRequest): { type: TargetType; id: number } | null {
+  const type = req.params.type as TargetType;
+  const id = Number(req.params.id);
+  if (!TARGET_TYPES.includes(type) || !Number.isInteger(id) || id <= 0) return null;
+  return { type, id };
+}
+
+router.post("/admin/content/:type/:id/retirar", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const p = parseAlvoParams(req);
+  if (!p) return void res.status(400).json({ error: "Tipo ou ID inválido" });
+  try {
+    const motivo = (typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "").slice(0, 300) || "Violação das regras da plataforma.";
+    const avisar = req.body?.avisarAutor !== false;
+    const r = await db.transaction(async (tx) => {
+      const alvo = await lerAlvo(tx, p.type, p.id);
+      if (!alvo) throw new TakedownError("Conteúdo não encontrado", 404);
+      const out = await retirarAlvo(tx, p.type, p.id, req.adminId!, motivo);
+      if (out.mudou) {
+        await tx.insert(auditLogTable).values({
+          adminId: req.adminId!, action: "conteudo_retirado", targetType: p.type, targetId: p.id,
+          details: { motivo }, ipAddress: req.ip ?? null,
+        });
+        if (avisar) {
+          await notificarSistema(tx, alvo.ownerId, p.type === "user"
+            ? `A tua conta foi suspensa por violação das regras da plataforma. Motivo: ${motivo}`
+            : `O teu ${TARGET_LABEL[p.type]} foi retirado por violar as regras da plataforma. Motivo: ${motivo}`);
+        }
+      }
+      return out;
+    });
+    res.json({ ok: true, retirado: r.mudou });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao retirar conteúdo");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.post("/admin/content/:type/:id/repor", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const p = parseAlvoParams(req);
+  if (!p) return void res.status(400).json({ error: "Tipo ou ID inválido" });
+  try {
+    const r = await db.transaction(async (tx) => {
+      const alvo = await lerAlvo(tx, p.type, p.id);
+      if (!alvo) throw new TakedownError("Conteúdo não encontrado", 404);
+      const out = await restaurarAlvo(tx, p.type, p.id);
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: "conteudo_restaurado", targetType: p.type, targetId: p.id,
+        details: { motivo: typeof req.body?.motivo === "string" ? req.body.motivo.slice(0, 300) : null }, ipAddress: req.ip ?? null,
+      });
+      return out;
+    });
+    res.json({ ok: true, reposto: r.mudou });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao repor conteúdo");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Eliminar os FICHEIROS no Bunny (privado e público) de conteúdo JÁ retirado. Ação explícita e irreversível:
+// exige { confirmar: true }; o pedido é auditado ANTES de apagar (se o audit falhar, nada é apagado).
+router.delete("/admin/content/:type/:id/ficheiros", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const p = parseAlvoParams(req);
+  if (!p) return void res.status(400).json({ error: "Tipo ou ID inválido" });
+  if (req.body?.confirmar !== true) return void res.status(400).json({ error: "Confirmação em falta (confirmar: true)." });
+  try {
+    const media = await db.transaction(async (tx) => {
+      const alvo = await lerAlvo(tx, p.type, p.id);
+      if (!alvo) throw new TakedownError("Conteúdo não encontrado", 404);
+      if (!alvo.removido) throw new TakedownError("O conteúdo tem de estar retirado antes de apagar os ficheiros.", 409);
+      if (alvo.media.length === 0) throw new TakedownError("Este conteúdo não tem ficheiros.", 400);
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: "conteudo_ficheiros_apagar_pedido", targetType: p.type, targetId: p.id,
+        details: { ficheiros: alvo.media.length }, ipAddress: req.ip ?? null,
+      });
+      return alvo.media;
+    });
+    const resultado = await apagarFicheiros(media);
+    await logAudit(req, "conteudo_ficheiros_apagados", p.type, p.id, resultado);
+    res.json({ ok: true, ...resultado });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao apagar ficheiros");
     res.status(500).json({ error: "Erro interno." });
   }
 });

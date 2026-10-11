@@ -13,6 +13,10 @@ export const postsTable = pgTable("posts", {
   exclusivo: boolean("exclusivo").notNull().default(false),
   precoDesbloqueio: numeric("preco_desbloqueio", { precision: 10, scale: 2 }),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 });
 
 export const postMediaTable = pgTable("post_media", {
@@ -45,6 +49,10 @@ export const commentsTable = pgTable("comments", {
   comentarioPaiId: integer("comentario_pai_id"),
   texto: text("texto").notNull(),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 });
 
 export const hashtagsTable = pgTable("hashtags", {

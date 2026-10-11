@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { StoryGroup } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { X, ChevronLeft, ChevronRight, Trash2, Heart, Send, Coins } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash2, Heart, Send, Coins, Flag } from 'lucide-react';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { TipModal } from '@/components/shared/TipModal';
@@ -56,6 +57,7 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
   const [replyText, setReplyText] = useState('');
   const [liked, setLiked] = useState(false);
   const [tipOpen, setTipOpen] = useState(false);
+  const [reportStoryId, setReportStoryId] = useState<number | null>(null);
   // Snapshot of who/what is being tipped, frozen at the moment the modal opens,
   // so background auto-advance can't change the target mid-flow.
   const [tipTarget, setTipTarget] = useState<{
@@ -223,6 +225,15 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
                 <Trash2 className="w-4 h-4 text-white" />
               </button>
             )}
+            {!isOwn && (
+              <button
+                onClick={() => { setPaused(true); setReportStoryId(story.id); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                aria-label="Denunciar story"
+              >
+                <Flag className="w-4 h-4 text-white" />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
@@ -338,6 +349,14 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
           }}
           postId={tipTarget.storyId}
           onTipSent={() => toast({ title: 'Gorjeta enviada!', description: `Enviaste uma gorjeta a ${tipTarget.username}.` })}
+        />
+      )}
+      {reportStoryId !== null && (
+        <ReportDialog
+          open
+          onClose={() => { setReportStoryId(null); handlePauseEnd(); }}
+          targetType="story"
+          targetId={reportStoryId}
         />
       )}
     </div>,

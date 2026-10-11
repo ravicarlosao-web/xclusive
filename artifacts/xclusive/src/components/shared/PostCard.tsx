@@ -1,6 +1,6 @@
 import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Coins, Play, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, Flag, Coins, Play, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
 import { UnlockPostModal } from '@/components/wallet/UnlockPostModal';
 import { SubscribeModal } from '@/components/wallet/SubscribeModal';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
@@ -76,6 +77,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     post.totalComentarios + getLocalCommentsForPost(post.id).length,
   );
   const [unlockOpen, setUnlockOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [localUnlocked, setLocalUnlocked] = useState(false);
   const [localSubscribed, setLocalSubscribed] = useState(false);
@@ -247,8 +249,13 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
               <Trash2 className="w-5 h-5" />
             </button>
           ) : (
-            <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
-              <MoreHorizontal className="w-5 h-5" />
+            <button
+              className="text-muted-foreground hover:text-destructive transition-colors p-2"
+              onClick={() => setReportOpen(true)}
+              title="Denunciar publicação"
+              aria-label="Denunciar publicação"
+            >
+              <Flag className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -471,6 +478,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         postId={post.id}
         onTipSent={handleTipSuccess}
       />
+
+      <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="post" targetId={post.id} />
 
       {/* Unlock Modal (pay-per-view) */}
       {post.precoDesbloqueio && (

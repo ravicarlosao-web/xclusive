@@ -12,6 +12,10 @@ export const storiesTable = pgTable("stories", {
   audiencia: storyAudienciaEnum("audiencia").notNull().default("todos"),
   expiraEm: timestamp("expira_em").notNull(),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 });
 
 export const storyViewsTable = pgTable("story_views", {

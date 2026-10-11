@@ -11,6 +11,10 @@ export const reelsTable = pgTable("reels", {
   somArtista: text("som_artista"),
   exclusivo: boolean("exclusivo").notNull().default(false),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 });
 
 export type Reel = typeof reelsTable.$inferSelect;

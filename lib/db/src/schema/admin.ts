@@ -17,18 +17,43 @@ import { usersTable } from "./users";
 
 // ─── reports ────────────────────────────────────────────────────────────────
 
+export const reportStatusEnum = pgEnum("report_status", ["pendente", "em_analise", "procedente", "improcedente"]);
+export const reportTargetEnum = pgEnum("report_target_type", ["post", "reel", "story", "comment", "user", "live"]);
+
+/**
+ * Denúncias de conteúdo. Máquina de estados rígida (routes/admin.ts, sob FOR UPDATE):
+ *   pendente → em_analise → procedente | improcedente      pendente → procedente | improcedente
+ * (procedente e improcedente são finais). O texto do denunciante (`description`) é IMUTÁVEL;
+ * as notas do admin ficam em `admin_notes`. Denunciante: utilizador (`reporter_id`) ou, na rota
+ * pública, só um contacto (`reporter_contact`).
+ */
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),
-  reporterId: integer("reporter_id").references(() => usersTable.id),
-  targetType: varchar("target_type", { length: 20 }).notNull(), // 'post' | 'comment' | 'user' | 'message'
+  reporterId: integer("reporter_id").references(() => usersTable.id, { onDelete: "set null" }),
+  targetType: reportTargetEnum("target_type").notNull(),
   targetId: integer("target_id").notNull(),
-  reason: varchar("reason", { length: 50 }).notNull(), // 'nudity_minor' | 'spam' | 'harassment' | 'copyright' | 'other'
+  /** Autor/dono do alvo no momento da denúncia (para avisar/suspender sem reler o alvo). */
+  targetOwnerId: integer("target_owner_id").references(() => usersTable.id, { onDelete: "set null" }),
+  reason: varchar("reason", { length: 50 }).notNull(), // 'menor' | 'sem_consentimento' | 'direitos_autor' | 'violencia' | 'assedio' | 'spam' | 'outro'
   description: text("description"),
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // 'pending' | 'reviewing' | 'resolved' | 'dismissed'
-  resolvedBy: integer("resolved_by").references(() => usersTable.id),
+  /** Denúncia prioritária (categoria 'menor'): fila própria no admin. */
+  urgente: boolean("urgente").notNull().default(false),
+  status: reportStatusEnum("status").notNull().default("pendente"),
+  /** Notas internas do admin (nunca sobrescrevem o texto do denunciante). */
+  adminNotes: text("admin_notes"),
+  acaoRetirou: boolean("acao_retirou").notNull().default(false),
+  acaoSuspendeu: boolean("acao_suspendeu").notNull().default(false),
+  /** Só na rota pública (sem conta): contacto e IP (apenas na BD; nunca em logs). */
+  reporterContact: varchar("reporter_contact", { length: 255 }),
+  reporterIp: varchar("reporter_ip", { length: 45 }),
+  resolvedBy: integer("resolved_by").references(() => usersTable.id, { onDelete: "set null" }),
   resolvedAt: timestamp("resolved_at"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
-});
+}, (t) => [
+  // Um só denunciante por alvo (utilizador com conta, ou contacto na rota pública).
+  uniqueIndex("reports_um_por_utilizador").on(t.reporterId, t.targetType, t.targetId).where(sql`${t.reporterId} IS NOT NULL`),
+  uniqueIndex("reports_um_por_contacto").on(t.reporterContact, t.targetType, t.targetId).where(sql`${t.reporterId} IS NULL AND ${t.reporterContact} IS NOT NULL`),
+]);
 
 export type Report = typeof reportsTable.$inferSelect;
 

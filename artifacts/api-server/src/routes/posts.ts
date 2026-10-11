@@ -7,6 +7,7 @@ import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl } from "../lib/storage";
+import { postVisivel, commentVisivel } from "../lib/takedown";
 import { getCommissionRate, calcComissao } from "../lib/commission";
 
 const createPostSchema = z.object({
@@ -46,8 +47,8 @@ router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> =
   const limit = Math.min(20, parseInt(String(req.query.limit || "12")));
   const offset = (page - 1) * limit;
 
-  const [{ totalCount }] = await db.select({ totalCount: sql<number>`count(*)::int` }).from(postsTable);
-  const posts = await db.select().from(postsTable).orderBy(desc(postsTable.criadoEm)).limit(limit).offset(offset);
+  const [{ totalCount }] = await db.select({ totalCount: sql<number>`count(*)::int` }).from(postsTable).where(postVisivel());
+  const posts = await db.select().from(postsTable).where(postVisivel()).orderBy(desc(postsTable.criadoEm)).limit(limit).offset(offset);
 
   const result = await Promise.all(posts.map(p => formatPost(p, userId)));
 
@@ -123,7 +124,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
 
   try {
     // 1. Verificar se o post existe e é exclusivo
-    const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
+    const [post] = await db.select().from(postsTable).where(and(eq(postsTable.id, id), postVisivel())).limit(1);
     if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
     if (!post.exclusivo || !post.precoDesbloqueio) { res.status(400).json({ error: "Este post não precisa de ser desbloqueado por PPV." }); return; }
     if (post.autorId === userId) { res.status(400).json({ error: "Não podes desbloquear o teu próprio post." }); return; }
@@ -179,7 +180,7 @@ router.get("/posts/:id", optionalAuth, async (req: AuthRequest, res): Promise<vo
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
 
-  const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id));
+  const [post] = await db.select().from(postsTable).where(and(eq(postsTable.id, id), postVisivel()));
   if (!post) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   res.json(await formatPost(post, req.userId));
@@ -257,10 +258,14 @@ router.delete("/posts/:id/save", requireAuth, async (req: AuthRequest, res): Pro
 router.get("/posts/:id/comments", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
 
+  // Post retirado/suspenso: os comentários também não são servidos
+  const [postVisivelRow] = await db.select({ id: postsTable.id }).from(postsTable).where(and(eq(postsTable.id, id), postVisivel())).limit(1);
+  if (!postVisivelRow) { res.status(404).json({ error: "Não encontrado" }); return; }
+
   const comments = await db.select({ c: commentsTable, u: usersTable })
     .from(commentsTable)
     .innerJoin(usersTable, eq(commentsTable.autorId, usersTable.id))
-    .where(and(eq(commentsTable.postId, id), sql`${commentsTable.comentarioPaiId} IS NULL`))
+    .where(and(eq(commentsTable.postId, id), sql`${commentsTable.comentarioPaiId} IS NULL`, commentVisivel()))
     .orderBy(desc(commentsTable.criadoEm))
     .limit(30);
 

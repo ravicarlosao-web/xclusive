@@ -2,6 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
+import { liveVisivel } from "../lib/takedown";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
@@ -45,7 +46,7 @@ router.get("/live/active", optionalAuth, async (req: AuthRequest, res): Promise<
       })
       .from(liveStreamsTable)
       .innerJoin(usersTable, eq(usersTable.id, liveStreamsTable.criadorId))
-      .where(eq(liveStreamsTable.status, "ao_vivo"));
+      .where(and(eq(liveStreamsTable.status, "ao_vivo"), liveVisivel()));
 
     const allowed = await liveIdsWithAccess(req.userId, activeStreams);
 
@@ -382,6 +383,10 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
+    if (stream.retiradoEm) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
     if (stream.status !== "ao_vivo") {
       res.status(409).json({ error: "Esta live não está ativa." });
       return;
@@ -449,6 +454,10 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
 
     const [stream0] = await db.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, streamId)).limit(1);
     if (!stream0) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    if (stream0.retiradoEm) {
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
@@ -730,6 +739,12 @@ router.post("/live/admission", async (req, res): Promise<void> => {
       .from(liveStreamsTable)
       .where(eq(liveStreamsTable.streamKey, streamKey))
       .limit(1);
+
+    if (stream?.retiradoEm) {
+      // Live retirada (takedown): nem emissão nem visualização
+      res.json({ allowed: false });
+      return;
+    }
 
     if (!stream) {
       (req as any).log?.info?.({ streamKey }, "Live admission negada: streamKey inexistente");

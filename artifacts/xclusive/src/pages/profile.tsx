@@ -4,7 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Grid, PlaySquare, Lock, Settings, Radio } from 'lucide-react';
+import { Grid, PlaySquare, Lock, Settings, Radio, Flag } from 'lucide-react';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -34,6 +35,7 @@ export default function Profile() {
   const createConversationMutation = useCreateConversation();
 
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
+  const [reportOpen, setReportOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [followModal, setFollowModal] = useState<{ type: 'followers' | 'following' } | null>(null);
@@ -179,6 +181,17 @@ export default function Profile() {
                 >
                   {createConversationMutation.isPending ? 'A abrir…' : 'Mensagem'}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => setReportOpen(true)}
+                  title="Denunciar perfil"
+                  aria-label="Denunciar perfil"
+                >
+                  <Flag className="w-4 h-4" />
+                </Button>
+                <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={profile.id} />
                 {activeStream && (
                   <Button
                     className="gap-2 bg-red-600 hover:bg-red-700 text-white border-0 font-semibold animate-pulse"

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Music, Play, Volume2, VolumeX } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Flag, Music, Play, Volume2, VolumeX } from 'lucide-react';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useGetFeed, useFollowUser, useUnfollowUser } from '@workspace/api-client-react';
 import { type Post } from '@workspace/api-client-react';
@@ -78,6 +79,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
   const [isLiked, setIsLiked] = useState(post.curtido);
   const [likesCount, setLikesCount] = useState(post.totalCurtidas);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
   const { toast } = useToast();
@@ -269,11 +271,12 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
           <span className="text-white text-xs font-semibold drop-shadow-md">Partilhar</span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 group">
+        <button className="flex flex-col items-center gap-1 group" onClick={() => setReportOpen(true)} aria-label="Denunciar">
           <div className="w-11 h-11 bg-black/40 rounded-full flex items-center justify-center backdrop-blur-sm group-hover:bg-black/60 transition-colors">
-            <MoreHorizontal className="w-6 h-6 text-white" />
+            <Flag className="w-6 h-6 text-white" />
           </div>
         </button>
+        <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="post" targetId={post.id} />
 
         {/* Spinning record thumbnail */}
         <div className="w-10 h-10 rounded-md border-2 border-white overflow-hidden animate-[spin_4s_linear_infinite]">

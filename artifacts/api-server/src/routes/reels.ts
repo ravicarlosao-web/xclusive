@@ -3,6 +3,7 @@ import { db, reelsTable, likesTable, commentsTable, usersTable } from "@workspac
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
+import { reelVisivel } from "../lib/takedown";
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.get("/reels", optionalAuth, async (req: AuthRequest, res): Promise<void> 
   const limit = Math.min(20, parseInt(String(req.query.limit || "10")));
   const offset = (page - 1) * limit;
 
-  const reels = await db.select().from(reelsTable).orderBy(desc(reelsTable.criadoEm)).limit(limit).offset(offset);
+  const reels = await db.select().from(reelsTable).where(reelVisivel()).orderBy(desc(reelsTable.criadoEm)).limit(limit).offset(offset);
 
   const result = await Promise.all(reels.map(r => formatReel(r, req.userId)));
   res.json({ reels: result, page, hasMore: result.length === limit });
@@ -37,7 +38,7 @@ router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> 
 // Obter reel
 router.get("/reels/:id", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
-  const [reel] = await db.select().from(reelsTable).where(eq(reelsTable.id, id));
+  const [reel] = await db.select().from(reelsTable).where(and(eq(reelsTable.id, id), reelVisivel()));
   if (!reel) { res.status(404).json({ error: "Não encontrado" }); return; }
   res.json(await formatReel(reel, req.userId));
 });
