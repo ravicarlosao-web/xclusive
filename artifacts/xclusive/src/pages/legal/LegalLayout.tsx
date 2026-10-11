@@ -22,8 +22,8 @@ export function LegalLayout({ docKey, children }: { docKey: LegalDocKey; childre
     <div className="min-h-[100dvh] bg-background text-foreground">
       <header className="border-b border-border/50">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/"><img src="/logo.png" alt="Xclusive" className="h-6 w-auto cursor-pointer" /></Link>
-          <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">Voltar ao início</Link>
+          <Link href="/login"><img src="/logo.png" alt="Xclusive" className="h-6 w-auto cursor-pointer" /></Link>
+          <Link href="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">Voltar</Link>
         </div>
       </header>
 

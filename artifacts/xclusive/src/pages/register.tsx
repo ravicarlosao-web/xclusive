@@ -118,7 +118,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 py-12">
-      <Link href="/" className="flex items-center justify-center mb-8 text-center group">
+      <Link href="/login" className="flex items-center justify-center mb-8 text-center group">
         <img
           src="/logo.png"
           alt="Xclusive"

@@ -946,7 +946,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSaldo(null);
       setGanhos(null);
       queryClient.clear();
-      setLocation('/');
+      setLocation('/login');
     }
   };
 

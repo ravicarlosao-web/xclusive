@@ -5,11 +5,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/layouts/AppLayout';
-import { AgeGate } from '@/components/shared/AgeGate';
+import { AgeGate, idadeJaConfirmada } from '@/components/shared/AgeGate';
 import { useEffect } from 'react';
 
 // Pages
-import Landing from '@/pages/landing';
 import Login from '@/pages/login';
 import Register from '@/pages/register';
 import Home from '@/pages/home';
@@ -105,10 +104,28 @@ function PublicOnlyRoute({ component: Component, ...rest }: { component: any, pa
   return <Component />;
 }
 
+/**
+ * Entrada ("/"): sem landing. Com sessão vai para /home; sem sessão vê SÓ o aviso 18+ (o AgeGate cobre o ecrã)
+ * e, ao confirmar, o AgeGate leva a /login. Se a idade já foi confirmada, vai direto para /login.
+ */
+function EntradaRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (isAuthenticated) setLocation('/home');
+    else if (idadeJaConfirmada()) setLocation('/login');
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
+  return <div className="min-h-[100dvh] bg-background" />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/">{(params) => <PublicOnlyRoute component={Landing} path="/" />}</Route>
+      <Route path="/" component={EntradaRoute} />
       <Route path="/login">{(params) => <PublicOnlyRoute component={Login} path="/login" />}</Route>
       <Route path="/registo">{(params) => <PublicOnlyRoute component={Register} path="/registo" />}</Route>
       {/* Páginas legais: públicas (abrem com ou sem sessão) */}
