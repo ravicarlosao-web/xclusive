@@ -5,9 +5,10 @@ import { and, eq } from "drizzle-orm";
 import { db, reportsTable, auditLogTable } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { enviarEMarcarAlerta, textoAlerta } from "../lib/alertaExterno";
 import {
   TARGET_TYPES, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
-  lerAlvo, retirarAlvo, notificarSistema, TakedownError, type TargetType,
+  lerAlvo, retirarAlvo, notificarSistema, notificarAdmins, TakedownError, type TargetType,
 } from "../lib/takedown";
 
 /**
@@ -72,7 +73,8 @@ async function criarDenuncia(opts: {
   ip?: string | null;
   autoRetirar: boolean;
 }): Promise<{ id: number; retiradoAuto: boolean }> {
-  return db.transaction(async (tx) => {
+  const urgente = opts.reason === "menor";
+  const resultado = await db.transaction(async (tx) => {
     const alvo = await lerAlvo(tx, opts.targetType, opts.targetId);
     // Conteúdo inexistente ou já retirado: mesma resposta (não revela o estado interno).
     if (!alvo || alvo.removido) throw new TakedownError("Conteúdo indisponível.", 404);
@@ -80,7 +82,6 @@ async function criarDenuncia(opts: {
       throw new TakedownError("Não podes denunciar o teu próprio conteúdo.", 400);
     }
 
-    const urgente = opts.reason === "menor";
     const [rep] = await tx.insert(reportsTable).values({
       reporterId: opts.reporterId,
       targetType: opts.targetType,
@@ -92,6 +93,11 @@ async function criarDenuncia(opts: {
       reporterContact: opts.contacto ?? null,
       reporterIp: opts.ip ?? null,
     }).returning({ id: reportsTable.id });
+
+    // Urgente: avisa TODOS os admins na mesma transação (se falhar, a denúncia não fica por avisar).
+    if (urgente) {
+      await notificarAdmins(tx, textoAlerta({ reportId: rep.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0 }), rep.id);
+    }
 
     // Menor: retirada automática imediata (esconde, não apaga) — só com sessão (denunciante identificável)
     // e nunca para perfis (suspender uma conta por uma única denúncia é abusável: fica na fila urgente).
@@ -109,6 +115,11 @@ async function criarDenuncia(opts: {
     }
     return { id: rep.id, retiradoAuto };
   });
+  // Canal externo só depois do commit; nunca lança nem atrasa a resposta.
+  if (urgente) {
+    void enviarEMarcarAlerta({ reportId: resultado.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0 });
+  }
+  return resultado;
 }
 
 function tratarErro(err: unknown, res: import("express").Response, log: { error: (...a: any[]) => void } | undefined): void {

@@ -239,6 +239,7 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       [{ novosHoje }],
       [{ postsHoje }],
       [{ denunciasPendentes }],
+      [{ denunciasUrgentes, urgenteMaisAntigaEm }],
       [{ levantamentosPendentes }],
       [{ receitaTotal }],
       [{ comissaoMes }],
@@ -253,6 +254,8 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
         .where(gte(postsTable.criadoEm, hoje)),
       db.select({ denunciasPendentes: count() }).from(reportsTable)
         .where(eq(reportsTable.status, "pendente")),
+      db.select({ denunciasUrgentes: count(), urgenteMaisAntigaEm: sql<Date | null>`min(${reportsTable.criadoEm})` }).from(reportsTable)
+        .where(and(eq(reportsTable.status, "pendente"), eq(reportsTable.urgente, true))),
       db.select({ levantamentosPendentes: count() }).from(withdrawalRequestsTable)
         .where(eq(withdrawalRequestsTable.status, "pendente")),
       db.select({ receitaTotal: sum(purchasesTable.valor) }).from(purchasesTable),
@@ -271,6 +274,11 @@ router.get("/admin/dashboard/kpis", async (req, res) => {
       comissaoMes: comissaoMesNum,
       postsHoje: Number(postsHoje),
       denunciasPendentes: Number(denunciasPendentes),
+      denunciasUrgentes: Number(denunciasUrgentes),
+      // Idade (minutos) da urgente mais antiga por tratar; null se não houver.
+      urgenteMaisAntigaMin: urgenteMaisAntigaEm
+        ? Math.max(0, Math.floor((Date.now() - new Date(urgenteMaisAntigaEm).getTime()) / 60_000))
+        : null,
       levantamentosPendentes: Number(levantamentosPendentes),
     });
   } catch (err) {

@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
   db, postsTable, postMediaTable, reelsTable, storiesTable, commentsTable, liveStreamsTable,
@@ -140,6 +140,20 @@ export async function apagarFicheiros(media: { url: string }[]): Promise<{ apaga
 /** Notificação do sistema (sem ator e sem alvo: não revela quem denunciou nem liga ao conteúdo retirado). */
 export async function notificarSistema(tx: Tx, destinatarioId: number, mensagem: string): Promise<void> {
   await tx.insert(notificationsTable).values({ destinatarioId, tipo: "sistema", mensagem: mensagem.slice(0, 1000) });
+}
+
+/**
+ * Notificação 'sistema' para TODOS os admins ativos (role admin|superadmin), na transação recebida.
+ * `alvoId` = id da denúncia. Devolve quantos admins foram notificados.
+ */
+export async function notificarAdmins(tx: Tx, mensagem: string, alvoId: number): Promise<number> {
+  const admins = await tx.select({ id: usersTable.id }).from(usersTable)
+    .where(and(inArray(usersTable.role, ["admin", "superadmin"]), eq(usersTable.ativo, true)));
+  if (admins.length === 0) return 0;
+  await tx.insert(notificationsTable).values(
+    admins.map((a) => ({ destinatarioId: a.id, tipo: "sistema" as const, alvoId, mensagem: mensagem.slice(0, 1000) })),
+  );
+  return admins.length;
 }
 
 export class TakedownError extends Error {

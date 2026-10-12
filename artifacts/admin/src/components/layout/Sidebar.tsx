@@ -31,7 +31,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/creators', label: 'Criadores', icon: Star },
     { href: '/creators/kyc', label: 'Fila KYC', icon: ShieldCheck, badge: kpis?.kycPendente || undefined },
     { href: '/content', label: 'Conteúdo', icon: ImageIcon },
-    { href: '/reports', label: 'Denúncias', icon: Flag, badge: kpis?.denunciasPendentes || undefined },
+    { href: '/reports', label: 'Denúncias', icon: Flag, badge: kpis?.denunciasPendentes || undefined, urgent: kpis?.denunciasUrgentes || undefined },
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
     { href: '/commissions', label: 'Comissões', icon: Percent },
     { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine },
@@ -75,13 +75,21 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
                   <item.icon className={cn("h-5 w-5", !collapsed && "mr-3", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                   {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
                   
+                  {!collapsed && item.urgent ? (
+                    <span
+                      className="ml-auto mr-1 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground animate-pulse"
+                      title="Denúncias urgentes por tratar"
+                    >
+                      {item.urgent}!
+                    </span>
+                  ) : null}
                   {!collapsed && item.badge ? (
                     <span className="ml-auto flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary border border-primary/30">
                       {item.badge}
                     </span>
                   ) : null}
                   {collapsed && item.badge ? (
-                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary"></span>
+                    <span className={cn("absolute right-2 top-2 h-2 w-2 rounded-full", item.urgent ? "bg-destructive animate-pulse" : "bg-primary")}></span>
                   ) : null}
                 </div>
               </Link>

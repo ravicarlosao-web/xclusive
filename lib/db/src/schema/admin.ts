@@ -48,6 +48,11 @@ export const reportsTable = pgTable("reports", {
   reporterIp: varchar("reporter_ip", { length: 45 }),
   resolvedBy: integer("resolved_by").references(() => usersTable.id, { onDelete: "set null" }),
   resolvedAt: timestamp("resolved_at"),
+  /** Marcadores de escalada de urgentes (lib/reportEscalation.ts): garantem um único aviso por nível. */
+  escalada1hEm: timestamp("escalada_1h_em"),
+  escalada24hEm: timestamp("escalada_24h_em"),
+  /** Preenchido quando o alerta externo (webhook) foi entregue com sucesso; o job reenvia os que faltam. */
+  alertaExternoEm: timestamp("alerta_externo_em"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 }, (t) => [
   // Um só denunciante por alvo (utilizador com conta, ou contacto na rota pública).

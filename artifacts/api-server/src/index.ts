@@ -9,6 +9,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
+import { startReportEscalationJob } from "./lib/reportEscalation";
 
 if (!process.env.NODE_ENV) {
   // Falha fechada: sem NODE_ENV o servidor corre como produção (nunca como desenvolvimento).
@@ -32,6 +33,9 @@ initSocket(server);
 
 // Expira subscrições vencidas e notifica (nunca cobra; renovação é manual)
 startSubscriptionExpiryJob();
+
+// Avisa os admins de denúncias urgentes por tratar (1 h e 24 h); idempotente e com lock
+startReportEscalationJob();
 
 // Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (40 minutos / 2400s):
 server.requestTimeout = 40 * 60 * 1000; // 2.400.000 ms (alinhado com o Nginx a 2400s)

@@ -44,6 +44,13 @@ export default function Dashboard() {
     { title: 'Posts Hoje', value: kpis?.postsHoje, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-500/10' },
     { title: 'Novos Hoje', value: kpis?.novosHoje, icon: ShieldAlert, color: 'text-orange-500', bg: 'bg-orange-500/10' },
     { title: 'Denúncias', value: kpis?.denunciasPendentes, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', alert: (kpis?.denunciasPendentes || 0) > 5 },
+    {
+      title: 'Urgentes (menor)', value: kpis?.denunciasUrgentes, icon: ShieldAlert, color: 'text-red-500', bg: 'bg-red-500/10',
+      alert: (kpis?.denunciasUrgentes || 0) > 0,
+      sub: kpis?.urgenteMaisAntigaMin != null
+        ? `Mais antiga há ${kpis.urgenteMaisAntigaMin < 60 ? `${kpis.urgenteMaisAntigaMin} min` : `${Math.floor(kpis.urgenteMaisAntigaMin / 60)} h`}`
+        : undefined,
+    },
     { title: 'Levantamentos', value: kpis?.levantamentosPendentes, icon: CreditCard, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
   ];
 
@@ -67,6 +74,7 @@ export default function Dashboard() {
               <div className="text-2xl font-bold">
                 {isLoadingKpis ? <div className="h-8 w-24 bg-muted animate-pulse rounded" /> : kpi.value}
               </div>
+              {'sub' in kpi && kpi.sub ? <p className="mt-1 text-xs font-medium text-destructive">{kpi.sub}</p> : null}
             </CardContent>
           </Card>
         ))}
