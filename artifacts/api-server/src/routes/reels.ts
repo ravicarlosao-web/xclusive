@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { db, reelsTable, likesTable, commentsTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { reelVisivel } from "../lib/takedown";
 
 const router = Router();
 
 // Feed de reels
-router.get("/reels", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const page = Math.max(1, parseInt(String(req.query.page || "1")));
   const limit = Math.min(20, parseInt(String(req.query.limit || "10")));
   const offset = (page - 1) * limit;
@@ -36,7 +36,7 @@ router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> 
 });
 
 // Obter reel
-router.get("/reels/:id", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/reels/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const [reel] = await db.select().from(reelsTable).where(and(eq(reelsTable.id, id), reelVisivel()));
   if (!reel) { res.status(404).json({ error: "Não encontrado" }); return; }

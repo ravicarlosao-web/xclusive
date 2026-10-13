@@ -1,6 +1,6 @@
 import { Router } from "express";
 import crypto from "node:crypto";
-import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
 import { liveVisivel } from "../lib/takedown";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -27,8 +27,8 @@ const router = Router();
 // ── GET /api/live/active ──────────────────────────────────────────────────
 // Retorna a lista de lives ativas (só metadados). NUNCA devolve a streamKey:
 // quem tem acesso obtém-na em GET /api/live/:streamId/playback.
-// optionalAuth: sem sessão → temAcesso:false.
-router.get("/live/active", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+// requireAuth: sem sessão → 401. temAcesso indica se o utilizador já pode ver esta live.
+router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   try {
     const activeStreams = await db
       .select({
