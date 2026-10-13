@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable, subscriptionsTable, purchasesTable, notificationsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
-import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
@@ -41,7 +41,7 @@ class PaymentError extends Error {
 }
 
 // Feed
-router.get("/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/feed", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId;
   const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1"))));
   const limit = Math.min(20, parseInt(String(req.query.limit || "12")));
@@ -176,7 +176,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
 });
 
 // Obter post
-router.get("/posts/:id", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
 
@@ -255,7 +255,7 @@ router.delete("/posts/:id/save", requireAuth, async (req: AuthRequest, res): Pro
 });
 
 // Comentários
-router.get("/posts/:id/comments", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/posts/:id/comments", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
 
   // Post retirado/suspenso: os comentários também não são servidos

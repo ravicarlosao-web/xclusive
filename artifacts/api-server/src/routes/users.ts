@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, usersTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
-import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
@@ -56,7 +56,7 @@ async function canViewPrivateContent(
 }
 
 // Sugestões de utilizadores para seguir
-router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/suggestions", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId;
 
   let excludeIds: number[] = userId ? [userId] : [];
@@ -90,7 +90,7 @@ router.get("/users/suggestions", optionalAuth, async (req: AuthRequest, res): Pr
 });
 
 // Top Criadores (mais ativos em publicações e mais curtidos)
-router.get(["/users/top-creators", "/creators/top"], optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const viewerId = req.userId;
 
   try {
@@ -379,7 +379,7 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
 });
 
 // Obter perfil por username
-router.get("/users/:username", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const { username } = req.params;
   const viewerId = req.userId;
 
@@ -457,7 +457,7 @@ router.delete("/users/:username/follow", requireAuth, async (req: AuthRequest, r
 });
 
 // Seguidores
-router.get("/users/:username/followers", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username/followers", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
@@ -482,7 +482,7 @@ router.get("/users/:username/followers", optionalAuth, async (req: AuthRequest, 
 });
 
 // A seguir
-router.get("/users/:username/following", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username/following", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
@@ -507,7 +507,7 @@ router.get("/users/:username/following", optionalAuth, async (req: AuthRequest, 
 });
 
 // Posts do utilizador
-router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
@@ -550,7 +550,7 @@ router.get("/users/:username/posts", optionalAuth, async (req: AuthRequest, res)
 });
 
 // Reels do utilizador
-router.get("/users/:username/reels", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username/reels", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }

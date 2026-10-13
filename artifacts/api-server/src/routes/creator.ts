@@ -229,10 +229,10 @@ router.get("/creator/transactions", requireAuth, requireCreator, async (req: Aut
   });
 });
 
-// Plano activo de um criador — endpoint público (sem requireAuth) para que
-// o frontend do fã possa resolver o planoId antes de chamar POST /subscriptions.
-router.get("/users/:username/subscription-plan", async (req, res): Promise<void> => {
-  const { username } = req.params;
+// Plano activo de um criador — exige sessão (requireAuth). O frontend do fã resolve
+// o planoId antes de chamar POST /subscriptions.
+router.get("/users/:username/subscription-plan", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const username = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
 
   const [user] = await db
     .select({ id: usersTable.id, tipoSubscricao: usersTable.tipoSubscricao })

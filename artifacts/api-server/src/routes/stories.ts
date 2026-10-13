@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable } from "@workspace/db";
 import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
-import { requireAuth, optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
 
 const router = Router();
 
 // Feed de stories
-router.get("/stories/feed", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId;
   const now = new Date();
 
@@ -99,7 +99,7 @@ router.delete("/stories/:id", requireAuth, async (req: AuthRequest, res): Promis
 });
 
 // Ver story
-router.post("/stories/:id/view", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.post("/stories/:id/view", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (req.userId) {
     const [existing] = await db.select().from(storyViewsTable).where(and(eq(storyViewsTable.storyId, id), eq(storyViewsTable.utilizadorId, req.userId)));
@@ -173,7 +173,7 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
   });
 });
 
-router.get("/users/:username/highlights", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/users/:username/highlights", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }

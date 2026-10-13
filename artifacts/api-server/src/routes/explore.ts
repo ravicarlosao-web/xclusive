@@ -2,14 +2,14 @@ import { Router } from "express";
 import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
 import { sql, desc, inArray, and, eq } from "drizzle-orm";
 import { postVisivel } from "../lib/takedown";
-import { optionalAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl } from "../lib/storage";
 
 const router = Router();
 
 // Explorar
-router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const page = Math.max(1, parseInt(String(req.query.page || "1")));
   const limit = 20;
   const offset = (page - 1) * limit;
@@ -93,7 +93,7 @@ router.get("/explore", optionalAuth, async (req: AuthRequest, res): Promise<void
 });
 
 // Pesquisa
-router.get("/search", optionalAuth, async (req: AuthRequest, res): Promise<void> => {
+router.get("/search", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const q = String(req.query.q || "").trim();
   const type = String(req.query.type || "all");
 

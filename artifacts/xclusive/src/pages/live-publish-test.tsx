@@ -167,7 +167,7 @@ export default function LivePublishTest() {
     setCheckingActive(true);
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/live/active`);
+      const res = await fetch(`${base}/api/live/active`, { headers: { Authorization: `Bearer ${localStorage.getItem('xclusive_token') ?? ''}` } });
       const data = await res.json();
       setActiveLives(Array.isArray(data) ? data : []);
       addLog(`Lives ativas encontradas em /api/live/active: ${Array.isArray(data) ? data.length : 0}`, 'info');
