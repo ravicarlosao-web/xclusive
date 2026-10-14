@@ -1,5 +1,6 @@
 import { db, usersTable, followsTable, likesTable, savedPostsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { urlMedia } from "./storage";
 
 export async function getUserSummary(userId: number, viewerId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
@@ -31,7 +32,7 @@ export async function getUserSummary(userId: number, viewerId?: number) {
     id: user.id,
     username: user.username,
     nomeExibicao: user.nomeExibicao,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: urlMedia(user.avatarUrl),
     verificado: user.verificado,
     tipoConta: user.tipoConta,
     estaASeguir,

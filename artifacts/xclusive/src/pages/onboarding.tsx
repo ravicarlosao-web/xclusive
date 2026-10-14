@@ -8,6 +8,7 @@ import { useUpdateProfile, useGetUserSuggestions, useFollowUser } from '@workspa
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ProfileUpdateTipoConta } from '@workspace/api-client-react';
 import { Check, Camera, ArrowRight, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const CATEGORIES = ['Moda', 'Fitness', 'Arte', 'Música', 'Viagens', 'Culinária', 'Tecnologia', 'Comédia', 'Lifestyle'];
 
@@ -27,7 +28,14 @@ export default function Onboarding() {
   const handleNext = async () => {
     if (step === 1) {
       if (avatarUrl) {
-        await updateProfile.mutateAsync({ data: { avatarUrl } });
+        try {
+          await updateProfile.mutateAsync({ data: { avatarUrl } });
+        } catch (err) {
+          // Ex.: 400 quando o URL não é de um ficheiro carregado no Xclusive: mostra a mensagem do servidor.
+          const msg = (err as { data?: { error?: string } } | null)?.data?.error;
+          toast.error(msg || 'Não foi possível guardar a foto de perfil.');
+          return;
+        }
       }
       setStep(2);
     } else if (step === 2) {

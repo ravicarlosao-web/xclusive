@@ -4,7 +4,7 @@ import { sql, desc, inArray, and, eq } from "drizzle-orm";
 import { postVisivel } from "../lib/takedown";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
-import { resolveMediaUrl } from "../lib/storage";
+import { resolveMediaUrl, urlMedia } from "../lib/storage";
 
 const router = Router();
 
@@ -71,7 +71,7 @@ router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void>
       id: p.id,
       autor: user ? {
         id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-        avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta,
+        avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
       } : null,
       legenda: p.legenda,
@@ -116,7 +116,7 @@ router.get("/search", requireAuth, async (req: AuthRequest, res): Promise<void> 
       id: u.id,
       username: u.username,
       nomeExibicao: u.nomeExibicao,
-      avatarUrl: u.avatarUrl,
+      avatarUrl: urlMedia(u.avatarUrl),
       verificado: u.verificado,
       tipoConta: u.tipoConta,
       estaASeguir: false,

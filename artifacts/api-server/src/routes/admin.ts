@@ -46,7 +46,7 @@ import {
   notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured } from "../lib/storage.js";
+import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, urlMedia, urlParaServidor } from "../lib/storage.js";
 import {
   TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
@@ -102,8 +102,8 @@ function mapUser(u: typeof usersTable.$inferSelect) {
     email: u.email,
     nomeExibicao: u.nomeExibicao,
     bio: u.bio ?? null,
-    avatarUrl: u.avatarUrl ?? null,
-    capaUrl: u.capaUrl ?? null,
+    avatarUrl: urlMedia(u.avatarUrl ?? null),
+    capaUrl: urlMedia(u.capaUrl ?? null),
     tipoConta: u.tipoConta,
     verificado: u.verificado,
     privado: u.privado,
@@ -163,7 +163,8 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise
     return void res.status(403).json({ error: "URL de media inválido ou expirado." });
   }
   try {
-    const upstream = await fetch(rawUrl);
+    // O CDN público exige token: assina o URL (se for nosso) antes de ir buscar o ficheiro.
+    const upstream = await fetch(urlParaServidor(rawUrl));
     if (!upstream.ok) return void res.status(502).json({ error: "Não foi possível obter o recurso." });
     const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
     const contentLength = upstream.headers.get("content-length");
@@ -216,7 +217,7 @@ router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> =
       nomeExibicao: user.nomeExibicao ?? user.username,
       email: user.email,
       role: user.role,
-      avatarUrl: user.avatarUrl ?? null,
+      avatarUrl: urlMedia(user.avatarUrl ?? null),
     },
     expiresIn: 14400,
   });
@@ -345,7 +346,7 @@ router.get("/admin/dashboard/charts", async (req, res) => {
 
     res.json({
       dias30: chartDias,
-      top10Criadores: top10.map(u => ({ ...u, ganhos: Number(u.ganhos) })),
+      top10Criadores: top10.map(u => ({ ...u, avatarUrl: urlMedia(u.avatarUrl), ganhos: Number(u.ganhos) })),
       distribuicaoPaises: [], // campo não existe na DB actual
     });
   } catch (err) {
@@ -1015,7 +1016,7 @@ router.get("/admin/posts", async (req, res) => {
       db.select({ total: count() }).from(postsTable).where(where),
     ]);
 
-    res.json(paginate(rows, Number(total), pageNum, limitNum));
+    res.json(paginate(rows.map((r) => ({ ...r, autorAvatar: urlMedia(r.autorAvatar) })), Number(total), pageNum, limitNum));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao listar posts");
     res.status(500).json({ error: "Erro interno." });
@@ -1138,7 +1139,7 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         if (isPaidKey(m.url)) {
           return { tipo: m.tipo, url: isPrivateStorageConfigured() ? getPrivateSignedUrl(m.url, 300).url : null };
         }
-        return { tipo: m.tipo, url: m.url };
+        return { tipo: m.tipo, url: urlMedia(m.url) };
       });
       const { reporterIp: _ip, ...rSemIp } = r;
       return {

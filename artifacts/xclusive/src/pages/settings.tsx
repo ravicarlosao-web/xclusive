@@ -51,6 +51,8 @@ export default function Settings() {
     setIsUploadingAvatar(true);
     try {
       let avatarUrl: string;
+      // URL a mostrar já (assinado, vem do upload); avatarUrl é o canónico que se guarda.
+      let avatarVisualizacao: string | null = null;
 
       if (isMockMode) {
         // Em modo mock não há servidor disponível — usamos um blob URL local
@@ -68,14 +70,16 @@ export default function Settings() {
         if (!res.ok) throw new Error('Erro no upload');
         const data = await res.json();
         const relativeUrl = data.files?.[0]?.url;
+        const urlVisualizacao = data.files?.[0]?.urlVisualizacao;
         if (!relativeUrl) throw new Error('URL não devolvida pelo servidor');
         // O backend valida com z.url() que requer URL absoluto
         avatarUrl = new URL(relativeUrl, window.location.origin).href;
 
+        avatarVisualizacao = urlVisualizacao ? new URL(urlVisualizacao, window.location.origin).href : null;
         await updateProfile.mutateAsync({ data: { avatarUrl } });
       }
 
-      updateAvatarUrl(avatarUrl);
+      updateAvatarUrl(avatarVisualizacao ?? avatarUrl);
       toast({ title: 'Foto de perfil atualizada!' });
     } catch (err) {
       console.error(err);

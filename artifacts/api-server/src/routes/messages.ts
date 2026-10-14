@@ -3,6 +3,7 @@ import { db, conversationsTable, conversationParticipantsTable, messagesTable, u
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
+import { urlMedia } from "../lib/storage";
 
 const sendMessageSchema = z.object({
   tipo: z.enum(["texto", "imagem", "audio", "post_partilhado"]).default("texto"),
@@ -53,7 +54,7 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
       id: convId,
       participantes: participants.map(({ u }) => ({
         id: u.id, username: u.username, nomeExibicao: u.nomeExibicao,
-        avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta,
+        avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
       })),
       tipo: conv?.tipo || "privada",
@@ -62,7 +63,7 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
         autorId: lastMsg.autorId,
         tipo: lastMsg.tipo,
         conteudo: lastMsg.conteudo,
-        mediaUrl: lastMsg.mediaUrl,
+        mediaUrl: urlMedia(lastMsg.mediaUrl),
         lido: lastMsg.lido,
         criadoEm: lastMsg.criadoEm.toISOString(),
       } : null,
@@ -98,7 +99,7 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
         .where(eq(conversationParticipantsTable.conversationId, conversationId));
       res.json({
         id: conversationId,
-        participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
+        participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
         tipo: conv?.tipo || "privada",
         ultimaMensagem: null,
         totalNaoLidas: 0,
@@ -119,7 +120,7 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
 
   res.status(201).json({
     id: conv.id,
-    participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
+    participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
     tipo: conv.tipo,
     ultimaMensagem: null,
     totalNaoLidas: 0,
@@ -178,10 +179,10 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
     messages: messages.reverse().map(({ m, u }) => ({
       id: m.id,
       autorId: m.autorId,
-      autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+      autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
       tipo: m.tipo,
       conteudo: m.conteudo,
-      mediaUrl: m.mediaUrl,
+      mediaUrl: urlMedia(m.mediaUrl),
       lido: m.lido,
       criadoEm: m.criadoEm.toISOString(),
     })),
@@ -241,10 +242,10 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
   res.status(201).json({
     id: msg.id,
     autorId: msg.autorId,
-    autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+    autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
     tipo: msg.tipo,
     conteudo: msg.conteudo,
-    mediaUrl: msg.mediaUrl,
+    mediaUrl: urlMedia(msg.mediaUrl),
     lido: msg.lido,
     criadoEm: msg.criadoEm.toISOString(),
   });

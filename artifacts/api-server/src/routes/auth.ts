@@ -9,6 +9,7 @@ import {
   REFRESH_COOKIE, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { urlMedia } from "../lib/storage";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -387,8 +388,8 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     username: user.username,
     nomeExibicao: user.nomeExibicao,
     bio: user.bio,
-    avatarUrl: user.avatarUrl,
-    capaUrl: user.capaUrl,
+    avatarUrl: urlMedia(user.avatarUrl),
+    capaUrl: urlMedia(user.capaUrl),
     link: user.link,
     tipoConta: user.tipoConta,
     verificado: user.verificado,

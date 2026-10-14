@@ -6,6 +6,7 @@ import { db, liveStreamsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { userHasLiveAccess } from "./liveAccess";
+import { urlMedia } from "./storage";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -231,7 +232,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           streamId,
           userId: socket.data.userId,
           username: socket.data.username,
-          avatarUrl: socket.data.avatarUrl ?? null,
+          avatarUrl: urlMedia(socket.data.avatarUrl ?? null),
           mensagem: texto,
           criadoEm: new Date().toISOString(),
         };

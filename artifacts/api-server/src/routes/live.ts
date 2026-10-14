@@ -12,6 +12,7 @@ import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAc
 import { liveStartSchema } from "../lib/liveTicket";
 import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl, isViewerTokenConfigured } from "../lib/liveViewerToken";
 import { logger } from "../lib/logger";
+import { urlMedia } from "../lib/storage";
 
 class PaymentError extends Error {
   statusCode: number;
@@ -53,6 +54,7 @@ router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<v
     res.json(
       activeStreams.map((s) => ({
         ...s,
+        criador: { ...s.criador, avatarUrl: urlMedia(s.criador.avatarUrl) },
         preco: Number(s.preco),
         temAcesso: allowed.has(s.id),
       })),

@@ -4,6 +4,7 @@ import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
+import { urlMedia, urlCanonico } from "../lib/storage";
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<
     return {
       utilizador: user ? {
         id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-        avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta,
+        avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
       } : null,
       stories: formattedStories,
@@ -79,7 +80,7 @@ router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void
 
   const [story] = await db.insert(storiesTable).values({
     autorId: req.userId!,
-    mediaUrl,
+    mediaUrl: urlCanonico(String(mediaUrl)),
     tipo: tipo || "imagem",
     duracao: duracao || 5,
     audiencia: audiencia || "todos",
@@ -126,7 +127,7 @@ router.get("/stories/:id/views", requireAuth, async (req: AuthRequest, res): Pro
     .orderBy(desc(storyViewsTable.vistoEm));
 
   res.json(views.map(({ v, u }) => ({
-    utilizador: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+    utilizador: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
     vistoEm: v.vistoEm.toISOString(),
   })));
 });
@@ -149,7 +150,7 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
   const [highlight] = await db.insert(highlightsTable).values({
     utilizadorId: req.userId!,
     titulo,
-    capaUrl: capaUrl || null,
+    capaUrl: capaUrl ? urlCanonico(String(capaUrl)) : null,
   }).returning();
 
   if (storyIds && Array.isArray(storyIds)) {
@@ -167,7 +168,7 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
   res.status(201).json({
     id: highlight.id,
     titulo: highlight.titulo,
-    capaUrl: highlight.capaUrl,
+    capaUrl: urlMedia(highlight.capaUrl),
     stories: [],
     criadoEm: highlight.criadoEm.toISOString(),
   });
@@ -183,7 +184,7 @@ router.get("/users/:username/highlights", requireAuth, async (req: AuthRequest, 
   res.json(highlights.map(h => ({
     id: h.id,
     titulo: h.titulo,
-    capaUrl: h.capaUrl,
+    capaUrl: urlMedia(h.capaUrl),
     stories: [],
     criadoEm: h.criadoEm.toISOString(),
   })));
@@ -211,10 +212,10 @@ async function formatStory(story: any, viewerId?: number) {
     id: story.id,
     autor: user ? {
       id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-      avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta,
+      avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
       estaASeguir: false, segueVoce: false, totalSeguidores: 0,
     } : null,
-    mediaUrl: story.mediaUrl,
+    mediaUrl: urlMedia(story.mediaUrl),
     tipo: story.tipo,
     duracao: story.duracao,
     audiencia: story.audiencia,

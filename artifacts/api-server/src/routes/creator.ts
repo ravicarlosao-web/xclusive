@@ -6,6 +6,7 @@ import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { getCommissionRate, calcComissao } from "../lib/commission";
 import { subscricaoComAcesso } from "../lib/exclusiveAccess";
+import { urlMedia } from "../lib/storage";
 
 const createPlanSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório").max(100),
@@ -220,7 +221,7 @@ router.get("/creator/transactions", requireAuth, requireCreator, async (req: Aut
       id: p.id,
       tipo: p.tipo,
       valor: parseFloat(String(p.valor)),
-      utilizador: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+      utilizador: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
       descricao: p.descricao,
       criadoEm: p.criadoEm.toISOString(),
     })),

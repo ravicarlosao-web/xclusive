@@ -4,7 +4,7 @@ import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate } from "../lib/storage";
+import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { postVisivel } from "../lib/takedown";
 
@@ -77,7 +77,7 @@ router.get("/users/suggestions", requireAuth, async (req: AuthRequest, res): Pro
       id: u.id,
       username: u.username,
       nomeExibicao: u.nomeExibicao,
-      avatarUrl: u.avatarUrl,
+      avatarUrl: urlMedia(u.avatarUrl),
       verificado: u.verificado,
       tipoConta: u.tipoConta,
       estaASeguir: false,
@@ -209,7 +209,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
         id: u.id,
         username: u.username,
         nomeExibicao: u.nomeExibicao,
-        avatarUrl: u.avatarUrl,
+        avatarUrl: urlMedia(u.avatarUrl),
         verificado: u.verificado,
         tipoConta: u.tipoConta,
         totalPublicacoes: totalPosts,
@@ -239,8 +239,17 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
   if (nomeExibicao !== undefined) updates.nomeExibicao = nomeExibicao;
   if (bio !== undefined) updates.bio = bio;
   if (link !== undefined) updates.link = link;
-  if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
-  if (capaUrl !== undefined) updates.capaUrl = capaUrl;
+  // Avatar e capa: só ficheiros do nosso CDN (guardados sem token) ou vazio para remover.
+  if (avatarUrl !== undefined) {
+    const v = urlAvatarOuCapa(avatarUrl);
+    if (v === null) { res.status(400).json({ error: "A foto de perfil tem de ser um ficheiro carregado no Xclusive." }); return; }
+    updates.avatarUrl = v;
+  }
+  if (capaUrl !== undefined) {
+    const v = urlAvatarOuCapa(capaUrl);
+    if (v === null) { res.status(400).json({ error: "A capa tem de ser um ficheiro carregado no Xclusive." }); return; }
+    updates.capaUrl = v;
+  }
   if (privado !== undefined) updates.privado = privado;
 
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, userId)).returning();
@@ -254,8 +263,8 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     username: user.username,
     nomeExibicao: user.nomeExibicao,
     bio: user.bio,
-    avatarUrl: user.avatarUrl,
-    capaUrl: user.capaUrl,
+    avatarUrl: urlMedia(user.avatarUrl),
+    capaUrl: urlMedia(user.capaUrl),
     link: user.link,
     tipoConta: user.tipoConta,
     verificado: user.verificado,
@@ -408,8 +417,8 @@ router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promi
     username: user.username,
     nomeExibicao: user.nomeExibicao,
     bio: user.bio,
-    avatarUrl: user.avatarUrl,
-    capaUrl: user.capaUrl,
+    avatarUrl: urlMedia(user.avatarUrl),
+    capaUrl: urlMedia(user.capaUrl),
     link: user.link,
     tipoConta: user.tipoConta,
     verificado: user.verificado,
@@ -471,7 +480,7 @@ router.get("/users/:username/followers", requireAuth, async (req: AuthRequest, r
     id: f.u.id,
     username: f.u.username,
     nomeExibicao: f.u.nomeExibicao,
-    avatarUrl: f.u.avatarUrl,
+    avatarUrl: urlMedia(f.u.avatarUrl),
     verificado: f.u.verificado,
     tipoConta: f.u.tipoConta,
     estaASeguir: false,
@@ -496,7 +505,7 @@ router.get("/users/:username/following", requireAuth, async (req: AuthRequest, r
     id: f.u.id,
     username: f.u.username,
     nomeExibicao: f.u.nomeExibicao,
-    avatarUrl: f.u.avatarUrl,
+    avatarUrl: urlMedia(f.u.avatarUrl),
     verificado: f.u.verificado,
     tipoConta: f.u.tipoConta,
     estaASeguir: false,
@@ -530,7 +539,7 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
       : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
     return {
       id: p.id,
-      autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+      autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
       legenda: p.legenda,
       localizacao: p.localizacao,
       tipo: p.tipo,

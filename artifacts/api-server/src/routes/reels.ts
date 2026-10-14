@@ -4,6 +4,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { reelVisivel } from "../lib/takedown";
+import { urlMedia, urlCanonico } from "../lib/storage";
 
 const router = Router();
 
@@ -26,8 +27,8 @@ router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> 
 
   const [reel] = await db.insert(reelsTable).values({
     autorId: req.userId!,
-    videoUrl,
-    capaUrl: capaUrl || null,
+    videoUrl: urlCanonico(String(videoUrl)),
+    capaUrl: capaUrl ? urlCanonico(String(capaUrl)) : null,
     legenda: legenda || null,
     exclusivo: exclusivo || false,
   }).returning();
@@ -77,11 +78,11 @@ async function formatReel(reel: any, userId?: number) {
     id: reel.id,
     autor: user ? {
       id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-      avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta,
+      avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
       estaASeguir: false, segueVoce: false, totalSeguidores: 0,
     } : null,
-    videoUrl: acesso ? reel.videoUrl : null,
-    capaUrl: acesso ? reel.capaUrl : null,
+    videoUrl: acesso ? urlMedia(reel.videoUrl) : null,
+    capaUrl: acesso ? urlMedia(reel.capaUrl) : null,
     legenda: reel.legenda,
     somTitulo: reel.somTitulo,
     somArtista: reel.somArtista,
