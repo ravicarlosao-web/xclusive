@@ -6,7 +6,7 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
-import { resolveMediaUrl } from "../lib/storage";
+import { resolveMediaUrl, urlMedia, urlCanonico } from "../lib/storage";
 import { postVisivel, commentVisivel } from "../lib/takedown";
 import { getCommissionRate, calcComissao } from "../lib/commission";
 
@@ -89,7 +89,7 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
         res.status(400).json({ error: "Os ficheiros de um post exclusivo têm de ser enviados como privados. Atualiza a página e tenta novamente." });
         return;
       }
-      mediaToStore.push(m);
+      mediaToStore.push({ ...m, url: urlCanonico(m.url) });
     }
   }
 
@@ -271,7 +271,7 @@ router.get("/posts/:id/comments", requireAuth, async (req: AuthRequest, res): Pr
 
   const result = comments.map(({ c, u }) => ({
     id: c.id,
-    autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: u.avatarUrl, verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+    autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
     texto: c.texto,
     comentarioPaiId: c.comentarioPaiId,
     respostas: [],
@@ -310,7 +310,7 @@ router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), a
 
   res.status(201).json({
     id: comment.id,
-    autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+    autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
     texto: comment.texto,
     comentarioPaiId: comment.comentarioPaiId,
     respostas: [],
@@ -353,7 +353,7 @@ async function formatPost(post: any, userId?: number) {
     id: post.id,
     autor: user ? {
       id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-      avatarUrl: user.avatarUrl, verificado: user.verificado, tipoConta: user.tipoConta,
+      avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
       estaASeguir: false, segueVoce: false, totalSeguidores: 0,
     } : null,
     legenda: post.legenda,

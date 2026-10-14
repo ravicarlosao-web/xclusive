@@ -208,7 +208,7 @@ export default function Home() {
         body: formData,
       });
       const uploadBody = await uploadResponse.json().catch(() => null) as {
-        files?: { url: string; tipo: string }[];
+        files?: { url: string; urlVisualizacao?: string; tipo: string }[];
         error?: string;
       } | null;
       if (!uploadResponse.ok) {
@@ -242,7 +242,7 @@ export default function Home() {
       }
 
       // Adiciona também localmente para feedback instantâneo no círculo do criador
-      addLocalStory(user.id, uploadedFile.url, tipo);
+      addLocalStory(user.id, uploadedFile.urlVisualizacao ?? uploadedFile.url, tipo);
       setLocalStoriesVersion(v => v + 1);
 
       await queryClient.invalidateQueries({ queryKey: ['/api/stories/feed'] });

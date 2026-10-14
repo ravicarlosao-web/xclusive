@@ -278,9 +278,123 @@ export function isPaidKey(value: string): boolean {
  * Nunca recorre à zona pública para chaves "paid/".
  */
 export function resolveMediaUrl(stored: string): string {
-  if (!isPaidKey(stored)) return stored;
+  if (!isPaidKey(stored)) return assinarPublico(stored);
   if (!isPrivateStorageConfigured()) return "";
   return getPrivateSignedUrl(stored, PAID_MEDIA_TTL_SECONDS).url;
+}
+
+// ─── Zona PÚBLICA com Token Authentication (URLs de visualização) ────────────
+// A BD continua a guardar o URL canónico do CDN (sem token). Cada resposta da API devolve, para
+// qualquer ficheiro nosso, um URL assinado de curta duração (mesmo esquema da zona privada).
+// Sem BUNNY_CDN_TOKEN_KEY nada é assinado e os URLs saem como sempre (comportamento anterior).
+// A chave e os tokens nunca vão para logs.
+
+/** Validade mínima de um URL assinado de imagem; a expiração é quantizada (ver getPublicSignedUrl). */
+export const PUBLIC_MEDIA_TTL_SECONDS = 60 * 60;
+/** Vídeos (o <video> faz vários pedidos Range): 2 h. */
+export const PUBLIC_VIDEO_TTL_SECONDS = 2 * 60 * 60;
+
+export function isPublicSigningEnabled(): boolean {
+  return Boolean(process.env.BUNNY_CDN_TOKEN_KEY && process.env.BUNNY_CDN_HOSTNAME);
+}
+
+function publicHost(): string {
+  return (process.env.BUNNY_CDN_HOSTNAME ?? "").replace(/^https?:\/\//, "").replace(/\/+$/, "").split("/")[0] ?? "";
+}
+
+function ehVideoKey(key: string): boolean {
+  return /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(key);
+}
+
+/**
+ * URL assinado de um ficheiro da zona pública (Bunny Token Authentication, modo Basic):
+ *   token = base64url( SHA256( chave + caminho + expiração ) ), URL = https://<host><caminho>?token=&expires=
+ * A expiração é QUANTIZADA em janelas fixas de `ttlSeconds`: expira no fim da janela seguinte, logo o URL
+ * vale entre `ttl` e `2*ttl` e é IDÊNTICO para o mesmo ficheiro durante a janela (a cache do browser e do
+ * edge continua a funcionar).
+ */
+export function getPublicSignedUrl(
+  key: string,
+  ttlSeconds: number = PUBLIC_MEDIA_TTL_SECONDS,
+  nowMs: number = Date.now(),
+): { url: string; expiresAt: Date } {
+  const tokenKey = process.env.BUNNY_CDN_TOKEN_KEY;
+  const host = publicHost();
+  if (!tokenKey || !host) throw new Error("Public CDN token authentication is not configured.");
+  const path = `/${publicKeyPath(key)}`;
+  const expires = (Math.floor(nowMs / 1000 / ttlSeconds) + 2) * ttlSeconds;
+  const token = crypto
+    .createHash("sha256")
+    .update(tokenKey + path + expires)
+    .digest("base64")
+    .replace(/\n/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+  return { url: `https://${host}${path}?token=${token}&expires=${expires}`, expiresAt: new Date(expires * 1000) };
+}
+
+/** Chave de um valor guardado que seja nosso (URL do CDN público ou chave "users/…"); null se não for. */
+function chavePublica(stored: string): string | null {
+  if (/^https?:\/\//i.test(stored)) return getStorageKeyFromPublicUrl(stored);
+  return stored.startsWith("users/") ? stored : null;
+}
+
+/**
+ * Assina o que é nosso; URLs externos, relativos ou antigos passam intactos. Só se assina a pasta "users/"
+ * (onde vivem os uploads públicos): um valor guardado a apontar para outra pasta (ex.: documentos KYC
+ * legados) nunca é assinado para o cliente.
+ */
+function assinarPublico(stored: string): string {
+  if (!isPublicSigningEnabled()) return stored;
+  const key = chavePublica(stored);
+  if (!key || key.includes("..") || !key.startsWith("users/")) return stored;
+  return getPublicSignedUrl(key, ehVideoKey(key) ? PUBLIC_VIDEO_TTL_SECONDS : PUBLIC_MEDIA_TTL_SECONDS).url;
+}
+
+/**
+ * Para pedidos feitos PELO SERVIDOR ao CDN público (proxy de media do admin): assina qualquer ficheiro do
+ * nosso CDN, incluindo pastas legadas (ex.: kyc/). Nunca é devolvido ao cliente tal e qual.
+ */
+export function urlParaServidor(rawUrl: string): string {
+  if (!isPublicSigningEnabled()) return rawUrl;
+  const key = /^https?:\/\//i.test(rawUrl) ? getStorageKeyFromPublicUrl(rawUrl) : null;
+  if (!key || key.includes("..")) return rawUrl;
+  return getPublicSignedUrl(key, PUBLIC_MEDIA_TTL_SECONDS).url;
+}
+
+/**
+ * Serializador de saída: URL a devolver ao cliente para um valor guardado (avatar, capa, media, vídeo…).
+ * null/undefined/"" passam como estão. "paid/…" → URL assinado da zona privada; nosso → URL assinado.
+ */
+export function urlMedia(stored: string): string;
+export function urlMedia(stored: string | null): string | null;
+export function urlMedia(stored: string | null | undefined): string | null | undefined;
+export function urlMedia(stored: string | null | undefined): string | null | undefined {
+  if (!stored) return stored;
+  return resolveMediaUrl(stored);
+}
+
+/**
+ * Normalização na ESCRITA: um URL do nosso CDN (possivelmente assinado, com ?token=&expires=) é guardado
+ * sempre na forma canónica https://<host>/<chave>, sem query nem fragmento. Outros valores ficam como estão.
+ */
+export function urlCanonico(url: string): string {
+  const key = /^https?:\/\//i.test(url) ? getStorageKeyFromPublicUrl(url) : null;
+  if (!key || key.includes("..")) return url;
+  return `https://${publicHost()}/${publicKeyPath(key)}`;
+}
+
+/**
+ * Avatar/capa: só ficheiros do nosso CDN ("users/…") ou vazio (remove). Devolve o URL canónico, ou null se
+ * o valor for recusado. Sem BUNNY_CDN_HOSTNAME configurado não há como distinguir, e aceita-se como antes.
+ */
+export function urlAvatarOuCapa(url: string): string | null {
+  if (url === "") return "";
+  if (!publicHost()) return url;
+  const key = /^https?:\/\//i.test(url) ? getStorageKeyFromPublicUrl(url) : null;
+  if (!key || !key.startsWith("users/") || key.includes("..")) return null;
+  return urlCanonico(url);
 }
 
 export async function uploadPrivateStream(

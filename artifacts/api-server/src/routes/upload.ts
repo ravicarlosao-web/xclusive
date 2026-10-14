@@ -27,6 +27,7 @@ import {
   uploadFileStream,
   uploadPrivate,
   uploadPrivateStream,
+  urlMedia,
 } from "../lib/storage";
 
 const router = Router();
@@ -370,7 +371,9 @@ router.post(
 
         return {
           // Privado: pseudo-URL; a chave é validada (prefixo do autor) ao criar o post.
+          // url = valor a GUARDAR (canónico, sem token); urlVisualizacao = URL assinado para MOSTRAR já.
           url: privado ? `private://${key}` : getPublicUrl(key),
+          urlVisualizacao: privado ? urlMedia(key) : urlMedia(getPublicUrl(key)),
           tipo: isVideo ? "video" : "imagem",
           size,
         };

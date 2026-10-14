@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { urlMedia } from "../lib/storage";
 
 const router = Router();
 
@@ -25,12 +26,12 @@ router.get("/notifications", requireAuth, async (req: AuthRequest, res): Promise
       tipo: n.tipo,
       ator: ator ? {
         id: ator.id, username: ator.username, nomeExibicao: ator.nomeExibicao,
-        avatarUrl: ator.avatarUrl, verificado: ator.verificado, tipoConta: ator.tipoConta,
+        avatarUrl: urlMedia(ator.avatarUrl), verificado: ator.verificado, tipoConta: ator.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
       } : null,
       lida: n.lida,
       postId: n.alvoId,
-      postThumbnail: n.postThumbnail,
+      postThumbnail: urlMedia(n.postThumbnail),
       mensagem: n.mensagem,
       criadoEm: n.criadoEm.toISOString(),
     })),
