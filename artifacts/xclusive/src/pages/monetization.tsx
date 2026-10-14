@@ -2,6 +2,7 @@ import { useAuth, DadosBancarios, WithdrawalItem } from '@/contexts/AuthContext'
 import { useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PlanDialog } from '@/components/monetization/PlanDialog';
+import { TipoSubscricaoCard, type TipoSubscricao } from '@/components/subscricoes/TipoSubscricaoCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +62,8 @@ export default function Monetization() {
   // Plan dialogs
   const [editPlan, setEditPlan] = useState<SubscriptionPlan | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
+  // Tipo de subscrição da criadora (servidor). Com 'gratuita' os planos não se aplicam a novas subscrições.
+  const [tipoSub, setTipoSub] = useState<TipoSubscricao | null>(null);
 
   // Withdrawal
   const [withdrawing, setWithdrawing] = useState(false);
@@ -379,6 +382,11 @@ export default function Monetization() {
         </CardContent>
       </Card>
 
+      {/* Tipo de subscrição (gratuita | paga) */}
+      <div className="mb-8">
+        <TipoSubscricaoCard onTipo={setTipoSub} />
+      </div>
+
       {/* Chart + Plans */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         <Card className="lg:col-span-2 bg-card border-border">
@@ -428,7 +436,8 @@ export default function Monetization() {
           </CardContent>
         </Card>
 
-        {/* Plans Management */}
+        {/* Plans Management (só para subscrição paga) */}
+        {tipoSub !== 'gratuita' && (
         <Card className="bg-card border-border flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Os Meus Planos</CardTitle>
@@ -485,6 +494,7 @@ export default function Monetization() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Plan Dialogs */}

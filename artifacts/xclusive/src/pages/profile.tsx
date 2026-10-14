@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { SubscribeModal } from '@/components/wallet/SubscribeModal';
+import { ExclusivoCard } from '@/components/subscricoes/ExclusivoCard';
 import { PostDetailModal } from '@/components/shared/PostDetailModal';
 import { FollowListModal } from '@/components/shared/FollowListModal';
 import type { Post } from '@workspace/api-client-react';
@@ -36,7 +36,6 @@ export default function Profile() {
 
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
   const [reportOpen, setReportOpen] = useState(false);
-  const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [followModal, setFollowModal] = useState<{ type: 'followers' | 'following' } | null>(null);
   const [, setLocation] = useLocation();
@@ -266,7 +265,7 @@ export default function Profile() {
               <PlaySquare className="w-5 h-5 mr-2" />
               <span className="hidden sm:inline">Reels</span>
             </TabsTrigger>
-            {profile.tipoConta === 'criador' && (
+            {profile.tipoConta === 'criador' && !isMe && (
               <TabsTrigger value="exclusive" className="flex-1 h-full rounded-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground">
                 <Lock className="w-5 h-5 mr-2" />
                 <span className="hidden sm:inline">Exclusivo</span>
@@ -380,26 +379,16 @@ export default function Profile() {
             })()}
           </TabsContent>
 
-          <TabsContent value="exclusive" className="mt-6">
-             <div className="text-center py-20 max-w-md mx-auto border border-primary/20 rounded-2xl bg-primary/5 p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -ml-10 -mb-10" />
-              
-              <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/30 shadow-[0_0_20px_rgba(255,62,114,0.2)]">
-                <Lock className="w-10 h-10 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold mb-2">Clube Exclusivo</h3>
-              <p className="text-muted-foreground mb-8">
-                Desbloqueia conteúdos privados, bastidores e interação direta com {profile.nomeExibicao}.
-              </p>
-              <Button
-                className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 shadow-[0_0_20px_rgba(255,62,114,0.3)]"
-                onClick={() => setSubscribeOpen(true)}
-              >
-                Subscrever por 4.990 Kz / mês
-              </Button>
-            </div>
-          </TabsContent>
+          {profile.tipoConta === 'criador' && !isMe && (
+            <TabsContent value="exclusive" className="mt-6">
+              <ExclusivoCard
+                username={profile.username}
+                nomeExibicao={profile.nomeExibicao}
+                avatarUrl={profile.avatarUrl ?? null}
+                verificado={profile.verificado}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
@@ -414,20 +403,6 @@ export default function Profile() {
           username={username}
           type={followModal.type}
           total={followModal.type === 'followers' ? profile.totalSeguidores : profile.totalSeguindo}
-        />
-      )}
-
-      {/* Subscribe modal */}
-      {profile && (
-        <SubscribeModal
-          open={subscribeOpen}
-          onClose={() => setSubscribeOpen(false)}
-          creatorUsername={profile.username}
-          creatorNome={profile.nomeExibicao}
-          creatorAvatar={profile.avatarUrl ?? null}
-          creatorVerificado={profile.verificado}
-          preco={4990}
-          onSubscribed={() => setSubscribeOpen(false)}
         />
       )}
     </div>

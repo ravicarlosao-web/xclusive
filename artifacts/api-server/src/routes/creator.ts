@@ -522,6 +522,72 @@ router.delete("/subscriptions/:id", requireAuth, async (req: AuthRequest, res): 
   res.json({ ok: true, estado: "cancelada", acessoAte: sub.renovacaoEm?.toISOString() ?? null });
 });
 
+// Minhas subscrições (só LEITURA, só as do próprio utilizador). Devolve a mais recente de cada criador,
+// com o estado efetivo (o que já passou da data conta como 'expirada' mesmo antes de o job o registar),
+// as datas e o preço atual do plano — tudo do servidor — para o front-end mostrar, renovar e cancelar.
+router.get("/subscriptions/me", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const now = new Date();
+  const rows = await db
+    .select({
+      sub: subscriptionsTable,
+      criador: {
+        id: usersTable.id,
+        username: usersTable.username,
+        nomeExibicao: usersTable.nomeExibicao,
+        avatarUrl: usersTable.avatarUrl,
+        verificado: usersTable.verificado,
+        tipoSubscricao: usersTable.tipoSubscricao,
+      },
+      plano: {
+        id: subscriptionPlansTable.id,
+        nome: subscriptionPlansTable.nome,
+        preco: subscriptionPlansTable.preco,
+        ativo: subscriptionPlansTable.ativo,
+      },
+    })
+    .from(subscriptionsTable)
+    .innerJoin(usersTable, eq(usersTable.id, subscriptionsTable.criadorId))
+    .leftJoin(subscriptionPlansTable, eq(subscriptionPlansTable.id, subscriptionsTable.planoId))
+    .where(eq(subscriptionsTable.subscriitorId, req.userId!))
+    .orderBy(desc(subscriptionsTable.id));
+
+  const vistos = new Set<number>();
+  const subscricoes = [];
+  for (const { sub, criador, plano } of rows) {
+    if (vistos.has(sub.criadorId)) continue; // histórico antigo do mesmo criador não aparece
+    vistos.add(sub.criadorId);
+    const fim = sub.renovacaoEm;
+    const temAcesso = sub.estado === "ativa"
+      ? !fim || fim > now
+      : sub.estado === "cancelada" && !!fim && fim > now;
+    const gratuita = !fim; // sem data de fim = subscrição gratuita
+    subscricoes.push({
+      id: sub.id,
+      estado: temAcesso ? sub.estado : "expirada",
+      temAcesso,
+      gratuita,
+      inicioEm: sub.inicioEm.toISOString(),
+      renovacaoEm: fim?.toISOString() ?? null, // = periodoAtual a enviar em /renovar
+      acessoAte: temAcesso && fim ? fim.toISOString() : null,
+      terminouEm: !temAcesso && fim ? fim.toISOString() : null,
+      preco: plano?.id != null ? parseFloat(String(plano.preco)) : null, // preço ATUAL do plano (o da renovação)
+      plano: plano?.id != null ? { id: plano.id, nome: plano.nome } : null,
+      podeRenovar: !gratuita && plano?.id != null && plano.ativo === true && criador.tipoSubscricao === "paga",
+      criador: {
+        id: criador.id,
+        username: criador.username,
+        nomeExibicao: criador.nomeExibicao,
+        avatarUrl: urlMedia(criador.avatarUrl),
+        verificado: criador.verificado,
+        tipoSubscricao: criador.tipoSubscricao,
+      },
+    });
+  }
+
+  res.set("Cache-Control", "no-store");
+  res.json({ subscricoes });
+});
+
 // ── Tipo de subscrição da criadora (gratuita | paga) ────────────────────────────
 // Só vale para NOVAS subscrições; as em curso mantêm-se até ao fim do período.
 const subscriptionTypeSchema = z.object({ tipo: z.enum(["gratuita", "paga"]) });
