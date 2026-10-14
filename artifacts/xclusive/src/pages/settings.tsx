@@ -8,8 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2, Camera, User, Lock, Bell, Shield, LogOut } from 'lucide-react';
+import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
@@ -103,6 +104,9 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="notifications" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
             <Bell className="w-5 h-5 mr-3" /> Notificações
+          </TabsTrigger>
+          <TabsTrigger value="subscricoes" data-testid="tab-subscricoes" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
+            <Star className="w-5 h-5 mr-3" /> Subscrições
           </TabsTrigger>
           <TabsTrigger value="security" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
             <Shield className="w-5 h-5 mr-3" /> Segurança
@@ -217,6 +221,10 @@ export default function Settings() {
                 </div>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="subscricoes" className="mt-0 focus-visible:outline-none">
+            <MinhasSubscricoes />
           </TabsContent>
 
           <TabsContent value="security" className="mt-0 space-y-8">

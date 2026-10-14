@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
 import { UnlockPostModal } from '@/components/wallet/UnlockPostModal';
 import { SubscribeModal } from '@/components/wallet/SubscribeModal';
+import { useMinhasSubscricoes } from '@/hooks/useMinhasSubscricoes';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
@@ -26,6 +27,8 @@ interface PostCardProps {
 
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
   const { user, isSubscribed, isPostUnlocked } = useAuth();
+  // Estado real das minhas subscrições (servidor): faz o cartão reagir a subscrever, renovar, cancelar ou expirar.
+  useMinhasSubscricoes();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -503,7 +506,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           creatorNome={post.autor.nomeExibicao || post.autor.username}
           creatorAvatar={post.autor.avatarUrl || null}
           creatorVerificado={post.autor.verificado ?? false}
-          preco={4990}
           onSubscribed={async () => { await refreshAccess(); setLocalSubscribed(true); }}
         />
       )}

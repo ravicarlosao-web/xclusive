@@ -14,6 +14,10 @@ import {
   setOnSessionExpired,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  MINHAS_SUBS_KEY, SubscricaoError, apiSub, fetchPlanoCriador,
+  type MinhaSubscricao, type PlanoCriador,
+} from '@/lib/subscricoes';
 
 // Wire the API client to always send the stored JWT token
 setAuthTokenGetter(() => localStorage.getItem('xclusive_token'));
@@ -302,9 +306,17 @@ interface AuthContextType {
   topUp: (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
   unlockPost: (postId: number, creatorUsername: string, preco: number) => Promise<void>;
-  /** Subscreve a um criador. Lança erro se saldo insuficiente. */
-  subscribe: (creatorUsername: string, preco: number) => Promise<void>;
-  /** Verifica se o utilizador tem subscrição ativa do criador */
+  /**
+   * Subscreve a um criador. Lança erro se saldo insuficiente.
+   * API real: `plano` (o que o utilizador viu) define o pedido — paga: { planoId, precoEsperado = preco };
+   * gratuita: { criadorId }. Devolve a subscrição criada (id e fim do período, do servidor).
+   */
+  subscribe: (creatorUsername: string, preco: number, plano?: PlanoCriador) => Promise<{ id: number; renovacaoEm: string | null } | void>;
+  /** Renova (manual, debita o saldo UMA vez). Só API real. periodoAtual = fim de período que o utilizador viu. */
+  renovarSubscricao: (id: number, periodoAtual: string, precoEsperado: number) => Promise<{ estado: string; renovacaoEm: string | null }>;
+  /** Cancela: mantém o acesso até ao fim do período pago. Só API real. */
+  cancelarSubscricao: (id: number) => Promise<{ acessoAte: string | null }>;
+  /** Verifica se o utilizador tem subscrição com acesso ao criador (API real: estado do servidor) */
   isSubscribed: (creatorUsername: string) => boolean;
   /** Verifica se o utilizador desbloqueou este post */
   isPostUnlocked: (postId: number) => boolean;
@@ -702,39 +714,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSaldo(freshUsers[senderIdx].saldo);
   }, [token, isMockToken, fetchApiWallet]);
 
-  const subscribe = useCallback(async (creatorUsername: string, preco: number) => {
+  const subscribe = useCallback(async (creatorUsername: string, preco: number, plano?: PlanoCriador) => {
 
     // ── Real API mode ──────────────────────────────────────────────────────────
     if (token && !isMockToken) {
-      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-
-      // 1. Resolver o planoId do criador (endpoint público, sem auth)
-      const planRes = await fetch(`${base}/api/users/${creatorUsername}/subscription-plan`, {
-        credentials: 'same-origin',
-      });
-      if (!planRes.ok) {
-        const err = await planRes.json().catch(() => ({}));
-        throw new Error((err as any).error || 'Criador não tem plano de subscrição disponível.');
-      }
-      const plan = await planRes.json() as { id: number; preco: number };
-
-      // 2. Submeter subscrição com planoId e precoEsperado (protecção contra race condition de preço)
-      const res = await fetch(`${base}/api/subscriptions`, {
+      // O plano vem do servidor (o que o utilizador viu; se não vier, vai buscar-se agora).
+      const p = plano ?? await fetchPlanoCriador(creatorUsername);
+      // Gratuita: { criadorId } sem cobrança. Paga: { planoId, precoEsperado } (protege contra mudança de preço).
+      const body = p.tipoSubscricao === 'gratuita' || p.id === null
+        ? { criadorId: p.criadorId }
+        : { planoId: p.id, precoEsperado: plano ? preco : p.preco };
+      const criada = await apiSub<{ id: number; renovacaoEm: string | null }>('/api/subscriptions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({ planoId: plan.id, precoEsperado: plan.preco }),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error || 'Erro ao processar subscrição.');
-      }
       // Actualizar saldo local a partir da API após débito bem-sucedido
       await fetchApiWallet(token);
-      return;
+      await queryClient.invalidateQueries({ queryKey: MINHAS_SUBS_KEY });
+      return { id: criada.id, renovacaoEm: criada.renovacaoEm ?? null };
     }
 
     // ── Mock mode ──────────────────────────────────────────────────────────────
@@ -776,15 +773,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     saveTransactions(txs);
     setSaldo(freshUsers[senderIdx].saldo);
-  }, [token, isMockToken, fetchApiWallet]);
+    return;
+  }, [token, isMockToken, fetchApiWallet, queryClient]);
+
+  const renovarSubscricao = useCallback(async (id: number, periodoAtual: string, precoEsperado: number) => {
+    if (!token || isMockToken) throw new SubscricaoError('A renovação só está disponível com a conta real.', 0);
+    const r = await apiSub<{ estado: string; renovacaoEm: string | null }>(`/api/subscriptions/${id}/renovar`, {
+      method: 'POST',
+      body: JSON.stringify({ periodoAtual, precoEsperado }),
+    });
+    await fetchApiWallet(token);
+    await queryClient.invalidateQueries({ queryKey: MINHAS_SUBS_KEY });
+    return r;
+  }, [token, isMockToken, fetchApiWallet, queryClient]);
+
+  const cancelarSubscricao = useCallback(async (id: number) => {
+    if (!token || isMockToken) throw new SubscricaoError('O cancelamento só está disponível com a conta real.', 0);
+    const r = await apiSub<{ acessoAte: string | null }>(`/api/subscriptions/${id}`, { method: 'DELETE' });
+    await queryClient.invalidateQueries({ queryKey: MINHAS_SUBS_KEY });
+    return { acessoAte: r.acessoAte ?? null };
+  }, [token, isMockToken, queryClient]);
 
   const isSubscribed = useCallback((creatorUsername: string): boolean => {
+    // API real: estado do servidor (GET /subscriptions/me, guardado em cache pelo useMinhasSubscricoes).
+    if (token && !isMockToken) {
+      const lista = queryClient.getQueryData<MinhaSubscricao[]>(MINHAS_SUBS_KEY) ?? [];
+      return lista.some((x) => x.criador.username === creatorUsername && x.temAcesso && (!x.acessoAte || new Date(x.acessoAte) > new Date()));
+    }
     const u = getCurrentMockUser();
     if (!u) return false;
     const sub = u.subscricoes?.[creatorUsername];
     if (!sub) return false;
     return new Date(sub.expira) > new Date();
-  }, []);
+  }, [token, isMockToken, queryClient]);
 
   const isPostUnlocked = useCallback((postId: number): boolean => {
     const u = getCurrentMockUser();
@@ -971,6 +992,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       topUp,
       unlockPost,
       subscribe,
+      renovarSubscricao,
+      cancelarSubscricao,
       isSubscribed,
       isPostUnlocked,
       getMockUserData,

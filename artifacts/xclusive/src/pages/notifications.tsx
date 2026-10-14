@@ -149,6 +149,10 @@ export default function Notifications() {
               const tipo = notif.tipo as NotifTipo;
               const username = notif.ator?.username ?? 'utilizador';
               const avatarUrl = notif.ator?.avatarUrl ?? '';
+              // Notificações de sistema trazem a mensagem do servidor (ex.: subscrição expirada, levantamento rejeitado).
+              const mensagem = (notif as { mensagem?: string | null }).mensagem ?? null;
+              const sistema = tipo === 'sistema';
+              const temAtor = !!notif.ator;
 
               return (
                 <div
@@ -157,27 +161,43 @@ export default function Notifications() {
                     ${!notif.lida ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-secondary'}
                   `}
                 >
-                  <Link href={`/perfil/${username}`} className="relative shrink-0">
-                    <Avatar className="w-12 h-12 border border-border">
-                      <AvatarImage src={avatarUrl} />
-                      <AvatarFallback>{username[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border shadow-sm">
-                      {renderIcon(tipo)}
+                  {temAtor ? (
+                    <Link href={`/perfil/${username}`} className="relative shrink-0">
+                      <Avatar className="w-12 h-12 border border-border">
+                        <AvatarImage src={avatarUrl} />
+                        <AvatarFallback>{username[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border shadow-sm">
+                        {renderIcon(tipo)}
+                      </div>
+                    </Link>
+                  ) : (
+                    <div className="relative shrink-0 w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center">
+                      {renderIcon(tipo) ?? <Bell className="w-4 h-4" />}
                     </div>
-                  </Link>
+                  )}
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm">
-                      <Link href={`/perfil/${username}`} className="font-bold hover:underline">
-                        {username}
-                      </Link>{' '}
-                      {renderText(tipo)}
-                    </p>
+                    {sistema ? (
+                      <p className="text-sm" data-testid="notif-mensagem">{mensagem || renderText(tipo)}</p>
+                    ) : (
+                      <p className="text-sm">
+                        <Link href={`/perfil/${username}`} className="font-bold hover:underline">
+                          {username}
+                        </Link>{' '}
+                        {renderText(tipo)}
+                      </p>
+                    )}
                     <span className={`text-xs ${!notif.lida ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
                       {formatTime(notif.criadoEm)}
                     </span>
                   </div>
+
+                  {sistema && temAtor && (
+                    <Link href={`/perfil/${username}`}>
+                      <Button size="sm" className="bg-primary text-white" data-testid="notif-renovar">Renovar</Button>
+                    </Link>
+                  )}
 
                   {tipo === 'novo_seguidor' && (
                     <Button size="sm" className={!notif.lida ? 'bg-primary text-white' : 'bg-secondary text-foreground'}>
