@@ -72,7 +72,7 @@ export async function createSession(
       refreshJti,
       expiresAt,
       userAgent: userAgent ?? null,
-      ip: ip ?? null,
+      ip: ip?.slice(0, 45) || null,
     });
 
     if (MAX_SESSIONS > 0) {
