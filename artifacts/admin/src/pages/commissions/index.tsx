@@ -17,13 +17,14 @@ interface CreatorCommission {
   nomeExibicao: string;
   verificado: boolean;
   comissaoPersonalizada: number | null;
-  taxaEfectiva: number;
-  fonte: 'personalizada' | 'global';
-  taxaGlobal: number;
+  /** null = sem taxa utilizável (global não definida, ou override inválido): as compras respondem 503. */
+  taxaEfectiva: number | null;
+  fonte: 'personalizada' | 'global' | 'nao_definida' | 'invalida';
+  taxaGlobal: number | null;
 }
 
 interface CommissionOverview {
-  taxaGlobal: number;
+  taxaGlobal: number | null;
   criadores: CreatorCommission[];
 }
 
@@ -87,13 +88,19 @@ function CreatorCommissionRow({
 
       {/* Taxa efectiva */}
       <td className="py-3 px-4">
-        <span className="font-mono text-sm font-semibold">{creator.taxaEfectiva}%</span>
+        <span className="font-mono text-sm font-semibold">
+          {creator.taxaEfectiva !== null ? `${creator.taxaEfectiva}%` : 'não definida'}
+        </span>
       </td>
 
       {/* Origem */}
       <td className="py-3 px-4">
         {creator.fonte === 'personalizada' ? (
           <Badge variant="default" className="text-xs bg-violet-500 hover:bg-violet-600">Personalizada</Badge>
+        ) : creator.fonte === 'invalida' ? (
+          <Badge variant="destructive" className="text-xs">Override inválido</Badge>
+        ) : creator.fonte === 'nao_definida' ? (
+          <Badge variant="destructive" className="text-xs">Sem taxa</Badge>
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">Global</Badge>
         )}
@@ -292,7 +299,9 @@ function CreatorCommissionsSection() {
 export default function Commissions() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [globalRate, setGlobalRate] = useState<number | null>(null);
+  // Texto do campo (vazio = taxa global ainda não definida na base de dados; não há valor por omissão).
+  const [globalRate, setGlobalRate] = useState<string>('');
+  const [iniciado, setIniciado] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -304,11 +313,18 @@ export default function Commissions() {
     queryFn: adminApi.getCommissionOverview,
   });
 
+  const taxaGuardada: number | null =
+    typeof (settings as any)?.commission_rate?.value === 'number' ? (settings as any).commission_rate.value : null;
+
   useEffect(() => {
-    if (settings && globalRate === null) {
-      setGlobalRate((settings as any).commission_rate?.value ?? 20);
+    if (settings && !iniciado) {
+      setGlobalRate(taxaGuardada !== null ? String(taxaGuardada) : '');
+      setIniciado(true);
     }
-  }, [settings, globalRate]);
+  }, [settings, iniciado, taxaGuardada]);
+
+  const taxaNumero = globalRate.trim() === '' ? NaN : Number(globalRate);
+  const taxaOk = Number.isFinite(taxaNumero) && taxaNumero >= 0 && taxaNumero <= 100;
 
   const updateGlobalRate = useMutation({
     mutationFn: (rate: number) => adminApi.updateSettings({
@@ -325,7 +341,7 @@ export default function Commissions() {
     }
   });
 
-  if (isLoading || globalRate === null) return <div>A carregar dados...</div>;
+  if (isLoading || !iniciado) return <div>A carregar dados...</div>;
 
   const totalComPersonalizada = (commissionData as any)?.criadores?.filter(
     (c: any) => c.comissaoPersonalizada !== null
@@ -340,6 +356,13 @@ export default function Commissions() {
         </p>
       </div>
 
+      {taxaGuardada === null && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm" id="commission-not-set">
+          <strong>Taxa global não definida.</strong> Enquanto não a definires, subscrições, PPV, gorjetas e bilhetes
+          de live recusam o pagamento (erro 503) e nada é cobrado.
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
          <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -350,7 +373,9 @@ export default function Commissions() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {(commissionData as any)?.taxaGlobal ?? globalRate}%
+              {typeof (commissionData as any)?.taxaGlobal === 'number'
+                ? `${(commissionData as any).taxaGlobal}%`
+                : taxaGuardada !== null ? `${taxaGuardada}%` : 'Não definida'}
             </div>
           </CardContent>
         </Card>
@@ -389,7 +414,8 @@ export default function Commissions() {
                     min={0}
                     max={100}
                     value={globalRate}
-                    onChange={e => setGlobalRate(Number(e.target.value))}
+                    placeholder="não definida"
+                    onChange={e => setGlobalRate(e.target.value)}
                     className="bg-card font-mono"
                   />
                   <span className="text-muted-foreground">%</span>
@@ -397,8 +423,8 @@ export default function Commissions() {
               </div>
               <Button
                 id="save-global-settings"
-                onClick={() => updateGlobalRate.mutate(globalRate)}
-                disabled={updateGlobalRate.isPending}
+                onClick={() => updateGlobalRate.mutate(taxaNumero)}
+                disabled={updateGlobalRate.isPending || !taxaOk}
               >
                 <Save className="mr-2 h-4 w-4" /> Guardar
               </Button>

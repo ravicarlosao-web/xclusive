@@ -8,7 +8,7 @@ import { deletePostWithMedia } from "../lib/postDeletion";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl, urlMedia, urlCanonico } from "../lib/storage";
 import { postVisivel, commentVisivel } from "../lib/takedown";
-import { getCommissionRate, calcComissao } from "../lib/commission";
+import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -160,6 +160,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
         tipo: "ppv",
         valor: String(precoNumber),
         comissao: String(comissao),
+        taxaComissao: String(commissionRate),
         conteudoId: id,
         descricao: `Desbloqueio PPV do post #${id}`,
       });
@@ -167,6 +168,11 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
 
     res.status(200).json({ ok: true });
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.httpStatus).json({ error: err.message });
       return;

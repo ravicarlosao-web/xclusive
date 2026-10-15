@@ -4,7 +4,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { getCommissionRate, calcComissao } from "../lib/commission";
+import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
 const router = Router();
 
@@ -88,6 +88,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
           tipo: "gorjeta",
           valor: String(valor),
           comissao: String(comissao),
+          taxaComissao: String(commissionRate),
           conteudoId: postId,
           descricao: `Gorjeta ao post #${postId}`,
         })
@@ -98,6 +99,11 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
 
     res.status(201).json({ purchase });
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.httpStatus).json({ error: err.message });
       return;

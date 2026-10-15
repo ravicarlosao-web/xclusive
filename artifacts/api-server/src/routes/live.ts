@@ -7,7 +7,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
-import { getCommissionRate, calcComissao } from "../lib/commission";
+import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
 import { liveStartSchema } from "../lib/liveTicket";
 import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl, isViewerTokenConfigured } from "../lib/liveViewerToken";
@@ -258,6 +258,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           tipo: "gorjeta",
           valor: String(valor),
           comissao: String(comissao),
+          taxaComissao: String(commissionRate),
           conteudoId: streamId,
           descricao: `Gorjeta na Live #${streamId}${mensagem ? ` - ${mensagem}` : ""}`,
         });
@@ -287,6 +288,11 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       // Ignorar — não deve falhar o pedido HTTP
     }
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.statusCode).json({ error: err.message });
       return;
@@ -543,6 +549,7 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
             tipo: "bilhete_live",
             valor: String(preco),
             comissao: String(comissao),
+            taxaComissao: String(commissionRate),
             conteudoId: streamId,
             descricao: `Bilhete da Live #${streamId}`,
           })
@@ -598,6 +605,11 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       saldo: result.saldo,
     });
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.statusCode).json({ error: err.message });
       return;

@@ -45,6 +45,11 @@ export const purchasesTable = pgTable("purchases", {
    * Default 0 para retrocompatibilidade com registos anteriores a esta migração.
    */
   comissao: numeric("comissao", { precision: 10, scale: 2 }).notNull().default("0"),
+  /**
+   * Taxa de comissão (percentagem, 0-100) aplicada NESTA compra, gravada no momento do pagamento.
+   * NULL = compra anterior ao registo da taxa (só se conhece o montante em `comissao`).
+   */
+  taxaComissao: numeric("taxa_comissao", { precision: 5, scale: 2 }),
   conteudoId: integer("conteudo_id"),
   descricao: text("descricao"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),

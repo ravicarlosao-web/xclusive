@@ -80,6 +80,8 @@ export default function Monetization() {
   const { data: stats, isLoading: statsLoading } = useGetCreatorStats({
     query: { queryKey: getGetCreatorStatsQueryKey(), enabled: !!user && user.tipoConta === 'criador' },
   });
+  // Taxa de comissão efetiva da criadora (GET /creator/stats): null/ausente = não definida.
+  const taxaComissao = (stats as { taxaComissao?: number | null } | undefined)?.taxaComissao;
 
   const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlans({
     query: { queryKey: getGetSubscriptionPlansQueryKey(), enabled: !!user && user.tipoConta === 'criador' },
@@ -242,9 +244,12 @@ export default function Monetization() {
           <h1 className="text-3xl font-extrabold tracking-tight">Painel do Criador</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Gere os teus ganhos, subscritores e conteúdo exclusivo.</p>
         </div>
-        <div className="bg-primary/10 border border-primary/20 text-primary px-4 py-2 rounded-xl font-bold flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" /> Fica com 90% do teu ganho em Kz
-        </div>
+        {/* Percentagem que a criadora recebe = 100 − taxa efetiva (base de dados). Sem taxa definida, não se mostra. */}
+        {typeof taxaComissao === 'number' && (
+          <div className="bg-primary/10 border border-primary/20 text-primary px-4 py-2 rounded-xl font-bold flex items-center gap-2" data-testid="taxa-criadora">
+            <TrendingUp className="w-5 h-5" /> Fica com {(100 - taxaComissao).toLocaleString('pt-PT', { maximumFractionDigits: 2 })}% do teu ganho em Kz
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}

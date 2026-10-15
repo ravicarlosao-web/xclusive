@@ -4,7 +4,7 @@ import { eq, and, sql, desc, inArray, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { getCommissionRate, calcComissao } from "../lib/commission";
+import { getCommissionRate, calcComissao, lerTaxaEfetiva, CommissionNotConfiguredError } from "../lib/commission";
 import { subscricaoComAcesso } from "../lib/exclusiveAccess";
 import { urlMedia } from "../lib/storage";
 
@@ -76,7 +76,11 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
     .where(eq(subscriptionsTable.criadorId, userId));
   const taxaRetencao = totalHistorico > 0 ? Math.min(100, Math.round((totalSubscritores / totalHistorico) * 100)) : 0;
 
+  // Taxa de comissão efetiva desta criadora (override ou global, da base de dados); null se não estiver definida.
+  const { taxa: taxaComissao } = await lerTaxaEfetiva(db, userId);
+
   res.json({
+    taxaComissao,
     ganhosMes: parseFloat(String(ganhosMes)) || 0,
     totalSubscritores: totalSubscritores || 0,
     taxaRetencao,
@@ -298,10 +302,11 @@ async function cobrarSubscricao(
   descricao: string,
 ): Promise<void> {
   const precoReal = Number(plan.preco);
-  await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoReal}` }).where(eq(usersTable.id, subscritorId));
-
+  // A taxa vem da base de dados e lê-se ANTES de qualquer débito (sem taxa válida lança 503 e nada é cobrado).
   const commissionRate = await getCommissionRate(tx, plan.criadorId);
   const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
+
+  await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoReal}` }).where(eq(usersTable.id, subscritorId));
   await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` }).where(eq(usersTable.id, plan.criadorId));
 
   await tx.insert(purchasesTable).values({
@@ -310,6 +315,7 @@ async function cobrarSubscricao(
     tipo: "subscricao",
     valor: plan.preco,
     comissao: String(comissao),
+    taxaComissao: String(commissionRate),
     conteudoId: plan.id,
     descricao,
   });
@@ -408,6 +414,11 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
       renovacaoEm: sub.newSub.renovacaoEm?.toISOString() || null,
     });
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.httpStatus).json({ error: err.message });
       return;
@@ -490,6 +501,11 @@ router.post("/subscriptions/:id/renovar", requireAuth, validate(renewSchema), as
 
     res.json({ id: result.id, estado: result.estado, renovacaoEm: result.renovacaoEm?.toISOString() ?? null });
   } catch (err) {
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
     if (err instanceof PaymentError) {
       res.status(err.httpStatus).json({ error: err.message });
       return;
