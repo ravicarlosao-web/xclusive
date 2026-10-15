@@ -51,7 +51,7 @@ import {
   TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
-import { getCommissionRate } from "../lib/commission.js";
+import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
 
@@ -504,31 +504,46 @@ router.patch("/admin/users/:id/commission", requireAdmin, async (req: AdminReque
 
     const { comissaoPersonalizada } = req.body as { comissaoPersonalizada: number | null };
 
-    // Validar: null (remover override) ou número entre 0 e 100
+    // Validar: null (remover override) ou NÚMERO entre 0 e 100 (máx. 2 casas decimais)
     if (comissaoPersonalizada !== null) {
-      if (typeof comissaoPersonalizada !== "number" || !isFinite(comissaoPersonalizada)
-          || comissaoPersonalizada < 0 || comissaoPersonalizada > 100) {
-        res.status(400).json({ error: "comissaoPersonalizada deve ser null ou um número entre 0 e 100." });
+      if (!taxaValida(comissaoPersonalizada) || !taxaComDuasCasas(comissaoPersonalizada)) {
+        res.status(400).json({ error: "comissaoPersonalizada deve ser null ou um número entre 0 e 100 (no máximo 2 casas decimais)." });
         return;
       }
     }
 
-    const [user] = await db.select({ id: usersTable.id, username: usersTable.username })
-      .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    if (!user) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
+    // Leitura do valor anterior, atualização e audit na MESMA transação.
+    const resultado = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select({ id: usersTable.id, username: usersTable.username, tipoConta: usersTable.tipoConta, anterior: usersTable.comissaoPersonalizada })
+        .from(usersTable).where(eq(usersTable.id, userId)).for("update").limit(1);
+      if (!user) return { erro: 404 as const };
+      if (user.tipoConta !== "criador") return { erro: 400 as const };
 
-    await db.update(usersTable)
-      .set({ comissaoPersonalizada: comissaoPersonalizada !== null ? String(comissaoPersonalizada) : null })
-      .where(eq(usersTable.id, userId));
-
-    await logAudit(req, "set_commission_override", "user", userId, {
-      username: user.username,
-      comissaoPersonalizada,
+      const anterior = user.anterior !== null && user.anterior !== undefined ? Number(user.anterior) : null;
+      await tx.update(usersTable)
+        .set({ comissaoPersonalizada: comissaoPersonalizada !== null ? String(comissaoPersonalizada) : null })
+        .where(eq(usersTable.id, userId));
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!,
+        action: "set_commission_override",
+        targetType: "user",
+        targetId: userId,
+        details: { username: user.username, anterior, novo: comissaoPersonalizada },
+        ipAddress: req.ip ?? null,
+      });
+      return { username: user.username };
     });
+
+    if ("erro" in resultado) {
+      if (resultado.erro === 404) res.status(404).json({ error: "Utilizador não encontrado." });
+      else res.status(400).json({ error: "A comissão personalizada só se aplica a criadores." });
+      return;
+    }
 
     res.json({
       userId,
-      username: user.username,
+      username: resultado.username,
       comissaoPersonalizada,
     });
   } catch (err) {
@@ -543,14 +558,8 @@ router.patch("/admin/users/:id/commission", requireAdmin, async (req: AdminReque
  */
 router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const [globalRow] = await db
-      .select({ value: platformSettingsTable.value })
-      .from(platformSettingsTable)
-      .where(eq(platformSettingsTable.key, "commission_rate"))
-      .limit(1);
-    const globalRate: number = (typeof (globalRow?.value as any)?.value === "number")
-      ? (globalRow.value as any).value
-      : 20;
+    // Taxa global da base de dados; null = não definida (nada é inventado: as compras respondem 503).
+    const globalRate = await lerTaxaGlobal(db);
 
     const creators = await db
       .select({
@@ -566,10 +575,14 @@ router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRe
       .orderBy(asc(usersTable.username));
 
     const result = creators.map((c) => {
-      const override = c.comissaoPersonalizada !== null && c.comissaoPersonalizada !== undefined
-        ? Number(c.comissaoPersonalizada)
-        : null;
-      const taxaEfectiva = override !== null ? override : globalRate;
+      const bruto = c.comissaoPersonalizada;
+      const override = bruto !== null && bruto !== undefined ? Number(bruto) : null;
+      const overrideValido = override !== null && taxaValida(override);
+      // override inválido NÃO cai para a global: o criador fica sem taxa utilizável (compras com 503).
+      const taxaEfectiva = override !== null ? (overrideValido ? override : null) : globalRate;
+      const fonte = override !== null
+        ? (overrideValido ? "personalizada" : "invalida")
+        : (globalRate !== null ? "global" : "nao_definida");
       return {
         id: c.id,
         username: c.username,
@@ -577,7 +590,7 @@ router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRe
         verificado: c.verificado,
         comissaoPersonalizada: override,
         taxaEfectiva,
-        fonte: override !== null ? "personalizada" : "global",
+        fonte,
         taxaGlobal: globalRate,
       };
     });
@@ -1861,9 +1874,8 @@ router.get("/admin/broadcast/history", async (req, res) => {
 // SETTINGS
 // ────────────────────────────────────────────────────────────────────────────
 
-// Defaults aplicados quando a tabela está vazia
+// Defaults aplicados quando a tabela está vazia. A comissão NÃO tem default: vem sempre da base de dados.
 const DEFAULT_SETTINGS: Record<string, unknown> = {
-  commission_rate: { value: 20 },
   maintenance_mode: { enabled: false },
   allowed_countries: { list: ["AO", "MZ", "ZA", "PT", "BR"] },
   min_withdrawal_amount: { value: 5000 },
@@ -1872,7 +1884,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
 router.get("/admin/settings", async (req, res) => {
   try {
     const rows = await db.select().from(platformSettingsTable);
-    const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS, [COMMISSION_KEY]: null }; // null = não definida
     for (const row of rows) {
       settings[row.key] = row.value;
     }
@@ -1890,9 +1902,12 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
     const updates: Array<{ key: string; value: unknown }> = [];
 
     if (req.body.commission_rate !== undefined) {
-      const val = Number(req.body.commission_rate?.value);
-      if (!Number.isFinite(val) || val < 0 || val > 100) erros.push("commission_rate.value deve estar entre 0 e 100");
-      else updates.push({ key: "commission_rate", value: { value: val } });
+      // Tem de ser { value: <NÚMERO 0-100> }: null, string, array, booleano ou objeto vazio são recusados,
+      // e a taxa nunca pode ser apagada.
+      const cr = req.body.commission_rate;
+      const v = cr !== null && typeof cr === "object" && !Array.isArray(cr) ? (cr as { value?: unknown }).value : undefined;
+      if (!taxaValida(v) || !taxaComDuasCasas(v)) erros.push("commission_rate.value deve ser um número entre 0 e 100 (no máximo 2 casas decimais)");
+      else updates.push({ key: COMMISSION_KEY, value: { value: v } });
     }
     if (req.body.maintenance_mode !== undefined) {
       if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
@@ -1918,21 +1933,44 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
     const before: Record<string, unknown> = {};
     for (const r of beforeRows) before[r.key] = r.value;
 
-    // Upsert cada definição
-    for (const upd of updates) {
-      await db.insert(platformSettingsTable)
-        .values({ key: upd.key, value: upd.value as any, updatedBy: req.adminId ?? undefined })
-        .onConflictDoUpdate({
-          target: platformSettingsTable.key,
-          set: { value: upd.value as any, updatedBy: req.adminId ?? undefined, updatedAt: new Date() },
+    // Upserts e audit na MESMA transação: se o audit falhar, nada é alterado.
+    await db.transaction(async (tx) => {
+      // Taxa anterior lida com lock, para o audit registar exatamente o que foi substituído.
+      const [antes] = await tx.select({ value: platformSettingsTable.value }).from(platformSettingsTable)
+        .where(eq(platformSettingsTable.key, COMMISSION_KEY)).for("update").limit(1);
+      const taxaAnterior = (antes?.value as { value?: unknown } | undefined)?.value;
+
+      for (const upd of updates) {
+        await tx.insert(platformSettingsTable)
+          .values({ key: upd.key, value: upd.value as any, updatedBy: req.adminId ?? undefined })
+          .onConflictDoUpdate({
+            target: platformSettingsTable.key,
+            set: { value: upd.value as any, updatedBy: req.adminId ?? undefined, updatedAt: new Date() },
+          });
+      }
+
+      const novaTaxa = updates.find((u) => u.key === COMMISSION_KEY);
+      if (novaTaxa) {
+        await tx.insert(auditLogTable).values({
+          adminId: req.adminId!, action: "commission_rate_update", targetType: "platform", targetId: 0,
+          details: { anterior: taxaValida(taxaAnterior) ? taxaAnterior : null, novo: (novaTaxa.value as { value: number }).value },
+          ipAddress: req.ip ?? null,
         });
-    }
+      }
+      const outras = updates.filter((u) => u.key !== COMMISSION_KEY);
+      if (outras.length > 0) {
+        await tx.insert(auditLogTable).values({
+          adminId: req.adminId!, action: "settings_update", targetType: "platform", targetId: 0,
+          details: { before, after: Object.fromEntries(outras.map((u) => [u.key, u.value])) },
+          ipAddress: req.ip ?? null,
+        });
+      }
+    });
 
     const afterRows = await db.select().from(platformSettingsTable);
-    const after: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    const after: Record<string, unknown> = { ...DEFAULT_SETTINGS, [COMMISSION_KEY]: null };
     for (const r of afterRows) after[r.key] = r.value;
 
-    await logAudit(req, "settings_update", "platform", 0, { before, after: Object.fromEntries(updates.map(u => [u.key, u.value])) });
     res.json(after);
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao actualizar definições");
