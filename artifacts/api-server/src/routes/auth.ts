@@ -164,7 +164,7 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
     const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await createSession(user.id, refreshJti, sessionExpiresAt,
       req.headers["user-agent"],
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? undefined,
+      (req.ip ?? "").slice(0, 45) || undefined, // req.ip respeita "trust proxy": não aceita o X-Forwarded-For forjado
     );
 
     res.status(201).json({
@@ -217,7 +217,7 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
     const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await createSession(user.id, refreshJti, sessionExpiresAt,
       req.headers["user-agent"],
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? undefined,
+      (req.ip ?? "").slice(0, 45) || undefined, // req.ip respeita "trust proxy": não aceita o X-Forwarded-For forjado
     );
 
     const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
@@ -359,7 +359,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     deleteSession(payload.jti),
     createSession(payload.userId, newRefreshJti, sessionExpiresAt,
       req.headers["user-agent"],
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? (req as any).ip ?? undefined,
+      (req.ip ?? "").slice(0, 45) || undefined,
     ),
   ]);
 
