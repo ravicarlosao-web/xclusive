@@ -123,7 +123,7 @@ export default function Carteira() {
   const { saldo, user, isMockMode, getTransactionHistory, refreshSaldo } = useAuth();
   const [topUpOpen, setTopUpOpen] = useState(false);
 
-  const isMockToken = (localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_');
+  const isMockToken = import.meta.env.DEV && (localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_');
   const useRealApi = !isMockToken && !!user;
 
   // Transações reais (modo API)

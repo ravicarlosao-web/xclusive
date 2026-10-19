@@ -32,9 +32,22 @@ function parseTokenExp(token: string): number | null {
   } catch { return null; }
 }
 
+// ─── Modo mock: SÓ em desenvolvimento local (import.meta.env.DEV) ─────────────
+// Em produção não existe sessão mock nem contas de teste. Restos de sessões antigas (token mock e chaves
+// xclusive_mock_*) são removidos ao carregar, antes de qualquer estado ser lido do localStorage.
+const MSG_SEM_SERVIDOR = 'Não foi possível contactar o servidor. Tenta novamente.';
+if (!import.meta.env.DEV) {
+  try {
+    if ((localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_')) localStorage.removeItem('xclusive_token');
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('xclusive_mock_')) localStorage.removeItem(k);
+    }
+  } catch { /* localStorage indisponível */ }
+}
+
 // ─── Mock store helpers (DB-less mode) ───────────────────────────────────────
-const MOCK_KEY = 'xclusive_mock_users';
-const MOCK_SESSION_KEY = 'xclusive_mock_session';
+const MOCK_KEY = import.meta.env.DEV ? 'xclusive_mock_users' : ''; // produção: sem chaves mock
+const MOCK_SESSION_KEY = import.meta.env.DEV ? 'xclusive_mock_session' : ''; // produção: sem chaves mock
 
 /** IBAN da plataforma Xclusive para receber carregamentos */
 export const XCLUSIVE_IBAN = 'AO06 0040 0000 1234 5678 9012 3';
@@ -96,7 +109,7 @@ interface MockUser {
 
 export type TransactionTipo = 'gorjeta' | 'carregamento' | 'desbloqueio' | 'subscricao' | 'levantamento';
 
-const MOCK_TRANSACTIONS_KEY = 'xclusive_mock_transactions';
+const MOCK_TRANSACTIONS_KEY = import.meta.env.DEV ? 'xclusive_mock_transactions' : ''; // produção: sem chaves mock
 
 // ─── Top-up requests (shared with admin via localStorage) ────────────────────
 import { getTopUpRequests as _getTopUpRequests, saveTopUpRequests as _saveTopUpRequests } from '@/lib/topupStorage';
@@ -361,17 +374,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [token, setTokenState] = useState<string | null>(() => localStorage.getItem('xclusive_token'));
-  const [mockUser, setMockUser] = useState<UserProfile | null>(() => getMockSession());
+  const [mockUser, setMockUser] = useState<UserProfile | null>(() => (import.meta.env.DEV ? getMockSession() : null));
   const [isMockMode, setIsMockMode] = useState(false);
-  const [saldo, setSaldo] = useState<number | null>(() => getMockSaldo());
-  const [ganhos, setGanhos] = useState<number | null>(() => getMockGanhos());
+  const [saldo, setSaldo] = useState<number | null>(() => (import.meta.env.DEV ? getMockSaldo() : null));
+  const [ganhos, setGanhos] = useState<number | null>(() => (import.meta.env.DEV ? getMockGanhos() : null));
 
   // Seed test accounts into mock store on first load
   useEffect(() => {
-    seedMockUsersIfEmpty();
+    if (import.meta.env.DEV) seedMockUsersIfEmpty();
   }, []);
 
-  const isMockToken = token?.startsWith('mock_token_') ?? false;
+  const isMockToken = import.meta.env.DEV && (token?.startsWith('mock_token_') ?? false);
 
   const { data: apiUser, isLoading: isUserLoading, error } = useGetMe({
     query: {
@@ -519,7 +532,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const apiStatus: number | undefined = apiError?.response?.status ?? apiError?.status;
       // 4xx = credential rejection or client error — do NOT fall back to mock.
       if (apiStatus && apiStatus >= 400 && apiStatus < 500) throw apiError;
-      // Network/server error — fall back to mock only if user is a known mock account.
+      // Produção: nunca há sessão mock. API inacessível (rede/5xx) = erro claro, sem criar sessão.
+      if (!import.meta.env.DEV) throw new Error(MSG_SEM_SERVIDOR);
+      // DEV: fallback para o mock só se o utilizador for uma conta mock conhecida.
       const knownMockUser = getMockUsers().find(u => u.email === data.email);
       if (!knownMockUser) throw apiError;
       const response = await mockLogin(data);
@@ -544,6 +559,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const apiStatus: number | undefined = apiError?.response?.status ?? apiError?.status;
       const isClientError = apiStatus && apiStatus >= 400 && apiStatus < 500;
       if (isClientError) throw apiError;
+      // Produção: nunca se cria conta mock. API inacessível (rede/5xx) = erro claro, sem criar conta.
+      if (!import.meta.env.DEV) throw new Error(MSG_SEM_SERVIDOR);
       const response = await mockRegister(data);
       setIsMockMode(true);
       setToken(response.token);
