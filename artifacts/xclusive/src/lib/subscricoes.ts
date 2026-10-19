@@ -51,6 +51,7 @@ export class SubscricaoError extends Error {
 
 /** Sessão de demonstração (modo mock): estas funções novas só existem com a API real. */
 export function ehSessaoMock(): boolean {
+  if (!import.meta.env.DEV) return false; // produção: não há sessão mock
   try { return (localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_'); } catch { return false; }
 }
 
