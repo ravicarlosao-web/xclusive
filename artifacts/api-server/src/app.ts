@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { verifyToken } from "./lib/auth";
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -127,19 +128,20 @@ const refreshLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Helper: chave por userId extraído do JWT (sem re-verificar assinatura).
-// A verificação criptográfica real acontece em requireAuth — aqui basta isolar o utilizador.
-// Fallback para IP normalizado se o token estiver ausente ou malformado.
+// Helper: chave por userId, SÓ quando o JWT é verificado (assinatura e expiração, sem base de dados).
+// Um token forjado, expirado, malformado, de refresh ou sem userId inteiro positivo NÃO escolhe a chave:
+// cai no IP normalizado (req.ip respeita "trust proxy"), por isso não contorna o limite.
+// A revogação não se verifica aqui (exigiria base de dados); o requireAuth rejeita-a depois.
 function userIdKey(req: Parameters<typeof rateLimit>[0] extends { keyGenerator?: (req: infer R) => string } ? R : never): string {
   const auth = (req as any).headers?.authorization as string | undefined;
   if (auth?.startsWith("Bearer ")) {
     try {
-      const payload = JSON.parse(
-        Buffer.from(auth.slice(7).split(".")[1]!, "base64url").toString()
-      );
-      if (payload?.userId) return `user:${payload.userId}`;
+      const payload = verifyToken(auth.slice(7));
+      if (payload.type !== "refresh" && Number.isInteger(payload.userId) && payload.userId > 0) {
+        return `user:${payload.userId}`;
+      }
     } catch {
-      // fallback abaixo
+      // token inválido ou expirado: fallback abaixo
     }
   }
   return ipKeyGenerator((req as any).ip ?? "");
