@@ -208,10 +208,21 @@ const globalAuthLimiter = rateLimit({
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth/refresh", refreshLimiter);
-app.use("/api/posts", gorjetaLimiter);
-app.use("/api/users", followLimiter);          // cobre POST e DELETE /users/:username/follow
-app.use("/api/posts", createPostLimiter);       // cobre POST /posts (acumula com gorjetaLimiter apenas em gorjetas)
-app.use("/api/conversations", sendMessageLimiter); // cobre POST /conversations/:id/messages
+// Os limitadores contam SÓ as ações sensíveis (método + caminho); as leituras e as restantes escritas
+// (likes, saves, comentários, PATCH /users/me) ficam sob o globalAuthLimiter.
+app.post(
+  [
+    "/api/posts/:postId/gorjeta",
+    "/api/live/:streamId/tip",
+    "/api/posts/:id/unlock",
+    "/api/live/:streamId/ticket",
+  ],
+  gorjetaLimiter,
+);
+app.post("/api/users/:username/follow", followLimiter);
+app.delete("/api/users/:username/follow", followLimiter);
+app.post("/api/posts", createPostLimiter);
+app.post(["/api/conversations", "/api/conversations/:id/messages"], sendMessageLimiter);
 app.use("/api", globalAuthLimiter);             // limiter global autenticado (defesa de profundidade)
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
