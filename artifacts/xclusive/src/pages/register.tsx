@@ -45,6 +45,19 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 // ── Component ────────────────────────────────────────────────────────────────
+/** Estado público dos registos (GET /api/registos/estado). null = não foi possível ler (o servidor decide no envio). */
+async function lerRegistosAbertos(): Promise<boolean | null> {
+  try {
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/registos/estado`, { credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const { abertos } = (await res.json()) as { abertos?: unknown };
+    return typeof abertos === 'boolean' ? abertos : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Register() {
   const { register } = useAuth();
   const { toast } = useToast();
@@ -52,6 +65,15 @@ export default function Register() {
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>('AO');
   const [countryDropOpen, setCountryDropOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  // Registos: 'a-carregar' (carregamento curto, sem piscar o formulário), 'abertos' ou 'fechados' (pelo admin).
+  // Se o estado não puder ser lido, mostra o formulário e é o servidor que decide no envio.
+  const [estadoRegistos, setEstadoRegistos] = useState<'a-carregar' | 'abertos' | 'fechados'>('a-carregar');
+
+  useEffect(() => {
+    let vivo = true;
+    lerRegistosAbertos().then((a) => { if (vivo) setEstadoRegistos(a === false ? 'fechados' : 'abertos'); });
+    return () => { vivo = false; };
+  }, []);
 
   const country = COUNTRIES.find(c => c.code === selectedCountry)!;
 
@@ -101,6 +123,11 @@ export default function Register() {
       };
       await register(payload);
     } catch (error: any) {
+      // Fechados entretanto (403 registos_fechados): mostra o mesmo aviso, sem toast de erro.
+      if (error?.status === 403 && error?.data?.codigo === 'registos_fechados') {
+        setEstadoRegistos('fechados');
+        return;
+      }
       toast({
         variant: 'destructive',
         title: 'Erro ao criar conta',
@@ -127,6 +154,25 @@ export default function Register() {
       </Link>
 
       <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+        {estadoRegistos === 'a-carregar' && (
+          <div className="flex items-center justify-center py-16" data-testid="registos-a-carregar" aria-busy="true">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {estadoRegistos === 'fechados' && (
+          <div className="text-center space-y-5 py-4" data-testid="registos-fechados">
+            <h1 className="text-2xl font-bold text-white">Registos fechados</h1>
+            <p className="text-muted-foreground text-sm" role="alert">
+              Os registos estão fechados de momento. Volta a tentar mais tarde.
+            </p>
+            <Link href="/login">
+              <Button className="w-full h-12 font-bold rounded-xl" data-testid="registos-fechados-login">Ir para o login</Button>
+            </Link>
+          </div>
+        )}
+
+        {estadoRegistos === 'abertos' && (<>
         {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-white mb-1">Cria a tua conta</h1>
@@ -375,6 +421,7 @@ export default function Register() {
             Entra aqui
           </Link>
         </div>
+        </>)}
       </div>
     </div>
   );

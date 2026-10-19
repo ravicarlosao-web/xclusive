@@ -26,6 +26,19 @@ function lerFlagSuspensa(): boolean {
   try { return sessionStorage.getItem(CHAVE_SUSPENSA) === '1'; } catch { return false; }
 }
 
+/** Estado público dos registos (GET /api/registos/estado). null = não foi possível ler (o servidor decide no envio). */
+async function lerRegistosAbertos(): Promise<boolean | null> {
+  try {
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/registos/estado`, { credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const { abertos } = (await res.json()) as { abertos?: unknown };
+    return typeof abertos === 'boolean' ? abertos : null;
+  } catch {
+    return null;
+  }
+}
+
 /** E-mail de contacto (GET /api/reports/contact). Devolve null se falhar ou não tiver forma de e-mail. */
 async function lerEmailContacto(): Promise<string | null> {
   try {
@@ -44,6 +57,14 @@ export default function Login() {
   const { toast } = useToast();
   const [suspensa, setSuspensa] = useState<boolean>(() => lerFlagSuspensa());
   const [emailContacto, setEmailContacto] = useState<string | null>(null);
+  // false = registos fechados pelo admin (null = ainda não sabemos / não foi possível ler: mostra o link normal)
+  const [registosAbertos, setRegistosAbertos] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    lerRegistosAbertos().then((a) => { if (vivo) setRegistosAbertos(a); });
+    return () => { vivo = false; };
+  }, []);
 
   useEffect(() => {
     if (!suspensa) return;
@@ -238,9 +259,15 @@ export default function Login() {
 
           <div className="text-center text-sm text-muted-foreground pt-4 border-t border-border">
             Ainda não tens conta?{' '}
-            <Link href="/registo" className="text-primary font-semibold hover:underline">
-              Cria uma conta grátis
-            </Link>
+            {registosAbertos === false ? (
+              <span className="font-semibold text-foreground" data-testid="registos-fechados-login">
+                Os registos estão temporariamente fechados.
+              </span>
+            ) : (
+              <Link href="/registo" className="text-primary font-semibold hover:underline">
+                Cria uma conta grátis
+              </Link>
+            )}
           </div>
         </div>
       </div>

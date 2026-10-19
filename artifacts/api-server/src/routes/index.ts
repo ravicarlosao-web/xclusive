@@ -16,6 +16,7 @@ import walletRouter from "./wallet";
 import appypayRouter from "./appypay";
 import liveRouter from "./live";
 import reportsRouter from "./reports";
+import registosRouter from "./registos";
 
 const router: Router = Router();
 
@@ -36,5 +37,6 @@ router.use(walletRouter);
 router.use(appypayRouter);
 router.use(liveRouter);
 router.use(reportsRouter);
+router.use(registosRouter);
 
 export default router;

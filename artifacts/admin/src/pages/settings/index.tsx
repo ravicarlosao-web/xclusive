@@ -28,6 +28,7 @@ export default function Settings() {
       setFormData({
         minWithdrawalAmount: (settings as any).min_withdrawal_amount?.value ?? 5000,
         maintenanceMode: (settings as any).maintenance_mode?.enabled ?? false,
+        registosAbertos: (settings as any).registos_abertos?.value !== false,
         allowedCountries: ((settings as any).allowed_countries?.list ?? []).join(', '),
       });
     }
@@ -37,6 +38,7 @@ export default function Settings() {
     mutationFn: (data: any) => adminApi.updateSettings({
       min_withdrawal_amount: { value: data.minWithdrawalAmount },
       maintenance_mode: { enabled: data.maintenanceMode },
+      registos_abertos: { value: data.registosAbertos },
       allowed_countries: { list: data.allowedCountries.split(',').map((s: string) => s.trim()) },
     }),
     onSuccess: () => {
@@ -89,6 +91,30 @@ export default function Settings() {
                 className="bg-card font-mono uppercase"
               />
               <p className="text-xs text-muted-foreground">Exemplo: MZ, AO, PT, BR</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle>Registos</CardTitle>
+            <CardDescription>Controla se podem ser criadas contas novas. As contas existentes continuam a poder entrar.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between border border-border p-4 rounded-lg bg-card/50">
+              <div className="space-y-0.5">
+                <Label className="text-base" htmlFor="registos-abertos">Registos abertos</Label>
+                <p className="text-sm text-muted-foreground">
+                  {formData.registosAbertos
+                    ? 'Qualquer pessoa pode criar uma conta.'
+                    : 'Fechados: a API recusa novos registos e o ecrã de registo mostra um aviso.'}
+                </p>
+              </div>
+              <Switch
+                id="registos-abertos"
+                checked={formData.registosAbertos}
+                onCheckedChange={c => setFormData({...formData, registosAbertos: c})}
+              />
             </div>
           </CardContent>
         </Card>
