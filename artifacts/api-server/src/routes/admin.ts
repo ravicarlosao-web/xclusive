@@ -51,6 +51,7 @@ import {
   TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
+import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
@@ -667,10 +668,35 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
     const novoAtivo = estado === "ativo";
     const estadoAnterior = mapEstado(user.ativo);
 
-    const [updated] = await db.update(usersTable).set({ ativo: novoAtivo }).where(eq(usersTable.id, id)).returning();
-    await logAudit(req, novoAtivo ? "user_reactivate" : "user_suspend", "user", id, {
-      before: { estado: estadoAnterior }, after: { estado },
+    if (!novoAtivo) {
+      if (user.id === req.adminId) {
+        return void res.status(403).json({ error: "Não podes suspender a tua própria conta." });
+      }
+      if (user.role === "admin" || user.role === "superadmin") {
+        return void res.status(403).json({ error: "Não é possível suspender uma conta de administrador." });
+      }
+    }
+
+    // Suspender: ativo=false + sessões e refresh tokens revogados (função partilhada), tudo numa transação com o audit.
+    // Reativar: só ativo=true (o utilizador tem de fazer login outra vez; as sessões antigas continuam revogadas).
+    const updated = await db.transaction(async (tx) => {
+      if (novoAtivo) {
+        const [u] = await tx.update(usersTable).set({ ativo: true }).where(eq(usersTable.id, id)).returning();
+        await tx.insert(auditLogTable).values({
+          adminId: req.adminId!, action: "user_reactivate", targetType: "user", targetId: id,
+          details: { before: { estado: estadoAnterior }, after: { estado } }, ipAddress: req.ip ?? null,
+        });
+        return u;
+      }
+      await suspenderConta(tx, id, { adminId: req.adminId!, ip: req.ip ?? null, origem: "admin" });
+      const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: "user_suspend", targetType: "user", targetId: id,
+        details: { before: { estado: estadoAnterior }, after: { estado } }, ipAddress: req.ip ?? null,
+      });
+      return u;
     });
+    if (!novoAtivo) desligarSockets(id);
     res.json(mapUser(updated));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao alterar estado do utilizador");
@@ -715,9 +741,23 @@ router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): 
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
-    // Soft delete — desactiva a conta sem eliminar os dados
-    await db.update(usersTable).set({ ativo: false }).where(eq(usersTable.id, id));
-    await logAudit(req, "user_delete", "user", id, { before: { ativo: user.ativo }, after: { ativo: false } });
+    // Mesmas proteções do PATCH de estado: nem a própria conta nem contas de administrador.
+    if (user.id === req.adminId) {
+      return void res.status(403).json({ error: "Não podes eliminar a tua própria conta." });
+    }
+    if (user.role === "admin" || user.role === "superadmin") {
+      return void res.status(403).json({ error: "Não é possível eliminar uma conta de administrador." });
+    }
+
+    // Soft delete — desactiva a conta sem eliminar os dados (mesma suspensão partilhada: revoga sessões e refresh tokens)
+    await db.transaction(async (tx) => {
+      await suspenderConta(tx, id, { adminId: req.adminId!, ip: req.ip ?? null, origem: "eliminacao" });
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: "user_delete", targetType: "user", targetId: id,
+        details: { before: { ativo: user.ativo }, after: { ativo: false } }, ipAddress: req.ip ?? null,
+      });
+    });
+    desligarSockets(id);
     res.json({ success: true });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao eliminar utilizador");

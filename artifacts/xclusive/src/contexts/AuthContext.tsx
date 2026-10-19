@@ -45,6 +45,12 @@ if (!import.meta.env.DEV) {
   } catch { /* localStorage indisponível */ }
 }
 
+/** Conta suspensa: marca (por sessão do browser) para o ecrã de login mostrar o aviso. */
+const CHAVE_CONTA_SUSPENSA = 'xclusive_conta_suspensa';
+function marcarContaSuspensa() {
+  try { sessionStorage.setItem(CHAVE_CONTA_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
+}
+
 // ─── Mock store helpers (DB-less mode) ───────────────────────────────────────
 const MOCK_KEY = import.meta.env.DEV ? 'xclusive_mock_users' : ''; // produção: sem chaves mock
 const MOCK_SESSION_KEY = import.meta.env.DEV ? 'xclusive_mock_session' : ''; // produção: sem chaves mock
@@ -414,7 +420,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         credentials: 'same-origin',
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        if (res.status === 403 && (await res.json().catch(() => null))?.codigo === 'conta_suspensa') marcarContaSuspensa();
+        return false;
+      }
       const data = await res.json();
       if (data?.token) { setToken(data.token); return true; }
       return false;
@@ -430,7 +439,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: 'POST',
           credentials: 'same-origin',
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          if (res.status === 403 && (await res.json().catch(() => null))?.codigo === 'conta_suspensa') marcarContaSuspensa();
+          return null;
+        }
         const data = await res.json();
         if (data?.token && typeof data.token === 'string') {
           setToken(data.token);
@@ -474,6 +486,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (error && !isMockToken) {
       const status = (error as any)?.response?.status;
+      // Conta suspensa a meio da sessão: limpa a sessão e leva ao login com o aviso (sem tentar renovar).
+      if (status === 401 && /conta suspensa/i.test(String((error as any)?.data?.error ?? ''))) {
+        marcarContaSuspensa();
+        setToken(null);
+        queryClient.clear();
+        setLocation('/login');
+        return;
+      }
       if (status === 401 || status === 403) {
         tryRefreshToken().then(refreshed => {
           if (refreshed) {
@@ -484,7 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  }, [error, setToken, isMockToken, tryRefreshToken, queryClient]);
+  }, [error, setToken, setLocation, isMockToken, tryRefreshToken, queryClient]);
 
   // ─── Fetch real wallet balance from API ──────────────────────────────────────
   const fetchApiWallet = useCallback(async (currentToken: string) => {

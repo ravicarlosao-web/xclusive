@@ -5,6 +5,7 @@ import {
   usersTable, notificationsTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
+import { suspenderConta, desligarSocketsDepois } from "./suspensao";
 
 /**
  * Retirada de conteúdo (takedown) e denúncias.
@@ -102,7 +103,10 @@ export async function retirarAlvo(tx: Tx, type: TargetType, id: number, porAdmin
       const [u] = await tx.select({ role: usersTable.role, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
       if (!u) return { mudou: false };
       if (u.role === "admin" || u.role === "superadmin") throw new TakedownError("Não é possível suspender uma conta de administrador.", 403);
-      return { mudou: (await tx.update(usersTable).set({ ativo: false }).where(and(eq(usersTable.id, id), eq(usersTable.ativo, true))).returning({ id: usersTable.id })).length > 0 };
+      // Suspensão partilhada: ativo=false + revoga sessões e refresh tokens (+ audit); sockets desligam-se após o commit.
+      const r = await suspenderConta(tx, id, { adminId: porAdminId, origem: "denuncia" });
+      desligarSocketsDepois(id);
+      return { mudou: r.mudou };
     }
   }
 }
