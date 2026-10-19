@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,9 +19,38 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+/** Marca (por sessão do browser) de que a conta foi suspensa; também é posta pelo AuthContext ao expulsar uma sessão ativa. */
+const CHAVE_SUSPENSA = 'xclusive_conta_suspensa';
+
+function lerFlagSuspensa(): boolean {
+  try { return sessionStorage.getItem(CHAVE_SUSPENSA) === '1'; } catch { return false; }
+}
+
+/** E-mail de contacto (GET /api/reports/contact). Devolve null se falhar ou não tiver forma de e-mail. */
+async function lerEmailContacto(): Promise<string | null> {
+  try {
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/reports/contact`, { credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const { email } = (await res.json()) as { email?: unknown };
+    return typeof email === 'string' && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ? email : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
+  const [suspensa, setSuspensa] = useState<boolean>(() => lerFlagSuspensa());
+  const [emailContacto, setEmailContacto] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!suspensa) return;
+    let vivo = true;
+    lerEmailContacto().then((e) => { if (vivo) setEmailContacto(e); });
+    return () => { vivo = false; };
+  }, [suspensa]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -34,7 +64,14 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       await login({ email: data.email, password: data.password, lembrar: data.lembrar });
+      try { sessionStorage.removeItem(CHAVE_SUSPENSA); } catch { /* sem armazenamento */ }
     } catch (error: any) {
+      // Conta suspensa (403 + codigo): aviso persistente na página, sem toast e sem sessão.
+      if (error?.status === 403 && error?.data?.codigo === 'conta_suspensa') {
+        try { sessionStorage.setItem(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
+        setSuspensa(true);
+        return;
+      }
       toast({
         variant: 'destructive',
         title: 'Erro ao iniciar sessão',
@@ -72,6 +109,19 @@ export default function Login() {
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Bem-vindo de volta</h1>
             <p className="text-muted-foreground">Insere os teus dados para entrares na tua conta.</p>
           </div>
+
+          {suspensa && (
+            <div role="alert" data-testid="aviso-conta-suspensa" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm text-foreground">
+              <strong>A tua conta está suspensa.</strong>{' '}
+              Se achas que é um engano, contacta{' '}
+              {emailContacto ? (
+                <a href={`mailto:${emailContacto}`} className="font-semibold text-primary underline" data-testid="aviso-suspensa-email">{emailContacto}</a>
+              ) : (
+                'o suporte'
+              )}
+              .
+            </div>
+          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

@@ -8,6 +8,7 @@ import {
   createSession, deleteSession, deleteAllUserSessions,
   REFRESH_COOKIE, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
+import { MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao";
 import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 
@@ -210,6 +211,13 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
       return;
     }
 
+    // Conta suspensa: SÓ depois de a password estar certa (quem não a sabe não descobre que a conta existe
+    // nem o seu estado). Sem token, sem sessão, sem cookie.
+    if (!user.ativo) {
+      res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
+      return;
+    }
+
     const accessToken = signAccessToken({ userId: user.id, username: user.username, role: user.role });
     const { token: refreshToken, jti: refreshJti } = signRefreshToken(user.id, user.username, user.role);
     setRefreshCookie(res, refreshToken);
@@ -319,6 +327,25 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
   if (payload.type !== "refresh") {
     clearRefreshCookie(res);
     res.status(401).json({ error: "Token inválido." });
+    return;
+  }
+
+  // Conta suspensa (ou inexistente): não renova a sessão. Falha de DB = negar (fail-closed).
+  try {
+    const [conta] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
+    if (!conta) {
+      clearRefreshCookie(res);
+      res.status(401).json({ error: "Sessão inválida. Faz login novamente." });
+      return;
+    }
+    if (!conta.ativo) {
+      clearRefreshCookie(res);
+      res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
+      return;
+    }
+  } catch (err) {
+    (req as any).log?.warn({ err }, "Refresh: falha de DB ao verificar a conta — a negar (fail-closed)");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
     return;
   }
 
