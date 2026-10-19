@@ -52,6 +52,7 @@ import {
 } from "../lib/takedown.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
+import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
 import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
@@ -410,6 +411,7 @@ router.get("/admin/dashboard/activity-feed", async (req, res) => {
 function formatAuditMessage(action: string, admin: string, targetType: string | null, targetId: number | null, details: any): string {
   const target = targetId ? ` #${targetId}` : "";
   switch (action) {
+    case "registos_update": return `${admin} ${details?.novo ? "abriu" : "fechou"} os registos de novas contas`;
     case "user_suspend": return `${admin} suspendeu utilizador${target}`;
     case "user_reactivate": return `${admin} reactivou utilizador${target}`;
     case "user_delete": return `${admin} eliminou utilizador${target}`;
@@ -1917,6 +1919,7 @@ router.get("/admin/broadcast/history", async (req, res) => {
 // Defaults aplicados quando a tabela está vazia. A comissão NÃO tem default: vem sempre da base de dados.
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   maintenance_mode: { enabled: false },
+  [REGISTOS_KEY]: { value: true }, // registos abertos por omissão
   allowed_countries: { list: ["AO", "MZ", "ZA", "PT", "BR"] },
   min_withdrawal_amount: { value: 5000 },
 };
@@ -1953,6 +1956,12 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
       if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
       else updates.push({ key: "maintenance_mode", value: { enabled: req.body.maintenance_mode.enabled } });
     }
+    if (req.body.registos_abertos !== undefined) {
+      // Estritamente boolean: null, string, número, array ou objeto vazio são recusados.
+      const v = req.body.registos_abertos?.value;
+      if (typeof v !== "boolean") erros.push("registos_abertos.value deve ser boolean");
+      else updates.push({ key: REGISTOS_KEY, value: { value: v } });
+    }
     if (req.body.allowed_countries !== undefined) {
       const list = req.body.allowed_countries?.list;
       if (!Array.isArray(list) || list.some((c: unknown) => typeof c !== "string" || c.length > 5)) {
@@ -1979,6 +1988,16 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
       const [antes] = await tx.select({ value: platformSettingsTable.value }).from(platformSettingsTable)
         .where(eq(platformSettingsTable.key, COMMISSION_KEY)).for("update").limit(1);
       const taxaAnterior = (antes?.value as { value?: unknown } | undefined)?.value;
+      // Estado anterior dos registos, lido com lock (ausente = aberto), para o audit e para a releitura FOR SHARE do registo.
+      // Garante que a linha existe (aberta) antes do lock, para a primeira alteração também ficar protegida de registos em curso.
+      if (updates.some((u) => u.key === REGISTOS_KEY)) {
+        await tx.insert(platformSettingsTable)
+          .values({ key: REGISTOS_KEY, value: { value: true } as any, updatedBy: req.adminId ?? undefined })
+          .onConflictDoNothing();
+      }
+      const [antesReg] = await tx.select({ value: platformSettingsTable.value }).from(platformSettingsTable)
+        .where(eq(platformSettingsTable.key, REGISTOS_KEY)).for("update").limit(1);
+      const registosAnterior = registosAbertosDe(antesReg?.value);
 
       for (const upd of updates) {
         await tx.insert(platformSettingsTable)
@@ -1997,7 +2016,17 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
           ipAddress: req.ip ?? null,
         });
       }
-      const outras = updates.filter((u) => u.key !== COMMISSION_KEY);
+      const novoReg = updates.find((u) => u.key === REGISTOS_KEY);
+      if (novoReg) {
+        const novo = (novoReg.value as { value: boolean }).value;
+        if (novo !== registosAnterior) { // só se mudou
+          await tx.insert(auditLogTable).values({
+            adminId: req.adminId!, action: "registos_update", targetType: "platform", targetId: 0,
+            details: { anterior: registosAnterior, novo }, ipAddress: req.ip ?? null,
+          });
+        }
+      }
+      const outras = updates.filter((u) => u.key !== COMMISSION_KEY && u.key !== REGISTOS_KEY);
       if (outras.length > 0) {
         await tx.insert(auditLogTable).values({
           adminId: req.adminId!, action: "settings_update", targetType: "platform", targetId: 0,

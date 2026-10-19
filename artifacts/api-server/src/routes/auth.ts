@@ -9,6 +9,9 @@ import {
   REFRESH_COOKIE, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
 import { MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao";
+import {
+  lerRegistosAbertos, lerRegistosAbertosBloqueando, RegistosFechadosError, MSG_REGISTOS_FECHADOS, CODIGO_REGISTOS_FECHADOS,
+} from "../lib/registos";
 import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 
@@ -108,6 +111,19 @@ router.get("/auth/legal-versions", (_req, res): void => {
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
   const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;
 
+  // Registos fechados pelo admin: recusa logo no início (antes de bcrypt e de qualquer escrita), para qualquer tipo de conta.
+  // Falha a ler o estado = negar (fail-closed).
+  try {
+    if (!(await lerRegistosAbertos())) {
+      res.status(403).json({ error: MSG_REGISTOS_FECHADOS, codigo: CODIGO_REGISTOS_FECHADOS });
+      return;
+    }
+  } catch (err) {
+    (req as any).log?.warn({ err }, "Register: falha ao ler o estado dos registos — a negar (fail-closed)");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
+    return;
+  }
+
   // Barreira de idade no servidor (o front-end é só feedback): menores, datas inválidas e futuras recusadas.
   const erroData = validarDataNascimento(dataNascimento);
   if (erroData) {
@@ -140,6 +156,8 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
 
     // Utilizador + aceite NA MESMA transação: se o aceite falhar, o registo é revertido.
     const user = await db.transaction(async (tx) => {
+      // Relê o estado DENTRO da transação com FOR SHARE: se o admin fechou os registos entretanto, nada é criado.
+      if (!(await lerRegistosAbertosBloqueando(tx))) throw new RegistosFechadosError();
       const [created] = await tx.insert(usersTable).values({
         nomeExibicao: nomeCompleto,
         email,
@@ -173,6 +191,10 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       user: formatUser(user, 0, 0, 0),
     });
   } catch (err) {
+    if (err instanceof RegistosFechadosError) {
+      res.status(403).json({ error: MSG_REGISTOS_FECHADOS, codigo: CODIGO_REGISTOS_FECHADOS });
+      return;
+    }
     (req as any).log?.error({ err }, "Register: erro interno");
     res.status(500).json({ error: "Erro interno." });
   }
