@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
+import { Mais18Opcoes } from '@/components/shared/Mais18';
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
@@ -209,6 +210,28 @@ export default function Settings() {
                 <Switch defaultChecked />
               </div>
             </div>
+
+            {/* Conteúdo +18: escolha atual, data e alteração (não aparece em modo mock, onde a conta não tem este campo) */}
+            {!isMockMode && user && user.preferenciaMais18 !== undefined && (
+              <div className="space-y-4 pt-4 border-t border-border" data-testid="mais18-definicoes">
+                <h2 className="text-xl font-bold">Conteúdo +18</h2>
+                <div className="p-4 border border-border rounded-xl space-y-1">
+                  <p className="text-base font-bold" data-testid="mais18-atual">
+                    {user.preferenciaMais18 === 'ver'
+                      ? 'A ver conteúdo +18'
+                      : user.preferenciaMais18 === 'filtrar'
+                        ? 'A filtrar conteúdo +18'
+                        : 'Ainda não escolheste (o conteúdo +18 fica filtrado)'}
+                  </p>
+                  <p className="text-sm text-muted-foreground" data-testid="mais18-data">
+                    {user.preferenciaMais18Em
+                      ? `Escolha feita a ${new Date(user.preferenciaMais18Em).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}.`
+                      : 'Sem escolha registada.'}
+                  </p>
+                </div>
+                <Mais18Opcoes atual={user.preferenciaMais18 ?? null} />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="notifications" className="mt-0">

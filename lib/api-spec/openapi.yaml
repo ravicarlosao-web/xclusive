@@ -1145,6 +1145,13 @@ components:
           type: boolean
         segueVoce:
           type: boolean
+        preferenciaMais18:
+          description: Só na própria conta (/auth/me, login, registo). null = ainda não escolheu.
+          type: ["string", "null"]
+          enum: [ver, filtrar, null]
+        preferenciaMais18Em:
+          type: ["string", "null"]
+          format: date-time
         criadoEm:
           type: string
           format: date-time

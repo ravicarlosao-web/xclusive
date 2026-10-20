@@ -48,6 +48,8 @@ export const RegisterResponse = zod.object({
   "totalPublicacoes": zod.int(),
   "estaASeguir": zod.boolean().optional(),
   "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
   "criadoEm": zod.coerce.date()
 })
 })
@@ -82,6 +84,8 @@ export const LoginResponse = zod.object({
   "totalPublicacoes": zod.int(),
   "estaASeguir": zod.boolean().optional(),
   "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
   "criadoEm": zod.coerce.date()
 })
 })
@@ -112,6 +116,8 @@ export const GetMeResponse = zod.object({
   "totalPublicacoes": zod.int(),
   "estaASeguir": zod.boolean().optional(),
   "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
   "criadoEm": zod.coerce.date()
 })
 
@@ -161,6 +167,8 @@ export const UpdateProfileResponse = zod.object({
   "totalPublicacoes": zod.int(),
   "estaASeguir": zod.boolean().optional(),
   "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
   "criadoEm": zod.coerce.date()
 })
 
@@ -188,6 +196,8 @@ export const GetUserProfileResponse = zod.object({
   "totalPublicacoes": zod.int(),
   "estaASeguir": zod.boolean().optional(),
   "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
   "criadoEm": zod.coerce.date()
 })
 
