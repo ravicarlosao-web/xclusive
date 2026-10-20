@@ -4,6 +4,7 @@ import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
+import { lerVisualizador, storyPermitida, storyBloqueada } from "../lib/conteudoMais18";
 import { urlMedia, urlCanonico } from "../lib/storage";
 
 const router = Router();
@@ -20,9 +21,11 @@ router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<
     if (!authorIds.includes(userId)) authorIds.push(userId);
   }
 
+  // Filtro +18 na query: as stories filtradas saem ANTES de agrupar por autor (não ficam grupos vazios).
+  const visualizador = await lerVisualizador(userId);
   const allStories = authorIds.length > 0
-    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel())).orderBy(desc(storiesTable.criadoEm))
-    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel())).orderBy(desc(storiesTable.criadoEm)).limit(20);
+    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel(), storyPermitida(visualizador))).orderBy(desc(storiesTable.criadoEm))
+    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel(), storyPermitida(visualizador))).orderBy(desc(storiesTable.criadoEm)).limit(20);
 
   // Filtrar stories de audiência restrita: "subscritores" só visível com subscrição ativa
   const stories: typeof allStories = [];
@@ -102,6 +105,7 @@ router.delete("/stories/:id", requireAuth, async (req: AuthRequest, res): Promis
 // Ver story
 router.post("/stories/:id/view", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (await storyBloqueada(id, await lerVisualizador(req.userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
   if (req.userId) {
     const [existing] = await db.select().from(storyViewsTable).where(and(eq(storyViewsTable.storyId, id), eq(storyViewsTable.utilizadorId, req.userId)));
     if (!existing) {
@@ -179,7 +183,12 @@ router.get("/users/:username/highlights", requireAuth, async (req: AuthRequest, 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
 
-  const highlights = await db.select().from(highlightsTable).where(eq(highlightsTable.utilizadorId, user.id)).orderBy(desc(highlightsTable.criadoEm));
+  // Destaques: some o destaque se tiver alguma story +18 que este visualizador não pode ver.
+  const vh = await lerVisualizador(req.userId);
+  const semStory18 = vh.veTudo || user.id === vh.userId
+    ? sql`true`
+    : sql`NOT EXISTS (SELECT 1 FROM highlight_stories hs JOIN stories s ON s.id = hs.story_id WHERE hs.highlight_id = ${highlightsTable.id} AND s.mais18)`;
+  const highlights = await db.select().from(highlightsTable).where(and(eq(highlightsTable.utilizadorId, user.id), semStory18)).orderBy(desc(highlightsTable.criadoEm));
 
   res.json(highlights.map(h => ({
     id: h.id,

@@ -4,6 +4,9 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { reelVisivel } from "../lib/takedown";
+import {
+  lerVisualizador, reelPermitido, reelBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
+} from "../lib/conteudoMais18";
 import { urlMedia, urlCanonico } from "../lib/storage";
 
 const router = Router();
@@ -14,7 +17,8 @@ router.get("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> =
   const limit = Math.min(20, parseInt(String(req.query.limit || "10")));
   const offset = (page - 1) * limit;
 
-  const reels = await db.select().from(reelsTable).where(reelVisivel()).orderBy(desc(reelsTable.criadoEm)).limit(limit).offset(offset);
+  const visualizador = await lerVisualizador(req.userId);
+  const reels = await db.select().from(reelsTable).where(and(reelVisivel(), reelPermitido(visualizador))).orderBy(desc(reelsTable.criadoEm)).limit(limit).offset(offset);
 
   const result = await Promise.all(reels.map(r => formatReel(r, req.userId)));
   res.json({ reels: result, page, hasMore: result.length === limit });
@@ -41,12 +45,14 @@ router.get("/reels/:id", requireAuth, async (req: AuthRequest, res): Promise<voi
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const [reel] = await db.select().from(reelsTable).where(and(eq(reelsTable.id, id), reelVisivel()));
   if (!reel) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (bloqueadoMais18(await lerVisualizador(req.userId), reel)) { res.status(403).json({ error: MSG_CONTEUDO_MAIS18, codigo: CODIGO_CONTEUDO_MAIS18 }); return; }
   res.json(await formatReel(reel, req.userId));
 });
 
 // Curtir reel
 router.post("/reels/:id/like", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (await reelBloqueado(id, await lerVisualizador(req.userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
   const [existing] = await db.select().from(likesTable).where(and(eq(likesTable.utilizadorId, req.userId!), eq(likesTable.alvoTipo, "reel"), eq(likesTable.alvoId, id)));
   if (!existing) {
     await db.insert(likesTable).values({ utilizadorId: req.userId!, alvoTipo: "reel", alvoId: id });

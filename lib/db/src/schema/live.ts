@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum, uuid, numeric, check, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, uuid, numeric, boolean, check, unique, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 import { purchasesTable } from "./subscriptions";
@@ -20,6 +20,8 @@ export const liveStreamsTable = pgTable("live_streams", {
   tipo: liveAcessoEnum("tipo").notNull().default("gratuita"),
   // Preço inteiro em Kz; 0 quando gratuita. Limites validados em lib/liveTicket.ts.
   preco: numeric("preco", { precision: 10, scale: 2 }).notNull().default("0"),
+  /** Conteúdo +18 marcado pela criadora (PR 3); fixo desde a abertura. Só quem escolheu "ver" o vê; a autora vê sempre o seu. */
+  mais18: boolean("mais18").notNull().default(false),
   /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
   retiradoEm: timestamp("retirado_em"),
   retiradoMotivo: text("retirado_motivo"),

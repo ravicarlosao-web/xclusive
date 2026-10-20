@@ -6,6 +6,7 @@ import { db, liveStreamsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { userHasLiveAccess } from "./liveAccess";
+import { lerVisualizador, liveBloqueada, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18 } from "./conteudoMais18";
 import { urlMedia } from "./storage";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -131,6 +132,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
             status: liveStreamsTable.status,
             criadorId: liveStreamsTable.criadorId,
             tipo: liveStreamsTable.tipo,
+            mais18: liveStreamsTable.mais18,
           })
           .from(liveStreamsTable)
           .where(eq(liveStreamsTable.id, streamId))
@@ -138,6 +140,12 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 
         if (!stream || stream.status !== "ao_vivo") {
           socket.emit("error", { message: "Live não encontrada ou já terminada." });
+          return;
+        }
+
+        // Live +18 que este utilizador não vê: não entra na sala nem conta.
+        if (liveBloqueada(await lerVisualizador(socket.data.userId), stream)) {
+          socket.emit("error", { message: MSG_CONTEUDO_MAIS18, code: CODIGO_CONTEUDO_MAIS18 });
           return;
         }
 
@@ -321,4 +329,22 @@ async function emitViewerCount(streamId: number): Promise<void> {
   await db.update(liveStreamsTable).set({ totalVisualizadores: count }).where(eq(liveStreamsTable.id, streamId));
 
   io.to(`live:${streamId}`).emit("viewers:update", { streamId, count });
+}
+
+/**
+ * Quando um utilizador passa a "filtrar": desliga os seus sockets que estejam numa live +18 (exceto na sua
+ * própria live). Os restantes sockets e salas não se tocam. Nunca lança.
+ */
+export async function desligarSocketsLivesMais18(userId: number): Promise<void> {
+  try {
+    const sockets = (await getIO().fetchSockets()).filter((s) => s.data?.userId === userId && s.data?.currentStreamId);
+    for (const s of sockets) {
+      const [live] = await db
+        .select({ mais18: liveStreamsTable.mais18, criadorId: liveStreamsTable.criadorId })
+        .from(liveStreamsTable).where(eq(liveStreamsTable.id, s.data.currentStreamId as number)).limit(1);
+      if (live?.mais18 && live.criadorId !== userId) s.disconnect(true);
+    }
+  } catch (err) {
+    logger.warn({ erro: err instanceof Error ? err.name : "desconhecido" }, "Mais18: falha ao desligar sockets de lives +18");
+  }
 }
