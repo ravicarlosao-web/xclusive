@@ -4,7 +4,7 @@ import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
-import { lerVisualizador, storyPermitida, storyBloqueada } from "../lib/conteudoMais18";
+import { lerVisualizador, storyPermitida, storyBloqueada, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
 import { urlMedia, urlCanonico } from "../lib/storage";
 
 const router = Router();
@@ -78,6 +78,8 @@ router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void
 
   const { mediaUrl, tipo, duracao, audiencia } = req.body;
   if (!mediaUrl) { res.status(400).json({ error: "mediaUrl é obrigatório" }); return; }
+  const marcacao = lerMarcacaoMais18(req.body.mais18);
+  if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
   const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
@@ -87,6 +89,7 @@ router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void
     tipo: tipo || "imagem",
     duracao: duracao || 5,
     audiencia: audiencia || "todos",
+    mais18: marcacao.mais18,
     expiraEm,
   }).returning();
 
@@ -228,6 +231,7 @@ async function formatStory(story: any, viewerId?: number) {
     tipo: story.tipo,
     duracao: story.duracao,
     audiencia: story.audiencia,
+    mais18: story.mais18,
     expirado: new Date(story.expiraEm) < new Date(),
     visto,
     totalVisualizacoes: views || 0,

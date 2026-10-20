@@ -301,6 +301,7 @@ export const GetUserPostsResponse = zod.object({
   "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
@@ -341,6 +342,7 @@ export const GetUserReelsResponse = zod.object({
   "somTitulo": zod.string().nullish(),
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -387,6 +389,7 @@ export const GetFeedResponse = zod.object({
   "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
@@ -415,7 +418,8 @@ export const CreatePostBody = zod.object({
   "tipo": zod.enum(['imagem', 'video'])
 })).optional(),
   "exclusivo": zod.boolean().default(createPostBodyExclusivoDefault),
-  "precoDesbloqueio": zod.number().optional()
+  "precoDesbloqueio": zod.number().optional(),
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
 })
 
 export const CreatePostResponse = zod.object({
@@ -441,6 +445,7 @@ export const CreatePostResponse = zod.object({
   "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
@@ -481,6 +486,7 @@ export const GetPostResponse = zod.object({
   "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
@@ -499,6 +505,23 @@ export const DeletePostParams = zod.object({
 })
 
 export const DeletePostResponse = zod.void()
+
+
+/**
+ * @summary Alterar a marcação +18 de um post próprio (só muda mais18)
+ */
+export const UpdatePostMais18Params = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdatePostMais18Body = zod.object({
+  "mais18": zod.boolean()
+})
+
+export const UpdatePostMais18Response = zod.object({
+  "id": zod.int(),
+  "mais18": zod.boolean()
+})
 
 
 /**
@@ -647,6 +670,7 @@ export const GetStoriesFeedResponseItem = zod.object({
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int(),
   "audiencia": zod.enum(['todos', 'subscritores', 'proximos']),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "expirado": zod.boolean(),
   "visto": zod.boolean(),
   "totalVisualizacoes": zod.int().optional(),
@@ -668,7 +692,8 @@ export const CreateStoryBody = zod.object({
   "mediaUrl": zod.string(),
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int().default(createStoryBodyDuracaoDefault),
-  "audiencia": zod.enum(['todos', 'subscritores', 'proximos']).default(createStoryBodyAudienciaDefault)
+  "audiencia": zod.enum(['todos', 'subscritores', 'proximos']).default(createStoryBodyAudienciaDefault),
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
 })
 
 export const CreateStoryResponse = zod.object({
@@ -687,6 +712,7 @@ export const CreateStoryResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int(),
   "audiencia": zod.enum(['todos', 'subscritores', 'proximos']),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "expirado": zod.boolean(),
   "visto": zod.boolean(),
   "totalVisualizacoes": zod.int().optional(),
@@ -768,6 +794,7 @@ export const GetReelsResponse = zod.object({
   "somTitulo": zod.string().nullish(),
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -788,7 +815,8 @@ export const CreateReelBody = zod.object({
   "videoUrl": zod.string(),
   "capaUrl": zod.string().optional(),
   "legenda": zod.string().optional(),
-  "exclusivo": zod.boolean().default(createReelBodyExclusivoDefault)
+  "exclusivo": zod.boolean().default(createReelBodyExclusivoDefault),
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
 })
 
 export const CreateReelResponse = zod.object({
@@ -809,6 +837,7 @@ export const CreateReelResponse = zod.object({
   "somTitulo": zod.string().nullish(),
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -842,6 +871,7 @@ export const GetReelResponse = zod.object({
   "somTitulo": zod.string().nullish(),
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -904,6 +934,7 @@ export const GetExploreResponse = zod.object({
   "bloqueado": zod.boolean().optional()
 })).optional(),
   "exclusivo": zod.boolean(),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "bloqueado": zod.boolean().optional(),
   "precoDesbloqueio": zod.number().nullish(),
   "totalCurtidas": zod.int(),
@@ -1192,6 +1223,7 @@ export const CreateHighlightResponse = zod.object({
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int(),
   "audiencia": zod.enum(['todos', 'subscritores', 'proximos']),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "expirado": zod.boolean(),
   "visto": zod.boolean(),
   "totalVisualizacoes": zod.int().optional(),
@@ -1229,6 +1261,7 @@ export const GetUserHighlightsResponseItem = zod.object({
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int(),
   "audiencia": zod.enum(['todos', 'subscritores', 'proximos']),
+  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
   "expirado": zod.boolean(),
   "visto": zod.boolean(),
   "totalVisualizacoes": zod.int().optional(),

@@ -161,6 +161,8 @@ export interface Post {
   tipo: PostTipo;
   media?: PostMedia[];
   exclusivo: boolean;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   bloqueado?: boolean;
   /** @nullable */
   precoDesbloqueio?: number | null;
@@ -201,6 +203,17 @@ export interface PostInput {
   media?: PostInputMediaItem[];
   exclusivo?: boolean;
   precoDesbloqueio?: number;
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  mais18: boolean;
+}
+
+export interface PostMais18Input {
+  mais18: boolean;
+}
+
+export interface PostMais18 {
+  id: number;
+  mais18: boolean;
 }
 
 export interface PaginatedPosts {
@@ -258,6 +271,8 @@ export interface Story {
   tipo: StoryTipo;
   duracao: number;
   audiencia: StoryAudiencia;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   expirado: boolean;
   visto: boolean;
   totalVisualizacoes?: number;
@@ -293,6 +308,8 @@ export interface StoryInput {
   tipo: StoryInputTipo;
   duracao?: number;
   audiencia?: StoryInputAudiencia;
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  mais18: boolean;
 }
 
 export interface StoryView {
@@ -313,6 +330,8 @@ export interface Reel {
   /** @nullable */
   somArtista?: string | null;
   exclusivo: boolean;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   totalCurtidas: number;
   totalComentarios: number;
   curtido: boolean;
@@ -325,6 +344,8 @@ export interface ReelInput {
   capaUrl?: string;
   legenda?: string;
   exclusivo?: boolean;
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  mais18: boolean;
 }
 
 export interface PaginatedReels {

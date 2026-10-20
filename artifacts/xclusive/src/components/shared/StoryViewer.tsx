@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { SeloMais18 } from './MarcacaoMais18';
 import { createPortal } from 'react-dom';
 import { StoryGroup } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -211,6 +212,7 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
               <AvatarFallback>{group.utilizador.nomeExibicao?.[0] || 'U'}</AvatarFallback>
             </Avatar>
             <span className="text-white text-sm font-semibold drop-shadow">{group.utilizador.username}</span>
+            <SeloMais18 mais18={(story as { mais18?: boolean }).mais18} />
             <span className="text-white/70 text-xs drop-shadow">
               {formatDistanceToNowStrict(new Date(story.criadoEm), { locale: pt })}
             </span>

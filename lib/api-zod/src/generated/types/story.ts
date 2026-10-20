@@ -16,6 +16,8 @@ export interface Story {
   tipo: StoryTipo;
   duracao: number;
   audiencia: StoryAudiencia;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   expirado: boolean;
   visto: boolean;
   totalVisualizacoes?: number;

@@ -6,6 +6,7 @@ import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { reelVisivel } from "../lib/takedown";
 import {
   lerVisualizador, reelPermitido, reelBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
+  lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
 } from "../lib/conteudoMais18";
 import { urlMedia, urlCanonico } from "../lib/storage";
 
@@ -28,6 +29,8 @@ router.get("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> =
 router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const { videoUrl, capaUrl, legenda, exclusivo } = req.body;
   if (!videoUrl) { res.status(400).json({ error: "videoUrl é obrigatório" }); return; }
+  const marcacao = lerMarcacaoMais18(req.body.mais18);
+  if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
   const [reel] = await db.insert(reelsTable).values({
     autorId: req.userId!,
@@ -35,6 +38,7 @@ router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> 
     capaUrl: capaUrl ? urlCanonico(String(capaUrl)) : null,
     legenda: legenda || null,
     exclusivo: exclusivo || false,
+    mais18: marcacao.mais18,
   }).returning();
 
   res.status(201).json(await formatReel(reel, req.userId));
@@ -93,6 +97,7 @@ async function formatReel(reel: any, userId?: number) {
     somTitulo: reel.somTitulo,
     somArtista: reel.somArtista,
     exclusivo: reel.exclusivo,
+    mais18: reel.mais18,
     bloqueado: reel.exclusivo && !acesso,
     totalCurtidas: likes || 0,
     totalComentarios: comments || 0,

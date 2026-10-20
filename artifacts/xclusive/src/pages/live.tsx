@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { SeloMais18 } from '@/components/shared/MarcacaoMais18';
 import { useRoute, useLocation } from 'wouter';
 import Hls from 'hls.js';
 import { useAuth } from '@/contexts/AuthContext';
@@ -813,6 +814,8 @@ interface ActiveStream {
   status?: string;
   /** Live gratuita ou paga (bilhete) — fixo desde a abertura */
   tipo: 'gratuita' | 'paga';
+  /** Live +18 (marcação fixa desde a abertura) */
+  mais18?: boolean;
   /** Preço do bilhete em Kz (0 se gratuita) */
   preco: number;
   /** Se o utilizador atual pode ver (gratuita, bilhete, criadora ou admin) */
@@ -1377,6 +1380,7 @@ export default function LivePage() {
 
           {/* Lado Direito: Badge AO VIVO + Viewers + Som + Menu */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <SeloMais18 mais18={stream?.mais18} />
             {/* Badge AO VIVO + Duração */}
             <div className="flex items-center gap-1 bg-red-600/90 text-white text-[11px] font-bold px-2 py-1 rounded-full shadow-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
@@ -1541,6 +1545,7 @@ export default function LivePage() {
                   </p>
                   <p className="text-xs text-muted-foreground truncate">@{stream.criador.username}</p>
                 </div>
+                <SeloMais18 mais18={stream.mais18} />
                 <Badge className="bg-red-600 text-white border-0 gap-1.5 shrink-0 px-2.5 py-0.5">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
                   AO VIVO

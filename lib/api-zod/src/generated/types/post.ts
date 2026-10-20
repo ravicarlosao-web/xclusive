@@ -19,6 +19,8 @@ export interface Post {
   tipo: PostTipo;
   media?: PostMedia[];
   exclusivo: boolean;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   bloqueado?: boolean;
   /** @nullable */
   precoDesbloqueio?: number | null;

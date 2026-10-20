@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { SeloMais18 } from '@/components/shared/MarcacaoMais18';
 import { Heart, MessageCircle, Share2, Flag, Music, Play, Volume2, VolumeX } from 'lucide-react';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -218,6 +219,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
           <span className="font-bold text-white text-sm hover:underline">
             {post.autor.username}
           </span>
+          <SeloMais18 mais18={post.mais18} />
           <button
             onClick={handleFollowToggle}
             className={`px-3 py-1 rounded-full text-xs font-bold pointer-events-auto transition-colors ${

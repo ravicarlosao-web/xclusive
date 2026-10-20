@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SeletorMais18 } from './MarcacaoMais18';
 
 interface CreatePostModalProps {
   open: boolean;
@@ -168,6 +169,9 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   const [legenda, setLegenda] = useState('');
   const [localizacao, setLocalizacao] = useState('');
   const [exclusivo, setExclusivo] = useState(false);
+  // Marcação +18 obrigatória, sem valor pré-selecionado (null = ainda não escolhida)
+  const [mais18, setMais18] = useState<boolean | null>(null);
+  const [textoMais18, setTextoMais18] = useState<boolean | null>(null);
   const [preco, setPreco] = useState('');
   const [audiencia, setAudiencia] = useState<'todos' | 'seguidores' | 'subscritores'>('todos');
 
@@ -246,6 +250,8 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     setLegenda('');
     setLocalizacao('');
     setExclusivo(false);
+    setMais18(null);
+    setTextoMais18(null);
     setPreco('');
     setAudiencia('todos');
     setTextoConteudo('');
@@ -353,6 +359,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   // ── Submit: media post with live progress ──
   async function handleSubmit(bypassWarning = false) {
     if (mediaFiles.length === 0) return;
+    if (mais18 === null) { toast.error('Indica se o conteúdo é +18 (Sim ou Não).'); return; }
 
     // Check if any video file is > 20MB and warning not yet acknowledged
     if (!bypassWarning && !dataWarningConfirmed) {
@@ -426,6 +433,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
           tipo,
           media: uploadedMedia,
           exclusivo,
+          mais18,
           precoDesbloqueio: precoNumerico,
         },
       },
@@ -450,6 +458,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   // ── Submit: text post ──
   async function handleSubmitTexto() {
     if (!textoConteudo.trim()) { toast.error('Escreve algo para publicar.'); return; }
+    if (textoMais18 === null) { toast.error('Indica se o conteúdo é +18 (Sim ou Não).'); return; }
 
     const precoNumerico = textoExclusivo && textoPreco
       ? (() => { const v = parseFloat(textoPreco); return Number.isFinite(v) && v >= 0 ? v : undefined; })()
@@ -463,6 +472,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
           tipo: 'texto' as any,
           media: [],
           exclusivo: textoExclusivo,
+          mais18: textoMais18,
           precoDesbloqueio: precoNumerico,
         },
       },
@@ -663,13 +673,13 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                     size="sm"
                     className="bg-primary hover:bg-primary/90 text-white rounded-lg h-8 px-4 text-sm font-semibold gap-1.5 shadow-sm"
                     onClick={() => handleSubmit()}
-                    disabled={isCreatingPost || mediaFiles.length === 0}
+                    disabled={isCreatingPost || mediaFiles.length === 0 || mais18 === null}
                   >
                     <Upload className="w-3.5 h-3.5" /> Partilhar
                   </Button>
                 )}
                 {step === 'texto' && (
-                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-lg h-8 px-4 text-sm font-semibold" onClick={handleSubmitTexto} disabled={isCreatingPost || !textoConteudo.trim()}>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-lg h-8 px-4 text-sm font-semibold" onClick={handleSubmitTexto} disabled={isCreatingPost || !textoConteudo.trim() || textoMais18 === null}>
                     Publicar
                   </Button>
                 )}
@@ -848,6 +858,8 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       ))}
                     </div>
                   </div>
+
+                  <SeletorMais18 valor={textoMais18} onChange={setTextoMais18} disabled={isCreatingPost} />
 
                   {/* Exclusive */}
                   <div className="flex items-center justify-between">
@@ -1063,6 +1075,8 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       ))}
                     </div>
                   </div>
+
+                  <SeletorMais18 valor={mais18} onChange={setMais18} disabled={isCreatingPost} className="py-3 border-t border-border" />
 
                   <div className="flex items-center justify-between py-3 border-t border-border">
                     <div className="flex items-center gap-2.5">

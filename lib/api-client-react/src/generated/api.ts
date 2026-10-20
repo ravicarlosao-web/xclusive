@@ -49,6 +49,8 @@ import type {
   PaginatedUsers,
   Post,
   PostInput,
+  PostMais18,
+  PostMais18Input,
   ProfileUpdate,
   Reel,
   ReelInput,
@@ -1439,6 +1441,78 @@ export const useDeletePost = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeletePostMutationOptions(options));
+    }
+
+export const getUpdatePostMais18Url = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/mais18`
+}
+
+/**
+ * @summary Alterar a marcação +18 de um post próprio (só muda mais18)
+ */
+export const updatePostMais18 = async (id: number,
+    postMais18Input: PostMais18Input, options?: Parameters<typeof customFetch>[1]): Promise<PostMais18> => {
+
+  return customFetch<PostMais18>(getUpdatePostMais18Url(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(postMais18Input)
+  }
+);}
+
+
+
+
+
+export const getUpdatePostMais18MutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePostMais18>>, TError,{id: number;data: BodyType<PostMais18Input>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePostMais18>>, TError,{id: number;data: BodyType<PostMais18Input>}, TContext> => {
+
+const mutationKey = ['updatePostMais18'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePostMais18>>, {id: number;data: BodyType<PostMais18Input>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePostMais18(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePostMais18MutationResult = NonNullable<Awaited<ReturnType<typeof updatePostMais18>>>
+    export type UpdatePostMais18MutationBody = BodyType<PostMais18Input>
+    export type UpdatePostMais18MutationError = ErrorType<void>
+
+    /**
+ * @summary Alterar a marcação +18 de um post próprio (só muda mais18)
+ */
+export const useUpdatePostMais18 = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePostMais18>>, TError,{id: number;data: BodyType<PostMais18Input>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePostMais18>>,
+        TError,
+        {id: number;data: BodyType<PostMais18Input>},
+        TContext
+      > => {
+      return useMutation(getUpdatePostMais18MutationOptions(options));
     }
 
 export const getLikePostUrl = (id: number,) => {

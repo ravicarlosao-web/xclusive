@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
 import { liveVisivel } from "../lib/takedown";
-import { lerVisualizador, livePermitida, liveBloqueada, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18 } from "../lib/conteudoMais18";
+import { lerVisualizador, livePermitida, liveBloqueada, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
@@ -41,6 +41,7 @@ router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<v
         totalVisualizadores: liveStreamsTable.totalVisualizadores,
         tipo: liveStreamsTable.tipo,
         preco: liveStreamsTable.preco,
+        mais18: liveStreamsTable.mais18,
         criador: {
           username: usersTable.username,
           nomeExibicao: usersTable.nomeExibicao,
@@ -98,7 +99,7 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
       )
       .limit(1);
 
-    // Tipo e preço ficam fixos desde a abertura: se já existe live, o corpo é ignorado.
+    // Tipo, preço e marcação +18 ficam fixos desde a abertura: se já existe live, o corpo é ignorado.
     if (!stream) {
       const parsed = liveStartSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
@@ -109,6 +110,8 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
         return;
       }
       const { tipo, preco } = parsed.data;
+      const marcacao = lerMarcacaoMais18(parsed.data.mais18);
+      if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
       // Criar nova live em estado "agendado".
       // iniciadoEm é definido pelo admission webhook quando o OME confirmar publisher real.
@@ -121,6 +124,7 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
           status: "agendado",
           tipo,
           preco: String(tipo === "paga" ? preco : 0),
+          mais18: marcacao.mais18,
         })
         .returning();
     }

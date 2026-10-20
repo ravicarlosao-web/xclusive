@@ -1,4 +1,4 @@
-import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost } from '@workspace/api-client-react';
+import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost, useUpdatePostMais18 } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, MessageCircle, Send, Bookmark, Flag, Coins, Play, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +16,7 @@ import { ReportDialog } from '@/components/shared/ReportDialog';
 import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
+import { SeloMais18 } from './MarcacaoMais18';
 
 interface PostCardProps {
   post: Post;
@@ -38,6 +39,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
   const { mutate: apiSave } = useSavePost();
   const { mutate: apiUnsave } = useUnsavePost();
   const { mutate: apiDeletePost, isPending: isDeletingPost } = useDeletePost();
+  const { mutate: apiUpdateMais18, isPending: isUpdatingMais18 } = useUpdatePostMais18();
 
   function invalidateFeed() {
     queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
@@ -203,6 +205,22 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     setGorjetasCount(c => c + 1);
   };
 
+  // A criadora corrige a marcação +18 do SEU post (o servidor recusa o de outra pessoa).
+  const handleToggleMais18 = () => {
+    if (!isOwnPost || isUpdatingMais18) return;
+    const novo = !post.mais18;
+    apiUpdateMais18({ id: post.id, data: { mais18: novo } }, {
+      onSuccess: () => {
+        invalidateFeed();
+        queryClient.invalidateQueries({ queryKey: ['/api/explore'] });
+        toast({ title: novo ? 'Publicação marcada como +18' : 'Marca +18 removida' });
+      },
+      onError: () => {
+        toast({ variant: 'destructive', title: 'Não foi possível alterar a marcação +18' });
+      },
+    });
+  };
+
   const handleDeletePost = () => {
     if (!canDeletePost || isDeletingPost) return;
     const confirmed = window.confirm(
@@ -234,6 +252,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             <div className="flex flex-col">
               <span className="text-sm font-semibold hover:underline flex items-center gap-1">
                 {post.autor.username}
+                <SeloMais18 mais18={post.mais18} />
                 {post.autor.verificado && (
                   <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
                 )}
@@ -242,15 +261,29 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             </div>
           </Link>
           {canDeletePost ? (
-            <button
-              className="text-muted-foreground hover:text-destructive transition-colors p-2 disabled:opacity-50"
-              onClick={handleDeletePost}
-              disabled={isDeletingPost}
-              title="Apagar publicação"
-              aria-label="Apagar publicação"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {isOwnPost && (
+                <button
+                  data-testid="alternar-mais18"
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 transition-colors disabled:opacity-50"
+                  onClick={handleToggleMais18}
+                  disabled={isUpdatingMais18}
+                  title={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
+                  aria-label={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
+                >
+                  {post.mais18 ? 'Tirar +18' : 'Marcar +18'}
+                </button>
+              )}
+              <button
+                className="text-muted-foreground hover:text-destructive transition-colors p-2 disabled:opacity-50"
+                onClick={handleDeletePost}
+                disabled={isDeletingPost}
+                title="Apagar publicação"
+                aria-label="Apagar publicação"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
           ) : (
             <button
               className="text-muted-foreground hover:text-destructive transition-colors p-2"

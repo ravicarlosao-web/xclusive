@@ -341,6 +341,37 @@ paths:
         "204":
           description: Eliminado
 
+  /posts/{id}/mais18:
+    patch:
+      operationId: updatePostMais18
+      tags: [posts]
+      summary: Alterar a marcação +18 de um post próprio (só muda mais18)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostMais18Input"
+      responses:
+        "200":
+          description: Marcação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostMais18"
+        "400":
+          description: mais18 em falta ou não boolean
+        "403":
+          description: O post é de outra pessoa
+        "404":
+          description: Post não encontrado
+
   /posts/{id}/like:
     post:
       operationId: likePost
@@ -1233,6 +1264,9 @@ components:
             $ref: "#/components/schemas/PostMedia"
         exclusivo:
           type: boolean
+        mais18:
+          type: boolean
+          description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
         bloqueado:
           type: boolean
         precoDesbloqueio:
@@ -1267,7 +1301,7 @@ components:
 
     PostInput:
       type: object
-      required: [tipo]
+      required: [tipo, mais18]
       properties:
         legenda:
           type: string
@@ -1292,6 +1326,25 @@ components:
           default: false
         precoDesbloqueio:
           type: number
+        mais18:
+          type: boolean
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
+
+    PostMais18Input:
+      type: object
+      required: [mais18]
+      properties:
+        mais18:
+          type: boolean
+
+    PostMais18:
+      type: object
+      required: [id, mais18]
+      properties:
+        id:
+          type: integer
+        mais18:
+          type: boolean
 
     PaginatedPosts:
       type: object
@@ -1376,6 +1429,9 @@ components:
         audiencia:
           type: string
           enum: [todos, subscritores, proximos]
+        mais18:
+          type: boolean
+          description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
         expirado:
           type: boolean
         visto:
@@ -1404,7 +1460,7 @@ components:
 
     StoryInput:
       type: object
-      required: [mediaUrl, tipo]
+      required: [mediaUrl, tipo, mais18]
       properties:
         mediaUrl:
           type: string
@@ -1418,6 +1474,9 @@ components:
           type: string
           enum: [todos, subscritores, proximos]
           default: todos
+        mais18:
+          type: boolean
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
 
     StoryView:
       type: object
@@ -1450,6 +1509,9 @@ components:
           type: ["string", "null"]
         exclusivo:
           type: boolean
+        mais18:
+          type: boolean
+          description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
         totalCurtidas:
           type: integer
         totalComentarios:
@@ -1464,7 +1526,7 @@ components:
 
     ReelInput:
       type: object
-      required: [videoUrl]
+      required: [videoUrl, mais18]
       properties:
         videoUrl:
           type: string
@@ -1475,6 +1537,9 @@ components:
         exclusivo:
           type: boolean
           default: false
+        mais18:
+          type: boolean
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
 
     PaginatedReels:
       type: object
