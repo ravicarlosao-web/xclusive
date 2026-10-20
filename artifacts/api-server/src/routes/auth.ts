@@ -443,6 +443,9 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,
+    // Preferência de conteúdo +18 (só da própria conta): null = ainda não escolheu
+    preferenciaMais18: user.preferenciaMais18 ?? null,
+    preferenciaMais18Em: user.preferenciaMais18Em?.toISOString?.() ?? null,
     totalSeguidores,
     totalSeguindo,
     totalPublicacoes,

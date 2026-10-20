@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable } from "@workspace/db";
+import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
@@ -7,6 +7,8 @@ import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { postVisivel } from "../lib/takedown";
+import rateLimit from "express-rate-limit";
+import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
   nomeExibicao: z.string().min(1).max(100).optional(),
@@ -276,6 +278,79 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     segueVoce: false,
     criadoEm: user.criadoEm.toISOString(),
   });
+});
+
+// ── Preferência de conteúdo +18 ──────────────────────────────────────────────
+// PR 1: só guarda a escolha (nada é filtrado ainda). "filtrar" é sempre permitido; "ver" exige idade >= 18
+// pela data de nascimento da conta e a confirmação explícita enviada no pedido, sem nenhuma outra verificação.
+const preferenciaMais18Schema = z.object({
+  valor: z.enum(PREFERENCIAS_MAIS18),
+  confirmo: z.boolean().optional(),
+});
+
+const limitePreferenciaMais18 = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Demasiadas alterações seguidas. Tenta novamente dentro de alguns minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `user:${(req as AuthRequest).userId}`,
+});
+
+router.patch("/users/me/preferencia-mais18", requireAuth, limitePreferenciaMais18, validate(preferenciaMais18Schema), async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId!;
+  const { valor, confirmo } = req.body as z.infer<typeof preferenciaMais18Schema>;
+
+  if (valor === "ver" && confirmo !== true) {
+    res.status(400).json({ error: "Para ver conteúdo +18 tens de confirmar que tens 18 anos ou mais.", codigo: "confirmacao_em_falta" });
+    return;
+  }
+
+  try {
+    // Utilizador, preferência, data e histórico NA MESMA transação (se a linha do histórico falhar, nada muda).
+    // O IP vai só para a base de dados; nunca para logs.
+    const r = await db.transaction(async (tx) => {
+      const [u] = await tx
+        .select({ dataNascimento: usersTable.dataNascimento, preferenciaMais18: usersTable.preferenciaMais18, preferenciaMais18Em: usersTable.preferenciaMais18Em })
+        .from(usersTable).where(eq(usersTable.id, userId)).for("update").limit(1);
+      if (!u) return { erro: 404 as const };
+
+      if (valor === "ver") {
+        const idade = idadeEmAnos(u.dataNascimento);
+        if (idade === null) return { erro: 403 as const, codigo: "idade_nao_verificavel" };
+        if (idade < IDADE_MINIMA_VER) return { erro: 403 as const, codigo: "menor_de_idade" };
+      }
+
+      // Mesma escolha que já está guardada: nada a gravar (a data original mantém-se).
+      if (u.preferenciaMais18 === valor) {
+        return { preferenciaMais18: u.preferenciaMais18, preferenciaMais18Em: u.preferenciaMais18Em };
+      }
+
+      const agora = new Date();
+      await tx.update(usersTable).set({ preferenciaMais18: valor, preferenciaMais18Em: agora }).where(eq(usersTable.id, userId));
+      await tx.insert(userMais18ChoicesTable).values({
+        userId, valor, textoVersao: MAIS18_TEXTO_VERSAO, escolhidaEm: agora,
+        ip: (req.ip ?? "").slice(0, 45) || null,
+      });
+      return { preferenciaMais18: valor, preferenciaMais18Em: agora };
+    });
+
+    if ("erro" in r) {
+      if (r.erro === 404) { res.status(404).json({ error: "Utilizador não encontrado." }); return; }
+      res.status(403).json({
+        error: r.codigo === "menor_de_idade"
+          ? "Só quem tem 18 anos ou mais pode escolher ver conteúdo +18."
+          : "Não foi possível confirmar a tua idade pela data de nascimento da conta.",
+        codigo: r.codigo,
+      });
+      return;
+    }
+    res.json({ preferenciaMais18: r.preferenciaMais18, preferenciaMais18Em: r.preferenciaMais18Em?.toISOString() ?? null });
+  } catch (err) {
+    // NÃO se regista o objeto de erro: o do Drizzle inclui os parâmetros da query (e, com eles, o IP).
+    (req as any).log?.error({ erro: err instanceof Error ? err.name : "desconhecido", pgCode: (err as any)?.cause?.code ?? (err as any)?.code }, "Preferência +18: erro interno");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 /**

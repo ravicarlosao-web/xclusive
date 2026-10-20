@@ -47,9 +47,16 @@ export const usersTable = pgTable("users", {
    * Subscrições em curso não são afetadas por mudanças.
    */
   tipoSubscricao: tipoSubscricaoEnum("tipo_subscricao").notNull().default("paga"),
+  /**
+   * Preferência sobre conteúdo +18: 'ver' | 'filtrar'. NULL = ainda não escolheu (o servidor trata como 'filtrar').
+   * A escolha e a respetiva data são gravadas na MESMA transação que a linha de user_mais18_choices.
+   */
+  preferenciaMais18: text("preferencia_mais18"),
+  preferenciaMais18Em: timestamp("preferencia_mais18_em"),
 }, (table) => [
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
   check("users_ganhos_nao_negativo", sql`${table.ganhos} >= 0`),
+  check("users_preferencia_mais18_check", sql`${table.preferenciaMais18} IN ('ver', 'filtrar')`),
 ]);
 
 /**
@@ -66,6 +73,22 @@ export const userLegalAcceptancesTable = pgTable("user_legal_acceptances", {
   ip: varchar("ip", { length: 45 }),
 }, (t) => [
   index("user_legal_acceptances_user_idx").on(t.userId),
+]);
+
+/**
+ * Histórico (append-only) das escolhas sobre conteúdo +18: valor, versão do texto do cartão mostrado,
+ * data e IP. Escrita na MESMA transação do UPDATE de users.preferencia_mais18. O IP nunca é registado em logs.
+ */
+export const userMais18ChoicesTable = pgTable("user_mais18_choices", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  valor: text("valor").notNull(),
+  textoVersao: varchar("texto_versao", { length: 40 }).notNull(),
+  escolhidaEm: timestamp("escolhida_em").notNull().defaultNow(),
+  ip: varchar("ip", { length: 45 }),
+}, (t) => [
+  check("user_mais18_choices_valor_check", sql`${t.valor} IN ('ver', 'filtrar')`),
+  index("user_mais18_choices_user_idx").on(t.userId, t.escolhidaEm),
 ]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, criadoEm: true });

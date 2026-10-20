@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserProfilePreferenciaMais18 } from './userProfilePreferenciaMais18';
 import type { UserProfileTipoConta } from './userProfileTipoConta';
 
 export interface UserProfile {
@@ -27,5 +28,12 @@ export interface UserProfile {
   totalPublicacoes: number;
   estaASeguir?: boolean;
   segueVoce?: boolean;
+  /**
+     * Só na própria conta (/auth/me, login, registo). null = ainda não escolheu.
+     * @nullable
+     */
+  preferenciaMais18?: UserProfilePreferenciaMais18;
+  /** @nullable */
+  preferenciaMais18Em?: Date | null;
   criadoEm: Date;
 }

@@ -40,6 +40,18 @@ export const UserProfileTipoConta = {
   criador: 'criador',
 } as const;
 
+/**
+ * Só na própria conta (/auth/me, login, registo). null = ainda não escolheu.
+ * @nullable
+ */
+export type UserProfilePreferenciaMais18 = typeof UserProfilePreferenciaMais18[keyof typeof UserProfilePreferenciaMais18] | null;
+
+
+export const UserProfilePreferenciaMais18 = {
+  ver: 'ver',
+  filtrar: 'filtrar',
+} as const;
+
 export interface UserProfile {
   id: number;
   username: string;
@@ -60,6 +72,13 @@ export interface UserProfile {
   totalPublicacoes: number;
   estaASeguir?: boolean;
   segueVoce?: boolean;
+  /**
+     * Só na própria conta (/auth/me, login, registo). null = ainda não escolheu.
+     * @nullable
+     */
+  preferenciaMais18?: UserProfilePreferenciaMais18;
+  /** @nullable */
+  preferenciaMais18Em?: string | null;
   criadoEm: string;
 }
 

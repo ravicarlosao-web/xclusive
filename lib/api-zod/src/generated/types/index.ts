@@ -75,5 +75,6 @@ export * from './transaction';
 export * from './transactionTipo';
 export * from './unreadCount';
 export * from './userProfile';
+export * from './userProfilePreferenciaMais18';
 export * from './userProfileTipoConta';
 export * from './userSummary';

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { ReactNode, useState } from 'react';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
+import { Mais18Card } from '@/components/shared/Mais18';
 import { useGetConversations, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -225,6 +226,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <CreatePostModal open={createPostOpen} onClose={() => setCreatePostOpen(false)} />
       <TopUpModal open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+      {/* Cartão inicial do conteúdo +18: só aparece a quem ainda não escolheu (preferência nula) */}
+      <Mais18Card />
 
       {/* Mobile Bottom Navigation */}
       {!isLiveWatching && (
