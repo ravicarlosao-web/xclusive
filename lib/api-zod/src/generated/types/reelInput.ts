@@ -11,4 +11,6 @@ export interface ReelInput {
   capaUrl?: string;
   legenda?: string;
   exclusivo?: boolean;
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  mais18: boolean;
 }

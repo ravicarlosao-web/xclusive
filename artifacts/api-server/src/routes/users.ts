@@ -625,6 +625,7 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
       tipo: p.tipo,
       media: mediaSegura,
       exclusivo: p.exclusivo,
+      mais18: p.mais18,
       bloqueado: p.exclusivo && !acesso,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: likes || 0,

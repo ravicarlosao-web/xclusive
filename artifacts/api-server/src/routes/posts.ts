@@ -10,6 +10,7 @@ import { resolveMediaUrl, urlMedia, urlCanonico } from "../lib/storage";
 import { postVisivel, commentVisivel } from "../lib/takedown";
 import {
   lerVisualizador, postVisivelPara, postBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
+  lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
 } from "../lib/conteudoMais18";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
@@ -23,6 +24,8 @@ const createPostSchema = z.object({
     .optional(),
   exclusivo: z.boolean().optional(),
   precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
+  // Marcação +18 (obrigatória; em falta assume true durante a transição — ver lerMarcacaoMais18). Não boolean => 400.
+  mais18: z.boolean({ error: "O campo mais18 tem de ser verdadeiro ou falso." }).optional(),
 }).refine(
   data => data.tipo === 'texto' ? (data.legenda && data.legenda.trim().length > 0) : true,
   { message: 'Posts de texto precisam de conteúdo na legenda.' }
@@ -76,6 +79,8 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
   }
 
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
+  const marcacao = lerMarcacaoMais18(req.body.mais18);
+  if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
   // Média paga: o upload devolve "private://paid/<autorId>/<ficheiro>"; guardamos só a chave.
   // Posts exclusivos só aceitam ficheiros privados do próprio autor; posts gratuitos nunca.
@@ -105,6 +110,7 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
     localizacao: localizacao || null,
     tipo: tipo || "imagem",
     exclusivo: exclusivo || false,
+    mais18: marcacao.mais18,
     precoDesbloqueio: precoDesbloqueio ? String(precoDesbloqueio) : null,
   }).returning();
 
@@ -121,6 +127,18 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
 
   const formatted = await formatPost(post, userId);
   res.status(201).json(formatted);
+});
+
+// Editar a marcação +18 de um post PRÓPRIO (só muda mais18; nunca o de outra pessoa).
+const editarMais18Schema = z.object({ mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }) }).strict();
+router.patch("/posts/:id/mais18", requireAuth, validate(editarMais18Schema), async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "ID inválido." }); return; }
+  const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id)).limit(1);
+  if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
+  if (post.autorId !== req.userId) { res.status(403).json({ error: "Só a autora pode alterar a marcação +18 do seu post." }); return; }
+  const [atualizado] = await db.update(postsTable).set({ mais18: req.body.mais18 }).where(and(eq(postsTable.id, id), eq(postsTable.autorId, req.userId!))).returning({ id: postsTable.id, mais18: postsTable.mais18 });
+  res.json(atualizado);
 });
 
 // Desbloquear post PPV
@@ -380,6 +398,7 @@ async function formatPost(post: any, userId?: number) {
     tipo: post.tipo,
     media: mediaSegura,
     exclusivo: post.exclusivo,
+    mais18: post.mais18,
     bloqueado: post.exclusivo && !acesso,
     precoDesbloqueio: post.precoDesbloqueio ? parseFloat(post.precoDesbloqueio) : null,
     totalCurtidas: likes || 0,

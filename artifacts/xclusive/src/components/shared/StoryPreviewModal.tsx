@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { SeletorMais18 } from './MarcacaoMais18';
 
 /* ─── Types ─── */
 interface TextLayer {
@@ -36,7 +37,7 @@ interface StoryPreviewModalProps {
     nomeExibicao?: string | null;
     avatarUrl?: string | null;
   };
-  onPublish: (file: File, legenda: string, audiencia?: 'todos' | 'proximos') => Promise<void>;
+  onPublish: (file: File, legenda: string, audiencia: 'todos' | 'proximos' | undefined, mais18: boolean) => Promise<void>;
   onClose: () => void;
 }
 
@@ -212,6 +213,8 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
 
   /* publishing states */
   const [isPublishing, setIsPublishing] = useState(false);
+  // Marcação +18 obrigatória, sem valor pré-selecionado (bloqueia os botões de publicar)
+  const [mais18, setMais18] = useState<boolean | null>(null);
   const [published, setPublished] = useState(false);
   const [publishedAudience, setPublishedAudience] = useState<'todos' | 'proximos'>('todos');
 
@@ -331,6 +334,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
   /* Publish flow with visual confirmation */
   async function handlePublish(audiencia: 'todos' | 'proximos' = 'todos') {
     if (isPublishing || published) return;
+    if (mais18 === null) { toast.error('Indica se o conteúdo é +18 (Sim ou Não).'); return; }
     setIsPublishing(true);
     setPublishedAudience(audiencia);
 
@@ -348,7 +352,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
         containerH
       );
 
-      await onPublish(finalFile, legenda.trim(), audiencia);
+      await onPublish(finalFile, legenda.trim(), audiencia, mais18);
 
       // Trigger published state with visual confirmation
       setPublished(true);
@@ -784,6 +788,11 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
                 </AnimatePresence>
               </div>
 
+              {/* Marcação +18 obrigatória */}
+              <div className="px-4">
+                <SeletorMais18 valor={mais18} onChange={setMais18} disabled={isPublishing} dark />
+              </div>
+
               {/* Action Buttons Row (Exact match to Instagram screenshot) */}
               <div className="flex items-center gap-2.5 px-4">
                 {/* 1. "As tuas histórias" Pill */}
@@ -791,7 +800,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
                   id="story-preview-publish-main"
                   type="button"
                   onClick={() => handlePublish('todos')}
-                  disabled={isPublishing}
+                  disabled={isPublishing || mais18 === null}
                   className="flex-1 flex items-center gap-2 bg-black/55 backdrop-blur-md rounded-full border border-white/15 px-2.5 py-2 shadow-lg hover:bg-black/75 active:scale-98 transition-all overflow-hidden"
                   title="Publicar na Tua História"
                 >
@@ -817,7 +826,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
                   id="story-preview-close-friends"
                   type="button"
                   onClick={() => handlePublish('proximos')}
-                  disabled={isPublishing}
+                  disabled={isPublishing || mais18 === null}
                   className="flex-1 flex items-center gap-2 bg-black/55 backdrop-blur-md rounded-full border border-white/15 px-2.5 py-2 shadow-lg hover:bg-black/75 active:scale-98 transition-all overflow-hidden"
                   title="Publicar para Amigos Chegados / Subscritores"
                 >
@@ -834,7 +843,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
                   id="story-preview-send"
                   type="button"
                   onClick={() => handlePublish('todos')}
-                  disabled={isPublishing}
+                  disabled={isPublishing || mais18 === null}
                   className="w-11 h-11 rounded-full bg-[#0095f6] hover:bg-[#1877f2] active:scale-95 flex items-center justify-center shadow-xl transition-all shrink-0"
                   title="Publicar Story"
                 >

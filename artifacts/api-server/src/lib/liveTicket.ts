@@ -13,6 +13,8 @@ export const liveStartSchema = z
   .object({
     tipo: z.enum(["gratuita", "paga"]).default("gratuita"),
     preco: z.number().int("O preço deve ser um número inteiro em Kz.").optional(),
+    // Marcação +18, fixa desde a abertura (como tipo e preço). Em falta => true na transição; não boolean => 400.
+    mais18: z.boolean({ error: "O campo mais18 tem de ser verdadeiro ou falso." }).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.tipo === "gratuita") {

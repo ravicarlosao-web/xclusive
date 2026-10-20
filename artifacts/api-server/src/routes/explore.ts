@@ -80,6 +80,7 @@ router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void>
       tipo: p.tipo,
       media: mediaSegura,
       exclusivo: p.exclusivo,
+      mais18: p.mais18,
       bloqueado: p.exclusivo && !acesso,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: 0,

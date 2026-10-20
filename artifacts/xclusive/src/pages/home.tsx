@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { SeloMais18 } from '@/components/shared/MarcacaoMais18';
 import { useGetFeed, useGetStoriesFeed, useGetUserSuggestions, useFollowUser, useUnfollowUser, useDeleteStory, StoryGroup, getFreshAuthToken } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Flame, Heart, WifiOff, Radio } from 'lucide-react';
@@ -131,6 +132,7 @@ export default function Home() {
     id: number;
     criadorId: number;
     totalVisualizadores: number;
+    mais18?: boolean;
     criador: { username: string; nomeExibicao: string | null; avatarUrl: string | null };
   }>>( {
     queryKey: ['/api/live/active'],
@@ -179,7 +181,7 @@ export default function Home() {
     fileInputRef.current?.click();
   }, []);
 
-  async function uploadStory(file: File, audiencia: 'todos' | 'proximos' = 'todos') {
+  async function uploadStory(file: File, audiencia: 'todos' | 'proximos' = 'todos', mais18: boolean) {
     if (!user) return;
     const tipo = file.type.startsWith('video/') ? 'video' : 'imagem';
 
@@ -234,6 +236,7 @@ export default function Home() {
           mediaUrl: uploadedFile.url,
           tipo: uploadedFile.tipo === 'video' ? 'video' : tipo,
           audiencia,
+          mais18,
         }),
       });
       const storyBody = await storyResponse.json().catch(() => null) as { error?: string } | null;
@@ -338,6 +341,7 @@ export default function Home() {
                       <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
                         AO VIVO
                       </span>
+                      <SeloMais18 mais18={stream.mais18} className="absolute -top-1 -right-1 text-[8px] px-1" />
                     </div>
                     <span className="text-xs text-foreground font-medium truncate max-w-[64px]">
                       {stream.criador.nomeExibicao ?? stream.criador.username}
@@ -653,8 +657,8 @@ export default function Home() {
           file={storyPreviewFile}
           previewUrl={storyPreviewUrl}
           user={user}
-          onPublish={async (file, _legenda, audiencia) => {
-            await uploadStory(file, audiencia);
+          onPublish={async (file, _legenda, audiencia, mais18) => {
+            await uploadStory(file, audiencia, mais18);
           }}
           onClose={() => {
             if (storyPreviewUrl) URL.revokeObjectURL(storyPreviewUrl);

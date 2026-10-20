@@ -50,6 +50,7 @@ import {
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { SeletorMais18, SeloMais18 } from '@/components/shared/MarcacaoMais18';
 
 function formatKz(valor: number): string {
   return `${valor.toLocaleString('pt-PT')} Kz`;
@@ -279,6 +280,8 @@ export default function IrEmDireto() {
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [liveTipo, setLiveTipo] = useState<LiveAcesso>('gratuita');
   const [livePreco, setLivePreco] = useState<string>('');
+  // Marcação +18 obrigatória (fixa desde a abertura), sem valor pré-selecionado
+  const [liveMais18, setLiveMais18] = useState<boolean | null>(null);
   const [isEnding, setIsEnding] = useState<boolean>(false);
   const [hasEnded, setHasEnded] = useState<boolean>(false);
   const [finalDuration, setFinalDuration] = useState<number>(0);
@@ -519,6 +522,10 @@ export default function IrEmDireto() {
    * Iniciar transmissão nativa
    */
   const handleStartBroadcast = async () => {
+    if (liveMais18 === null) {
+      toast.error('Indica se a live é +18 (Sim ou Não).');
+      return;
+    }
     // Validação no cliente (o servidor valida sempre): paga exige preço inteiro dentro dos limites.
     const precoNum = Number(livePreco);
     if (
@@ -545,7 +552,7 @@ export default function IrEmDireto() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(liveTipo === 'paga' ? { tipo: 'paga', preco: precoNum } : { tipo: 'gratuita' }),
+        body: JSON.stringify(liveTipo === 'paga' ? { tipo: 'paga', preco: precoNum, mais18: liveMais18 } : { tipo: 'gratuita', mais18: liveMais18 }),
       });
 
       if (!res.ok) {
@@ -972,6 +979,7 @@ export default function IrEmDireto() {
                   disabled={isStarting}
                   dark
                 />
+                <SeletorMais18 valor={liveMais18} onChange={setLiveMais18} disabled={isStarting} dark />
 
                 <div className="flex items-center justify-center gap-6">
                   <button
@@ -988,7 +996,7 @@ export default function IrEmDireto() {
                   <button
                     type="button"
                     onClick={handleStartBroadcast}
-                    disabled={isStarting || !publisher.mediaStream}
+                    disabled={isStarting || !publisher.mediaStream || liveMais18 === null}
                     className="w-[76px] h-[76px] rounded-full bg-gradient-to-br from-red-600 to-pink-600 text-white flex flex-col items-center justify-center gap-0.5 shadow-2xl shadow-red-950/60 active:scale-95 transition-transform disabled:opacity-60 disabled:cursor-not-allowed border-[3px] border-white/25"
                   >
                     {isStarting ? (
@@ -1304,9 +1312,10 @@ export default function IrEmDireto() {
                     onPreco={setLivePreco}
                     disabled={isStarting}
                   />
+                  <SeletorMais18 valor={liveMais18} onChange={setLiveMais18} disabled={isStarting} />
                   <Button
                     onClick={handleStartBroadcast}
-                    disabled={isStarting || !publisher.mediaStream}
+                    disabled={isStarting || !publisher.mediaStream || liveMais18 === null}
                     className="w-full h-12 text-base font-bold bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-xl shadow-red-950/40 gap-2.5 transition-all group"
                   >
                     {isStarting ? (

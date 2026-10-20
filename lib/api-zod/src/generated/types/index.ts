@@ -45,6 +45,8 @@ export * from './postInput';
 export * from './postInputMediaItem';
 export * from './postInputMediaItemTipo';
 export * from './postInputTipo';
+export * from './postMais18';
+export * from './postMais18Input';
 export * from './postMedia';
 export * from './postMediaTipo';
 export * from './postTipo';

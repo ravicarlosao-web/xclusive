@@ -20,6 +20,8 @@ export interface Reel {
   /** @nullable */
   somArtista?: string | null;
   exclusivo: boolean;
+  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
+  mais18?: boolean;
   totalCurtidas: number;
   totalComentarios: number;
   curtido: boolean;
