@@ -6,7 +6,8 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
-import { postVisivel } from "../lib/takedown";
+import { lerVisualizador, postVisivelPara } from "../lib/conteudoMais18";
+import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
@@ -130,6 +131,8 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
     }
 
     const candidateIds = candidateUsers.map(u => u.id);
+    // Contagens com o filtro +18 do visualizador (a autora conta sempre os seus)
+    const visualizador = await lerVisualizador(viewerId);
 
     const postsCountRows = await db
       .select({
@@ -137,7 +140,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
         totalPosts: sql<number>`count(*)::int`,
       })
       .from(postsTable)
-      .where(and(inArray(postsTable.autorId, candidateIds), postVisivel()))
+      .where(and(inArray(postsTable.autorId, candidateIds), postVisivelPara(visualizador)))
       .groupBy(postsTable.autorId);
 
     const postsCountMap = new Map<number, number>();
@@ -148,7 +151,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
     const allUserPosts = await db
       .select({ id: postsTable.id, autorId: postsTable.autorId })
       .from(postsTable)
-      .where(and(inArray(postsTable.autorId, candidateIds), postVisivel()));
+      .where(and(inArray(postsTable.autorId, candidateIds), postVisivelPara(visualizador)));
 
     const postIds = allUserPosts.map(p => p.id);
     const postToAuthorMap = new Map<number, number>();
@@ -345,6 +348,8 @@ router.patch("/users/me/preferencia-mais18", requireAuth, limitePreferenciaMais1
       });
       return;
     }
+    // Passou a filtrar: desliga os sockets deste utilizador que estejam em lives +18 (o resto não se toca).
+    if (r.preferenciaMais18 === "filtrar") void desligarSocketsLivesMais18(userId);
     res.json({ preferenciaMais18: r.preferenciaMais18, preferenciaMais18Em: r.preferenciaMais18Em?.toISOString() ?? null });
   } catch (err) {
     // NÃO se regista o objeto de erro: o do Drizzle inclui os parâmetros da query (e, com eles, o IP).
@@ -474,7 +479,7 @@ router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promi
 
   const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
   const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
-  const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivel()));
+  const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivelPara(await lerVisualizador(viewerId))));
 
   let estaASeguir = false;
   let segueVoce = false;
@@ -600,7 +605,7 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const posts = await db.select().from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivel())).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
+  const posts = await db.select().from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivelPara(await lerVisualizador(req.userId)))).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
 
   const result = await Promise.all(posts.map(async (p) => {
     const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
 import { liveVisivel } from "../lib/takedown";
+import { lerVisualizador, livePermitida, liveBloqueada, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18 } from "../lib/conteudoMais18";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { validate } from "../lib/validate";
@@ -31,6 +32,7 @@ const router = Router();
 // requireAuth: sem sessão → 401. temAcesso indica se o utilizador já pode ver esta live.
 router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   try {
+    const visualizador = await lerVisualizador(req.userId);
     const activeStreams = await db
       .select({
         id: liveStreamsTable.id,
@@ -47,7 +49,7 @@ router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<v
       })
       .from(liveStreamsTable)
       .innerJoin(usersTable, eq(usersTable.id, liveStreamsTable.criadorId))
-      .where(and(eq(liveStreamsTable.status, "ao_vivo"), liveVisivel()));
+      .where(and(eq(liveStreamsTable.status, "ao_vivo"), liveVisivel(), livePermitida(visualizador)));
 
     const allowed = await liveIdsWithAccess(req.userId, activeStreams);
 
@@ -187,6 +189,11 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
 
     const [stream] = await db.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, streamId)).limit(1);
     if (!stream) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    // Gorjeta numa live +18 que o remetente não vê: 404 ANTES de qualquer cobrança.
+    if (liveBloqueada(await lerVisualizador(senderId), stream)) {
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
@@ -395,6 +402,8 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
+    // Live +18 que este utilizador não vê (leitura direta): 403 com código.
+    if (liveBloqueada(await lerVisualizador(req.userId), stream)) { res.status(403).json({ error: MSG_CONTEUDO_MAIS18, codigo: CODIGO_CONTEUDO_MAIS18 }); return; }
     if (stream.status !== "ao_vivo") {
       res.status(409).json({ error: "Esta live não está ativa." });
       return;
@@ -466,6 +475,11 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       return;
     }
     if (stream0.retiradoEm) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    // Bilhete de uma live +18 que o comprador não vê: 404 ANTES de qualquer cobrança.
+    if (liveBloqueada(await lerVisualizador(buyerId), stream0)) {
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }

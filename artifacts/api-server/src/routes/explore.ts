@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
 import { sql, desc, inArray, and, eq } from "drizzle-orm";
-import { postVisivel } from "../lib/takedown";
+import { postVisivelPara, lerVisualizador } from "../lib/conteudoMais18";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl, urlMedia } from "../lib/storage";
@@ -14,12 +14,13 @@ router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void>
   const limit = 20;
   const offset = (page - 1) * limit;
 
+  const visualizador = await lerVisualizador(req.userId);
   const posts = await db
     .select()
     .from(postsTable)
     // Cast the enum to text so this route also works while older databases
     // still have a post_tipo enum without the newer "texto" value.
-    .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivel()))
+    .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivelPara(visualizador)))
     .orderBy(desc(postsTable.criadoEm))
     .limit(limit)
     .offset(offset);

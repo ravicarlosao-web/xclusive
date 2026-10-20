@@ -10,6 +10,8 @@ export const storiesTable = pgTable("stories", {
   tipo: text("tipo").notNull().default("imagem"), // imagem, video
   duracao: integer("duracao").notNull().default(5),
   audiencia: storyAudienciaEnum("audiencia").notNull().default("todos"),
+  /** Conteúdo +18 marcado pela criadora (PR 3). Só quem escolheu "ver" o vê; a autora vê sempre o seu. */
+  mais18: boolean("mais18").notNull().default(false),
   expiraEm: timestamp("expira_em").notNull(),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */

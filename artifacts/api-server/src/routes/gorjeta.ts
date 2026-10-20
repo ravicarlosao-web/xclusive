@@ -4,6 +4,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { lerVisualizador, bloqueadoMais18 } from "../lib/conteudoMais18";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
 const router = Router();
@@ -40,12 +41,14 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
   try {
     // Leitura do post fora da transação — não precisa de lock (só leitura).
     const [post] = await db
-      .select({ autorId: postsTable.autorId })
+      .select({ autorId: postsTable.autorId, mais18: postsTable.mais18 })
       .from(postsTable)
       .where(eq(postsTable.id, postId))
       .limit(1);
 
     if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
+    // Conteúdo +18 que o remetente não vê: 404 ANTES de qualquer cobrança.
+    if (bloqueadoMais18(await lerVisualizador(senderId), post)) { res.status(404).json({ error: "Post não encontrado." }); return; }
     if (post.autorId === senderId) { res.status(400).json({ error: "Não podes dar gorjeta ao teu próprio post." }); return; }
 
     const purchase = await db.transaction(async (tx) => {

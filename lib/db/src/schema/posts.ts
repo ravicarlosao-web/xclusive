@@ -11,6 +11,8 @@ export const postsTable = pgTable("posts", {
   localizacao: text("localizacao"),
   tipo: postTipoEnum("tipo").notNull().default("imagem"),
   exclusivo: boolean("exclusivo").notNull().default(false),
+  /** Conteúdo +18 marcado pela criadora (PR 3). Só quem escolheu "ver" o vê; a autora vê sempre o seu. */
+  mais18: boolean("mais18").notNull().default(false),
   precoDesbloqueio: numeric("preco_desbloqueio", { precision: 10, scale: 2 }),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */

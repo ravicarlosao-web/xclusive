@@ -10,6 +10,8 @@ export const reelsTable = pgTable("reels", {
   somTitulo: text("som_titulo"),
   somArtista: text("som_artista"),
   exclusivo: boolean("exclusivo").notNull().default(false),
+  /** Conteúdo +18 marcado pela criadora (PR 3). Só quem escolheu "ver" o vê; a autora vê sempre o seu. */
+  mais18: boolean("mais18").notNull().default(false),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   /** Retirada de conteúdo (takedown): esconde sem apagar; os ficheiros ficam retidos. */
   retiradoEm: timestamp("retirado_em"),
