@@ -78,6 +78,11 @@ async function criarDenuncia(opts: {
     const alvo = await lerAlvo(tx, opts.targetType, opts.targetId);
     // Conteúdo inexistente ou já retirado: mesma resposta (não revela o estado interno).
     if (!alvo || alvo.removido) throw new TakedownError("Conteúdo indisponível.", 404);
+    // "Conteúdo +18 não marcado": só faz sentido em post, reel, story ou live que ainda NÃO está marcado.
+    if (opts.reason === "conteudo_mais18_nao_marcado") {
+      if (!["post", "reel", "story", "live"].includes(opts.targetType)) throw new TakedownError("Este motivo só se aplica a publicações, reels, stories e lives.", 400);
+      if (alvo.mais18) throw new TakedownError("Este conteúdo já está marcado como +18.", 409);
+    }
     if (opts.reporterId !== null && alvo.ownerId === opts.reporterId) {
       throw new TakedownError("Não podes denunciar o teu próprio conteúdo.", 400);
     }

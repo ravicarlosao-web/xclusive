@@ -1267,6 +1267,9 @@ components:
         mais18:
           type: boolean
           description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
+        mais18Bloqueado:
+          type: boolean
+          description: Só para a autora - a equipa marcou o post como +18 (infração ativa) e ela não o pode desmarcar.
         bloqueado:
           type: boolean
         precoDesbloqueio:

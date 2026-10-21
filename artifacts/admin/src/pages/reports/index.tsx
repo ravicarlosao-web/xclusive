@@ -19,7 +19,7 @@ const ESTADO_COR: Record<Estado, string> = {
 };
 const MOTIVO_LABEL: Record<string, string> = {
   menor: 'Menor de idade', sem_consentimento: 'Sem consentimento', direitos_autor: 'Direitos de autor',
-  violencia: 'Violência', assedio: 'Assédio', spam: 'Spam', outro: 'Outro',
+  violencia: 'Violência', assedio: 'Assédio', spam: 'Spam', conteudo_mais18_nao_marcado: 'Conteúdo +18 não marcado', outro: 'Outro',
 };
 const TIPO_LABEL: Record<string, string> = { post: 'Publicação', reel: 'Reel', story: 'Story', comment: 'Comentário', user: 'Perfil', live: 'Live' };
 

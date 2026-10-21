@@ -118,6 +118,34 @@ export const auditLogTable = pgTable("audit_log", {
 
 export type AuditLog = typeof auditLogTable.$inferSelect;
 
+// ─── infracoes_mais18 ────────────────────────────────────────────────────────
+
+/**
+ * Infrações da regra do +18: o admin marcou como +18 conteúdo que a criadora não tinha marcado.
+ * Uma infração ATIVA por conteúdo (índice único parcial). `numero` = infrações ativas da criadora depois desta.
+ * 1.ª e 2.ª = aviso; da 3.ª em diante = suspensão (lib/infracoesMais18.ts). Anular = preencher `anulada_*`.
+ */
+export const infracoesMais18Table = pgTable("infracoes_mais18", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  tipoConteudo: varchar("tipo_conteudo", { length: 10 }).notNull(), // 'post' | 'reel' | 'story' | 'live'
+  conteudoId: integer("conteudo_id").notNull(),
+  adminId: integer("admin_id").notNull().references(() => usersTable.id),
+  reportId: integer("report_id").references(() => reportsTable.id, { onDelete: "set null" }),
+  origem: varchar("origem", { length: 10 }).notNull(), // 'admin' | 'denuncia'
+  numero: integer("numero").notNull(),
+  acao: varchar("acao", { length: 10 }).notNull(), // 'aviso' | 'suspensao'
+  motivo: text("motivo"),
+  criadaEm: timestamp("criada_em").notNull().defaultNow(),
+  anuladaEm: timestamp("anulada_em"),
+  anuladaPor: integer("anulada_por").references(() => usersTable.id),
+  anuladaMotivo: text("anulada_motivo"),
+}, (t) => [
+  uniqueIndex("infracoes_mais18_uma_ativa_por_conteudo").on(t.tipoConteudo, t.conteudoId).where(sql`${t.anuladaEm} IS NULL`),
+]);
+
+export type InfracaoMais18 = typeof infracoesMais18Table.$inferSelect;
+
 // ─── topup_requests ──────────────────────────────────────────────────────────
 
 export const topupRequestsTable = pgTable("topup_requests", {

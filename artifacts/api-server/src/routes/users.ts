@@ -7,6 +7,7 @@ import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { lerVisualizador, postVisivelPara } from "../lib/conteudoMais18";
+import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
@@ -607,6 +608,9 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
 
   const posts = await db.select().from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivelPara(await lerVisualizador(req.userId)))).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
 
+  // Só a própria criadora precisa de saber que não pode desmarcar (infração +18 ativa)
+  const comInfracao = req.userId === user.id ? await postsComInfracaoAtiva(db, posts.map((p) => p.id)) : new Set<number>();
+
   const result = await Promise.all(posts.map(async (p) => {
     const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);
     const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, p.id)));
@@ -626,6 +630,7 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
       media: mediaSegura,
       exclusivo: p.exclusivo,
       mais18: p.mais18,
+      mais18Bloqueado: comInfracao.has(p.id),
       bloqueado: p.exclusivo && !acesso,
       precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
       totalCurtidas: likes || 0,

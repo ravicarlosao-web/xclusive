@@ -12,6 +12,7 @@ import {
   lerVisualizador, postVisivelPara, postBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
   lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
 } from "../lib/conteudoMais18";
+import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
 const createPostSchema = z.object({
@@ -137,8 +138,19 @@ router.patch("/posts/:id/mais18", requireAuth, validate(editarMais18Schema), asy
   const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id)).limit(1);
   if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
   if (post.autorId !== req.userId) { res.status(403).json({ error: "Só a autora pode alterar a marcação +18 do seu post." }); return; }
-  const [atualizado] = await db.update(postsTable).set({ mais18: req.body.mais18 }).where(and(eq(postsTable.id, id), eq(postsTable.autorId, req.userId!))).returning({ id: postsTable.id, mais18: postsTable.mais18 });
-  res.json(atualizado);
+  const novo: boolean = req.body.mais18;
+  // Desmarcar: não é permitido se o admin registou uma infração ativa neste post. O lock da linha da criadora serializa
+  // com o admin (que a bloqueia primeiro): ou a infração já está visível aqui, ou o admin espera por esta transação.
+  const r = await db.transaction(async (tx) => {
+    if (!novo) {
+      await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
+      if ((await postsComInfracaoAtiva(tx, [id])).has(id)) return null;
+    }
+    const [atualizado] = await tx.update(postsTable).set({ mais18: novo }).where(and(eq(postsTable.id, id), eq(postsTable.autorId, req.userId!))).returning({ id: postsTable.id, mais18: postsTable.mais18 });
+    return atualizado;
+  });
+  if (!r) { res.status(403).json({ error: "Este post foi marcado como +18 pela equipa e não pode ser desmarcado por ti.", codigo: "mais18_bloqueado" }); return; }
+  res.json(r);
 });
 
 // Desbloquear post PPV
@@ -399,6 +411,8 @@ async function formatPost(post: any, userId?: number) {
     media: mediaSegura,
     exclusivo: post.exclusivo,
     mais18: post.mais18,
+    // A criadora não pode desmarcar este post (infração +18 ativa): o PostCard esconde "Tirar +18".
+    mais18Bloqueado: post.autorId === userId ? (await postsComInfracaoAtiva(db, [post.id])).has(post.id) : false,
     bloqueado: post.exclusivo && !acesso,
     precoDesbloqueio: post.precoDesbloqueio ? parseFloat(post.precoDesbloqueio) : null,
     totalCurtidas: likes || 0,
