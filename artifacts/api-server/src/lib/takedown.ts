@@ -18,7 +18,7 @@ import { suspenderConta, desligarSocketsDepois } from "./suspensao";
 export const TARGET_TYPES = ["post", "reel", "story", "comment", "user", "live"] as const;
 export type TargetType = typeof TARGET_TYPES[number];
 
-export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "violencia", "assedio", "spam", "outro"] as const;
+export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "violencia", "assedio", "spam", "conteudo_mais18_nao_marcado", "outro"] as const;
 export type ReportReason = typeof REPORT_REASONS[number];
 
 /** E-mail de contacto para denúncias (configurável por REPORTS_CONTACT_EMAIL). */
@@ -47,6 +47,10 @@ export interface TargetInfo {
   /** URLs guardados do média (chave "paid/..." ou URL público). */
   media: { tipo: string; url: string }[];
   ownerRole?: string;
+  /** Marcação +18 (post, reel, story e live). */
+  mais18?: boolean;
+  /** Story cuja validade já passou. */
+  expirada?: boolean;
 }
 
 /** Lê o alvo (existência, dono, estado, resumo e média). null se não existir. */
@@ -56,17 +60,17 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
       const [p] = await q.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
       if (!p) return null;
       const media = await q.select().from(postMediaTable).where(eq(postMediaTable.postId, id)).orderBy(postMediaTable.ordem);
-      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })) };
+      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18 };
     }
     case "reel": {
       const [r] = await q.select().from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
       if (!r) return null;
-      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }] };
+      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }], mais18: r.mais18 };
     }
     case "story": {
       const [s] = await q.select().from(storiesTable).where(eq(storiesTable.id, id)).limit(1);
       if (!s) return null;
-      return { ownerId: s.autorId, removido: !!s.retiradoEm, resumo: null, media: [{ tipo: s.tipo === "video" ? "video" : "imagem", url: s.mediaUrl }] };
+      return { ownerId: s.autorId, removido: !!s.retiradoEm, resumo: null, media: [{ tipo: s.tipo === "video" ? "video" : "imagem", url: s.mediaUrl }], mais18: s.mais18, expirada: s.expiraEm < new Date() };
     }
     case "comment": {
       const [c] = await q.select().from(commentsTable).where(eq(commentsTable.id, id)).limit(1);
@@ -76,7 +80,7 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
     case "live": {
       const [l] = await q.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, id)).limit(1);
       if (!l) return null;
-      return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [] };
+      return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [], mais18: l.mais18 };
     }
     case "user": {
       const [u] = await q.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);

@@ -21,6 +21,8 @@ export interface Post {
   exclusivo: boolean;
   /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
   mais18?: boolean;
+  /** Só para a autora - a equipa marcou o post como +18 (infração ativa) e ela não o pode desmarcar. */
+  mais18Bloqueado?: boolean;
   bloqueado?: boolean;
   /** @nullable */
   precoDesbloqueio?: number | null;

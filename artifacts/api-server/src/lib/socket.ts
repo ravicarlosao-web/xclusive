@@ -332,6 +332,24 @@ async function emitViewerCount(streamId: number): Promise<void> {
 }
 
 /**
+ * Live marcada como +18 DEPOIS de estar em direto (marcação do admin): desliga da sala os espectadores que não
+ * podem ver +18 (preferência diferente de "ver" e sem ser admin), exceto a criadora. Nunca lança.
+ */
+export async function desligarSocketsDaLiveMais18(liveId: number): Promise<void> {
+  try {
+    const [live] = await db.select({ criadorId: liveStreamsTable.criadorId }).from(liveStreamsTable).where(eq(liveStreamsTable.id, liveId)).limit(1);
+    if (!live) return;
+    for (const s of await getIO().in(`live:${liveId}`).fetchSockets()) {
+      const uid = s.data?.userId as number | undefined;
+      if (uid === live.criadorId) continue;
+      if (!(await lerVisualizador(uid)).veTudo) s.disconnect(true);
+    }
+  } catch (err) {
+    logger.warn({ erro: err instanceof Error ? err.name : "desconhecido" }, "Mais18: falha ao desligar espectadores da live");
+  }
+}
+
+/**
  * Quando um utilizador passa a "filtrar": desliga os seus sockets que estejam numa live +18 (exceto na sua
  * própria live). Os restantes sockets e salas não se tocam. Nunca lança.
  */

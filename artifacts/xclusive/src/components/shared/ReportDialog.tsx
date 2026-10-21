@@ -17,6 +17,7 @@ const MOTIVOS: { value: string; label: string }[] = [
   { value: 'violencia', label: 'Violência ou ameaças' },
   { value: 'assedio', label: 'Assédio ou abuso' },
   { value: 'spam', label: 'Spam ou burla' },
+  { value: 'conteudo_mais18_nao_marcado', label: 'Conteúdo +18 que não está marcado' },
   { value: 'outro', label: 'Outro motivo' },
 ];
 
@@ -83,7 +84,7 @@ export function ReportDialog({ open, onClose, targetType, targetId }: ReportDial
 
         <div className="space-y-3">
           <div className="space-y-1.5" role="radiogroup" aria-label="Motivo da denúncia">
-            {MOTIVOS.map((m) => (
+            {MOTIVOS.filter((m) => m.value !== 'conteudo_mais18_nao_marcado' || ['post', 'reel', 'story', 'live'].includes(targetType)).map((m) => (
               <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer rounded-lg px-2 py-1.5 hover:bg-secondary/60">
                 <input type="radio" name="motivo" value={m.value} checked={reason === m.value} onChange={() => setReason(m.value)} />
                 {m.label}

@@ -262,7 +262,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           </Link>
           {canDeletePost ? (
             <div className="flex items-center gap-1">
-              {isOwnPost && (
+              {isOwnPost && !post.mais18Bloqueado && (
                 <button
                   data-testid="alternar-mais18"
                   className="text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 transition-colors disabled:opacity-50"

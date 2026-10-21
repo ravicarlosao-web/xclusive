@@ -29,6 +29,7 @@ import {
   kycSubmissionsTable,
   topupRequestsTable,
   notificationsTable,
+  infracoesMais18Table,
 } from "@workspace/db";
 import {
   eq,
@@ -52,6 +53,7 @@ import {
 } from "../lib/takedown.js";
 import { deletePostWithMedia } from "../lib/postDeletion.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
+import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
 import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
 
@@ -1371,6 +1373,74 @@ router.post("/admin/content/:type/:id/repor", requireAdmin, async (req: AdminReq
   } catch (err) {
     if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error({ err }, "Erro ao repor conteúdo");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Marcar / desmarcar conteúdo como +18 (post, reel, story, live). Corpo: { mais18: boolean, infracao?: boolean, motivo? }.
+//   mais18:true + infracao:true  → "a criadora não marcou": regista infração (1.ª/2.ª aviso, n>=3 suspensão), tudo numa transação.
+//   mais18:true + infracao:false → correção do admin: só marca (audit); sem infração nem notificação.
+//   mais18:false                 → desmarca (a infração ativa, se existir, anula-se em separado).
+// `infracao` é obrigatório ao marcar (sem valor por omissão: o admin tem de escolher).
+router.post("/admin/content/:type/:id/mais18", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const p = parseAlvoParams(req);
+  if (!p || !isTipoMais18(p.type)) return void res.status(400).json({ error: "Tipo ou ID inválido (post, reel, story ou live)" });
+  const { mais18, infracao, motivo } = (req.body ?? {}) as { mais18?: unknown; infracao?: unknown; motivo?: unknown };
+  if (typeof mais18 !== "boolean") return void res.status(400).json({ error: "mais18 é obrigatório (verdadeiro ou falso)." });
+  if (mais18 && typeof infracao !== "boolean") return void res.status(400).json({ error: "infracao é obrigatório ao marcar (true = a criadora não marcou; false = correção)." });
+  if (!mais18 && infracao === true) return void res.status(400).json({ error: "Desmarcar não regista infração." });
+  if (motivo !== undefined && typeof motivo !== "string") return void res.status(400).json({ error: "motivo inválido." });
+  try {
+    const tipo = p.type;
+    const r = await db.transaction((tx) => marcarMais18PorAdmin(tx, {
+      adminId: req.adminId!, ip: req.ip ?? null, tipo, conteudoId: p.id, mais18, infracao: infracao === true, motivo: (motivo as string | undefined)?.trim() || null,
+    }));
+    efeitosAposCommit(r, mais18);
+    res.json({
+      ok: true, mudou: r.mudou, infracao: r.infracao, semInfracaoPorque: r.semInfracaoPorque, suspendeu: r.suspendeu, infracaoAtivaId: r.infracaoAtivaId,
+    });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao marcar conteúdo +18");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Anular uma infração +18 (fica registada com quem/quando/porquê e deixa de contar). Não reativa a conta.
+router.post("/admin/infracoes/:id/anular", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (!motivo) return void res.status(400).json({ error: "O motivo da anulação é obrigatório." });
+  try {
+    const r = await db.transaction((tx) => anularInfracao(tx, { adminId: req.adminId!, ip: req.ip ?? null, infracaoId: id, motivo }));
+    res.json({ ok: true, ativas: r.ativasDepois });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao anular infração");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Infrações +18 de uma criadora (ativas e anuladas) e a contagem que vale para as sanções.
+router.get("/admin/users/:id/infracoes", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  try {
+    const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!u) return void res.status(404).json({ error: "Utilizador não encontrado" });
+    const rows = await db.select().from(infracoesMais18Table).where(eq(infracoesMais18Table.userId, id)).orderBy(desc(infracoesMais18Table.criadaEm), desc(infracoesMais18Table.id));
+    res.json({
+      ativas: await contarInfracoesAtivas(db, id),
+      total: rows.length,
+      infracoes: rows.map((i) => ({
+        id: i.id, tipoConteudo: i.tipoConteudo, conteudoId: i.conteudoId, origem: i.origem, numero: i.numero, acao: i.acao,
+        adminId: i.adminId, reportId: i.reportId, motivo: i.motivo, criadaEm: i.criadaEm,
+        anulada: i.anuladaEm ? { em: i.anuladaEm, por: i.anuladaPor, motivo: i.anuladaMotivo } : null,
+      })),
+    });
+  } catch (err) {
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao listar infrações");
     res.status(500).json({ error: "Erro interno." });
   }
 });
