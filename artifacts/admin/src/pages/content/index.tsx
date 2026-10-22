@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast';
 import { Search, Trash2, Heart, MessageCircle, Play, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { AcoesMais18, SeloMais18 } from '@/components/mais18/AcoesMais18';
 
 export default function Content() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,6 +74,7 @@ export default function Content() {
                 ) : (
                   <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
                 )}
+                {post.mais18 && <SeloMais18 className="absolute top-2 left-2" />}
                 {/* Fallback mock image placeholder text */}
                 <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold">
                   {post.tipo}
@@ -84,6 +86,9 @@ export default function Content() {
                   <span className="text-xs text-muted-foreground">{format(new Date(post.criadoEm), 'dd MMM')}</span>
                 </div>
                 <p className="text-sm line-clamp-3 text-foreground/90">{post.legenda}</p>
+                <div className="mt-3 border-t border-border pt-3">
+                  <AcoesMais18 tipo="post" id={post.id} donoId={post.autorId} mais18={!!post.mais18} />
+                </div>
               </CardContent>
               <CardFooter className="p-3 bg-muted/20 border-t border-border flex justify-between items-center">
                 <div className="flex gap-3 text-muted-foreground text-xs font-mono">

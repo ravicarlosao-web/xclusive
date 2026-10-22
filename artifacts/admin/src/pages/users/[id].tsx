@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Ban, ShieldAlert, Trash2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Ban, Trash2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { InfracoesMais18 } from '@/components/mais18/InfracoesMais18';
 
 export default function UserDetail() {
   const [, params] = useRoute('/users/:id');
@@ -126,13 +127,7 @@ export default function UserDetail() {
           </TabsContent>
 
           <TabsContent value="moderacao" className="m-0">
-            <div className="flex items-center justify-center p-8 border border-dashed border-border rounded-lg bg-muted/10">
-              <div className="text-center">
-                <ShieldAlert className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                <h3 className="text-lg font-medium">Nenhum alerta de moderação</h3>
-                <p className="text-sm text-muted-foreground">Este utilizador não tem reports pendentes.</p>
-              </div>
-            </div>
+            <InfracoesMais18 userId={id} />
           </TabsContent>
         </div>
       </Tabs>
