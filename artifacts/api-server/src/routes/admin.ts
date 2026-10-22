@@ -47,7 +47,7 @@ import {
   notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, urlMedia, urlParaServidor } from "../lib/storage.js";
+import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor } from "../lib/storage.js";
 import {
   TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
@@ -1074,7 +1074,27 @@ router.get("/admin/posts", async (req, res) => {
       db.select({ total: count() }).from(postsTable).where(where),
     ]);
 
-    res.json(paginate(rows.map((r) => ({ ...r, autorAvatar: urlMedia(r.autorAvatar) })), Number(total), pageNum, limitNum));
+    // Capa: primeira media (por ordem) de cada post PÚBLICO, numa só query. Posts exclusivos (media em "paid/")
+    // nunca são lidos nem devolvidos: capaUrl/capaTipo = null (a media paga só se vê no diálogo de denúncia).
+    const idsPublicos = rows.filter((r) => !r.exclusivo).map((r) => r.id);
+    const capas = new Map<number, { url: string; tipo: string }>();
+    if (idsPublicos.length > 0) {
+      const medias = await db.select({ postId: postMediaTable.postId, url: postMediaTable.url, tipo: postMediaTable.tipo })
+        .from(postMediaTable)
+        .where(inArray(postMediaTable.postId, idsPublicos))
+        .orderBy(asc(postMediaTable.postId), asc(postMediaTable.ordem), asc(postMediaTable.id));
+      for (const m of medias) if (!capas.has(m.postId) && !isPaidKey(m.url)) capas.set(m.postId, { url: m.url, tipo: m.tipo });
+    }
+
+    res.json(paginate(rows.map((r) => {
+      const capa = r.exclusivo ? undefined : capas.get(r.id);
+      return {
+        ...r,
+        autorAvatar: urlMedia(r.autorAvatar),
+        capaUrl: capa ? resolveMediaUrl(capa.url) || null : null,
+        capaTipo: capa ? capa.tipo : null,
+      };
+    }), Number(total), pageNum, limitNum));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao listar posts");
     res.status(500).json({ error: "Erro interno." });
