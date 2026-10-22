@@ -1254,10 +1254,20 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       suspender: a.suspender === true,
       avisarAutor: a.avisarAutor === true,
       avisarDenunciante: a.avisarDenunciante === true,
+      marcarMais18: a.marcarMais18 === true,
     };
     if (novo !== "procedente" && (acoes.retirar || acoes.suspender)) {
       return void res.status(400).json({ error: "Só uma denúncia procedente pode retirar conteúdo ou suspender o autor." });
     }
+    if (acoes.marcarMais18) {
+      if (novo !== "procedente") return void res.status(400).json({ error: "Só uma denúncia procedente pode marcar o conteúdo como +18." });
+      if (acoes.retirar || acoes.suspender) {
+        return void res.status(400).json({ error: "Marcar +18 já aplica a sanção da infração: não o combines com retirar o conteúdo nem com suspender o autor." });
+      }
+    }
+
+    // Resultado da marcação +18 (infração), para os efeitos fora da base de dados DEPOIS do commit
+    let marcacaoMais18: Awaited<ReturnType<typeof marcarMais18PorAdmin>> | null = null;
 
     const updated = await db.transaction(async (tx) => {
       const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).for("update");
@@ -1271,6 +1281,24 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       let retirou = false, suspendeu = false;
       const ownerId = r.targetOwnerId;
       const motivoRetirada = motivo || "Violação das regras da plataforma.";
+
+      let infracaoAudit: { infracaoId: number; numero: number; acao: string } | false = false;
+      // Marcar +18 e registar a infração à criadora (lib partilhada, NESTA transação: se algo falhar, a decisão inteira reverte).
+      if (acoes.marcarMais18) {
+        if (!isTipoMais18(r.targetType)) throw new TakedownError("Marcar +18 só se aplica a publicações, reels, stories e lives.", 400);
+        const m = await marcarMais18PorAdmin(tx, {
+          adminId: req.adminId!, ip: req.ip ?? null, tipo: r.targetType, conteudoId: r.targetId,
+          mais18: true, infracao: true, motivo: motivo || null, reportId: id, origem: "denuncia",
+        });
+        if (!m.infracao) {
+          throw new TakedownError(m.semInfracaoPorque === "infracao_ja_ativa"
+            ? "Este conteúdo já tem uma infração +18 ativa: não se regista outra."
+            : "Este conteúdo já está marcado como +18: não há infração a registar.", 409);
+        }
+        marcacaoMais18 = m;
+        infracaoAudit = { infracaoId: m.infracao.id, numero: m.infracao.numero, acao: m.infracao.acao };
+        if (m.suspendeu) suspendeu = true; // a infração suspendeu a conta: fica no registo da denúncia (acaoSuspendeu)
+      }
 
       if (acoes.retirar) {
         const res1 = await retirarAlvo(tx, r.targetType, r.targetId, req.adminId!, motivoRetirada);
@@ -1295,7 +1323,8 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       if (r.targetType === "user" && acoes.retirar) suspendeu = true;
 
       // Notificações (sem dados de quem denunciou)
-      if (ownerId && (acoes.avisarAutor || retirou || suspendeu) && final) {
+      // Com marcarMais18 o aviso da infração (já enviado pela lib) substitui a notificação genérica ao autor
+      if (ownerId && (acoes.avisarAutor || retirou || suspendeu) && final && !acoes.marcarMais18) {
         const label = TARGET_LABEL[r.targetType];
         const partes: string[] = [];
         if (retirou && r.targetType !== "user") partes.push(`O teu ${label} foi retirado por violar as regras da plataforma.`);
@@ -1322,12 +1351,13 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
         action: `report_${novo}`,
         targetType: "report",
         targetId: id,
-        details: { before: { status: r.status }, after: { status: novo }, acoes: { retirou, suspendeu, avisarAutor: acoes.avisarAutor, avisarDenunciante: acoes.avisarDenunciante }, alvo: { tipo: r.targetType, id: r.targetId } },
+        details: { before: { status: r.status }, after: { status: novo }, acoes: { retirou, suspendeu, avisarAutor: acoes.avisarAutor, avisarDenunciante: acoes.avisarDenunciante, marcarMais18: infracaoAudit }, alvo: { tipo: r.targetType, id: r.targetId } },
         ipAddress: req.ip ?? null,
       });
       return u;
     });
 
+    if (marcacaoMais18) efeitosAposCommit(marcacaoMais18, true); // sockets: criadora suspensa / espectadores de uma live +18
     const { reporterIp: _ip, reporterContact: _c, ...seguro } = updated;
     res.json(seguro);
   } catch (err) {

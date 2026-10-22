@@ -23,6 +23,44 @@ export function SeloMais18({ className = '' }: { className?: string }) {
 
 type Modo = null | 'infracao' | 'correcao' | 'desmarcar';
 
+/** Infrações ativas da criadora e o que aconteceria à próxima (lido só quando `enabled`; sem cache). */
+export function useResumoInfracao(donoId: number | null | undefined, enabled: boolean) {
+  const infr = useQuery({
+    queryKey: ['infracoes-mais18', donoId],
+    queryFn: () => adminApi.getInfracoesMais18(donoId as number),
+    enabled: enabled && !!donoId,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const ativas: number | null = infr.data ? infr.data.ativas : null;
+  const seraN = ativas === null ? null : ativas + 1;
+  const suspende = seraN !== null && seraN >= LIMITE_SUSPENSAO;
+  return { infr, ativas, seraN, suspende };
+}
+
+/** Contagem, "esta será a X.ª" e aviso de suspensão (3.ª e seguintes) — partilhado pelos diálogos de confirmação. */
+export function ResumoInfracaoMais18({ donoId, resumo }: { donoId: number | null | undefined; resumo: ReturnType<typeof useResumoInfracao> }) {
+  const { infr, ativas, seraN, suspende } = resumo;
+  if (!donoId) return <p className="text-muted-foreground">Não foi possível identificar a criadora.</p>;
+  if (infr.isLoading) return <p className="text-muted-foreground">A ler as infrações da criadora…</p>;
+  if (infr.error) return <p className="text-red-400" data-testid="infracao-erro">{String((infr.error as Error).message)}</p>;
+  return (
+    <div className="rounded-lg border p-3 space-y-1" data-testid="infracao-resumo">
+      <p>A criadora tem <strong data-testid="infracoes-ativas">{ativas}</strong> infração(ões) ativa(s) de {LIMITE_SUSPENSAO}.</p>
+      <p>Esta será a <strong data-testid="infracao-seria">{seraN}.ª</strong> infração.</p>
+      {suspende ? (
+        <p className="font-semibold text-red-400" data-testid="aviso-suspensao">
+          Atenção: a {LIMITE_SUSPENSAO}.ª infração (e as seguintes) SUSPENDE a conta e revoga as sessões. Só um admin a pode reativar.
+        </p>
+      ) : (
+        <p className="text-muted-foreground" data-testid="aviso-normal">
+          {seraN === LIMITE_SUSPENSAO - 1 ? 'Será o 2.º aviso: ' : 'Será um aviso: '}a {LIMITE_SUSPENSAO}.ª infração suspende a conta.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * Ações do admin sobre a marcação +18 de um conteúdo (post, reel, story, live):
  *  - "Marcar +18 (criadora não marcou, regista infração)": confirma mostrando as infrações ativas da criadora;
@@ -43,16 +81,8 @@ export function AcoesMais18({ tipo, id, donoId, mais18: inicial, onChange }: {
   const queryClient = useQueryClient();
 
   // Infrações da criadora: só lidas quando se abre a confirmação de "regista infração"
-  const infr = useQuery({
-    queryKey: ['infracoes-mais18', donoId],
-    queryFn: () => adminApi.getInfracoesMais18(donoId as number),
-    enabled: modo === 'infracao' && !!donoId,
-    staleTime: 0,
-    gcTime: 0,
-  });
-  const ativas: number | null = infr.data ? infr.data.ativas : null;
-  const seraN = ativas === null ? null : ativas + 1;
-  const suspende = seraN !== null && seraN >= LIMITE_SUSPENSAO;
+  const resumo = useResumoInfracao(donoId, modo === 'infracao');
+  const { infr, suspende } = resumo;
 
   const fechar = () => { setModo(null); setMotivo(''); };
   const falha = (e: any) => toast({ title: 'Não foi possível concluir', description: String(e?.message ?? '').slice(0, 300), variant: 'destructive' });
@@ -130,24 +160,7 @@ export function AcoesMais18({ tipo, id, donoId, mais18: inicial, onChange }: {
             <DialogDescription>A criadora não marcou este conteúdo. Fica registada uma infração e ela recebe um aviso.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            {!donoId ? <p className="text-muted-foreground">Não foi possível identificar a criadora.</p>
-              : infr.isLoading ? <p className="text-muted-foreground">A ler as infrações da criadora…</p>
-              : infr.error ? <p className="text-red-400" data-testid="infracao-erro">{String((infr.error as Error).message)}</p>
-              : (
-                <div className="rounded-lg border p-3 space-y-1" data-testid="infracao-resumo">
-                  <p>A criadora tem <strong data-testid="infracoes-ativas">{ativas}</strong> infração(ões) ativa(s) de {LIMITE_SUSPENSAO}.</p>
-                  <p>Esta será a <strong data-testid="infracao-seria">{seraN}.ª</strong> infração.</p>
-                  {suspende ? (
-                    <p className="font-semibold text-red-400" data-testid="aviso-suspensao">
-                      Atenção: a {LIMITE_SUSPENSAO}.ª infração (e as seguintes) SUSPENDE a conta e revoga as sessões. Só um admin a pode reativar.
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground" data-testid="aviso-normal">
-                      {seraN === LIMITE_SUSPENSAO - 1 ? 'Será o 2.º aviso: ' : 'Será um aviso: '}a {LIMITE_SUSPENSAO}.ª infração suspende a conta.
-                    </p>
-                  )}
-                </div>
-              )}
+            <ResumoInfracaoMais18 donoId={donoId} resumo={resumo} />
             <textarea className="w-full rounded-md border bg-background px-3 py-2 min-h-[60px]" placeholder="Motivo (opcional, fica no registo; a criadora não o vê)"
               maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)} data-testid="motivo-marcar" />
           </div>
