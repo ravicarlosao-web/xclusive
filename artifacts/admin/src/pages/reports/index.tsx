@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { DataTable, Column } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { AlertTriangle, Eye } from 'lucide-react';
-import { AcoesMais18, TIPOS_MAIS18, type TipoMais18 } from '@/components/mais18/AcoesMais18';
+import { AcoesMais18, ResumoInfracaoMais18, TIPOS_MAIS18, useResumoInfracao, type TipoMais18 } from '@/components/mais18/AcoesMais18';
 
 type Estado = 'pendente' | 'em_analise' | 'procedente' | 'improcedente';
 const ESTADO_LABEL: Record<Estado, string> = { pendente: 'Pendente', em_analise: 'Em análise', procedente: 'Procedente', improcedente: 'Improcedente' };
@@ -141,8 +141,22 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
   const [avisarDenunciante, setAvisarDenunciante] = useState(true);
   const [motivo, setMotivo] = useState('');
   const [notas, setNotas] = useState('');
+  const [marcarMais18, setMarcarMais18] = useState(false);
+  const [confirmarInfracao, setConfirmarInfracao] = useState(false);
 
   const final = d && (d.status === 'procedente' || d.status === 'improcedente');
+
+  // Marcar +18 e registar infração: só post/reel/story/live, com a criadora identificada e o conteúdo ainda NÃO marcado
+  const podeMarcarMais18 = !!d && !final && d.alvo?.existe && TIPOS_MAIS18.includes(d.targetType) && d.alvo.mais18 === false && !!d.alvo.dono?.id;
+  const resumoInfracao = useResumoInfracao(d?.alvo?.dono?.id, confirmarInfracao);
+  const ligarMarcarMais18 = (v: boolean) => {
+    setMarcarMais18(v);
+    if (v) { setRetirar(false); setSuspender(false); } // a infração já aplica a sanção: exclusivo com retirar e suspender
+  };
+  // Denúncia "conteúdo +18 não marcado": a ação vem pré-selecionada (e retirar desligada)
+  useEffect(() => {
+    if (podeMarcarMais18 && d.reason === 'conteudo_mais18_nao_marcado') ligarMarcarMais18(true);
+  }, [podeMarcarMais18, d?.reason]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const decidir = useMutation({
     mutationFn: () => adminApi.updateReport(id, {
@@ -150,11 +164,17 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
       notes: notas || undefined,
       motivo: motivo || undefined,
       acoes: decisao === 'procedente'
-        ? { retirar, suspender, avisarAutor, avisarDenunciante }
+        ? { retirar, suspender, avisarAutor, avisarDenunciante, ...(podeMarcarMais18 && marcarMais18 ? { marcarMais18: true } : {}) }
         : { avisarDenunciante: decisao === 'em_analise' ? false : avisarDenunciante },
     }),
     onSuccess: () => { toast({ title: 'Decisão registada' }); queryClient.invalidateQueries({ queryKey: ['reports'] }); onClose(); },
-    onError: (e: any) => toast({ title: 'Não foi possível registar', description: String(e?.message ?? '').slice(0, 200), variant: 'destructive' }),
+    onError: (e: any) => {
+      setConfirmarInfracao(false);
+      // adminFetch devolve o corpo em bruto ({"error":"..."}): mostra só a mensagem do servidor (ex.: 409 com texto claro)
+      let msg = String(e?.message ?? '');
+      try { const j = JSON.parse(msg); if (typeof j?.error === 'string') msg = j.error; } catch { /* não é JSON */ }
+      toast({ title: 'Não foi possível registar', description: msg.slice(0, 300), variant: 'destructive' });
+    },
   });
 
   async function acaoDireta(path: string, method: string, body: unknown, ok: string, confirmacao?: string) {
@@ -223,10 +243,16 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 </div>
                 {decisao === 'procedente' && (
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={retirar} onChange={(e) => setRetirar(e.target.checked)} /> Retirar o conteúdo</label>
-                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={suspender} onChange={(e) => setSuspender(e.target.checked)} /> Suspender o autor</label>
+                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={retirar} disabled={marcarMais18} onChange={(e) => setRetirar(e.target.checked)} /> Retirar o conteúdo</label>
+                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={suspender} disabled={marcarMais18} onChange={(e) => setSuspender(e.target.checked)} /> Suspender o autor</label>
                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={avisarAutor} onChange={(e) => setAvisarAutor(e.target.checked)} /> Avisar o autor</label>
                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={avisarDenunciante} onChange={(e) => setAvisarDenunciante(e.target.checked)} /> Avisar o denunciante</label>
+                    {podeMarcarMais18 && (
+                      <label className="col-span-2 flex items-center gap-1.5 rounded-md border border-red-500/40 px-2 py-1.5 text-red-400" data-testid="acao-marcar-mais18">
+                        <input type="checkbox" checked={marcarMais18} onChange={(e) => ligarMarcarMais18(e.target.checked)} /> Marcar +18 e registar infração
+                        <span className="text-xs text-muted-foreground">(substitui retirar/suspender e o aviso genérico ao autor)</span>
+                      </label>
+                    )}
                   </div>
                 )}
                 {decisao === 'improcedente' && (
@@ -236,11 +262,32 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                   <input className="w-full rounded-md border bg-background px-3 py-2" placeholder="Motivo (visível ao autor)" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={300} />
                 )}
                 <textarea className="w-full rounded-md border bg-background px-3 py-2 min-h-[60px]" placeholder="Notas internas (nunca visíveis ao utilizador)" value={notas} onChange={(e) => setNotas(e.target.value)} maxLength={1000} />
-                <Button disabled={decidir.isPending} onClick={() => decidir.mutate()}>Registar decisão</Button>
+                <Button disabled={decidir.isPending}
+                  onClick={() => { if (decisao === 'procedente' && podeMarcarMais18 && marcarMais18) setConfirmarInfracao(true); else decidir.mutate(); }}>Registar decisão</Button>
               </div>
             ) : (
               <p className="text-muted-foreground">Decisão final tomada{d.acaoRetirou ? ' · conteúdo retirado' : ''}{d.acaoSuspendeu ? ' · autor suspenso' : ''}.</p>
             )}
+
+            <Dialog open={confirmarInfracao} onOpenChange={(o) => { if (!o && !decidir.isPending) setConfirmarInfracao(false); }}>
+              <DialogContent className="sm:max-w-[480px]" data-testid="dialogo-decisao-infracao">
+                <DialogHeader>
+                  <DialogTitle>Confirmar decisão: marcar +18 e registar infração</DialogTitle>
+                  <DialogDescription>A denúncia fica procedente, o conteúdo passa a +18 e é registada uma infração à criadora. O aviso da infração substitui o aviso genérico ao autor.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  <ResumoInfracaoMais18 donoId={d.alvo?.dono?.id} resumo={resumoInfracao} />
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setConfirmarInfracao(false)} disabled={decidir.isPending}>Cancelar</Button>
+                  <Button variant={resumoInfracao.suspende ? 'destructive' : 'default'}
+                    disabled={decidir.isPending || resumoInfracao.infr.isLoading || !!resumoInfracao.infr.error}
+                    data-testid="confirmar-decisao-infracao" onClick={() => decidir.mutate()}>
+                    {resumoInfracao.suspende ? 'Confirmar, registar infração e suspender' : 'Confirmar e registar infração'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {d.alvo.existe && TIPOS_MAIS18.includes(d.targetType) && typeof d.alvo.mais18 === 'boolean' && (
               <div className="rounded-lg border p-3 space-y-1">
