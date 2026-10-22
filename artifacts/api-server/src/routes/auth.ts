@@ -274,7 +274,7 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
 
     res.json({ token: accessToken, user: formatUser(user, posts || 0, seguidores || 0, seguindo || 0) });
   } catch (err) {
-    (req as any).log?.error({ err }, "Login: erro interno");
+    (req as any).log?.error(erroSeguro(err), "Login: erro interno");
     res.status(500).json({ error: "Erro interno." });
   }
 });
@@ -314,7 +314,7 @@ router.post("/auth/logout", async (req: AuthRequest, res): Promise<void> => {
         await deleteSession(payload.jti);
       }
     } catch (err) {
-      (req as any).log?.warn({ err }, "Logout: falha ao revogar refresh token");
+      (req as any).log?.warn(erroSeguro(err), "Logout: falha ao revogar refresh token");
     }
   }
 
@@ -343,7 +343,7 @@ router.delete("/auth/sessions", requireAuth, async (req: AuthRequest, res): Prom
     clearRefreshCookie(res);
     res.json({ ok: true, sessionsRevoked: sessions.length });
   } catch (err) {
-    (req as any).log?.error({ err }, "Sessions: erro ao revogar todas as sessões");
+    (req as any).log?.error(erroSeguro(err), "Sessions: erro ao revogar todas as sessões");
     res.status(500).json({ error: "Erro interno." });
   }
 });
@@ -384,7 +384,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
       return;
     }
   } catch (err) {
-    (req as any).log?.warn({ err }, "Refresh: falha de DB ao verificar a conta — a negar (fail-closed)");
+    (req as any).log?.warn(erroSeguro(err), "Refresh: falha de DB ao verificar a conta — a negar (fail-closed)");
     res.status(503).json({ error: "Serviço temporariamente indisponível." });
     return;
   }
@@ -404,7 +404,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
       : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     wasRevoked = await revokeToken(payload.jti, payload.userId, expiresAt);
   } catch (err) {
-    (req as any).log?.warn({ err }, "Refresh: falha de DB ao revogar token — a negar (fail-closed)");
+    (req as any).log?.warn(erroSeguro(err), "Refresh: falha de DB ao revogar token — a negar (fail-closed)");
     res.status(503).json({ error: "Serviço temporariamente indisponível." });
     return;
   }
@@ -444,7 +444,7 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void>
 
     res.json(formatUser(user, 0, seguidores || 0, seguindo || 0));
   } catch (err) {
-    (req as any).log?.error({ err }, "Auth/me: erro interno");
+    (req as any).log?.error(erroSeguro(err), "Auth/me: erro interno");
     res.status(500).json({ error: "Erro interno." });
   }
 });
