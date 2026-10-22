@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { AlertTriangle, Eye } from 'lucide-react';
+import { AcoesMais18, TIPOS_MAIS18, type TipoMais18 } from '@/components/mais18/AcoesMais18';
 
 type Estado = 'pendente' | 'em_analise' | 'procedente' | 'improcedente';
 const ESTADO_LABEL: Record<Estado, string> = { pendente: 'Pendente', em_analise: 'Em análise', procedente: 'Procedente', improcedente: 'Improcedente' };
@@ -239,6 +240,13 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
               </div>
             ) : (
               <p className="text-muted-foreground">Decisão final tomada{d.acaoRetirou ? ' · conteúdo retirado' : ''}{d.acaoSuspendeu ? ' · autor suspenso' : ''}.</p>
+            )}
+
+            {d.alvo.existe && TIPOS_MAIS18.includes(d.targetType) && typeof d.alvo.mais18 === 'boolean' && (
+              <div className="rounded-lg border p-3 space-y-1">
+                <p className="text-xs uppercase text-muted-foreground">Marcação +18</p>
+                <AcoesMais18 tipo={d.targetType as TipoMais18} id={d.targetId} donoId={d.alvo.dono?.id} mais18={d.alvo.mais18} />
+              </div>
             )}
 
             {d.alvo.existe && (

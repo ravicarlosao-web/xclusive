@@ -1062,6 +1062,7 @@ router.get("/admin/posts", async (req, res) => {
         legenda: postsTable.legenda,
         tipo: postsTable.tipo,
         exclusivo: postsTable.exclusivo,
+        mais18: postsTable.mais18,
         criadoEm: postsTable.criadoEm,
       })
         .from(postsTable)
@@ -1203,7 +1204,7 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         ...rSemIp,
         reporterUsername: r.reporterId ? (await tx.select({ u: usersTable.username }).from(usersTable).where(eq(usersTable.id, r.reporterId)))[0]?.u ?? null : null,
         totalDenunciasDoAlvo: Number(outras),
-        alvo: alvo ? { existe: true, removido: alvo.removido, resumo: alvo.resumo, media, dono: dono ?? null } : { existe: false },
+        alvo: alvo ? { existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null } : { existe: false },
       };
     });
 

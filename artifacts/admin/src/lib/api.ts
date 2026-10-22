@@ -17,6 +17,26 @@ async function adminFetch(path: string, options?: RequestInit) {
   return await res.json();
 }
 
+/** Como adminFetch, mas o erro traz a mensagem do servidor ({ error }) em vez do JSON em bruto (409 legíveis). */
+async function adminFetchMsg(path: string, options?: RequestInit) {
+  const token = localStorage.getItem('admin_token');
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...options?.headers,
+    },
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = new Error(json?.error || `HTTP ${res.status}`) as Error & { status?: number };
+    e.status = res.status;
+    throw e;
+  }
+  return json;
+}
+
 export const adminApi = {
   login: (email: string, password: string) =>
     adminFetch('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
@@ -71,6 +91,13 @@ export const adminApi = {
     adminFetch('/admin/reports?' + new URLSearchParams(params)),
   updateReport: (id: number, data: any) =>
     adminFetch('/admin/reports/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Conteúdo +18 e infrações (rotas do PR A)
+  marcarMais18: (tipo: string, id: number, data: { mais18: boolean; infracao?: boolean; motivo?: string }) =>
+    adminFetchMsg(`/admin/content/${tipo}/${id}/mais18`, { method: 'POST', body: JSON.stringify(data) }),
+  getInfracoesMais18: (userId: number) => adminFetchMsg(`/admin/users/${userId}/infracoes`),
+  anularInfracaoMais18: (id: number, motivo: string) =>
+    adminFetchMsg(`/admin/infracoes/${id}/anular`, { method: 'POST', body: JSON.stringify({ motivo }) }),
 
   getFinanceKpis: () => adminFetch('/admin/finance/kpis'),
   getTransactions: (params?: Record<string, string>) =>
