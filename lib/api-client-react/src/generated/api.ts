@@ -54,6 +54,8 @@ import type {
   ProfileUpdate,
   Reel,
   ReelInput,
+  ReelMais18,
+  ReelMais18Input,
   RegisterInput,
   SearchParams,
   SearchResults,
@@ -1513,6 +1515,78 @@ export const useUpdatePostMais18 = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdatePostMais18MutationOptions(options));
+    }
+
+export const getUpdateReelMais18Url = (id: number,) => {
+
+
+
+
+  return `/api/reels/${id}/mais18`
+}
+
+/**
+ * @summary Alterar a marcação +18 de um reel próprio (só muda mais18)
+ */
+export const updateReelMais18 = async (id: number,
+    reelMais18Input: ReelMais18Input, options?: Parameters<typeof customFetch>[1]): Promise<ReelMais18> => {
+
+  return customFetch<ReelMais18>(getUpdateReelMais18Url(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reelMais18Input)
+  }
+);}
+
+
+
+
+
+export const getUpdateReelMais18MutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateReelMais18>>, TError,{id: number;data: BodyType<ReelMais18Input>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateReelMais18>>, TError,{id: number;data: BodyType<ReelMais18Input>}, TContext> => {
+
+const mutationKey = ['updateReelMais18'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateReelMais18>>, {id: number;data: BodyType<ReelMais18Input>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateReelMais18(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateReelMais18MutationResult = NonNullable<Awaited<ReturnType<typeof updateReelMais18>>>
+    export type UpdateReelMais18MutationBody = BodyType<ReelMais18Input>
+    export type UpdateReelMais18MutationError = ErrorType<void>
+
+    /**
+ * @summary Alterar a marcação +18 de um reel próprio (só muda mais18)
+ */
+export const useUpdateReelMais18 = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateReelMais18>>, TError,{id: number;data: BodyType<ReelMais18Input>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateReelMais18>>,
+        TError,
+        {id: number;data: BodyType<ReelMais18Input>},
+        TContext
+      > => {
+      return useMutation(getUpdateReelMais18MutationOptions(options));
     }
 
 export const getLikePostUrl = (id: number,) => {

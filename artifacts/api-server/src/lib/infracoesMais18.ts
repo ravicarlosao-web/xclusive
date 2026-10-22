@@ -195,11 +195,14 @@ export function efeitosAposCommit(r: ResultadoMarcacao, mais18: boolean): void {
   if (mais18 && r.mudou && r.tipo === "live") void desligarSocketsDaLiveMais18(r.conteudoId);
 }
 
-/** Posts (de entre `ids`) com infração ativa: a criadora não os pode desmarcar. */
-export async function postsComInfracaoAtiva(q: Tx | typeof db, ids: number[]): Promise<Set<number>> {
+/** Conteúdos de um tipo (de entre `ids`) com infração ativa: a criadora não os pode desmarcar. */
+export async function comInfracaoAtiva(q: Tx | typeof db, tipo: TipoMais18, ids: number[]): Promise<Set<number>> {
   if (ids.length === 0) return new Set();
   const rows = await q.select({ id: infracoesMais18Table.conteudoId }).from(infracoesMais18Table)
-    .where(and(eq(infracoesMais18Table.tipoConteudo, "post"), inArray(infracoesMais18Table.conteudoId, ids), isNull(infracoesMais18Table.anuladaEm)));
+    .where(and(eq(infracoesMais18Table.tipoConteudo, tipo), inArray(infracoesMais18Table.conteudoId, ids), isNull(infracoesMais18Table.anuladaEm)));
   return new Set(rows.map((r) => r.id));
 }
+
+/** Posts (de entre `ids`) com infração ativa (atalho de `comInfracaoAtiva`). */
+export const postsComInfracaoAtiva = (q: Tx | typeof db, ids: number[]): Promise<Set<number>> => comInfracaoAtiva(q, "post", ids);
 

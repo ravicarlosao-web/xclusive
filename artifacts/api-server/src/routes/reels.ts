@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { db, reelsTable, likesTable, commentsTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { validate } from "../lib/validate";
+import { comInfracaoAtiva } from "../lib/infracoesMais18";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { reelVisivel } from "../lib/takedown";
 import {
@@ -53,6 +56,29 @@ router.get("/reels/:id", requireAuth, async (req: AuthRequest, res): Promise<voi
   res.json(await formatReel(reel, req.userId));
 });
 
+// Editar a marcação +18 de um reel PRÓPRIO (só muda mais18; igual a PATCH /posts/:id/mais18).
+const editarMais18Schema = z.object({ mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }) }).strict();
+router.patch("/reels/:id/mais18", requireAuth, validate(editarMais18Schema), async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "ID inválido." }); return; }
+  const [reel] = await db.select({ autorId: reelsTable.autorId }).from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
+  if (!reel) { res.status(404).json({ error: "Reel não encontrado." }); return; }
+  if (reel.autorId !== req.userId) { res.status(403).json({ error: "Só a autora pode alterar a marcação +18 do seu reel." }); return; }
+  const novo: boolean = req.body.mais18;
+  // Desmarcar: não é permitido se o admin registou uma infração ativa neste reel. O lock da linha da criadora serializa
+  // com o admin (que a bloqueia primeiro): ou a infração já está visível aqui, ou o admin espera por esta transação.
+  const r = await db.transaction(async (tx) => {
+    if (!novo) {
+      await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
+      if ((await comInfracaoAtiva(tx, "reel", [id])).has(id)) return null;
+    }
+    const [atualizado] = await tx.update(reelsTable).set({ mais18: novo }).where(and(eq(reelsTable.id, id), eq(reelsTable.autorId, req.userId!))).returning({ id: reelsTable.id, mais18: reelsTable.mais18 });
+    return atualizado;
+  });
+  if (!r) { res.status(403).json({ error: "Este reel foi marcado como +18 pela equipa e não pode ser desmarcado por ti.", codigo: "mais18_bloqueado" }); return; }
+  res.json(r);
+});
+
 // Curtir reel
 router.post("/reels/:id/like", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
@@ -98,6 +124,8 @@ async function formatReel(reel: any, userId?: number) {
     somArtista: reel.somArtista,
     exclusivo: reel.exclusivo,
     mais18: reel.mais18,
+    // A criadora não pode desmarcar este reel (infração +18 ativa)
+    mais18Bloqueado: reel.autorId === userId ? (await comInfracaoAtiva(db, "reel", [reel.id])).has(reel.id) : false,
     bloqueado: reel.exclusivo && !acesso,
     totalCurtidas: likes || 0,
     totalComentarios: comments || 0,

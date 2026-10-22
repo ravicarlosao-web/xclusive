@@ -13,18 +13,11 @@ import { postVisivel } from "./takedown";
 export const CODIGO_CONTEUDO_MAIS18 = "conteudo_mais18";
 export const MSG_CONTEUDO_MAIS18 = "Este conteúdo é +18. Podes ativá-lo em Definições.";
 
-/**
- * Transição (PR 3): enquanto houver clientes em cache sem o seletor, um corpo SEM `mais18` assume TRUE
- * (conservador: o conteúdo fica protegido). Passar a false faz o campo em falta dar 400 (PR curto a seguir).
- */
-export const MAIS18_EM_FALTA_ASSUME_TRUE = true;
 export const MSG_MAIS18_INVALIDO = "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso.";
 
-/** Lê a marcação enviada pela criadora: boolean => esse valor; em falta => TRUE (transição); outro tipo => inválido. */
+/** Lê a marcação enviada pela criadora: só um boolean estrito é válido; em falta ou de outro tipo => inválido (400). */
 export function lerMarcacaoMais18(valor: unknown): { ok: true; mais18: boolean } | { ok: false } {
-  if (typeof valor === "boolean") return { ok: true, mais18: valor };
-  if (valor === undefined && MAIS18_EM_FALTA_ASSUME_TRUE) return { ok: true, mais18: true };
-  return { ok: false };
+  return typeof valor === "boolean" ? { ok: true, mais18: valor } : { ok: false };
 }
 
 export interface Visualizador {

@@ -54,6 +54,8 @@ export * from './profileUpdate';
 export * from './profileUpdateTipoConta';
 export * from './reel';
 export * from './reelInput';
+export * from './reelMais18';
+export * from './reelMais18Input';
 export * from './registerInput';
 export * from './registerInputTipoConta';
 export * from './searchParams';
