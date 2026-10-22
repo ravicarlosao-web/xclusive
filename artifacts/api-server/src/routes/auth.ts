@@ -92,6 +92,8 @@ const registerSchema = z.object({
   aceite: z.object({
     termos: z.string().min(1).max(40),
     privacidade: z.string().min(1).max(40),
+    // Declaração de maioridade: boolean estrito e true. Em falta, false ou de outro tipo => 400 (nada é criado).
+    maioridade: z.literal(true, { error: "Tens de declarar que tens 18 anos ou mais." }),
   }),
   tipoConta: z.enum(["pessoal", "criador"]).optional(),
   pais: z.string().max(10).optional(),
@@ -108,6 +110,16 @@ router.get("/auth/legal-versions", (_req, res): void => {
   res.json(LEGAL_DOCS);
 });
 
+/**
+ * Para logs do registo: só o nome e o código do erro. NUNCA o erro bruto: o do Drizzle traz a query e os
+ * parâmetros (email, hash da password, data de nascimento, IP e user-agent).
+ */
+function erroSeguro(err: unknown): { nome: string; codigo?: string } {
+  const e = err as { name?: unknown; code?: unknown; cause?: { code?: unknown } };
+  const codigo = typeof e?.code === "string" ? e.code : typeof e?.cause?.code === "string" ? e.cause.code : undefined;
+  return { nome: typeof e?.name === "string" ? e.name : "desconhecido", ...(codigo ? { codigo } : {}) };
+}
+
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
   const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;
 
@@ -119,7 +131,7 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       return;
     }
   } catch (err) {
-    (req as any).log?.warn({ err }, "Register: falha ao ler o estado dos registos — a negar (fail-closed)");
+    (req as any).log?.warn(erroSeguro(err), "Register: falha ao ler o estado dos registos — a negar (fail-closed)");
     res.status(503).json({ error: "Serviço temporariamente indisponível." });
     return;
   }
@@ -153,6 +165,9 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
     // IP só para o registo do aceite: guardado na BD, nunca escrito em logs.
     // req.ip respeita "trust proxy" (um salto): não aceita IPs forjados no início do X-Forwarded-For.
     const aceiteIp = (req.ip ?? "").slice(0, 45) || null;
+    // User-Agent: do cabeçalho do pedido, cortado a 400 caracteres; fica só na BD (evidência), nunca em logs.
+    const uaHeader = req.headers["user-agent"];
+    const aceiteUserAgent = (typeof uaHeader === "string" ? uaHeader : "").slice(0, 400) || null;
 
     // Utilizador + aceite NA MESMA transação: se o aceite falhar, o registo é revertido.
     const user = await db.transaction(async (tx) => {
@@ -172,6 +187,9 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
         termosVersao: aceite.termos,
         privacidadeVersao: aceite.privacidade,
         ip: aceiteIp,
+        userAgent: aceiteUserAgent,
+        maioridadeConfirmada: true,
+        origem: "registo",
       });
       return created;
     });
@@ -195,7 +213,7 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       res.status(403).json({ error: MSG_REGISTOS_FECHADOS, codigo: CODIGO_REGISTOS_FECHADOS });
       return;
     }
-    (req as any).log?.error({ err }, "Register: erro interno");
+    (req as any).log?.error(erroSeguro(err), "Register: erro interno");
     res.status(500).json({ error: "Erro interno." });
   }
 });

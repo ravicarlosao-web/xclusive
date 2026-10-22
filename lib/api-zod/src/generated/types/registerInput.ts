@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { RegisterInputAceite } from './registerInputAceite';
 import type { RegisterInputTipoConta } from './registerInputTipoConta';
 
 export interface RegisterInput {
@@ -14,4 +15,6 @@ export interface RegisterInput {
   password: string;
   dataNascimento: Date;
   tipoConta?: RegisterInputTipoConta;
+  /** Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade. */
+  aceite: RegisterInputAceite;
 }

@@ -17,6 +17,16 @@ export const RegisterInputTipoConta = {
   criador: 'criador',
 } as const;
 
+/**
+ * Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade.
+ */
+export type RegisterInputAceite = {
+  termos: string;
+  privacidade: string;
+  /** Obrigatório. Declaração de ter 18 anos ou mais; só true é aceite (em falta, false ou de outro tipo => 400). */
+  maioridade: true;
+};
+
 export interface RegisterInput {
   nomeCompleto: string;
   email: string;
@@ -24,6 +34,8 @@ export interface RegisterInput {
   password: string;
   dataNascimento: string;
   tipoConta?: RegisterInputTipoConta;
+  /** Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade. */
+  aceite: RegisterInputAceite;
 }
 
 export interface LoginInput {
