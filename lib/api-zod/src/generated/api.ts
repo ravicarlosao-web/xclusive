@@ -27,7 +27,12 @@ export const RegisterBody = zod.object({
   "username": zod.string(),
   "password": zod.string(),
   "dataNascimento": zod.coerce.date(),
-  "tipoConta": zod.enum(['pessoal', 'criador']).default(registerBodyTipoContaDefault)
+  "tipoConta": zod.enum(['pessoal', 'criador']).default(registerBodyTipoContaDefault),
+  "aceite": zod.object({
+  "termos": zod.string(),
+  "privacidade": zod.string(),
+  "maioridade": zod.literal(true).describe('Obrigatório. Declaração de ter 18 anos ou mais; só true é aceite (em falta, false ou de outro tipo => 400).')
+}).describe('Versões vigentes dos documentos legais que a pessoa aceitou (GET \/auth\/legal-versions) e declaração de maioridade.')
 })
 
 export const RegisterResponse = zod.object({

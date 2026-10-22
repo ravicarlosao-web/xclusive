@@ -70,7 +70,14 @@ export const userLegalAcceptancesTable = pgTable("user_legal_acceptances", {
   termosVersao: varchar("termos_versao", { length: 40 }).notNull(),
   privacidadeVersao: varchar("privacidade_versao", { length: 40 }).notNull(),
   aceiteEm: timestamp("aceite_em").notNull().defaultNow(),
+  // Evidência do registo (ip, user_agent): dados pessoais — prazo de retenção a definir pelo advogado.
   ip: varchar("ip", { length: 45 }),
+  /** User-Agent do pedido (cortado a 400 caracteres). */
+  userAgent: varchar("user_agent", { length: 400 }),
+  /** Declarou ter 18 anos ou mais (NULL nas linhas anteriores à declaração). */
+  maioridadeConfirmada: boolean("maioridade_confirmada"),
+  /** Origem do aceite: 'registo' (hoje); futuros re-aceites usam outro valor. */
+  origem: varchar("origem", { length: 20 }).notNull().default("registo"),
 }, (t) => [
   index("user_legal_acceptances_user_idx").on(t.userId),
 ]);

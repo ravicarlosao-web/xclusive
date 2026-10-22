@@ -57,6 +57,7 @@ export * from './reelInput';
 export * from './reelMais18';
 export * from './reelMais18Input';
 export * from './registerInput';
+export * from './registerInputAceite';
 export * from './registerInputTipoConta';
 export * from './searchParams';
 export * from './searchResults';

@@ -40,6 +40,9 @@ const registerSchema = z.object({
   termos: z.literal(true, {
     errorMap: () => ({ message: 'Tens de aceitar os termos e condições' }),
   }),
+  maioridade: z.literal(true, {
+    errorMap: () => ({ message: 'Tens de declarar que tens 18 anos ou mais' }),
+  }),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -92,6 +95,7 @@ export default function Register() {
 
   const watchPassword = form.watch('password');
   const watchTipoConta = form.watch('tipoConta');
+  const watchMaioridade = form.watch('maioridade');
 
   useEffect(() => {
     if (!watchPassword) { setPasswordStrength(0); return; }
@@ -110,7 +114,7 @@ export default function Register() {
     try {
       // O aceite leva as versões vigentes dos documentos (lidas do servidor no momento do envio).
       const docs = await fetchLegalDocs();
-      const payload: Parameters<typeof register>[0] & { aceite: { termos: string; privacidade: string } } = {
+      const payload: Parameters<typeof register>[0] & { aceite: { termos: string; privacidade: string; maioridade: true } } = {
         nomeCompleto: data.nomeCompleto,
         email: data.email,
         username: data.username,
@@ -119,7 +123,7 @@ export default function Register() {
         pais: country.name,
         telefone: data.telefone ? `${country.prefix}${data.telefone}` : undefined,
         tipoConta: data.tipoConta,
-        aceite: { termos: docs.termos.versao, privacidade: docs.privacidade.versao },
+        aceite: { termos: docs.termos.versao, privacidade: docs.privacidade.versao, maioridade: true },
       };
       await register(payload);
     } catch (error: any) {
@@ -391,6 +395,19 @@ export default function Register() {
                   </FormItem>
                 )} />
 
+                {/* Declaração de maioridade: obrigatória (bloqueia o botão enquanto não está marcada) */}
+                <FormField control={form.control} name="maioridade" render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value === true} onCheckedChange={(v) => field.onChange(v === true ? true : undefined)} data-testid="maioridade" />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal text-muted-foreground">Declaro ter 18 anos ou mais.</FormLabel>
+                      <FormMessage />
+                    </div>
+                  </FormItem>
+                )} />
+
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -403,7 +420,7 @@ export default function Register() {
                   <Button
                     type="submit"
                     className="flex-1 h-12 text-base font-bold bg-primary hover:bg-primary/90 text-white rounded-xl"
-                    disabled={form.formState.isSubmitting}
+                    disabled={form.formState.isSubmitting || watchMaioridade !== true}
                   >
                     {form.formState.isSubmitting ? (
                       <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> A criar...</>
