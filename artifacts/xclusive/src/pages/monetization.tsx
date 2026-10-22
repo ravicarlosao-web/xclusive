@@ -183,33 +183,6 @@ export default function Monetization() {
     queryClient.invalidateQueries({ queryKey: ['/api/creator/stats'] });
   }
 
-  async function handleStartLive() {
-    setLiveLoading(true);
-    try {
-      const token = await getFreshAuthToken();
-      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/live/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error || 'Erro ao iniciar live');
-      }
-      const stream: { id: number } = await res.json();
-      setActiveStreamId(stream.id);
-      setLocation(`/live/${stream.id}`);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao iniciar live';
-      alert(msg);
-    } finally {
-      setLiveLoading(false);
-    }
-  }
-
   async function handleEndLive() {
     if (!activeStreamId) return;
     setLiveLoading(true);

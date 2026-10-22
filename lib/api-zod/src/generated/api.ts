@@ -344,6 +344,7 @@ export const GetUserReelsResponse = zod.object({
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
   "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
+  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -421,7 +422,7 @@ export const CreatePostBody = zod.object({
 })).optional(),
   "exclusivo": zod.boolean().default(createPostBodyExclusivoDefault),
   "precoDesbloqueio": zod.number().optional(),
-  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.')
 })
 
 export const CreatePostResponse = zod.object({
@@ -523,6 +524,23 @@ export const UpdatePostMais18Body = zod.object({
 })
 
 export const UpdatePostMais18Response = zod.object({
+  "id": zod.int(),
+  "mais18": zod.boolean()
+})
+
+
+/**
+ * @summary Alterar a marcação +18 de um reel próprio (só muda mais18)
+ */
+export const UpdateReelMais18Params = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateReelMais18Body = zod.object({
+  "mais18": zod.boolean()
+})
+
+export const UpdateReelMais18Response = zod.object({
   "id": zod.int(),
   "mais18": zod.boolean()
 })
@@ -697,7 +715,7 @@ export const CreateStoryBody = zod.object({
   "tipo": zod.enum(['imagem', 'video']),
   "duracao": zod.int().default(createStoryBodyDuracaoDefault),
   "audiencia": zod.enum(['todos', 'subscritores', 'proximos']).default(createStoryBodyAudienciaDefault),
-  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.')
 })
 
 export const CreateStoryResponse = zod.object({
@@ -799,6 +817,7 @@ export const GetReelsResponse = zod.object({
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
   "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
+  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -820,7 +839,7 @@ export const CreateReelBody = zod.object({
   "capaUrl": zod.string().optional(),
   "legenda": zod.string().optional(),
   "exclusivo": zod.boolean().default(createReelBodyExclusivoDefault),
-  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.')
+  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.')
 })
 
 export const CreateReelResponse = zod.object({
@@ -842,6 +861,7 @@ export const CreateReelResponse = zod.object({
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
   "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
+  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
@@ -876,6 +896,7 @@ export const GetReelResponse = zod.object({
   "somArtista": zod.string().nullish(),
   "exclusivo": zod.boolean(),
   "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
+  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
   "totalCurtidas": zod.int(),
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),

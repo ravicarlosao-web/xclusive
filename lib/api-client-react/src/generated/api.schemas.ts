@@ -205,7 +205,7 @@ export interface PostInput {
   media?: PostInputMediaItem[];
   exclusivo?: boolean;
   precoDesbloqueio?: number;
-  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400. */
   mais18: boolean;
 }
 
@@ -214,6 +214,15 @@ export interface PostMais18Input {
 }
 
 export interface PostMais18 {
+  id: number;
+  mais18: boolean;
+}
+
+export interface ReelMais18Input {
+  mais18: boolean;
+}
+
+export interface ReelMais18 {
   id: number;
   mais18: boolean;
 }
@@ -310,7 +319,7 @@ export interface StoryInput {
   tipo: StoryInputTipo;
   duracao?: number;
   audiencia?: StoryInputAudiencia;
-  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400. */
   mais18: boolean;
 }
 
@@ -334,6 +343,8 @@ export interface Reel {
   exclusivo: boolean;
   /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
   mais18?: boolean;
+  /** Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar. */
+  mais18Bloqueado?: boolean;
   totalCurtidas: number;
   totalComentarios: number;
   curtido: boolean;
@@ -346,7 +357,7 @@ export interface ReelInput {
   capaUrl?: string;
   legenda?: string;
   exclusivo?: boolean;
-  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400. */
+  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400. */
   mais18: boolean;
 }
 

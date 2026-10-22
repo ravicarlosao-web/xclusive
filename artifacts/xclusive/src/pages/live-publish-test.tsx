@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { SeletorMais18 } from '@/components/shared/MarcacaoMais18';
 import {
   Video,
   VideoOff,
@@ -26,6 +27,8 @@ export default function LivePublishTest() {
   const [streamKey, setStreamKey] = useState<string>('');
   const [backendStatus, setBackendStatus] = useState<string | null>(null);
   const [loadingBackend, setLoadingBackend] = useState<boolean>(false);
+  // Marcação +18 obrigatória ao abrir uma live nova, sem valor pré-escolhido
+  const [mais18, setMais18] = useState<boolean | null>(null);
   const [customSignallingUrl, setCustomSignallingUrl] = useState<string>('');
   const [activeLives, setActiveLives] = useState<any[] | null>(null);
   const [checkingActive, setCheckingActive] = useState<boolean>(false);
@@ -67,6 +70,7 @@ export default function LivePublishTest() {
    * Passo 1: Chamar POST /api/live/start com token do utilizador autenticado
    */
   const handleStartOnBackend = async () => {
+    if (mais18 === null) { addLog('Indica se a live é +18 (Sim ou Não) antes de iniciar.', 'warn'); return; }
     setLoadingBackend(true);
     addLog('A contactar backend: POST /api/live/start...', 'info');
 
@@ -80,6 +84,7 @@ export default function LivePublishTest() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({ mais18 }),
       });
 
       if (!res.ok) {
@@ -338,13 +343,14 @@ export default function LivePublishTest() {
               </CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
+              <SeletorMais18 valor={mais18} onChange={setMais18} disabled={loadingBackend} />
               <div className="flex gap-2">
                 <Button
                   className="w-full"
                   variant="secondary"
                   size="sm"
                   onClick={handleStartOnBackend}
-                  disabled={loadingBackend}
+                  disabled={loadingBackend || mais18 === null}
                 >
                   {loadingBackend ? (
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />

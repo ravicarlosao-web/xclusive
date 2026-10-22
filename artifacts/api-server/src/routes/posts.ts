@@ -25,8 +25,8 @@ const createPostSchema = z.object({
     .optional(),
   exclusivo: z.boolean().optional(),
   precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
-  // Marcação +18 (obrigatória; em falta assume true durante a transição — ver lerMarcacaoMais18). Não boolean => 400.
-  mais18: z.boolean({ error: "O campo mais18 tem de ser verdadeiro ou falso." }).optional(),
+  // Marcação +18 obrigatória (boolean estrito): em falta ou de outro tipo => 400.
+  mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }),
 }).refine(
   data => data.tipo === 'texto' ? (data.legenda && data.legenda.trim().length > 0) : true,
   { message: 'Posts de texto precisam de conteúdo na legenda.' }

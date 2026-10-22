@@ -372,6 +372,37 @@ paths:
         "404":
           description: Post não encontrado
 
+  /reels/{id}/mais18:
+    patch:
+      operationId: updateReelMais18
+      tags: [reels]
+      summary: Alterar a marcação +18 de um reel próprio (só muda mais18)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReelMais18Input"
+      responses:
+        "200":
+          description: Marcação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReelMais18"
+        "400":
+          description: mais18 em falta ou não boolean
+        "403":
+          description: O reel é de outra pessoa, ou tem uma infração +18 ativa e não pode ser desmarcado (codigo mais18_bloqueado)
+        "404":
+          description: Reel não encontrado
+
   /posts/{id}/like:
     post:
       operationId: likePost
@@ -1331,7 +1362,7 @@ components:
           type: number
         mais18:
           type: boolean
-          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.
 
     PostMais18Input:
       type: object
@@ -1341,6 +1372,22 @@ components:
           type: boolean
 
     PostMais18:
+      type: object
+      required: [id, mais18]
+      properties:
+        id:
+          type: integer
+        mais18:
+          type: boolean
+
+    ReelMais18Input:
+      type: object
+      required: [mais18]
+      properties:
+        mais18:
+          type: boolean
+
+    ReelMais18:
       type: object
       required: [id, mais18]
       properties:
@@ -1479,7 +1526,7 @@ components:
           default: todos
         mais18:
           type: boolean
-          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.
 
     StoryView:
       type: object
@@ -1515,6 +1562,9 @@ components:
         mais18:
           type: boolean
           description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
+        mais18Bloqueado:
+          type: boolean
+          description: Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.
         totalCurtidas:
           type: integer
         totalComentarios:
@@ -1542,7 +1592,7 @@ components:
           default: false
         mais18:
           type: boolean
-          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar, o servidor assume true durante a transição; um valor que não seja boolean dá 400.
+          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.
 
     PaginatedReels:
       type: object
