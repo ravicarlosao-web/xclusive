@@ -12,6 +12,7 @@ import { Loader2, User, Camera, ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { fetchLegalDocs } from './legal/useLegalDocs';
+import { AuthSplitLayout, AuthHeader, AuthLogoMobile } from '@/components/AuthSplitLayout';
 
 // ── Country / phone prefix config ──────────────────────────────────────────
 const COUNTRIES = [
@@ -148,25 +149,20 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 py-12">
-      <Link href="/login" className="flex items-center justify-center mb-8 text-center group">
-        <img
-          src="/logo.png"
-          alt="Xclusive"
-          className="h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
-        />
-      </Link>
-
-      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+    <AuthSplitLayout frase="Junta-te à comunidade mais exclusiva de Angola." centroFixo>
         {estadoRegistos === 'a-carregar' && (
-          <div className="flex items-center justify-center py-16" data-testid="registos-a-carregar" aria-busy="true">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <>
+            <AuthLogoMobile />
+            <div className="flex items-center justify-center py-16" data-testid="registos-a-carregar" aria-busy="true">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          </>
         )}
 
         {estadoRegistos === 'fechados' && (
-          <div className="text-center space-y-5 py-4" data-testid="registos-fechados">
-            <h1 className="text-2xl font-bold text-white">Registos fechados</h1>
+          <div className="text-center lg:text-left space-y-5 py-4" data-testid="registos-fechados">
+            <AuthLogoMobile />
+            <h1 className="text-3xl font-bold tracking-tight text-white">Registos fechados</h1>
             <p className="text-muted-foreground text-sm" role="alert">
               Os registos estão fechados de momento. Volta a tentar mais tarde.
             </p>
@@ -178,20 +174,17 @@ export default function Register() {
 
         {estadoRegistos === 'abertos' && (<>
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-white mb-1">Cria a tua conta</h1>
-          <p className="text-muted-foreground text-sm">Junta-te à comunidade mais exclusiva de Angola.</p>
-        </div>
+        <AuthHeader titulo="Cria a tua conta" subtitulo="Junta-te à comunidade mais exclusiva de Angola." />
 
         {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-7">
+        <div className="flex items-center gap-2">
           {[1, 2].map(s => (
             <div key={s} className={cn('h-1.5 flex-1 rounded-full transition-all', s <= step ? 'bg-primary' : 'bg-secondary')} />
           ))}
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
             {/* ── STEP 1: Basic info ── */}
             {step === 1 && (
@@ -200,7 +193,7 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Nome Completo</FormLabel>
                     <FormControl>
-                      <Input placeholder="O teu nome completo" className="bg-secondary/50" {...field} />
+                      <Input placeholder="O teu nome completo" className="h-12 bg-secondary/50" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -211,7 +204,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel>Username</FormLabel>
                       <FormControl>
-                        <Input placeholder="@username" className="bg-secondary/50" {...field} />
+                        <Input placeholder="@username" className="h-12 bg-secondary/50" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -221,7 +214,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel>Data de Nascimento</FormLabel>
                       <FormControl>
-                        <Input type="date" className="bg-secondary/50 block w-full text-white color-scheme-dark" {...field} />
+                        <Input type="date" className="h-12 bg-secondary/50 block w-full text-white color-scheme-dark" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -232,7 +225,7 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="o.teu@email.com" className="bg-secondary/50" {...field} />
+                      <Input type="email" placeholder="o.teu@email.com" className="h-12 bg-secondary/50" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -242,7 +235,7 @@ export default function Register() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Cria uma password segura" className="bg-secondary/50" {...field} />
+                      <Input type="password" placeholder="Cria uma password segura" className="h-12 bg-secondary/50" {...field} />
                     </FormControl>
                     {watchPassword && (
                       <>
@@ -281,7 +274,7 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setCountryDropOpen(o => !o)}
-                      className="w-full flex items-center justify-between gap-3 h-10 px-3 rounded-lg bg-secondary/50 border border-input text-sm hover:bg-secondary transition-colors"
+                      className="w-full flex items-center justify-between gap-3 h-12 px-3 rounded-lg bg-secondary/50 border border-input text-sm hover:bg-secondary transition-colors"
                     >
                       <span className="flex items-center gap-2">
                         <span className="text-lg">{country.flag}</span>
@@ -298,7 +291,7 @@ export default function Register() {
                             type="button"
                             onClick={() => { setSelectedCountry(c.code); setCountryDropOpen(false); }}
                             className={cn(
-                              'w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-secondary transition-colors',
+                              'w-full flex items-center gap-3 px-4 min-h-[44px] text-sm text-left hover:bg-secondary transition-colors',
                               selectedCountry === c.code && 'bg-primary/10 text-primary'
                             )}
                           >
@@ -318,14 +311,14 @@ export default function Register() {
                     <FormLabel>Telefone <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
-                        <div className="flex items-center h-10 px-3 rounded-lg bg-secondary/50 border border-input text-sm shrink-0 text-muted-foreground gap-1.5">
+                        <div className="flex items-center h-12 px-3 rounded-lg bg-secondary/50 border border-input text-sm shrink-0 text-muted-foreground gap-1.5">
                           <span>{country.flag}</span>
                           <span>{country.prefix}</span>
                         </div>
                         <Input
                           type="tel"
                           placeholder={country.placeholder}
-                          className="bg-secondary/50 flex-1"
+                          className="h-12 bg-secondary/50 flex-1"
                           {...field}
                         />
                       </div>
@@ -379,7 +372,7 @@ export default function Register() {
 
                 {/* Terms */}
                 <FormField control={form.control} name="termos" render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 pt-2">
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 min-h-[44px]">
                     <FormControl>
                       <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
@@ -397,7 +390,7 @@ export default function Register() {
 
                 {/* Declaração de maioridade: obrigatória (bloqueia o botão enquanto não está marcada) */}
                 <FormField control={form.control} name="maioridade" render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 min-h-[44px]">
                     <FormControl>
                       <Checkbox checked={field.value === true} onCheckedChange={(v) => field.onChange(v === true ? true : undefined)} data-testid="maioridade" />
                     </FormControl>
@@ -432,14 +425,15 @@ export default function Register() {
           </form>
         </Form>
 
-        <div className="text-center text-sm text-muted-foreground pt-6 mt-6 border-t border-border">
+        <div className="text-center text-sm text-muted-foreground pt-4 border-t border-border">
           Já tens conta?{' '}
-          <Link href="/login" className="text-primary font-semibold hover:underline">
+          <Link href="/login" className="inline-flex items-center min-h-[44px] text-primary font-semibold hover:underline">
             Entra aqui
           </Link>
         </div>
+        {/* Área segura do ecrã (barra inferior do telemóvel) */}
+        <div aria-hidden className="h-[env(safe-area-inset-bottom)]" />
         </>)}
-      </div>
-    </div>
+    </AuthSplitLayout>
   );
 }
