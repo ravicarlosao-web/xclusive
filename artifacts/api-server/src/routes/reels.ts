@@ -28,8 +28,18 @@ router.get("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> =
   res.json({ reels: result, page, hasMore: result.length === limit });
 });
 
-// Criar reel
+// Criar reel (apenas criadores verificados — mesmas verificações de POST /posts e POST /stories)
 router.post("/reels", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const [author] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  if (!author || author.tipoConta !== 'criador') {
+    res.status(403).json({ error: 'Apenas criadores podem publicar reels.' });
+    return;
+  }
+  if (!author.verificado) {
+    res.status(403).json({ error: 'A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador antes de publicares.' });
+    return;
+  }
+
   const { videoUrl, capaUrl, legenda, exclusivo } = req.body;
   if (!videoUrl) { res.status(400).json({ error: "videoUrl é obrigatório" }); return; }
   const marcacao = lerMarcacaoMais18(req.body.mais18);
