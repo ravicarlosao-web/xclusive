@@ -67,12 +67,27 @@ export default function Content() {
           {filteredPosts.map((post: any) => (
             <Card key={post.id} className="border-border bg-card overflow-hidden flex flex-col">
               <div className="relative aspect-square bg-muted flex items-center justify-center">
-                {post.tipo === 'video' ? (
+                {post.tipo === 'video' && !post.exclusivo ? (
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                     <Play className="h-12 w-12 text-white opacity-70" />
                   </div>
                 ) : (
                   <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
+                )}
+                {/* Capa dos posts públicos (o ícone fica por baixo como fallback; em erro a capa esconde-se) */}
+                {post.capaUrl && (post.capaTipo === 'video' ? (
+                  <video src={`${post.capaUrl}#t=0.1`} muted playsInline preload="metadata" data-testid="capa-video"
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                ) : (
+                  <img src={post.capaUrl} alt="" loading="lazy" data-testid="capa-img"
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                ))}
+                {post.exclusivo && (
+                  <span data-testid="selo-exclusivo" className="absolute top-2 right-2 rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                    Exclusivo
+                  </span>
                 )}
                 {post.mais18 && <SeloMais18 className="absolute top-2 left-2" />}
                 {/* Fallback mock image placeholder text */}
