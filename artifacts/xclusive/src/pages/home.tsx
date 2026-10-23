@@ -214,12 +214,12 @@ export default function Home() {
         error?: string;
       } | null;
       if (!uploadResponse.ok) {
-        throw new Error(uploadBody?.error || `Upload falhou: ${uploadResponse.status}`);
+        throw new Error(uploadBody?.error || 'Não foi possível enviar o ficheiro.');
       }
 
       const uploadedFile = uploadBody?.files?.[0];
       if (!uploadedFile?.url) {
-        throw new Error('O upload não devolveu um URL de media.');
+        throw new Error('Não foi possível enviar o ficheiro.');
       }
 
       const freshStoryToken = await getFreshAuthToken();

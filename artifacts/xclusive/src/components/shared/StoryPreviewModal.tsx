@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { UploadProgressCircle } from './UploadProgressCircle';
 import { SeletorMais18 } from './MarcacaoMais18';
 
 /* ─── Types ─── */
@@ -869,20 +870,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                   >
-                    <div className="relative w-16 h-16 flex items-center justify-center">
-                      <div className="absolute inset-0 rounded-full border-4 border-white/20" />
-                      <div className="absolute inset-0 rounded-full border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent animate-spin" />
-                      <Avatar className="w-10 h-10 border border-white/30">
-                        <AvatarImage src={user.avatarUrl || ''} />
-                        <AvatarFallback className="bg-primary text-white text-xs font-bold">
-                          {(user.nomeExibicao || user.username)?.[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-white font-bold text-base">A partilhar história…</p>
-                      <p className="text-white/60 text-xs">A otimizar e enviar o teu story</p>
-                    </div>
+                    <UploadProgressCircle size={88} />
                   </motion.div>
                 )}
 

@@ -11,13 +11,14 @@ import { MobileDataWarningDialog } from './MobileDataWarningDialog';
 import {
   ImagePlus, MapPin, Lock, X, ChevronLeft, ChevronRight,
   Film, Upload, Hash, AtSign, Smile, Layers, Type,
-  Clock, HardDrive, CheckCircle2, AlertCircle, Loader2,
-  Sparkles, Video, RefreshCw
+  Clock, HardDrive, CheckCircle2, AlertCircle,
+  Video, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SeletorMais18 } from './MarcacaoMais18';
+import { UploadProgressCircle } from './UploadProgressCircle';
 
 interface CreatePostModalProps {
   open: boolean;
@@ -132,16 +133,16 @@ async function uploadWithProgress(
         }
         try {
           const json = JSON.parse(xhr.responseText);
-          reject(new Error(json.error || 'Token inválido ou sessão expirada.'));
+          reject(new Error(json.error || 'Sessão expirada. Inicia sessão novamente.'));
         } catch {
           reject(new Error('Sessão expirada. Faz login novamente.'));
         }
       } else {
         try {
           const json = JSON.parse(xhr.responseText);
-          reject(new Error(json.error || `Upload falhou com status ${xhr.status}`));
+          reject(new Error(json.error || 'Não foi possível enviar os ficheiros.'));
         } catch {
-          reject(new Error(`Upload falhou com status ${xhr.status}`));
+          reject(new Error('Não foi possível enviar os ficheiros.'));
         }
       }
     };
@@ -506,49 +507,34 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
         {/* ══════════════ UPLOADING / PROCESSING OVERLAY CARD ══════════════ */}
         {isUploading ? (
           <div className="p-6 sm:p-8 flex flex-col items-center text-center">
-            {/* Animated Header / Icon */}
-            <div className="relative mb-6">
-              <div className="w-24 h-24 rounded-3xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(234,179,8,0.15)]">
-                {uploadStage === 'error' ? (
-                  <AlertCircle className="w-10 h-10 text-destructive animate-bounce" />
-                ) : uploadStage === 'done' ? (
-                  <CheckCircle2 className="w-10 h-10 text-green-400" />
-                ) : (
-                  <>
-                    <Film className="w-10 h-10 text-yellow-400 animate-pulse" />
-                    <motion.div
-                      className="absolute inset-0 border-2 border-yellow-400/40 rounded-3xl"
-                      animate={{ scale: [1, 1.08, 1], opacity: [0.8, 0.2, 0.8] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
-                  </>
-                )}
+            {uploadStage === 'uploading' || uploadStage === 'processing' ? (
+              /* Carregamento: só o círculo de progresso (percentagem real no envio; indeterminado no processamento) */
+              <div className="py-4 mb-4">
+                <UploadProgressCircle percent={uploadStage === 'uploading' ? uploadPercent : null} />
               </div>
-              {uploadStage === 'uploading' && (
-                <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-[11px] font-extrabold px-2 py-0.5 rounded-full shadow-lg">
-                  {uploadPercent}%
+            ) : (
+              <>
+                <div className="relative mb-6">
+                  <div className="w-24 h-24 rounded-3xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+                    {uploadStage === 'error' ? (
+                      <AlertCircle className="w-10 h-10 text-destructive animate-bounce" />
+                    ) : (
+                      <CheckCircle2 className="w-10 h-10 text-green-400" />
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Title & Stage */}
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-1 text-foreground">
-              {uploadStage === 'uploading' && (hasLongVideo ? 'A carregar vídeo longo…' : 'A carregar ficheiros…')}
-              {uploadStage === 'processing' && (queueStatus?.queued && queueStatus.queued > 0 ? 'Na fila de processamento…' : 'A comprimir e optimizar…')}
-              {uploadStage === 'done' && 'Publicação concluída!'}
-              {uploadStage === 'error' && 'Ocorreu um erro'}
-            </h2>
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-1 text-foreground">
+                  {uploadStage === 'done' && 'Publicação concluída!'}
+                  {uploadStage === 'error' && 'Ocorreu um erro'}
+                </h2>
 
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-              {uploadStage === 'uploading' && (
-                hasLongVideo
-                  ? 'Vídeos de alta duração requerem envio contínuo. Mantém esta janela aberta.'
-                  : 'A enviar a tua publicação em alta qualidade para o servidor.'
-              )}
-              {uploadStage === 'processing' && (queueStatus?.queued && queueStatus.queued > 0 ? 'Há outro vídeo a ser processado, o teu vai começar em breve.' : 'O vídeo está a ser optimizado para melhor performance. Pode demorar 1-3 minutos…')}
-              {uploadStage === 'done' && 'O teu vídeo já está disponível no feed do Xclusive.'}
-              {uploadStage === 'error' && (uploadError || 'Não foi possível completar o envio.')}
-            </p>
+                <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                  {uploadStage === 'done' && 'O teu vídeo já está disponível no feed do Xclusive.'}
+                  {uploadStage === 'error' && (uploadError || 'Não foi possível completar o envio.')}
+                </p>
+              </>
+            )}
 
             {/* Video Details Card */}
             {mainVideo && (
@@ -578,40 +564,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       </span>
                     )}
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Progress Bar & Real-time Metrics */}
-            {uploadStage !== 'error' && uploadStage !== 'done' && (
-              <div className="w-full space-y-2 mb-6">
-                <div className="flex justify-between items-center text-xs font-semibold">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-yellow-400" />
-                    {uploadStage === 'uploading' ? 'Progresso do envio' : 'Processamento no servidor'}
-                  </span>
-                  <span className="font-mono text-yellow-400 font-bold text-sm">
-                    {uploadStage === 'uploading' ? `${uploadPercent}%` : '100%'}
-                  </span>
-                </div>
-
-                {/* Progress bar */}
-                <div className="relative w-full h-3 bg-secondary rounded-full overflow-hidden border border-border">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-300 rounded-full shadow-[0_0_12px_rgba(234,179,8,0.5)]"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadStage === 'processing' ? 100 : uploadPercent}%` }}
-                    transition={{ ease: 'easeOut', duration: 0.3 }}
-                  />
-                </div>
-
-                <div className="flex justify-between items-center text-[11px] text-muted-foreground pt-1">
-                  <span>
-                    {uploadStage === 'uploading'
-                      ? `${formatFileSize(uploadLoadedBytes)} transferidos`
-                      : 'Upload finalizado'}
-                  </span>
-                  <span>Total: {formatFileSize(uploadTotalBytes)}</span>
                 </div>
               </div>
             )}
@@ -981,11 +933,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                     )}
                   </div>
 
-                  {hasLongVideo && (
-                    <span className="text-[11px] font-semibold text-yellow-400/90 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> Upload optimizado
-                    </span>
-                  )}
                 </div>
               </div>
             )}
@@ -1032,9 +979,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                           <span className="bg-yellow-500/20 text-yellow-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
                             {mainVideo?.duration ? formatDuration(mainVideo.duration) : ''}
                           </span>
-                        </p>
-                        <p className="text-muted-foreground mt-0.5 leading-relaxed">
-                          Ao clicares em <strong>Partilhar</strong>, verás uma barra de progresso em tempo real com a percentagem do envio.
                         </p>
                       </div>
                     </div>

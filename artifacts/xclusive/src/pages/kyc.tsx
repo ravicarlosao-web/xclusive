@@ -13,7 +13,7 @@ import {
   Shield, ChevronLeft, ChevronRight, CheckCircle2, Star,
   BarChart3, BadgeCheck, Clock, AlertTriangle, Camera,
   FileText, ScanFace, ClipboardList, Sparkles, X,
-  Eye, Loader2, RefreshCw, Info
+  Eye, Loader2, RefreshCw, Info, Wallet, Smile
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,9 +61,9 @@ const PAISES = [
 ];
 
 const LIVENESS_CHALLENGES = [
-  { id: 1, text: 'Olha diretamente para a câmera', icon: '👁️', auto: true, delay: 2500 },
-  { id: 2, text: 'Pisca os olhos devagar 2 vezes', icon: '😉', auto: false },
-  { id: 3, text: 'Sorri naturalmente', icon: '😊', auto: false },
+  { id: 1, text: 'Olha diretamente para a câmera', icon: Eye, auto: true, delay: 2500 },
+  { id: 2, text: 'Pisca os olhos devagar 2 vezes', icon: Eye, auto: false },
+  { id: 3, text: 'Sorri naturalmente', icon: Smile, auto: false },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -300,12 +300,12 @@ export default function KYCPage() {
             {/* Benefits */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { icon: '💰', title: 'Monetiza', sub: 'Conteúdo exclusivo' },
-                { icon: '📊', title: 'Analytics', sub: 'Ganhos em tempo real' },
-                { icon: '✅', title: 'Verificado', sub: 'Selo de criador' },
+                { icon: Wallet, title: 'Monetiza', sub: 'Conteúdo exclusivo' },
+                { icon: BarChart3, title: 'Analytics', sub: 'Ganhos em tempo real' },
+                { icon: BadgeCheck, title: 'Verificado', sub: 'Selo de criador' },
               ].map(b => (
                 <div key={b.title} className="bg-secondary/50 border border-border rounded-2xl p-3 text-center space-y-1">
-                  <div className="text-2xl">{b.icon}</div>
+                  <b.icon className="w-6 h-6 mx-auto text-primary" />
                   <div className="text-xs font-bold text-foreground">{b.title}</div>
                   <div className="text-[10px] text-muted-foreground leading-tight">{b.sub}</div>
                 </div>
@@ -471,13 +471,13 @@ export default function KYCPage() {
             {/* Tips */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { icon: '💡', text: 'Boa iluminação' },
-                { icon: '🔍', text: 'Dados legíveis' },
-                { icon: '📐', text: 'Documento plano' },
-                { icon: '🚫', text: 'Sem reflexos' },
+                { text: 'Boa iluminação' },
+                { text: 'Dados legíveis' },
+                { text: 'Documento plano' },
+                { text: 'Sem reflexos' },
               ].map(t => (
                 <div key={t.text} className="flex items-center gap-2 bg-secondary/40 rounded-xl px-3 py-2.5 text-xs text-muted-foreground">
-                  <span>{t.icon}</span> {t.text}
+                  {t.text}
                 </div>
               ))}
             </div>
@@ -513,13 +513,13 @@ export default function KYCPage() {
             {/* Tips */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { icon: '🤳', text: 'Câmera frontal' },
-                { icon: '📄', text: 'Segura o BI na mão' },
-                { icon: '👁️', text: 'Olhos visíveis' },
-                { icon: '💡', text: 'Luz natural' },
+                { text: 'Câmera frontal' },
+                { text: 'Segura o BI na mão' },
+                { text: 'Olhos visíveis' },
+                { text: 'Luz natural' },
               ].map(t => (
                 <div key={t.text} className="flex items-center gap-2 bg-secondary/40 rounded-xl px-3 py-2.5 text-xs text-muted-foreground">
-                  <span>{t.icon}</span> {t.text}
+                  {t.text}
                 </div>
               ))}
             </div>
@@ -563,7 +563,7 @@ export default function KYCPage() {
               </div>
               {!livenesDone ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{LIVENESS_CHALLENGES[livenessChallenge]?.icon}</span>
+                  {(() => { const Icone = LIVENESS_CHALLENGES[livenessChallenge]?.icon; return Icone ? <Icone className="w-8 h-8 text-primary" /> : null; })()}
                   <div>
                     <p className="font-semibold text-white">{LIVENESS_CHALLENGES[livenessChallenge]?.text}</p>
                     {LIVENESS_CHALLENGES[livenessChallenge]?.auto && (

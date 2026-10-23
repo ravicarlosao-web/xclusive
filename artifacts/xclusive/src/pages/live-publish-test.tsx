@@ -62,7 +62,7 @@ export default function LivePublishTest() {
   // Se houver erro no hook, regista no log
   useEffect(() => {
     if (publisher.error) {
-      addLog(`❌ Erro no publisher: ${publisher.error}`, 'error');
+      addLog(`Erro no publisher: ${publisher.error}`, 'error');
     }
   }, [publisher.error]);
 
@@ -98,14 +98,14 @@ export default function LivePublishTest() {
       setStreamKey(pureKey);
       setBackendStatus(data.status);
 
-      addLog(`✅ Live criada/recuperada no backend! ID: ${data.id} | Status: "${data.status}" | StreamKey: ${pureKey}`, 'success');
+      addLog(`Live criada/recuperada no backend! ID: ${data.id} | Status: "${data.status}" | StreamKey: ${pureKey}`, 'success');
 
       // Atualiza SEMPRE a URL de sinalização com a streamKey pura (sem chavetas)
       const isHttps = window.location.protocol === 'https:';
       const proto = isHttps ? 'wss:' : 'ws:';
       setCustomSignallingUrl(`${proto}//live.xclusive.ao:3333/live/${pureKey}?direction=send`);
     } catch (e: any) {
-      addLog(`❌ Erro no POST /api/live/start: ${e.message}`, 'error');
+      addLog(`Erro no POST /api/live/start: ${e.message}`, 'error');
     } finally {
       setLoadingBackend(false);
     }
@@ -118,9 +118,9 @@ export default function LivePublishTest() {
     addLog('A solicitar permissões de câmara e microfone...', 'info');
     try {
       await publisher.requestMedia();
-      addLog('✅ Acesso à câmara e microfone concedido. Preview pronta.', 'success');
+      addLog('Acesso à câmara e microfone concedido. Preview pronta.', 'success');
     } catch (e: any) {
-      addLog(`❌ Falha ao obter media: ${e.message}`, 'error');
+      addLog(`Falha ao obter media: ${e.message}`, 'error');
     }
   };
 
@@ -140,7 +140,7 @@ export default function LivePublishTest() {
     }
 
     if (!keyToUse) {
-      addLog('⚠️ Define ou obtém um streamKey antes de iniciar a transmissão.', 'warn');
+      addLog('Define ou obtém um streamKey antes de iniciar a transmissão.', 'warn');
       return;
     }
 
@@ -148,7 +148,7 @@ export default function LivePublishTest() {
     try {
       await publisher.startPublishing(keyToUse, cleanCustomUrl || undefined);
     } catch (e: any) {
-      addLog(`❌ Falha ao iniciar transmissão: ${e.message}`, 'error');
+      addLog(`Falha ao iniciar transmissão: ${e.message}`, 'error');
     }
   };
 

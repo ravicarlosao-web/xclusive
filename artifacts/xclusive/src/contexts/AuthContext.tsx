@@ -85,7 +85,7 @@ interface MockUser {
   nomeCompleto: string;
   username: string;
   email: string;
-  /** ⚠️ DEV-ONLY mock store — stored in localStorage, not for production use */
+  /** DEV-ONLY mock store — stored in localStorage, not for production use */
   _devPassword: string;
   dataNascimento: string;
   tipoConta: 'pessoal' | 'criador';
@@ -139,7 +139,7 @@ function saveTransactions(txs: MockTransaction[]) {
 
 /**
  * Obfusca dadosBancarios antes de guardar em localStorage.
- * ⚠️ NOTA: Base64 NÃO é encriptação — é apenas obfuscação para o sistema mock.
+ * NOTA: Base64 NÃO é encriptação — é apenas obfuscação para o sistema mock.
  * Em produção, dados bancários devem ser guardados exclusivamente no servidor,
  * encriptados em repouso com chave de servidor, e nunca transmitidos ao cliente.
  */

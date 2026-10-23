@@ -501,7 +501,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
             const bitrateKbps = Math.round((bytesDelta * 8) / 5 / 1000);
             prevBytesSentRef.current = bytesSent;
 
-            // ⚠️ Só logging — não altera nenhum parâmetro ou comportamento
+            // Só logging — não altera nenhum parâmetro ou comportamento
             console.info(
               `[AUDIT][WebRTC-Publisher] sample=${sampleIndex++} | ` +
               `bitrate=${bitrateKbps} kbps | ` +
@@ -527,7 +527,7 @@ export function useLivePublisher(options: UseLivePublisherOptions = {}): UseLive
       const kitInstance = OvenLiveKit.create({
         callbacks: {
           connected: () => {
-            console.info('[useLivePublisher] ✅ Transmissão WebRTC conectada com sucesso ao OME!');
+            console.info('[useLivePublisher] Transmissão WebRTC conectada com sucesso ao OME!');
             setConnectionState('live');
             setError(null);
             // [AUDITORIA] Arranca o polling de getStats() assim que a ligação WebRTC está ativa

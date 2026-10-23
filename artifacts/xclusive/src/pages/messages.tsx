@@ -79,7 +79,7 @@ export default function Messages() {
             const partner = conv.participantes.find(p => p.username !== user?.username)
               ?? conv.participantes[0];
             const lastMsg = conv.ultimaMensagem;
-            const preview = lastMsg?.conteudo ?? (lastMsg?.tipo === 'imagem' ? '📷 Imagem' : lastMsg?.tipo === 'audio' ? '🎤 Áudio' : '');
+            const preview = lastMsg?.conteudo ?? (lastMsg?.tipo === 'imagem' ? 'Imagem' : lastMsg?.tipo === 'audio' ? 'Áudio' : '');
             const unread = conv.totalNaoLidas ?? 0;
             const time = formatTime(lastMsg?.criadoEm ?? conv.criadoEm);
 
