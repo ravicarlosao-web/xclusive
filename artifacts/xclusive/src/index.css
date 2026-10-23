@@ -54,7 +54,8 @@
 }
 
 :root {
-  /* Tema diurno (claro). O noturno (escuro) é o padrão e fica em .dark, aplicado por <html class="dark"> */
+  /* Tema diurno (claro). O noturno (escuro) é o padrão e fica em .dark, aplicado por <html class="dark">.
+     primary/destructive/success/warning mais escuros que no noturno: texto branco sobre primary e texto colorido sobre fundo claro com contraste AA. */
   color-scheme: light;
 
   --background: 0 0% 100%;
@@ -66,26 +67,26 @@
   --sidebar: 0 0% 98%;
   --sidebar-foreground: 0 0% 7%;
   --sidebar-border: 0 0% 88%;
-  --sidebar-primary: 344 100% 62%;
+  --sidebar-primary: 344 90% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 0 0% 94%;
   --sidebar-accent-foreground: 0 0% 7%;
-  --sidebar-ring: 344 100% 62%;
+  --sidebar-ring: 344 90% 42%;
   --popover: 0 0% 100%;
   --popover-foreground: 0 0% 7%;
   --popover-border: 0 0% 88%;
-  --primary: 344 100% 62%;
+  --primary: 344 90% 42%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 94%;
   --secondary-foreground: 0 0% 7%;
   --muted: 0 0% 94%;
   --muted-foreground: 0 0% 40%;
-  --accent: 344 100% 62%;
+  --accent: 344 90% 42%;
   --accent-foreground: 0 0% 100%;
-  --destructive: 358 85% 52%;
+  --destructive: 358 80% 42%;
   --destructive-foreground: 0 0% 100%;
   --input: 0 0% 88%;
-  --ring: 344 100% 62%;
+  --ring: 344 90% 42%;
   --chart-1: 344 100% 62%;
   --chart-2: 24 100% 68%;
   --chart-3: 42 100% 62%;
@@ -103,9 +104,9 @@
   --elevate-1: rgba(0, 0, 0, 0.04);
   --elevate-2: rgba(0, 0, 0, 0.09);
 
-  --success: 145 63% 32%;
-  --warning: 38 92% 36%;
-  --error: 358 85% 48%;
+  --success: 145 63% 26%;
+  --warning: 36 92% 27%;
+  --error: 358 80% 42%;
 }
 
 /* Tema noturno (escuro): valores IGUAIS aos que o site sempre teve. Padrão para todos. */
