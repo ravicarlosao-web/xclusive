@@ -66,7 +66,7 @@ export default function Onboarding() {
           ))}
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-2xl min-h-[400px] flex flex-col">
+        <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm dark:shadow-2xl min-h-[400px] flex flex-col">
           {step === 1 && (
             <div className="flex-1 flex flex-col items-center text-center">
               <h2 className="text-2xl font-bold mb-2">Adiciona uma foto de perfil</h2>

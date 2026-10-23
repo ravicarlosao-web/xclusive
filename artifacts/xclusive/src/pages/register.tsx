@@ -162,7 +162,7 @@ export default function Register() {
         {estadoRegistos === 'fechados' && (
           <div className="text-center lg:text-left space-y-5 py-4" data-testid="registos-fechados">
             <AuthLogoMobile />
-            <h1 className="text-3xl font-bold tracking-tight text-white">Registos fechados</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Registos fechados</h1>
             <p className="text-muted-foreground text-sm" role="alert">
               Os registos estão fechados de momento. Volta a tentar mais tarde.
             </p>
@@ -214,7 +214,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel>Data de Nascimento</FormLabel>
                       <FormControl>
-                        <Input type="date" className="h-12 bg-secondary/50 block w-full text-white color-scheme-dark" {...field} />
+                        <Input type="date" className="h-12 bg-secondary/50 block w-full text-foreground color-scheme-dark" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

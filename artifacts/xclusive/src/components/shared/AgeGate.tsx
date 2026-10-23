@@ -47,7 +47,9 @@ export function AgeGate() {
       className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-6"
     >
       <div className="max-w-md w-full text-center space-y-6">
-        <img src="/logo.png" alt="Xclusive" className="h-8 w-auto mx-auto" />
+        {/* Dois logos trocados por tema (ver AuthSplitLayout) */}
+        <img src="/logo.png" alt="Xclusive" className="hidden dark:block h-8 w-auto mx-auto" />
+        <img src="/logo-claro.png" alt="Xclusive" className="dark:hidden h-8 w-auto mx-auto" />
         <div className="space-y-2">
           <h1 id="age-gate-title" className="text-2xl font-bold">Conteúdo para maiores de 18 anos</h1>
           <p className="text-sm text-muted-foreground">
