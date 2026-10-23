@@ -29,10 +29,10 @@ export function MobileDataWarningDialog({
     <AlertDialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}>
       <AlertDialogContent className="max-w-[420px] rounded-2xl bg-card border-border p-6 shadow-2xl">
         <AlertDialogHeader className="flex flex-col items-center text-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mb-1 shadow-[0_0_20px_rgba(245,158,11,0.15)]">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-800 dark:text-amber-500 mb-1 shadow-none dark:shadow-[0_0_20px_rgba(245,158,11,0.15)]">
             <div className="relative">
-              <Smartphone className="w-7 h-7 text-amber-500" />
-              <Wifi className="w-4 h-4 text-amber-400 absolute -top-1 -right-2 animate-pulse" />
+              <Smartphone className="w-7 h-7 text-amber-800 dark:text-amber-500" />
+              <Wifi className="w-4 h-4 text-amber-800 dark:text-amber-400 absolute -top-1 -right-2 animate-pulse" />
             </div>
           </div>
 

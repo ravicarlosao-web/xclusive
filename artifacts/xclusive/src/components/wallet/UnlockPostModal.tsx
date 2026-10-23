@@ -50,7 +50,7 @@ export function UnlockPostModal({ open, onClose, postId, creatorUsername, creato
             <DialogHeader className="mb-5">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center">
-                  <Unlock className="w-5 h-5 text-amber-400" />
+                  <Unlock className="w-5 h-5 text-amber-800 dark:text-amber-400" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Desbloquear Conteúdo</DialogTitle>
               </div>
@@ -69,13 +69,13 @@ export function UnlockPostModal({ open, onClose, postId, creatorUsername, creato
               <div className="h-px bg-border" />
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Valor</span>
-                <span className="text-lg font-bold text-amber-400">{preco.toLocaleString('pt-PT')} Kz</span>
+                <span className="text-lg font-bold text-amber-800 dark:text-amber-400">{preco.toLocaleString('pt-PT')} Kz</span>
               </div>
             </div>
 
             {/* Balance check */}
             <div className={`flex items-center gap-2.5 rounded-xl p-3 mb-5 text-sm ${hasSaldo ? 'bg-secondary/50 border border-border' : 'bg-destructive/10 border border-destructive/30'}`}>
-              <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-500' : 'text-destructive'}`} />
+              <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
               <div>
                 <span className="text-muted-foreground">O teu saldo: </span>
                 <span className={`font-bold ${hasSaldo ? 'text-foreground' : 'text-destructive'}`}>
@@ -105,7 +105,7 @@ export function UnlockPostModal({ open, onClose, postId, creatorUsername, creato
         {phase === 'loading' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center mb-4 animate-pulse">
-              <Unlock className="w-8 h-8 text-amber-400" />
+              <Unlock className="w-8 h-8 text-amber-800 dark:text-amber-400" />
             </div>
             <p className="font-semibold">A processar pagamento...</p>
           </div>
@@ -114,7 +114,7 @@ export function UnlockPostModal({ open, onClose, postId, creatorUsername, creato
         {phase === 'success' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
-              <CheckCircle2 className="w-10 h-10 text-green-400" />
+              <CheckCircle2 className="w-10 h-10 text-green-700 dark:text-green-400" />
             </div>
             <h2 className="text-xl font-bold mb-2">Conteúdo desbloqueado!</h2>
             <p className="text-sm text-muted-foreground mb-6">

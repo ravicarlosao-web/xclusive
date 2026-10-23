@@ -8,15 +8,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star } from 'lucide-react';
+import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star, Sun, Moon, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
+import { useTema } from '@/hooks/useTema';
+import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
   const updateProfile = useUpdateProfile();
   const { toast } = useToast();
+  const { tema, definir: definirTema } = useTema();
 
   const [nomeExibicao, setNomeExibicao] = useState(user?.nomeExibicao || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -105,6 +108,9 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="notifications" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
             <Bell className="w-5 h-5 mr-3" /> Notificações
+          </TabsTrigger>
+          <TabsTrigger value="aparencia" data-testid="tab-aparencia" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
+            <Sun className="w-5 h-5 mr-3" /> Aparência
           </TabsTrigger>
           <TabsTrigger value="subscricoes" data-testid="tab-subscricoes" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
             <Star className="w-5 h-5 mr-3" /> Subscrições
@@ -243,6 +249,42 @@ export default function Settings() {
                   <Switch defaultChecked />
                 </div>
               ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="aparencia" className="mt-0 space-y-6 focus-visible:outline-none" data-testid="aparencia">
+            <div>
+              <h2 className="text-xl font-bold mb-2">Aparência</h2>
+              <p className="text-sm text-muted-foreground">Escolhe o modo de cor da aplicação. O modo noturno é o padrão.</p>
+            </div>
+            <div role="radiogroup" aria-label="Modo de cor" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                { valor: 'noturno', titulo: 'Noturno', sub: 'Fundo preto (padrão)', Icone: Moon },
+                { valor: 'diurno', titulo: 'Diurno', sub: 'Fundo branco', Icone: Sun },
+              ] as const).map(({ valor, titulo, sub, Icone }) => {
+                const ativo = tema === valor;
+                return (
+                  <button
+                    key={valor}
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    data-testid={`tema-${valor}`}
+                    onClick={() => definirTema(valor)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl border p-4 min-h-[56px] text-left transition-colors',
+                      ativo ? 'border-primary bg-primary/10' : 'border-border bg-secondary/30 hover:bg-secondary',
+                    )}
+                  >
+                    <Icone className="w-5 h-5 shrink-0" />
+                    <span className="flex-1">
+                      <span className="block font-semibold">{titulo}</span>
+                      <span className="block text-xs text-muted-foreground">{sub}</span>
+                    </span>
+                    {ativo && <Check className="w-5 h-5 text-primary shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           </TabsContent>
 

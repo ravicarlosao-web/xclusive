@@ -515,11 +515,11 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
             ) : (
               <>
                 <div className="relative mb-6">
-                  <div className="w-24 h-24 rounded-3xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center relative overflow-hidden shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+                  <div className="w-24 h-24 rounded-3xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center relative overflow-hidden shadow-none dark:shadow-[0_0_30px_rgba(234,179,8,0.15)]">
                     {uploadStage === 'error' ? (
                       <AlertCircle className="w-10 h-10 text-destructive animate-bounce" />
                     ) : (
-                      <CheckCircle2 className="w-10 h-10 text-green-400" />
+                      <CheckCircle2 className="w-10 h-10 text-green-700 dark:text-green-400" />
                     )}
                   </div>
                 </div>
@@ -550,7 +550,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   <p className="text-sm font-semibold truncate text-foreground">{mainVideo.file.name}</p>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
                     {mainVideo.duration && (
-                      <span className="flex items-center gap-1 font-mono text-yellow-400/90 font-medium">
+                      <span className="flex items-center gap-1 font-mono text-yellow-700 dark:text-yellow-400/90 font-medium">
                         <Clock className="w-3 h-3" /> {formatDuration(mainVideo.duration)}
                       </span>
                     )}
@@ -559,7 +559,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       <HardDrive className="w-3 h-3" /> {formatFileSize(uploadTotalBytes || mainVideo.file.size)}
                     </span>
                     {isLongVideo(mainVideo) && (
-                      <span className="bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.2 rounded text-[10px] font-bold">
+                      <span className="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30 px-1.5 py-0.2 rounded text-[10px] font-bold">
                         Vídeo Longo
                       </span>
                     )}
@@ -744,7 +744,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                     placeholder="O que está a acontecer?"
                     value={textoConteudo}
                     onChange={e => setTextoConteudo(e.target.value.slice(0, MAX_TEXTO))}
-                    className="bg-transparent border-none shadow-none resize-none text-lg font-medium placeholder:text-muted-foreground/60 focus-visible:ring-0 p-0 min-h-[180px]"
+                    className="bg-transparent border-none shadow-none resize-none text-lg font-medium placeholder:text-muted-foreground dark:placeholder:text-muted-foreground/60 focus-visible:ring-0 p-0 min-h-[180px]"
                     maxLength={MAX_TEXTO}
                   />
 
@@ -763,7 +763,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                           stroke="currentColor" strokeWidth="2.5"
                           strokeDasharray={`${2 * Math.PI * 13}`}
                           strokeDashoffset={`${2 * Math.PI * 13 * (1 - textoConteudo.length / MAX_TEXTO)}`}
-                          className={textoRemaining <= 20 ? 'text-destructive' : textoRemaining <= 100 ? 'text-yellow-500' : 'text-primary'}
+                          className={textoRemaining <= 20 ? 'text-destructive' : textoRemaining <= 100 ? 'text-yellow-700 dark:text-yellow-500' : 'text-primary'}
                           strokeLinecap="round"
                         />
                       </svg>
@@ -784,7 +784,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       placeholder="Localização (opcional)"
                       value={textoLocalizacao}
                       onChange={e => setTextoLocalizacao(e.target.value)}
-                      className="bg-transparent border-none shadow-none p-0 text-sm focus-visible:ring-0 placeholder:text-muted-foreground/60 h-auto"
+                      className="bg-transparent border-none shadow-none p-0 text-sm focus-visible:ring-0 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground/60 h-auto"
                     />
                   </div>
 
@@ -927,7 +927,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       <>
                         <span>•</span>
                         <span className="text-foreground font-medium flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-yellow-400" /> Duração: {formatDuration(current.duration)}
+                          <Clock className="w-3 h-3 text-yellow-700 dark:text-yellow-400" /> Duração: {formatDuration(current.duration)}
                         </span>
                       </>
                     )}
@@ -971,12 +971,12 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   {hasLongVideo && (
                     <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                        <Film className="w-4 h-4 text-yellow-400" />
+                        <Film className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
                       </div>
                       <div className="text-xs">
                         <p className="font-bold text-foreground flex items-center gap-1.5">
                           Vídeo longo detetado
-                          <span className="bg-yellow-500/20 text-yellow-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                          <span className="bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
                             {mainVideo?.duration ? formatDuration(mainVideo.duration) : ''}
                           </span>
                         </p>
@@ -1048,7 +1048,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span className="bg-secondary rounded-full px-2.5 py-1">{mediaFiles.length} {mediaFiles.length === 1 ? 'ficheiro' : 'ficheiros'}</span>
                       {hasVideo && (
-                        <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-full px-2.5 py-1 flex items-center gap-1 font-medium">
+                        <span className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 rounded-full px-2.5 py-1 flex items-center gap-1 font-medium">
                           <Film className="w-3 h-3" /> Vídeo {mainVideo?.duration ? `(${formatDuration(mainVideo.duration)})` : ''}
                         </span>
                       )}

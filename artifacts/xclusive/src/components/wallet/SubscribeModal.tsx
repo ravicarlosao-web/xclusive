@@ -173,7 +173,7 @@ export function SubscribeModal({
 
             {!gratuita && (
               <div className={`flex items-center gap-2.5 rounded-xl p-3 mb-5 mt-3 text-sm ${hasSaldo ? 'bg-secondary/50 border border-border' : 'bg-destructive/10 border border-destructive/30'}`}>
-                <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-500' : 'text-destructive'}`} />
+                <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
                 <div>
                   <span className="text-muted-foreground">O teu saldo: </span>
                   <span className={`font-bold ${hasSaldo ? 'text-foreground' : 'text-destructive'}`}>
@@ -189,7 +189,7 @@ export function SubscribeModal({
             <div className="flex gap-2 mt-3">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={handleClose}>Cancelar</Button>
               <Button
-                className="flex-1 h-12 font-bold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-[0_0_20px_rgba(255,62,114,0.3)]"
+                className="flex-1 h-12 font-bold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.3)]"
                 disabled={!hasSaldo}
                 onClick={handleConfirm}
                 data-testid="subscrever-confirmar"

@@ -36,11 +36,11 @@ type DisplayTx = {
 // ─── Metadata por tipo ────────────────────────────────────────────────────────
 
 const TX_META: Record<string, { icon: React.FC<any>; color: string; label: string }> = {
-  carregamento: { icon: ArrowDownLeft, color: 'text-green-400',  label: 'Carregamento'  },
-  gorjeta:      { icon: Coins,         color: 'text-yellow-400', label: 'Gorjeta'        },
-  ppv:          { icon: Unlock,        color: 'text-amber-400',  label: 'Desbloqueio'   },
+  carregamento: { icon: ArrowDownLeft, color: 'text-green-700 dark:text-green-400',  label: 'Carregamento'  },
+  gorjeta:      { icon: Coins,         color: 'text-yellow-700 dark:text-yellow-400', label: 'Gorjeta'        },
+  ppv:          { icon: Unlock,        color: 'text-amber-800 dark:text-amber-400',  label: 'Desbloqueio'   },
   subscricao:   { icon: Sparkles,      color: 'text-primary',    label: 'Subscrição'    },
-  levantamento: { icon: TrendingDown,  color: 'text-blue-400',   label: 'Levantamento'  },
+  levantamento: { icon: TrendingDown,  color: 'text-blue-700 dark:text-blue-400',   label: 'Levantamento'  },
 };
 
 // ─── Hook para transações reais ───────────────────────────────────────────────
@@ -87,7 +87,7 @@ function TxRow({ tx }: { tx: DisplayTx }) {
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate">{meta.label}</p>
             {tx.pendente && (
-              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-500/15 px-1.5 py-0.5 rounded-full shrink-0">
+              <span className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400 bg-yellow-500/15 px-1.5 py-0.5 rounded-full shrink-0">
                 PENDENTE
               </span>
             )}
@@ -95,7 +95,7 @@ function TxRow({ tx }: { tx: DisplayTx }) {
           {tx.descricao && (
             <p className="text-xs text-muted-foreground truncate">{tx.descricao}</p>
           )}
-          <p className="text-[10px] text-muted-foreground/60">
+          <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/60">
             {new Date(tx.criadoEm).toLocaleDateString('pt-PT', {
               day: 'numeric', month: 'short', year: 'numeric',
               hour: '2-digit', minute: '2-digit',
@@ -106,9 +106,9 @@ function TxRow({ tx }: { tx: DisplayTx }) {
       <div className={cn(
         'text-sm font-bold shrink-0 ml-2',
         tx.pendente
-          ? 'text-yellow-400/70'
+          ? 'text-yellow-700 dark:text-yellow-400/70'
           : tx.credit
-          ? 'text-green-400'
+          ? 'text-green-700 dark:text-green-400'
           : 'text-foreground',
       )}>
         {tx.credit || tx.pendente ? '+' : '-'}{tx.amount.toLocaleString('pt-PT')} Kz
@@ -168,7 +168,7 @@ export default function Carteira() {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-yellow-500/5 rounded-full translate-y-1/2 -translate-x-1/2" />
         <div className="relative">
           <div className="flex items-center gap-2 mb-1">
-            <Wallet className="w-5 h-5 text-yellow-500" />
+            <Wallet className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
             <span className="text-sm text-muted-foreground font-medium uppercase tracking-wide">
               Saldo disponível
             </span>
@@ -178,12 +178,12 @@ export default function Carteira() {
               ? saldo.toLocaleString('pt-PT')
               : <span className="text-muted-foreground">—</span>}
             {' '}
-            <span className="text-2xl text-yellow-500 font-bold">Kz</span>
+            <span className="text-2xl text-yellow-700 dark:text-yellow-500 font-bold">Kz</span>
           </div>
           <div className="flex items-center gap-2">
             <Button
               onClick={() => setTopUpOpen(true)}
-              className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl h-11 px-6 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+              className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl h-11 px-6 shadow-none dark:shadow-[0_0_20px_rgba(234,179,8,0.3)]"
             >
               <Plus className="w-4 h-4 mr-2" />
               Carregar Carteira
@@ -195,7 +195,7 @@ export default function Carteira() {
               className="h-11 w-11 rounded-xl border-yellow-500/30 hover:border-yellow-500/60"
               title="Atualizar saldo"
             >
-              <RefreshCw className="w-4 h-4 text-yellow-500" />
+              <RefreshCw className="w-4 h-4 text-yellow-700 dark:text-yellow-500" />
             </Button>
           </div>
         </div>
@@ -205,7 +205,7 @@ export default function Carteira() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-2">
-            <ArrowDownLeft className="w-5 h-5 text-yellow-500" />
+            <ArrowDownLeft className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
           </div>
           <h3 className="font-bold text-sm mb-1">Carrega</h3>
           <p className="text-xs text-muted-foreground">Transfere por TPA ou banco para a conta Xclusive</p>
@@ -219,7 +219,7 @@ export default function Carteira() {
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="w-10 h-10 rounded-full bg-green-500/15 flex items-center justify-center mx-auto mb-2">
-            <Unlock className="w-5 h-5 text-green-400" />
+            <Unlock className="w-5 h-5 text-green-700 dark:text-green-400" />
           </div>
           <h3 className="font-bold text-sm mb-1">Desfruta</h3>
           <p className="text-xs text-muted-foreground">Acede a conteúdo premium dos teus criadores favoritos</p>
@@ -231,7 +231,7 @@ export default function Carteira() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">Histórico de transações</h2>
           {displayTxs.some((t) => t.pendente) && (
-            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+            <div className="flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-400">
               <Clock className="w-3.5 h-3.5" />
               <span>Carregamentos a aguardar aprovação</span>
             </div>
@@ -275,8 +275,8 @@ export default function Carteira() {
         {/* Nota sobre carregamentos pendentes */}
         {!txLoading && displayTxs.some((t) => t.pendente) && (
           <div className="mt-4 flex items-start gap-2 bg-yellow-500/8 border border-yellow-500/20 rounded-xl p-3">
-            <Clock className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-yellow-200/80">
+            <Clock className="w-4 h-4 text-yellow-700 dark:text-yellow-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-yellow-900 dark:text-yellow-200/80">
               Os carregamentos pendentes serão aprovados pela nossa equipa em alguns minutos a horas úteis.
               O saldo é creditado automaticamente após aprovação.
             </p>

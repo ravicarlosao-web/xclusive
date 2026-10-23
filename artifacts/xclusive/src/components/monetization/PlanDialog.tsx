@@ -99,7 +99,7 @@ export function PlanDialog({ open, onClose, mode, plan, onSaved }: PlanDialogPro
         {saved ? (
           <div className="flex flex-col items-center text-center py-6">
             <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center mb-3">
-              <CheckCircle2 className="w-7 h-7 text-green-400" />
+              <CheckCircle2 className="w-7 h-7 text-green-700 dark:text-green-400" />
             </div>
             <p className="font-semibold">
               {mode === 'edit' ? 'Plano atualizado!' : 'Novo nível criado!'}

@@ -104,6 +104,10 @@
   --elevate-1: rgba(0, 0, 0, 0.04);
   --elevate-2: rgba(0, 0, 0, 0.09);
 
+  /* Gráfico (monetização): grelha usa --border; eixos e linha têm tokens próprios */
+  --chart-axis: 0 0% 40%;
+  --chart-line: 344 90% 42%;
+
   --success: 145 63% 26%;
   --warning: 36 92% 27%;
   --error: 358 80% 42%;
@@ -147,6 +151,9 @@
   --badge-outline: rgba(255, 255, 255, 0.05);
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
+
+  --chart-axis: 0 0% 62.75%;
+  --chart-line: 344 100% 62.2%;
 
   --success: 145 63% 49%;
   --warning: 42 100% 62%;
