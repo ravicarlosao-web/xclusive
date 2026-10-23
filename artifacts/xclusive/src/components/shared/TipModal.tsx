@@ -86,7 +86,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                 <CheckCircle2 className="w-10 h-10 text-white" />
               </motion.div>
               <div>
-                <p className="text-2xl font-extrabold mb-1">Gorjeta enviada! 🎉</p>
+                <p className="text-2xl font-extrabold mb-1">Gorjeta enviada!</p>
                 <p className="text-muted-foreground text-sm">
                   Enviaste <span className="font-bold text-foreground">{effectiveAmount?.toLocaleString('pt-PT')} Kz</span> para{' '}
                   <span className="font-bold text-foreground">@{creator.username}</span>

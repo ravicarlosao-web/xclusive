@@ -101,7 +101,7 @@ function getHumanFriendlyError(rawError: string | null): string {
     lower.includes('failed to fetch') ||
     lower.includes('connection error')
   ) {
-    return 'Não foi possível ligar ao servidor de transmissão WebRTC. Verifica a tua ligação à internet e tenta novamente.';
+    return 'Não foi possível ligar ao servidor de transmissão. Verifica a tua ligação à internet e tenta novamente.';
   }
   return rawError;
 }
@@ -557,7 +557,7 @@ export default function IrEmDireto() {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}: Erro ao iniciar live no servidor.`);
+        throw new Error(errJson.error || `Erro ao iniciar a transmissão.`);
       }
 
       const streamData = await res.json();
@@ -899,7 +899,7 @@ export default function IrEmDireto() {
               >
                 {feed.length === 0 ? (
                   <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
-                    A aguardar comentários... 💬
+                    A aguardar comentários...
                   </div>
                 ) : (
                   feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
@@ -1104,7 +1104,7 @@ export default function IrEmDireto() {
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Transmite em direto para os teus subscritores e seguidores com ultra baixa latência.
+              Transmite em direto para os teus subscritores e seguidores.
             </p>
           </div>
 
@@ -1179,7 +1179,7 @@ export default function IrEmDireto() {
                   </div>
                   <div className="text-center">
                     <h3 className="font-bold text-lg">A estabelecer transmissão ao vivo...</h3>
-                    <p className="text-xs text-zinc-300 mt-1">A ligar ao servidor WebRTC seguro</p>
+                    <p className="text-xs text-zinc-300 mt-1">A ligar ao servidor seguro</p>
                   </div>
                 </div>
               )}
@@ -1231,7 +1231,7 @@ export default function IrEmDireto() {
                   <div ref={chatScrollOverlayRef} className="max-h-44 sm:max-h-56 overflow-y-auto scrollbar-none flex flex-col gap-1.5 pointer-events-auto pr-1">
                     {feed.length === 0 ? (
                       <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/70 text-[11px] rounded-xl px-3 py-1.5 w-fit shadow-md">
-                        A aguardar comentários dos espectadores... 💬
+                        A aguardar comentários dos espectadores...
                       </div>
                     ) : (
                       feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={false} />)
@@ -1299,12 +1299,6 @@ export default function IrEmDireto() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2 text-xs text-muted-foreground bg-secondary/30 p-3.5 rounded-xl border border-border/30">
-                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Conexão WebRTC com baixa latência (~1s)</span></div>
-                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Notificação automática enviada aos seguidores</span></div>
-                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Gorjetas em Kz creditadas diretamente na tua carteira</span></div>
-                    <div className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /><span>Chat interativo em tempo real via WebSocket</span></div>
-                  </div>
                   <LiveAccessPicker
                     tipo={liveTipo}
                     preco={livePreco}

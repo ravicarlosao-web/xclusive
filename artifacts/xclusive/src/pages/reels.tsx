@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { SeloMais18 } from '@/components/shared/MarcacaoMais18';
-import { Heart, MessageCircle, Share2, Flag, Music, Play, Volume2, VolumeX } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Flag, Music, Play, Volume2, VolumeX, Lock } from 'lucide-react';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useGetFeed, useFollowUser, useUnfollowUser } from '@workspace/api-client-react';
@@ -179,7 +179,7 @@ function ReelCard({ post, containerRef }: ReelCardProps) {
         />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary to-background text-white/70">
-          <span className="text-4xl">🔒</span>
+          <Lock className="w-10 h-10" />
           <span className="text-sm font-semibold">Conteúdo exclusivo</span>
         </div>
       )}

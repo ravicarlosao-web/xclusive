@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Grid, PlaySquare, Lock, Settings, Radio, Flag } from 'lucide-react';
+import { Grid, PlaySquare, Lock, Settings, Radio, Flag, Star } from 'lucide-react';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
@@ -158,7 +158,7 @@ export default function Profile() {
                 ) : (
                   <Link href="/tornar-criador">
                     <Button className="font-semibold bg-gradient-to-r from-primary to-orange-500 hover:opacity-90 text-white shadow-[0_0_20px_rgba(255,62,114,0.25)] gap-1.5">
-                      <span className="text-base leading-none">⭐</span> Tornar-se Criador
+                      <Star className="w-4 h-4" /> Tornar-se Criador
                     </Button>
                   </Link>
                 )}

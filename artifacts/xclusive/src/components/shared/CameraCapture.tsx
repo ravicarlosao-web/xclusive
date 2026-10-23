@@ -181,7 +181,7 @@ export function CameraCapture({
               <p className="text-muted-foreground text-sm">Permite o acesso à câmera nas definições do teu browser para continuar.</p>
             </div>
             <ol className="text-left text-xs text-muted-foreground space-y-1 bg-background/50 rounded-xl p-4 w-full">
-              <li>1. Clica no ícone 🔒 na barra de endereço</li>
+              <li>1. Clica no ícone do cadeado na barra de endereço</li>
               <li>2. Seleciona <strong className="text-foreground">Câmera → Permitir</strong></li>
               <li>3. Recarrega a página e tenta novamente</li>
             </ol>

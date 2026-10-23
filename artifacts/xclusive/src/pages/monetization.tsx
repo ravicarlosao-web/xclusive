@@ -354,9 +354,6 @@ export default function Monetization() {
               Ir em Direto
             </Button>
           )}
-          <p className="w-full text-xs text-muted-foreground mt-1">
-            Transmissão WebRTC nativa com ultra baixa latência (~1s), preview em tempo real e receção de gorjetas em Kz.
-          </p>
         </CardContent>
       </Card>
 

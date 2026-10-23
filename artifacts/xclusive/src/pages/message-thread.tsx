@@ -157,7 +157,7 @@ export default function MessageThread() {
         {/* Empty */}
         {!isLoading && !isError && messages.length === 0 && (
           <div className="text-center py-6 text-muted-foreground text-sm">
-            <p>Ainda não há mensagens. Diz olá! 👋</p>
+            <p>Ainda não há mensagens. Diz olá!</p>
           </div>
         )}
 

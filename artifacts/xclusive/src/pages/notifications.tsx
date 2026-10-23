@@ -36,7 +36,7 @@ function renderText(tipo: NotifTipo) {
     case 'like_reel':          return 'gostou do teu reel.';
     case 'comentario':         return 'comentou na tua publicação.';
     case 'mencao':             return 'mencionou-te numa publicação.';
-    case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo! 🎉';
+    case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo!';
     case 'pagamento_recebido': return 'pagou por conteúdo PPV.';
     case 'sistema':            return 'Notificação de Sistema';
     default:                   return '';

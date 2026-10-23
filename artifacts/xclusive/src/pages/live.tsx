@@ -288,7 +288,7 @@ function LiveVideoPlayer({
           const stallDurationMs = performance.now() - auditStallStartRef.current;
           auditStallStartRef.current = null;
           console.warn(
-            `[AUDIT][HLS-Player] ✅ Retomado após stall ` +
+            `[AUDIT][HLS-Player] Retomado após stall ` +
             `| duração=${stallDurationMs.toFixed(0)} ms ` +
             `| stallsTotal=${auditStallCountRef.current}`
           );
@@ -361,7 +361,7 @@ function LiveVideoPlayer({
           auditStallStartRef.current = performance.now();
           const elapsed = ((Date.now() - auditSessionStartRef.current) / 1000).toFixed(1);
           console.warn(
-            `[AUDIT][HLS-Player] ⚠️ BUFFER_STALLED #${auditStallCountRef.current} ` +
+            `[AUDIT][HLS-Player] BUFFER_STALLED #${auditStallCountRef.current} ` +
             `| t+${elapsed}s na sessão | totalStalls=${auditStallCountRef.current}`
           );
         }
@@ -416,7 +416,7 @@ function LiveVideoPlayer({
       });
     } else {
       setHasError(true);
-      setErrorMessage('O teu navegador não suporta reprodução HLS.');
+      setErrorMessage('O teu navegador não suporta esta transmissão.');
       setIsLoading(false);
     }
   };
@@ -768,7 +768,7 @@ function LiveVideoPlayer({
                 ? 'Abre o link no Chrome ou no Safari para ver a transmissão.'
                 : errorKind
                   ? 'Verifica a tua ligação à internet e tenta novamente.'
-                  : 'O criador pode estar a iniciar o encoder ou a conexão ainda está a ser sincronizada.'}
+                  : 'O criador pode estar a iniciar a transmissão ou a ligação ainda está a ser sincronizada.'}
             </p>
           </div>
           {errorKind !== 'unsupported' && (
@@ -1258,7 +1258,7 @@ export default function LivePage() {
         throw new Error(err.error || 'Erro ao enviar gorjeta');
       }
 
-      toast.success(`Gorjeta de ${formatKz(valor)} enviada! 🎉`);
+      toast.success(`Gorjeta de ${formatKz(valor)} enviada!`);
       setTipOpen(false);
       setTipValor('');
       setTipMensagem('');
@@ -1456,7 +1456,7 @@ export default function LivePage() {
           >
             {feed.length === 0 ? (
               <p className="text-white/60 text-xs text-center py-2 bg-black/30 backdrop-blur-sm rounded-xl border border-white/5 mx-auto px-4">
-                Dá as boas-vindas ao criador! Escreve a primeira mensagem. ✨
+                Dá as boas-vindas ao criador! Escreve a primeira mensagem.
               </p>
             ) : (
               feed.map((item) => <FeedRow key={item.id} item={item} isOverlay={true} />)
