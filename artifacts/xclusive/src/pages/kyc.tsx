@@ -98,7 +98,7 @@ function StepProgress({ current }: { current: Step }) {
               )}>
                 {done ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
               </div>
-              <span className={cn('text-[10px] font-medium hidden sm:block', active ? 'text-primary' : done ? 'text-muted-foreground' : 'text-muted-foreground/50')}>
+              <span className={cn('text-[10px] font-medium hidden sm:block', active ? 'text-primary' : done ? 'text-muted-foreground' : 'text-muted-foreground dark:text-muted-foreground/50')}>
                 {STEP_LABELS[step]}
               </span>
             </div>
@@ -288,7 +288,7 @@ export default function KYCPage() {
           <div className="space-y-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-400">
             {/* Hero */}
             <div className="text-center space-y-3 pt-2">
-              <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center shadow-[0_0_40px_rgba(255,62,114,0.15)]">
+              <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center shadow-none dark:shadow-[0_0_40px_rgba(255,62,114,0.15)]">
                 <Shield className="w-10 h-10 text-primary" />
               </div>
               <div>
@@ -332,16 +332,16 @@ export default function KYCPage() {
 
             {/* Important notice */}
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-200/80 space-y-1">
-                <p className="font-semibold text-amber-300">Informação importante</p>
+              <AlertTriangle className="w-5 h-5 text-amber-800 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900 dark:text-amber-200/80 space-y-1">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">Informação importante</p>
                 <p>As tuas informações são processadas de forma segura e nunca partilhadas com terceiros. O processo leva cerca de <strong>5 minutos</strong>.</p>
               </div>
             </div>
 
             <Button
               onClick={() => goTo('personal')}
-              className="w-full h-13 text-base font-bold bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-[0_0_30px_rgba(255,62,114,0.25)] gap-2"
+              className="w-full h-13 text-base font-bold bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-none dark:shadow-[0_0_30px_rgba(255,62,114,0.25)] gap-2"
             >
               Começar Verificação <ChevronRight className="w-5 h-5" />
             </Button>
@@ -386,7 +386,7 @@ export default function KYCPage() {
                 <p className="text-destructive text-xs flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{errors.dataNascimento}</p>
               ) : data.dataNascimento && (
                 <p className="text-muted-foreground text-xs flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <CheckCircle2 className="w-3 h-3 text-green-700 dark:text-green-500" />
                   {calculateAge(data.dataNascimento)} anos — elegível ✓
                 </p>
               )}
@@ -445,8 +445,8 @@ export default function KYCPage() {
 
             {/* Privacy note */}
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex gap-2">
-              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-300/80">Os teus dados são encriptados e armazenados de forma segura, sendo usados apenas para verificação de identidade.</p>
+              <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-800 dark:text-blue-300/80">Os teus dados são encriptados e armazenados de forma segura, sendo usados apenas para verificação de identidade.</p>
             </div>
 
             <Button
@@ -565,7 +565,7 @@ export default function KYCPage() {
                 <div className="flex items-center gap-3">
                   {(() => { const Icone = LIVENESS_CHALLENGES[livenessChallenge]?.icon; return Icone ? <Icone className="w-8 h-8 text-primary" /> : null; })()}
                   <div>
-                    <p className="font-semibold text-white">{LIVENESS_CHALLENGES[livenessChallenge]?.text}</p>
+                    <p className="font-semibold text-foreground">{LIVENESS_CHALLENGES[livenessChallenge]?.text}</p>
                     {LIVENESS_CHALLENGES[livenessChallenge]?.auto && (
                       <p className="text-xs text-muted-foreground">A verificar automaticamente…</p>
                     )}
@@ -573,9 +573,9 @@ export default function KYCPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-8 h-8 text-green-500" />
+                  <CheckCircle2 className="w-8 h-8 text-green-700 dark:text-green-500" />
                   <div>
-                    <p className="font-semibold text-green-400">Verificação concluída!</p>
+                    <p className="font-semibold text-green-700 dark:text-green-400">Verificação concluída!</p>
                     <p className="text-xs text-muted-foreground">A capturar frame…</p>
                   </div>
                 </div>
@@ -629,7 +629,7 @@ export default function KYCPage() {
               </div>
               <div className="px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Data de Nascimento</span>
-                <span className="text-sm font-semibold text-foreground">{new Date(data.dataNascimento + 'T12:00:00').toLocaleDateString('pt-PT')} <Badge variant="outline" className="text-[10px] ml-1 text-green-400 border-green-400/40">{calculateAge(data.dataNascimento)} anos</Badge></span>
+                <span className="text-sm font-semibold text-foreground">{new Date(data.dataNascimento + 'T12:00:00').toLocaleDateString('pt-PT')} <Badge variant="outline" className="text-[10px] ml-1 text-green-700 dark:text-green-400 border-green-400/40">{calculateAge(data.dataNascimento)} anos</Badge></span>
               </div>
               <div className="px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Tipo de Doc.</span>
@@ -676,8 +676,8 @@ export default function KYCPage() {
 
             {/* Warning */}
             <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-300/80">Documentos falsos ou informações incorretas resultam em <strong className="text-red-300">banimento permanente</strong> da plataforma e possível ação legal.</p>
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 dark:text-red-300/80">Documentos falsos ou informações incorretas resultam em <strong className="text-red-700 dark:text-red-300">banimento permanente</strong> da plataforma e possível ação legal.</p>
             </div>
 
             {/* Consent */}
@@ -712,8 +712,8 @@ export default function KYCPage() {
           <div className="flex flex-col items-center text-center gap-6 pt-6 animate-in fade-in-0 zoom-in-95 duration-500">
             {/* Animated checkmark */}
             <div className="relative">
-              <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary/30 to-green-500/20 border-2 border-green-500/40 flex items-center justify-center shadow-[0_0_60px_rgba(34,197,94,0.2)]">
-                <CheckCircle2 className="w-14 h-14 text-green-400" />
+              <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary/30 to-green-500/20 border-2 border-green-500/40 flex items-center justify-center shadow-none dark:shadow-[0_0_60px_rgba(34,197,94,0.2)]">
+                <CheckCircle2 className="w-14 h-14 text-green-700 dark:text-green-400" />
               </div>
               <div className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center border-2 border-background">
                 <Sparkles className="w-4 h-4 text-white" />
@@ -737,7 +737,7 @@ export default function KYCPage() {
                     <div className={cn('w-7 h-7 rounded-full flex items-center justify-center shrink-0',
                       item.done ? 'bg-green-500/20 border-2 border-green-500' : 'bg-secondary border-2 border-border',
                     )}>
-                      {item.done && <CheckCircle2 className="w-4 h-4 text-green-400" />}
+                      {item.done && <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-400" />}
                     </div>
                     {i < 2 && <div className="w-0.5 h-6 bg-green-500/40" />}
                   </div>
@@ -749,8 +749,8 @@ export default function KYCPage() {
             {/* Mock mode note */}
             {isMockMode && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-left flex gap-2 w-full">
-                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-300/80">Em modo de demonstração, a tua conta de criador foi ativada imediatamente. Em produção, a verificação demora até 24 horas.</p>
+                <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-800 dark:text-blue-300/80">Em modo de demonstração, a tua conta de criador foi ativada imediatamente. Em produção, a verificação demora até 24 horas.</p>
               </div>
             )}
 

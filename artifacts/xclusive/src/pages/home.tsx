@@ -549,7 +549,7 @@ export default function Home() {
                             <Heart className="w-2.5 h-2.5 fill-current" />
                             {formatNumberCompact(creator.totalCurtidas)}
                           </span>
-                          <span className="text-muted-foreground/40">•</span>
+                          <span className="text-muted-foreground dark:text-muted-foreground/40">•</span>
                           <span className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium truncate">
                             {creator.totalPublicacoes} {creator.totalPublicacoes === 1 ? 'post' : 'posts'}
                           </span>

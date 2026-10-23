@@ -32,7 +32,7 @@ export function UploadProgressCircle({ percent, size = 112, className }: UploadP
         className={cn('-rotate-90', !determinado && 'animate-spin')}
         aria-hidden
       >
-        <circle cx={size / 2} cy={size / 2} r={raio} fill="none" strokeWidth={stroke} className="stroke-white/15" />
+        <circle cx={size / 2} cy={size / 2} r={raio} fill="none" strokeWidth={stroke} className="stroke-foreground/15" />
         <circle
           cx={size / 2}
           cy={size / 2}

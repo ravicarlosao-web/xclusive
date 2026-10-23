@@ -81,7 +81,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                 initial={{ scale: 0 }}
                 animate={{ scale: [0, 1.3, 1] }}
                 transition={{ delay: 0.1, duration: 0.5, times: [0, 0.6, 1] }}
-                className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-[0_0_40px_rgba(251,191,36,0.4)]"
+                className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-500 dark:from-yellow-400 to-orange-600 dark:to-orange-500 flex items-center justify-center shadow-none dark:shadow-[0_0_40px_rgba(251,191,36,0.4)]"
               >
                 <CheckCircle2 className="w-10 h-10 text-white" />
               </motion.div>
@@ -110,7 +110,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     <AvatarImage src={creator.avatarUrl || ''} />
                     <AvatarFallback className="text-xl font-bold">{(creator.nomeExibicao || creator.username)[0].toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-md">
+                  <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gradient-to-br from-yellow-500 dark:from-yellow-400 to-orange-600 dark:to-orange-500 rounded-full flex items-center justify-center shadow-md">
                     <Coins className="w-4 h-4 text-white" />
                   </div>
                 </div>
@@ -143,7 +143,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                         className={cn(
                           'h-11 rounded-xl text-sm font-bold border transition-all duration-150',
                           selected === amt
-                            ? 'bg-primary border-primary text-white shadow-[0_0_16px_rgba(255,62,114,0.35)]'
+                            ? 'bg-primary border-primary text-white shadow-none dark:shadow-[0_0_16px_rgba(255,62,114,0.35)]'
                             : 'bg-secondary border-border text-foreground hover:border-primary/50 hover:bg-primary/5'
                         )}
                       >
@@ -176,7 +176,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                 <Button
                   onClick={handleSend}
                   disabled={!canSend || phase === 'loading'}
-                  className="h-13 rounded-2xl font-bold text-base w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90 text-white shadow-[0_4px_24px_rgba(251,191,36,0.3)] disabled:opacity-40 disabled:shadow-none"
+                  className="h-13 rounded-2xl font-bold text-base w-full bg-gradient-to-r from-amber-700 dark:from-yellow-500 to-orange-700 dark:to-orange-500 hover:opacity-90 text-white shadow-none dark:shadow-[0_4px_24px_rgba(251,191,36,0.3)] disabled:opacity-40 disabled:shadow-none dark:disabled:shadow-none"
                 >
                   {phase === 'loading' ? (
                     <Loader2 className="w-5 h-5 animate-spin" />

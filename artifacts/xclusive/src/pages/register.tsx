@@ -214,7 +214,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel>Data de Nascimento</FormLabel>
                       <FormControl>
-                        <Input type="date" className="h-12 bg-secondary/50 block w-full text-foreground color-scheme-dark" {...field} />
+                        <Input type="date" className="h-12 bg-secondary/50 block w-full text-foreground" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

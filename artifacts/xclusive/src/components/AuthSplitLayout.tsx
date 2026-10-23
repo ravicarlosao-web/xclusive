@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BotaoTema } from '@/components/shared/BotaoTema';
 
 /** Logo da versão telemóvel/tablet (< lg): fica no topo do conteúdo, centrado. A coluna esquerda só existe a partir de lg. */
 export function AuthLogoMobile() {
@@ -43,7 +44,10 @@ export function AuthSplitLayout({ frase, centroFixo = false, children }: { frase
   );
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="relative min-h-screen bg-background flex">
+      {/* Botão do tema: canto superior direito do ecrã, comum ao login e ao registo */}
+      <BotaoTema className="absolute top-4 right-4 z-30" />
+
       {/* Left side - Image/Branding */}
       <div
         className={

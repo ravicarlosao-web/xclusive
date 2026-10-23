@@ -54,7 +54,7 @@ export function ExclusivoCard({ username, nomeExibicao, avatarUrl, verificado }:
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
       <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -ml-10 -mb-10" />
 
-      <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/30 shadow-[0_0_20px_rgba(255,62,114,0.2)] relative">
+      <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/30 shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.2)] relative">
         <Lock className="w-10 h-10 text-primary" />
       </div>
       <h3 className="text-2xl font-bold mb-2 relative">Clube Exclusivo</h3>
@@ -105,7 +105,7 @@ export function ExclusivoCard({ username, nomeExibicao, avatarUrl, verificado }:
                 Renovar{sub.preco != null ? ` · ${kz(sub.preco)}` : ''}
               </Button>
             ) : (
-              <Button className="w-full h-12 font-bold shadow-[0_0_20px_rgba(255,62,114,0.3)]" onClick={() => setSubscreverAberto(true)} data-testid="btn-subscrever">
+              <Button className="w-full h-12 font-bold shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.3)]" onClick={() => setSubscreverAberto(true)} data-testid="btn-subscrever">
                 {rotuloSubscrever}
               </Button>
             )}
@@ -119,7 +119,7 @@ export function ExclusivoCard({ username, nomeExibicao, avatarUrl, verificado }:
               {(plano.error as Error)?.message || 'Esta criadora ainda não tem uma subscrição disponível.'}
             </p>
           ) : (
-            <Button className="w-full h-12 font-bold shadow-[0_0_20px_rgba(255,62,114,0.3)]" onClick={() => setSubscreverAberto(true)} data-testid="btn-subscrever">
+            <Button className="w-full h-12 font-bold shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.3)]" onClick={() => setSubscreverAberto(true)} data-testid="btn-subscrever">
               {rotuloSubscrever}
             </Button>
           )

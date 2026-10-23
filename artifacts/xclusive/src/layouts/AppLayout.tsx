@@ -2,8 +2,9 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio
+  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio, Sun, Moon
 } from 'lucide-react';
+import { useTema } from '@/hooks/useTema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -17,6 +18,7 @@ import { useGetConversations, useGetUnreadNotificationsCount } from '@workspace/
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, logout, saldo, isMockMode } = useAuth();
+  const { noturno, alternar: alternarTema } = useTema();
   const [createPostOpen, setCreatePostOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
 
@@ -203,6 +205,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </Link>
           )}
+          {/* Alternar entre modo noturno (padrão) e diurno */}
+          <button
+            type="button"
+            onClick={alternarTema}
+            aria-pressed={!noturno}
+            aria-label={noturno ? 'Mudar para o modo diurno' : 'Mudar para o modo noturno'}
+            data-testid="tema-sidebar"
+            className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full"
+          >
+            {noturno
+              ? <Sun className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
+              : <Moon className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />}
+            <span className="hidden lg:block text-[15px]">{noturno ? 'Modo diurno' : 'Modo noturno'}</span>
+          </button>
           <Popover>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full">

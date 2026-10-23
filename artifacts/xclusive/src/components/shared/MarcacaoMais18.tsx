@@ -38,7 +38,7 @@ export function SeletorMais18({
     cn(
       'flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60',
       ativo
-        ? 'border-primary bg-primary/20 text-primary'
+        ? 'border-primary bg-primary/10 dark:bg-primary/20 text-primary'
         : dark
           ? 'border-white/20 bg-white/5 text-white/80'
           : 'border-border bg-secondary/30 text-muted-foreground',
@@ -46,7 +46,7 @@ export function SeletorMais18({
   return (
     <div data-testid="seletor-mais18" className={cn('flex flex-col gap-1.5', className)}>
       <p className={cn('text-sm font-semibold', dark ? 'text-white' : 'text-foreground')}>
-        Este conteúdo é +18? <span className="text-red-500">*</span>
+        Este conteúdo é +18? <span className="text-red-600 dark:text-red-500">*</span>
       </p>
       <div role="radiogroup" aria-label="Este conteúdo é +18?" className="flex gap-2">
         <button type="button" role="radio" aria-checked={valor === true} disabled={disabled} onClick={() => onChange(true)} className={btn(valor === true)} data-testid="mais18-sim">

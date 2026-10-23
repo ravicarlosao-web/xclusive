@@ -251,7 +251,7 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Subscritores Ativos</CardTitle>
-            <Users className="w-4 h-4 text-blue-500" />
+            <Users className="w-4 h-4 text-blue-600 dark:text-blue-500" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -259,7 +259,7 @@ export default function Monetization() {
             ) : (
               <>
                 <div className="text-2xl font-bold">{stats?.totalSubscritores ?? 0}</div>
-                <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                <p className="text-xs text-green-700 dark:text-green-500 mt-1 flex items-center gap-1">
                   <Activity className="w-3 h-3" /> +{stats?.novosSubscritores ?? 0} novos este mês
                 </p>
               </>
@@ -270,7 +270,7 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Retenção</CardTitle>
-            <Activity className="w-4 h-4 text-yellow-500" />
+            <Activity className="w-4 h-4 text-yellow-700 dark:text-yellow-500" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -287,7 +287,7 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Conteúdo Publicado</CardTitle>
-            <Eye className="w-4 h-4 text-purple-500" />
+            <Eye className="w-4 h-4 text-purple-600 dark:text-purple-500" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -305,7 +305,7 @@ export default function Monetization() {
       </div>
 
       {/* Live Stream Panel */}
-      <Card className="mb-8 bg-gradient-to-r from-red-950/40 to-zinc-900/60 border-red-500/30">
+      <Card className="mb-8 bg-gradient-to-r from-red-100/70 dark:from-red-950/40 to-zinc-100/70 dark:to-zinc-900/60 border-red-500/30">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeStreamId ? 'bg-red-600' : 'bg-zinc-700'}`}>
@@ -339,7 +339,7 @@ export default function Monetization() {
                 onClick={handleEndLive}
                 disabled={liveLoading}
                 variant="outline"
-                className="gap-2 border-red-500/50 text-red-400 hover:bg-red-950/50"
+                className="gap-2 border-red-500/50 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
               >
                 {liveLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Terminar Live
@@ -395,15 +395,15 @@ export default function Monetization() {
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-                    <XAxis dataKey="date" stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#a0a0a0" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatKz} width={70} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="date" stroke="hsl(var(--chart-axis))" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--chart-axis))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatKz} width={70} />
                     <RechartsTooltip
-                      contentStyle={{ backgroundColor: '#121212', border: '1px solid #262626', borderRadius: '8px' }}
-                      itemStyle={{ color: '#ff3e72', fontWeight: 'bold' }}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                      itemStyle={{ color: 'hsl(var(--chart-line))', fontWeight: 'bold' }}
                       formatter={(v: number) => [`${Number(v).toLocaleString('pt-PT')} Kz`, 'Ganhos']}
                     />
-                    <Line type="monotone" dataKey="ganhos" stroke="#ff3e72" strokeWidth={3} dot={{ r: 4, fill: '#121212', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#ff3e72' }} />
+                    <Line type="monotone" dataKey="ganhos" stroke="hsl(var(--chart-line))" strokeWidth={3} dot={{ r: 4, fill: 'hsl(var(--card))', strokeWidth: 2 }} activeDot={{ r: 6, fill: 'hsl(var(--chart-line))' }} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -446,7 +446,7 @@ export default function Monetization() {
                       <p className="text-sm text-muted-foreground mb-4">{plan.beneficios}</p>
                     )}
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-white font-semibold">{plan.totalSubscritores} subscritor{plan.totalSubscritores !== 1 ? 'es' : ''}</span>
+                      <span className="text-foreground font-semibold">{plan.totalSubscritores} subscritor{plan.totalSubscritores !== 1 ? 'es' : ''}</span>
                       <Button variant="outline" size="sm" className="h-8 bg-secondary/50" onClick={() => setEditPlan(plan)}>
                         Editar
                       </Button>
@@ -492,14 +492,14 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-green-400" />
+              <Wallet className="w-5 h-5 text-green-700 dark:text-green-400" />
               Saldo para Levantamento
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
               <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Disponível para levantar</p>
-              <p className="text-3xl font-extrabold text-green-400" data-testid="withdrawal-ganhos">
+              <p className="text-3xl font-extrabold text-green-700 dark:text-green-400" data-testid="withdrawal-ganhos">
                 {(ganhos ?? 0).toLocaleString('pt-PT')} <span className="text-xl font-bold">Kz</span>
               </p>
             </div>
@@ -526,14 +526,14 @@ export default function Monetization() {
               </div>
             )}
             {withdrawalSuccess !== null && (
-              <div className="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+              <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Levantamento de <strong>{withdrawalSuccess.toLocaleString('pt-PT')} Kz</strong> solicitado com sucesso!
               </div>
             )}
 
             <Button
-              className="w-full h-12 font-bold rounded-xl gap-2 bg-green-500 hover:bg-green-400 text-black shadow-[0_0_20px_rgba(34,197,94,0.3)]"
+              className="w-full h-12 font-bold rounded-xl gap-2 bg-green-500 hover:bg-green-400 text-black shadow-none dark:shadow-[0_0_20px_rgba(34,197,94,0.3)]"
               disabled={withdrawing || (ganhos ?? 0) <= 0 || !dadosBancarios || withdrawals.some(w => w.status === 'pendente')}
               onClick={handleWithdrawal}
             >
@@ -553,7 +553,7 @@ export default function Monetization() {
                   <div key={w.id} className="flex items-center justify-between text-sm bg-secondary/50 rounded-lg px-3 py-2">
                     <span className="font-semibold">{w.valor.toLocaleString('pt-PT')} Kz</span>
                     <span className="text-xs text-muted-foreground">{new Date(w.criadoEm).toLocaleDateString('pt-PT')}</span>
-                    <span className={cn('text-xs font-bold capitalize', w.status === 'pago' ? 'text-green-400' : w.status === 'rejeitado' ? 'text-destructive' : 'text-yellow-400')}>{w.status}</span>
+                    <span className={cn('text-xs font-bold capitalize', w.status === 'pago' ? 'text-green-700 dark:text-green-400' : w.status === 'rejeitado' ? 'text-destructive' : 'text-yellow-700 dark:text-yellow-400')}>{w.status}</span>
                   </div>
                 ))}
               </div>
@@ -570,7 +570,7 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-400" />
+              <Building2 className="w-5 h-5 text-blue-700 dark:text-blue-400" />
               Dados Bancários
             </CardTitle>
             {dadosBancarios && !editingBank && (
@@ -581,7 +581,7 @@ export default function Monetization() {
           </CardHeader>
           <CardContent>
             {bankSaved && (
-              <div className="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl p-3 mb-4">
+              <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl p-3 mb-4">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Dados bancários guardados com sucesso!
               </div>

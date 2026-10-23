@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Grid, PlaySquare, Lock, Settings, Radio, Flag, Star } from 'lucide-react';
+import { BotaoTema } from '@/components/shared/BotaoTema';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
@@ -162,6 +163,7 @@ export default function Profile() {
                     </Button>
                   </Link>
                 )}
+                <BotaoTema className="bg-secondary/50 border border-border" />
               </>
             ) : (
               <>
@@ -239,14 +241,14 @@ export default function Profile() {
             </div>
             <button
               onClick={() => setFollowModal({ type: 'followers' })}
-              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left hover:opacity-70 transition-opacity"
+              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left dark:hover:opacity-70 hover:underline dark:hover:no-underline transition-opacity"
             >
               <span className="font-bold text-lg sm:text-base">{profile.totalSeguidores}</span>
               <span className="text-muted-foreground">fãs</span>
             </button>
             <button
               onClick={() => setFollowModal({ type: 'following' })}
-              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left hover:opacity-70 transition-opacity"
+              className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 text-center sm:text-left dark:hover:opacity-70 hover:underline dark:hover:no-underline transition-opacity"
             >
               <span className="font-bold text-lg sm:text-base">{profile.totalSeguindo}</span>
               <span className="text-muted-foreground">a seguir</span>

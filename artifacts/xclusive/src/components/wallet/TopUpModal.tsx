@@ -172,7 +172,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <DialogHeader className="mb-6">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-yellow-500" />
+                  <Wallet className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Carregar Carteira</DialogTitle>
               </div>
@@ -193,7 +193,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                   className={cn(
                     "py-2.5 px-3 rounded-xl text-sm font-bold transition-all border",
                     amount === v
-                      ? "bg-yellow-500 text-black border-yellow-500 shadow-[0_0_16px_rgba(234,179,8,0.4)]"
+                      ? "bg-yellow-500 text-black border-yellow-500 shadow-none dark:shadow-[0_0_16px_rgba(234,179,8,0.4)]"
                       : "bg-secondary border-border text-foreground hover:border-yellow-500/50"
                   )}
                 >
@@ -248,7 +248,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'gpo'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
                     : "border-border bg-secondary/30 hover:border-border/80"
                 )}
               >
@@ -269,7 +269,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'ref'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
                     : "border-border bg-secondary/30 hover:border-border/80"
                 )}
               >
@@ -290,7 +290,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'manual'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
                     : "border-border bg-secondary/30 hover:border-border/80"
                 )}
               >
@@ -377,7 +377,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         {step === 'gpo_success' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <Smartphone className="w-10 h-10 text-yellow-400 animate-pulse" />
+              <Smartphone className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Verifica o teu telemóvel!</h2>
             <p className="text-muted-foreground mb-6">
@@ -402,7 +402,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <DialogHeader className="mb-5">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                  <Receipt className="w-5 h-5 text-yellow-500" />
+                  <Receipt className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Referência Gerada</DialogTitle>
               </div>
@@ -465,7 +465,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                     onClick={copyIban}
                     className="shrink-0 p-1.5 rounded-lg bg-background border border-border hover:bg-secondary transition-colors"
                   >
-                    {copiedIban ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+                    {copiedIban ? <Check className="w-4 h-4 text-green-700 dark:text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
                   </button>
                 </div>
               </div>
@@ -529,8 +529,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </button>
               ) : (
                 <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/8 px-4 py-3">
-                  <FileText className="w-5 h-5 text-green-400 shrink-0" />
-                  <span className="flex-1 text-sm font-medium truncate text-green-300">{pdfName}</span>
+                  <FileText className="w-5 h-5 text-green-700 dark:text-green-400 shrink-0" />
+                  <span className="flex-1 text-sm font-medium truncate text-green-800 dark:text-green-300">{pdfName}</span>
                   <button
                     type="button"
                     onClick={() => { setPdfBase64(null); setPdfName(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
@@ -568,7 +568,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         {step === 'success' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <CheckCircle2 className="w-10 h-10 text-yellow-400" />
+              <CheckCircle2 className="w-10 h-10 text-yellow-700 dark:text-yellow-400" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Pedido enviado!</h2>
             <p className="text-muted-foreground mb-4">
