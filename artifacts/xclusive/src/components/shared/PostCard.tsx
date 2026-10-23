@@ -241,7 +241,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
 
   return (
     <>
-      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-2xl">
+      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-md sm:dark:shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4">
           <Link href={`/perfil/${post.autor.username}`} className="flex items-center gap-3 group">
@@ -307,7 +307,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           >
             {/* Locked overlay for text posts */}
             {isLocked && (
-              <div className="absolute inset-0 rounded-2xl backdrop-blur-md bg-black/40 z-10 flex flex-col items-center justify-center p-4 text-center" onClick={e => e.stopPropagation()}>
+              <div className="absolute inset-0 rounded-2xl backdrop-blur-md bg-black/80 dark:bg-black/40 z-10 flex flex-col items-center justify-center p-4 text-center" onClick={e => e.stopPropagation()}>
                 {post.precoDesbloqueio ? (
                   <>
                     <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-3">
@@ -365,7 +365,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             onClick={handleMediaClick}
           >
             {isLocked ? (
-              <div className="absolute inset-0 backdrop-blur-xl bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center" onClick={e => e.stopPropagation()}>
+              <div className="absolute inset-0 backdrop-blur-xl bg-black/80 dark:bg-black/50 z-10 flex flex-col items-center justify-center p-6 text-center" onClick={e => e.stopPropagation()}>
                 {post.precoDesbloqueio ? (
                   <>
                     <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4">
@@ -450,11 +450,11 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                   <Coins className={cn(
                     "w-7 h-7 transition-all group-active:scale-90",
                     gorjetasCount > 0
-                      ? "text-yellow-500 fill-yellow-500/20"
-                      : "text-foreground hover:text-yellow-500 stroke-[1.5px]"
+                      ? "text-yellow-600 dark:text-yellow-500 fill-yellow-500/20"
+                      : "text-foreground hover:text-yellow-600 dark:hover:text-yellow-500 stroke-[1.5px]"
                   )} />
                   {gorjetasCount > 0 && (
-                    <span className="text-xs font-semibold text-yellow-500 leading-none">{gorjetasCount}</span>
+                    <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-500 leading-none">{gorjetasCount}</span>
                   )}
                 </button>
               )}

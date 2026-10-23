@@ -93,7 +93,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
   return (
     <div className={cn(
       'bg-card border border-border rounded-2xl mb-6 transition-all duration-200',
-      expanded ? 'shadow-lg' : 'shadow-none',
+      expanded ? 'shadow-md dark:shadow-lg' : 'shadow-none',
     )}>
       {/* Top row: avatar + input */}
       <div className="flex items-start gap-3 p-4">
@@ -112,7 +112,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
             rows={expanded ? 4 : 1}
             className={cn(
               'w-full bg-transparent border-none shadow-none resize-none p-0 text-[15px]',
-              'placeholder:text-muted-foreground/60 focus-visible:ring-0',
+              'placeholder:text-muted-foreground dark:placeholder:text-muted-foreground/60 focus-visible:ring-0',
               'leading-relaxed transition-all duration-200',
               expanded ? 'min-h-[80px]' : 'min-h-[24px] overflow-hidden',
             )}
@@ -166,7 +166,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
                     stroke="currentColor"
                     strokeDasharray={`${2 * Math.PI * 11}`}
                     strokeDashoffset={`${2 * Math.PI * 11 * (1 - texto.length / MAX_TEXTO)}`}
-                    className={remaining <= 20 ? 'text-destructive' : remaining <= 100 ? 'text-yellow-500' : 'text-primary'}
+                    className={remaining <= 20 ? 'text-destructive' : remaining <= 100 ? 'text-yellow-600 dark:text-yellow-500' : 'text-primary'}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -209,7 +209,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
           className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-all text-sm font-medium"
           title="Foto / Vídeo"
         >
-          <Image className="w-5 h-5 text-green-500" />
+          <Image className="w-5 h-5 text-green-600 dark:text-green-500" />
           <span className="hidden sm:inline text-xs">Foto/Vídeo</span>
         </button>
 
@@ -218,7 +218,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
           className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-all text-sm font-medium"
           title="Vídeo"
         >
-          <Film className="w-5 h-5 text-red-500" />
+          <Film className="w-5 h-5 text-red-600 dark:text-red-500" />
           <span className="hidden sm:inline text-xs">Reel</span>
         </button>
 
@@ -233,10 +233,10 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
 
         <Link href="/ir-em-direto">
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-red-600 dark:hover:text-red-500 hover:bg-red-500/10 transition-all text-sm font-medium"
             title="Ir em Direto"
           >
-            <Radio className="w-5 h-5 text-red-500" />
+            <Radio className="w-5 h-5 text-red-600 dark:text-red-500" />
             <span className="hidden sm:inline text-xs">Live</span>
           </button>
         </Link>

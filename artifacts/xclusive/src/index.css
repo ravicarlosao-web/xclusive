@@ -169,7 +169,7 @@
 }
 
 .story-ring-viewed {
-  background: #262626;
+  background: hsl(var(--border));
   padding: 2px;
   border-radius: 50%;
 }

@@ -967,12 +967,12 @@ function LiveTicketGate({
   const insuficiente = saldo !== null && saldo < stream.preco;
   const nome = stream.criador.nomeExibicao || stream.criador.username;
   return (
-    <div className="fixed inset-0 z-50 bg-black overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-background dark:bg-black overflow-y-auto">
       <div className="min-h-full flex flex-col items-center justify-center gap-6 text-center px-4 py-10">
         <button
           type="button"
           onClick={onBack}
-          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white"
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-foreground/10 flex items-center justify-center text-foreground"
           aria-label="Voltar"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -987,30 +987,30 @@ function LiveTicketGate({
           <Badge className="bg-red-600 text-white gap-1 mb-3">
             <Radio className="w-3 h-3" /> AO VIVO · live paga
           </Badge>
-          <h2 className="text-2xl font-bold text-white">{nome}</h2>
-          <p className="text-sm text-white/60 flex items-center justify-center gap-1.5 mt-1">
+          <h2 className="text-2xl font-bold text-foreground">{nome}</h2>
+          <p className="text-sm text-foreground/60 flex items-center justify-center gap-1.5 mt-1">
             <Clock className="w-3.5 h-3.5" /> A decorrer há {formatDuration(durationSeconds)}
           </p>
         </div>
 
-        <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-white/5 p-5 space-y-4">
+        <div className="w-full max-w-sm rounded-2xl border border-foreground/15 bg-foreground/5 p-5 space-y-4">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-white/60">Preço do bilhete</span>
-            <span className="text-2xl font-extrabold text-white">{formatKz(stream.preco)}</span>
+            <span className="text-sm text-foreground/60">Preço do bilhete</span>
+            <span className="text-2xl font-extrabold text-foreground">{formatKz(stream.preco)}</span>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-white/60">O teu saldo</span>
-            <span className={cn('text-sm font-semibold', insuficiente ? 'text-red-400' : 'text-white')}>
+            <span className="text-sm text-foreground/60">O teu saldo</span>
+            <span className={cn('text-sm font-semibold', insuficiente ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
               {saldo !== null ? formatKz(saldo) : '—'}
             </span>
           </div>
 
-          <p className="text-xs text-white/70 leading-relaxed">
+          <p className="text-xs text-foreground/70 leading-relaxed">
             Esta live já começou. O bilhete tem o preço inteiro e dá acesso até ao fim.
           </p>
 
           {insuficiente && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-left text-xs text-red-300">
+            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-left text-xs text-red-700 dark:text-red-300">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
                 Saldo insuficiente: faltam {formatKz(stream.preco - (saldo ?? 0))}. Carrega a tua carteira para comprar o bilhete.

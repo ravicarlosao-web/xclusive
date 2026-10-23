@@ -20,10 +20,10 @@ function renderIcon(tipo: NotifTipo) {
     case 'novo_seguidor':      return <UserPlus className="w-4 h-4 text-blue-500" />;
     case 'like_post':
     case 'like_reel':          return <Heart className="w-4 h-4 text-primary fill-primary" />;
-    case 'comentario':         return <MessageCircle className="w-4 h-4 text-green-500 fill-green-500" />;
-    case 'mencao':             return <AtSign className="w-4 h-4 text-sky-400" />;
-    case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />;
-    case 'pagamento_recebido': return <DollarSign className="w-4 h-4 text-emerald-500" />;
+    case 'comentario':         return <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-500 fill-green-600 dark:fill-green-500" />;
+    case 'mencao':             return <AtSign className="w-4 h-4 text-sky-600 dark:text-sky-400" />;
+    case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500 fill-yellow-600 dark:fill-yellow-500" />;
+    case 'pagamento_recebido': return <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />;
     case 'sistema':            return <Bell className="w-4 h-4 text-purple-500 fill-purple-500" />;
     default:                   return null;
   }
@@ -102,13 +102,13 @@ export default function Notifications() {
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('tudo')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'tudo' ? 'bg-primary text-white shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'tudo' ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
           >
             Tudo
           </button>
           <button
             onClick={() => setFilter('mencoes')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'mencoes' ? 'bg-primary text-white shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'mencoes' ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
           >
             Menções
           </button>

@@ -184,7 +184,7 @@ export default function MessageThread() {
                   ) : (
                     <div className={`px-4 py-2.5 rounded-2xl text-[15px] ${
                       isMe
-                        ? 'bg-primary text-white rounded-br-sm shadow-[0_4px_10px_rgba(255,62,114,0.15)]'
+                        ? 'bg-primary text-white rounded-br-sm shadow-none dark:shadow-[0_4px_10px_rgba(255,62,114,0.15)]'
                         : 'bg-secondary text-foreground rounded-bl-sm border border-border'
                     }`}>
                       {msg.conteudo}
