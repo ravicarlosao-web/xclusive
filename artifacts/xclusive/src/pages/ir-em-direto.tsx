@@ -762,7 +762,7 @@ export default function IrEmDireto() {
 
   // ─── ECRÃ PRINCIPAL DE TRANSMISSÃO ─────────────────────────────────────────
   return (
-    <div className="w-full max-w-6xl mx-auto">
+    <div className="dark bg-background text-foreground w-full max-w-6xl mx-auto">
 
       {/* ═══════════════════════════════════════════════════════════════════════
           MOBILE: Layout fullscreen tipo Instagram Live (apenas < md)

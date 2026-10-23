@@ -40,6 +40,9 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -51,34 +54,37 @@
 }
 
 :root {
-  --background: 0 0% 4%;
-  --foreground: 0 0% 100%;
-  --border: 0 0% 15%;
-  --card: 0 0% 7%;
-  --card-foreground: 0 0% 100%;
-  --card-border: 0 0% 15%;
-  --sidebar: 0 0% 7%;
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 0 0% 15%;
+  /* Tema diurno (claro). O noturno (escuro) é o padrão e fica em .dark, aplicado por <html class="dark"> */
+  color-scheme: light;
+
+  --background: 0 0% 100%;
+  --foreground: 0 0% 7%;
+  --border: 0 0% 88%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 7%;
+  --card-border: 0 0% 88%;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 0 0% 7%;
+  --sidebar-border: 0 0% 88%;
   --sidebar-primary: 344 100% 62%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 0% 10%;
-  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 94%;
+  --sidebar-accent-foreground: 0 0% 7%;
   --sidebar-ring: 344 100% 62%;
-  --popover: 0 0% 7%;
-  --popover-foreground: 0 0% 100%;
-  --popover-border: 0 0% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 7%;
+  --popover-border: 0 0% 88%;
   --primary: 344 100% 62%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 10%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 0 0% 10%;
-  --muted-foreground: 0 0% 63%;
+  --secondary: 0 0% 94%;
+  --secondary-foreground: 0 0% 7%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 40%;
   --accent: 344 100% 62%;
   --accent-foreground: 0 0% 100%;
-  --destructive: 358 100% 65%;
+  --destructive: 358 85% 52%;
   --destructive-foreground: 0 0% 100%;
-  --input: 0 0% 15%;
+  --input: 0 0% 88%;
   --ring: 344 100% 62%;
   --chart-1: 344 100% 62%;
   --chart-2: 24 100% 68%;
@@ -90,18 +96,22 @@
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
   --radius: 0.5rem;
-  
-  --button-outline: rgba(255, 255, 255, 0.1);
-  --badge-outline: rgba(255, 255, 255, 0.05);
+
+  --button-outline: rgba(0, 0, 0, 0.1);
+  --badge-outline: rgba(0, 0, 0, 0.05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255, 255, 255, 0.04);
-  --elevate-2: rgba(255, 255, 255, 0.09);
-  
-  --success: 145 63% 49%;
-  --error: 358 100% 65%;
+  --elevate-1: rgba(0, 0, 0, 0.04);
+  --elevate-2: rgba(0, 0, 0, 0.09);
+
+  --success: 145 63% 32%;
+  --warning: 38 92% 36%;
+  --error: 358 85% 48%;
 }
 
+/* Tema noturno (escuro): valores IGUAIS aos que o site sempre teve. Padrão para todos. */
 .dark {
+  color-scheme: dark;
+
   --background: 0 0% 4%;
   --foreground: 0 0% 100%;
   --border: 0 0% 15%;
@@ -131,6 +141,15 @@
   --destructive-foreground: 0 0% 100%;
   --input: 0 0% 15%;
   --ring: 344 100% 62%;
+
+  --button-outline: rgba(255, 255, 255, 0.1);
+  --badge-outline: rgba(255, 255, 255, 0.05);
+  --elevate-1: rgba(255, 255, 255, 0.04);
+  --elevate-2: rgba(255, 255, 255, 0.09);
+
+  --success: 145 63% 49%;
+  --warning: 42 100% 62%;
+  --error: 358 100% 65%;
 }
 
 @layer base {

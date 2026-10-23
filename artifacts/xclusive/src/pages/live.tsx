@@ -1325,7 +1325,7 @@ export default function LivePage() {
       {/* ══════════════════════════════════════════════════════════════════════════
           LAYOUT MOBILE: FULL-BLEED (ECRÃ INTEIRO COM OVERLAYS)
           ══════════════════════════════════════════════════════════════════════════ */}
-      <div className="lg:hidden fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden touch-manipulation">
+      <div className="dark text-foreground lg:hidden fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden touch-manipulation">
         {/* Vídeo em fundo full-bleed */}
         <div className="absolute inset-0 w-full h-full">
           {!isDesktop && (
@@ -1516,7 +1516,7 @@ export default function LivePage() {
       {/* ══════════════════════════════════════════════════════════════════════════
           LAYOUT DESKTOP: DUAS COLUNAS (VÍDEO À ESQUERDA + CHAT À DIREITA)
           ══════════════════════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:block max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <div className="dark bg-background text-foreground hidden lg:block max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header Superior Desktop */}
         <div className="flex items-center justify-between gap-4 p-3 rounded-2xl bg-card/60 backdrop-blur-md border border-border">
           <div className="flex items-center gap-3 min-w-0">

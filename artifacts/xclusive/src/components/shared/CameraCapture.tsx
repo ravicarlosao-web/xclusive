@@ -170,7 +170,7 @@ export function CameraCapture({
 
   if (status === 'error') {
     return (
-      <div className={cn('relative bg-secondary rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-4 p-8 text-center min-h-[280px]', className)}>
+      <div className={cn('dark text-foreground relative bg-secondary rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-4 p-8 text-center min-h-[280px]', className)}>
         <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
           <AlertTriangle className="w-7 h-7 text-destructive" />
         </div>
@@ -210,7 +210,7 @@ export function CameraCapture({
 
   if (status === 'captured' && capturedUrl) {
     return (
-      <div className={cn('relative bg-black rounded-2xl overflow-hidden', className)}>
+      <div className={cn('dark text-foreground relative bg-black rounded-2xl overflow-hidden', className)}>
         <img src={capturedUrl} alt="Captura" className="w-full h-full object-cover" style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }} />
         <div className="absolute inset-0 flex flex-col items-end justify-between p-4 pointer-events-none">
           <div className="bg-green-500/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 pointer-events-none">
@@ -233,7 +233,7 @@ export function CameraCapture({
   // ── Live viewfinder ───────────────────────────────────────────────────────
 
   return (
-    <div className={cn('relative bg-black rounded-2xl overflow-hidden', className)}>
+    <div className={cn('dark text-foreground relative bg-black rounded-2xl overflow-hidden', className)}>
       {/* Loading overlay */}
       {status === 'loading' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-20 bg-black/80">

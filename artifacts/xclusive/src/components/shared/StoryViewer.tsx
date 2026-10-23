@@ -162,7 +162,7 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center select-none gap-4 px-4">
+    <div className="dark text-foreground fixed inset-0 z-[100] bg-black/95 flex items-center justify-center select-none gap-4 px-4">
       {/* Left side peek */}
       {prevGroup ? (
         <SidePeek group={prevGroup} side="left" onClick={() => { setGroupIndex(i => i - 1); setStoryIndex(0); }} />

@@ -396,7 +396,7 @@ export function StoryPreviewModal({ file, previewUrl, user, onPublish, onClose }
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[120] flex items-center justify-center bg-black select-none"
+        className="dark text-foreground fixed inset-0 z-[120] flex items-center justify-center bg-black select-none"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
