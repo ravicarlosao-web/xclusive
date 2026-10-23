@@ -57,7 +57,7 @@ export default function Explore() {
                 onClick={() => setCategory(cat)}
                 className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                   category === cat
-                    ? 'bg-primary text-white shadow-[0_0_15px_rgba(255,62,114,0.4)]'
+                    ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.4)]'
                     : 'bg-secondary text-foreground hover:bg-secondary/80'
                 }`}
               >
@@ -72,7 +72,7 @@ export default function Explore() {
               onClick={() => setActiveSearchTab('accounts')}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
                 activeSearchTab === 'accounts'
-                  ? 'bg-primary text-white shadow-[0_0_15px_rgba(255,62,114,0.3)]'
+                  ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.3)]'
                   : 'bg-secondary text-foreground hover:bg-secondary/80'
               }`}
             >
@@ -82,7 +82,7 @@ export default function Explore() {
               onClick={() => setActiveSearchTab('hashtags')}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
                 activeSearchTab === 'hashtags'
-                  ? 'bg-primary text-white shadow-[0_0_15px_rgba(255,62,114,0.3)]'
+                  ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.3)]'
                   : 'bg-secondary text-foreground hover:bg-secondary/80'
               }`}
             >

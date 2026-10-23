@@ -52,16 +52,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-50 w-[80px] lg:w-[245px] border-r border-border bg-card transition-all duration-300">
         <div className="p-4 lg:p-6 mb-2">
           <Link href="/home" className="flex items-center group">
+            {/* Dois logos trocados por tema: o escuro (palavra branca, com brilho) só no noturno; o claro (palavra escura) só no diurno */}
             <img
               src="/logo.png"
               alt="Xclusive"
-              className="hidden lg:block h-7 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+              className="hidden lg:dark:block h-7 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+            />
+            <img
+              src="/logo-claro.png"
+              alt="Xclusive"
+              className="hidden lg:block lg:dark:hidden h-7 w-auto object-contain group-hover:scale-105 transition-transform"
             />
             <div className="lg:hidden w-8 h-8 overflow-hidden flex items-center justify-start">
               <img
                 src="/logo.png"
                 alt="Xclusive"
-                className="h-8 max-w-none object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+                className="hidden dark:block h-8 max-w-none object-contain drop-shadow-[0_0_15px_rgba(255,59,92,0.35)] group-hover:scale-105 transition-transform"
+              />
+              <img
+                src="/logo-claro.png"
+                alt="Xclusive"
+                className="dark:hidden h-8 max-w-none object-contain group-hover:scale-105 transition-transform"
               />
             </div>
           </Link>
@@ -119,8 +130,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <Radio className={cn(
                     "w-6 h-6",
                     location.startsWith('/ir-em-direto')
-                      ? "stroke-[2.5px] text-red-500 animate-pulse"
-                      : "stroke-[1.5px] text-red-500 group-hover:scale-110 transition-transform"
+                      ? "stroke-[2.5px] text-red-600 dark:text-red-500 animate-pulse"
+                      : "stroke-[1.5px] text-red-600 dark:text-red-500 group-hover:scale-110 transition-transform"
                   )} />
                   <span className="hidden lg:block text-[15px]">Ir em Direto</span>
                 </div>
@@ -163,7 +174,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <Link href="/tornar-criador">
               <div className={cn(
                 "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-primary/10 border border-transparent hover:border-primary/30",
-                location.startsWith('/tornar-criador') ? "text-primary font-semibold bg-primary/10 border-primary/30" : "text-primary/70"
+                location.startsWith('/tornar-criador') ? "text-primary font-semibold bg-primary/10 border-primary/30" : "text-primary dark:text-primary/70"
               )}>
                 <Sparkles className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
                 <span className="hidden lg:block text-[14px] font-semibold">Tornar-se Criador</span>
@@ -177,7 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {saldo !== null && (
             <Link href="/carteira">
               <div className="group flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50 border border-border/50 hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-all cursor-pointer">
-                <Wallet className="w-5 h-5 text-yellow-500 stroke-[1.5px] shrink-0 group-hover:scale-110 transition-transform" />
+                <Wallet className="w-5 h-5 text-yellow-600 dark:text-yellow-500 stroke-[1.5px] shrink-0 group-hover:scale-110 transition-transform" />
                 <div className="hidden lg:flex flex-col leading-tight flex-1 min-w-0">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Carteira</span>
                   <span className="text-sm font-bold">{saldo.toLocaleString('pt-PT')} Kz</span>
@@ -187,7 +198,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   className="hidden lg:flex w-6 h-6 rounded-full bg-yellow-500/20 hover:bg-yellow-500/40 items-center justify-center transition-colors shrink-0"
                   title="Carregar carteira"
                 >
-                  <Plus className="w-3.5 h-3.5 text-yellow-500" />
+                  <Plus className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-500" />
                 </button>
               </div>
             </Link>
@@ -199,7 +210,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <span className="hidden lg:block text-[15px]">Mais</span>
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-2 rounded-xl border-border bg-card shadow-2xl mb-2" side="top" align="start">
+            <PopoverContent className="w-56 p-2 rounded-xl border-border bg-card shadow-lg dark:shadow-2xl mb-2" side="top" align="start">
               <div className="flex flex-col gap-1">
                 <Link href="/definicoes">
                   <Button variant="ghost" className="w-full justify-start gap-3 rounded-lg h-11 px-3">

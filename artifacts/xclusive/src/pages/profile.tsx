@@ -136,7 +136,7 @@ export default function Profile() {
       <div className="px-4 sm:px-8">
         {/* Header section with avatar and actions */}
         <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-end -mt-16 sm:-mt-20 mb-4 sm:mb-6 gap-4">
-          <Avatar className="w-32 h-32 sm:w-40 sm:h-40 border-4 border-background shadow-xl">
+          <Avatar className="w-32 h-32 sm:w-40 sm:h-40 border-4 border-background shadow-md dark:shadow-xl">
             <AvatarImage src={profile.avatarUrl || ''} className="object-cover" />
             <AvatarFallback className="text-4xl">{profile.nomeExibicao[0]}</AvatarFallback>
           </Avatar>
@@ -157,7 +157,7 @@ export default function Profile() {
                   </Link>
                 ) : (
                   <Link href="/tornar-criador">
-                    <Button className="font-semibold bg-gradient-to-r from-primary to-orange-500 hover:opacity-90 text-white shadow-[0_0_20px_rgba(255,62,114,0.25)] gap-1.5">
+                    <Button className="font-semibold bg-gradient-to-r from-primary to-orange-700 dark:to-orange-500 hover:opacity-90 text-white shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.25)] gap-1.5">
                       <Star className="w-4 h-4" /> Tornar-se Criador
                     </Button>
                   </Link>
@@ -168,7 +168,7 @@ export default function Profile() {
                 <Button 
                   onClick={handleFollowToggle}
                   variant={isFollowing ? "outline" : "default"}
-                  className={`font-semibold flex-1 sm:flex-none ${!isFollowing ? 'bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_rgba(255,62,114,0.2)]' : ''}`}
+                  className={`font-semibold flex-1 sm:flex-none ${!isFollowing ? 'bg-primary hover:bg-primary/90 text-white shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.2)]' : ''}`}
                 >
                   {isFollowing ? 'A seguir' : 'Seguir'}
                 </Button>

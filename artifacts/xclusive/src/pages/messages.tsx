@@ -122,7 +122,7 @@ export default function Messages() {
         </div>
         <h2 className="text-2xl font-bold mb-2">As tuas mensagens</h2>
         <p className="text-muted-foreground mb-6">Envia fotos e mensagens privadas para um amigo ou grupo.</p>
-        <button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-[0_0_20px_rgba(255,62,114,0.3)]">
+        <button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 py-2.5 rounded-full transition-colors shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.3)]">
           Enviar Mensagem
         </button>
       </div>

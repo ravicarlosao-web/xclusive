@@ -315,8 +315,8 @@ export default function Home() {
         {liveStreams.length > 0 && (
           <div className="mb-6 px-4 sm:px-0">
             <div className="flex items-center gap-2 mb-3">
-              <Radio className="w-4 h-4 text-red-500 animate-pulse" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-red-500">Ao Vivo Agora</h2>
+              <Radio className="w-4 h-4 text-red-600 dark:text-red-500 animate-pulse" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-red-600 dark:text-red-500">Ao Vivo Agora</h2>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
               {liveStreams.map((stream) => (
@@ -331,7 +331,7 @@ export default function Home() {
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+                          <div className="w-full h-full bg-gradient-to-br from-red-600 dark:from-red-500 to-pink-700 dark:to-pink-600 flex items-center justify-center">
                             <span className="text-white font-bold text-lg">
                               {(stream.criador.nomeExibicao ?? stream.criador.username).slice(0, 2).toUpperCase()}
                             </span>
@@ -454,7 +454,7 @@ export default function Home() {
                 <span className="text-sm text-muted-foreground">{user.nomeExibicao}</span>
               </div>
             </Link>
-            <Link href="/login" className="text-xs font-bold text-primary hover:text-white transition-colors">
+            <Link href="/login" className="text-xs font-bold text-primary hover:text-foreground transition-colors">
               Mudar
             </Link>
           </div>
@@ -464,12 +464,12 @@ export default function Home() {
         <div className="mb-6 bg-card/70 border border-border/80 rounded-2xl p-3.5 shadow-sm">
           <div className="flex items-center justify-between mb-3 px-0.5">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-[0_0_10px_rgba(244,63,94,0.35)]">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-none dark:shadow-[0_0_10px_rgba(244,63,94,0.35)]">
                 <Flame className="w-3.5 h-3.5 text-white fill-current" />
               </div>
               <span className="text-sm font-bold tracking-tight text-foreground">Top Criadores</span>
             </div>
-            <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
               Em alta
             </span>
           </div>
@@ -506,11 +506,11 @@ export default function Home() {
                 const isThird = index === 2;
 
                 const rankBadgeClass = isFirst
-                  ? "bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]"
+                  ? "bg-amber-400/20 text-amber-800 dark:text-amber-300 border-amber-400/50 shadow-none dark:shadow-[0_0_8px_rgba(251,191,36,0.3)]"
                   : isSecond
-                  ? "bg-slate-300/20 text-slate-200 border-slate-300/40"
+                  ? "bg-slate-300/20 text-slate-600 dark:text-slate-200 border-slate-300/40"
                   : isThird
-                  ? "bg-amber-700/20 text-amber-400 border-amber-600/40"
+                  ? "bg-amber-700/20 text-amber-800 dark:text-amber-400 border-amber-600/40"
                   : "bg-secondary text-muted-foreground border-border/60";
 
                 const isFollowing = followingMap[creator.id] ?? creator.estaASeguir;
@@ -545,12 +545,12 @@ export default function Home() {
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
-                          <span className="flex items-center gap-0.5 text-rose-400 font-medium">
+                          <span className="flex items-center gap-0.5 text-rose-600 dark:text-rose-400 font-medium">
                             <Heart className="w-2.5 h-2.5 fill-current" />
                             {formatNumberCompact(creator.totalCurtidas)}
                           </span>
                           <span className="text-muted-foreground/40">•</span>
-                          <span className="text-[10px] text-muted-foreground/80 font-medium truncate">
+                          <span className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium truncate">
                             {creator.totalPublicacoes} {creator.totalPublicacoes === 1 ? 'post' : 'posts'}
                           </span>
                         </div>
@@ -564,7 +564,7 @@ export default function Home() {
                       className={`font-bold text-[11px] h-7 px-2.5 rounded-lg shrink-0 transition-colors ${
                         isFollowing
                           ? 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                          : 'text-primary hover:text-white hover:bg-primary/20 bg-primary/10'
+                          : 'text-primary hover:text-foreground hover:bg-primary/20 bg-primary/10'
                       }`}
                       onClick={() => handleSuggestionFollow(creator.id, creator.username)}
                     >
@@ -615,7 +615,7 @@ export default function Home() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`font-bold text-xs h-7 px-2.5 transition-colors ${followingMap[suggestion.id] ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:text-white hover:bg-primary/20'}`}
+                    className={`font-bold text-xs h-7 px-2.5 transition-colors ${followingMap[suggestion.id] ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:text-foreground hover:bg-primary/20'}`}
                     onClick={() => handleSuggestionFollow(suggestion.id, suggestion.username)}
                   >
                     {followingMap[suggestion.id] ? 'A seguir' : 'Seguir'}
