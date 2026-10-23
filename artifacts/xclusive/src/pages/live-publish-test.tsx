@@ -203,7 +203,7 @@ export default function LivePublishTest() {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-5xl space-y-6">
+    <div className="dark bg-background text-foreground container mx-auto p-4 max-w-5xl space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-border pb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

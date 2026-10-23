@@ -1,8 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-AO" dir="ltr">
+<html lang="pt-AO" dir="ltr" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+
+    <!-- Tema: o modo noturno (classe "dark" em <html>) é o PADRÃO para todos, sempre; a preferência do sistema operativo é ignorada.
+         Só o valor exato 'claro' guardado pelo utilizador tira o escuro. Corre antes do CSS e do React (sem flash). -->
+    <script>
+      try { if (localStorage.getItem('xclusive_tema') === 'claro') document.documentElement.classList.remove('dark'); } catch (e) {}
+    </script>
 
     <!-- ╔══════════════════════════════════════════╗ -->
     <!-- ║           PRIMARY SEO META TAGS          ║ -->

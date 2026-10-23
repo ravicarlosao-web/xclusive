@@ -48,7 +48,7 @@ export default function Reels() {
   }, [initialId, posts.length]);
 
   return (
-    <div className="h-[calc(100dvh-60px)] md:h-[100dvh] w-full bg-black flex items-center justify-center relative overflow-hidden">
+    <div className="dark text-foreground h-[calc(100dvh-60px)] md:h-[100dvh] w-full bg-black flex items-center justify-center relative overflow-hidden">
       <div className="w-full h-full max-w-[500px] overflow-y-scroll snap-y snap-mandatory no-scrollbar relative">
         {isLoading ? (
           <div className="w-full h-[calc(100dvh-60px)] md:h-[100dvh] flex items-center justify-center text-white/60">

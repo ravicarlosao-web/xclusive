@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AgeGate, idadeJaConfirmada } from '@/components/shared/AgeGate';
 import { useEffect } from 'react';
+import { useTema } from '@/hooks/useTema';
 
 // Pages
 import Login from '@/pages/login';
@@ -162,9 +163,7 @@ function Router() {
 }
 
 function App() {
-  useEffect(() => {
-    document.documentElement.classList.add('dark');
-  }, []);
+  const { noturno } = useTema();
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -176,7 +175,7 @@ function App() {
           </AuthProvider>
         </WouterRouter>
         <Toaster />
-        <SonnerToaster position="bottom-center" theme="dark" />
+        <SonnerToaster position="bottom-center" theme={noturno ? 'dark' : 'light'} />
       </TooltipProvider>
     </QueryClientProvider>
   );
