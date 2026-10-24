@@ -88,7 +88,7 @@ function StepProgress({ current }: { current: Step }) {
         const done = currentIdx > idx;
         const active = currentIdx === idx;
         return (
-          <div key={step} className="flex items-center gap-2">
+          <div key={step} className="flex items-center gap-1 sm:gap-2">
             <div className="flex flex-col items-center gap-1">
               <div className={cn(
                 'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300',
@@ -103,7 +103,7 @@ function StepProgress({ current }: { current: Step }) {
               </span>
             </div>
             {idx < progressSteps.length - 1 && (
-              <div className={cn('w-8 sm:w-12 h-0.5 transition-all duration-500 mt-[-14px]', done ? 'bg-primary' : 'bg-border')} />
+              <div className={cn('w-3 sm:w-12 h-0.5 transition-all duration-500 mt-[-14px]', done ? 'bg-primary' : 'bg-border')} />
             )}
           </div>
         );
