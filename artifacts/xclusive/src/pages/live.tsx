@@ -875,15 +875,15 @@ function FeedRow({ item, isOverlay = false }: FeedRowProps) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap leading-tight">
-            <span className="font-bold text-xs text-amber-300">@{item.username}</span>
-            <span className="text-[11px] text-white/70">enviou</span>
-            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-[10px] px-1.5 py-0 border-0 shadow-sm">
+            <span className="font-bold text-xs text-amber-700 dark:text-amber-300">@{item.username}</span>
+            <span className="text-[11px] text-foreground/70">enviou</span>
+            <Badge className="bg-gradient-to-r from-amber-700 dark:from-amber-500 to-orange-700 dark:to-orange-500 text-white font-extrabold text-[10px] px-1.5 py-0 border-0 shadow-sm">
               {formatKz(item.valor)}
             </Badge>
-            <span className="text-[10px] text-white/50 ml-auto">{timeAgo(item.enviadoEm)}</span>
+            <span className="text-[10px] text-foreground/70 dark:text-foreground/50 ml-auto">{timeAgo(item.enviadoEm)}</span>
           </div>
           {item.mensagem && (
-            <p className="text-amber-100/95 font-medium mt-1 break-words text-xs leading-snug">
+            <p className="text-amber-900 dark:text-amber-100/95 font-medium mt-1 break-words text-xs leading-snug">
               {item.mensagem}
             </p>
           )}
@@ -907,7 +907,7 @@ function FeedRow({ item, isOverlay = false }: FeedRowProps) {
     >
       <Avatar className="w-5 h-5 shrink-0 mt-0.5 border border-white/10">
         <AvatarImage src={item.avatarUrl ?? undefined} />
-        <AvatarFallback className="text-[9px] bg-primary/20 text-primary font-bold">
+        <AvatarFallback className="text-[9px] bg-primary/10 text-primary font-bold">
           {item.username.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
@@ -1000,7 +1000,7 @@ function LiveTicketGate({
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-foreground/60">O teu saldo</span>
-            <span className={cn('text-sm font-semibold', insuficiente ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
+            <span className={cn('text-sm font-semibold', insuficiente ? 'text-red-700 dark:text-red-400' : 'text-foreground')}>
               {saldo !== null ? formatKz(saldo) : '—'}
             </span>
           </div>
@@ -1019,11 +1019,11 @@ function LiveTicketGate({
           )}
 
           {insuficiente ? (
-            <Button onClick={onTopUp} className="w-full h-11 font-bold">
+            <Button onClick={onTopUp} className="w-full h-11 font-bold dark:bg-[hsl(344_90%_47%)] dark:hover:bg-[hsl(344_90%_42%)]">
               Carregar carteira
             </Button>
           ) : (
-            <Button onClick={onBuy} disabled={isBuying} className="w-full h-11 font-bold gap-2">
+            <Button onClick={onBuy} disabled={isBuying} className="w-full h-11 font-bold gap-2 dark:bg-[hsl(344_90%_47%)] dark:hover:bg-[hsl(344_90%_42%)]">
               {isBuying ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> A comprar...</>
               ) : (
@@ -1420,7 +1420,7 @@ export default function LivePage() {
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+              <DropdownMenuContent align="end" className="dark bg-zinc-900 border-zinc-800 text-white">
                 <DropdownMenuItem onClick={handleShare} className="gap-2 cursor-pointer">
                   <Share2 className="w-4 h-4" /> Partilhar transmissão
                 </DropdownMenuItem>
@@ -1516,7 +1516,7 @@ export default function LivePage() {
       {/* ══════════════════════════════════════════════════════════════════════════
           LAYOUT DESKTOP: DUAS COLUNAS (VÍDEO À ESQUERDA + CHAT À DIREITA)
           ══════════════════════════════════════════════════════════════════════════ */}
-      <div className="dark bg-background text-foreground hidden lg:block max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <div className="bg-background text-foreground hidden lg:block max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header Superior Desktop */}
         <div className="flex items-center justify-between gap-4 p-3 rounded-2xl bg-card/60 backdrop-blur-md border border-border">
           <div className="flex items-center gap-3 min-w-0">
@@ -1558,7 +1558,7 @@ export default function LivePage() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-amber-500">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-500">
                 <AlertTriangle className="w-5 h-5" />
                 <span className="text-sm">Live não encontrada ou já terminou</span>
               </div>
@@ -1570,8 +1570,8 @@ export default function LivePage() {
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2.5 py-1 rounded-full bg-muted/40 border border-border">
               {isConnected ? (
                 <>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-emerald-500 font-medium">Ligado</span>
+                  <Wifi className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-500" />
+                  <span className="text-emerald-700 dark:text-emerald-500 font-medium">Ligado</span>
                 </>
               ) : (
                 <>
@@ -1592,7 +1592,7 @@ export default function LivePage() {
         <div className="grid grid-cols-12 gap-5 items-start">
           {/* Coluna Esquerda: Player de Vídeo HLS */}
           <div className="col-span-8 space-y-3">
-            <div className="relative group">
+            <div className="dark relative group">
               {isDesktop && (
                 <LiveVideoPlayer
                   streamKey={playback?.streamKey ?? undefined}
@@ -1642,7 +1642,7 @@ export default function LivePage() {
                 <Button
                   size="sm"
                   onClick={() => setTipOpen(true)}
-                  className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0 font-semibold text-xs h-8 px-3"
+                  className="gap-2 bg-gradient-to-r from-amber-700 dark:from-amber-500 to-orange-700 dark:to-orange-500 hover:from-amber-800 dark:hover:from-amber-600 hover:to-orange-800 dark:hover:to-orange-600 text-white border-0 font-semibold text-xs h-8 px-3"
                 >
                   <Gift className="w-3.5 h-3.5" />
                   Enviar Gorjeta
@@ -1673,7 +1673,7 @@ export default function LivePage() {
                 <div className="flex flex-col items-center justify-center h-full text-center p-6 text-muted-foreground">
                   <MessageSquare className="w-8 h-8 mb-2 opacity-30" />
                   <p className="text-xs font-medium">Ainda sem mensagens no chat.</p>
-                  <p className="text-[11px] opacity-70 mt-0.5">Sê o primeiro a comentar a transmissão!</p>
+                  <p className="text-[11px] dark:opacity-80 mt-0.5">Sê o primeiro a comentar a transmissão!</p>
                 </div>
               ) : (
                 feed.map((item) => <FeedRow key={item.id} item={item} isOverlay={false} />)
@@ -1697,7 +1697,7 @@ export default function LivePage() {
                     <span
                       className={cn(
                         'absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono',
-                        chatMessage.length >= 280 ? 'text-amber-500 font-bold' : 'text-muted-foreground'
+                        chatMessage.length >= 280 ? 'text-amber-700 dark:text-amber-500 font-bold' : 'text-muted-foreground'
                       )}
                     >
                       {chatMessage.length}/300
@@ -1722,7 +1722,7 @@ export default function LivePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setTipOpen(true)}
-                  className="w-full gap-2 text-xs h-8 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                  className="w-full gap-2 text-xs h-8 border-amber-500/30 text-amber-700 dark:text-amber-500 hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-400"
                 >
                   <Gift className="w-3.5 h-3.5" />
                   Enviar Gorjeta ao Criador
@@ -1738,7 +1738,7 @@ export default function LivePage() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Gift className="w-5 h-5 text-amber-400" />
+              <Gift className="w-5 h-5 text-amber-700 dark:text-amber-400" />
               Enviar Gorjeta
             </DialogTitle>
           </DialogHeader>
@@ -1764,7 +1764,7 @@ export default function LivePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setTipValor(String(v))}
-                  className={tipValor === String(v) ? 'border-amber-500 text-amber-400' : ''}
+                  className={tipValor === String(v) ? 'border-amber-500 text-amber-700 dark:text-amber-400' : ''}
                 >
                   {v} Kz
                 </Button>
@@ -1792,7 +1792,7 @@ export default function LivePage() {
             <Button
               onClick={handleSendTip}
               disabled={!tipValor || Number(tipValor) <= 0 || sendingTip}
-              className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 border-0"
+              className="gap-2 bg-gradient-to-r from-amber-700 dark:from-amber-500 to-orange-700 dark:to-orange-500 hover:from-amber-800 dark:hover:from-amber-600 hover:to-orange-800 dark:hover:to-orange-600 border-0"
             >
               {sendingTip ? (
                 <span className="animate-pulse">A enviar...</span>

@@ -149,13 +149,13 @@ function CreatorFeedRow({ item, isPanel = false }: { item: LiveFeedItem; isPanel
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap leading-tight">
-            <span className={cn('font-bold', isPanel ? 'text-amber-400' : 'text-amber-300')}>
+            <span className={cn('font-bold', isPanel ? 'text-amber-700 dark:text-amber-400' : 'text-amber-300')}>
               @{item.username}
             </span>
             <span className={cn('text-[10px]', isPanel ? 'text-muted-foreground' : 'text-white/70')}>
               enviou
             </span>
-            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-[10px] px-1.5 py-0 border-0 shadow-sm">
+            <Badge className="bg-gradient-to-r from-amber-700 dark:from-amber-500 to-orange-700 dark:to-orange-500 text-white font-extrabold text-[10px] px-1.5 py-0 border-0 shadow-sm">
               +{formatKz(item.valor)}
             </Badge>
           </div>
@@ -184,7 +184,7 @@ function CreatorFeedRow({ item, isPanel = false }: { item: LiveFeedItem; isPanel
     >
       <Avatar className="w-4 h-4 shrink-0 mt-0.5 border border-white/15">
         <AvatarImage src={item.avatarUrl ?? undefined} />
-        <AvatarFallback className="text-[8px] bg-primary/30 text-white font-bold">
+        <AvatarFallback className="text-[8px] bg-primary/30 text-foreground font-bold">
           {item.username.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
@@ -231,7 +231,7 @@ function LiveAccessPicker({
     cn(
       'flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60',
       active
-        ? 'border-primary bg-primary/20 text-primary'
+        ? 'border-primary bg-primary/10 dark:bg-primary/20 text-primary'
         : dark
           ? 'border-white/20 bg-white/5 text-white/80'
           : 'border-border bg-secondary/30 text-muted-foreground',
@@ -260,7 +260,7 @@ function LiveAccessPicker({
             placeholder={`Preço do bilhete em Kz (${LIVE_TICKET_MIN_KZ} a ${LIVE_TICKET_MAX_KZ.toLocaleString('pt-PT')})`}
             className={cn('h-10 text-sm', dark && 'bg-zinc-950/70 border-white/20 text-white placeholder:text-white/40')}
           />
-          <p className={cn('text-[11px]', precoInvalido ? 'text-red-400' : dark ? 'text-white/60' : 'text-muted-foreground')}>
+          <p className={cn('text-[11px]', precoInvalido ? 'text-red-700 dark:text-red-400' : dark ? 'text-white/60' : 'text-muted-foreground')}>
             {precoInvalido
               ? `O preço deve ser um inteiro entre ${LIVE_TICKET_MIN_KZ} e ${LIVE_TICKET_MAX_KZ.toLocaleString('pt-PT')} Kz.`
               : 'O tipo e o preço ficam fixos até a live terminar.'}
@@ -684,7 +684,7 @@ export default function IrEmDireto() {
   if (!user.verificado) {
     return (
       <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-6">
-        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-500 flex items-center justify-center mx-auto">
           <AlertTriangle className="w-8 h-8" />
         </div>
         <h1 className="text-2xl font-bold">Conta Pendente de Aprovação</h1>
@@ -708,7 +708,7 @@ export default function IrEmDireto() {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md shadow-2xl text-center overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-red-600 via-pink-600 to-amber-500" />
           <CardHeader className="pt-8 pb-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-3">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Radio className="w-8 h-8" />
             </div>
             <CardTitle className="text-2xl font-bold">Transmissão Terminada</CardTitle>
@@ -729,23 +729,23 @@ export default function IrEmDireto() {
 
               <div className="p-4 rounded-xl bg-secondary/50 border border-border/40">
                 <div className="text-xs text-muted-foreground uppercase font-medium flex items-center justify-center gap-1.5 mb-1">
-                  <Users className="w-3.5 h-3.5 text-blue-400" /> Espectadores
+                  <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Espectadores
                 </div>
                 <div className="text-xl sm:text-2xl font-bold font-mono">{viewers}</div>
               </div>
 
               <div className="p-4 rounded-xl bg-secondary/50 border border-border/40 col-span-2 sm:col-span-1">
                 <div className="text-xs text-muted-foreground uppercase font-medium flex items-center justify-center gap-1.5 mb-1">
-                  <Gift className="w-3.5 h-3.5 text-amber-400" /> Gorjetas
+                  <Gift className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" /> Gorjetas
                 </div>
-                <div className="text-base sm:text-lg font-bold font-mono text-amber-400">
+                <div className="text-base sm:text-lg font-bold font-mono text-amber-700 dark:text-amber-400">
                   {sessionTipsCount} ({formatKz(sessionTipsTotalKz)})
                 </div>
               </div>
             </div>
 
             <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3">
-              <Button onClick={handleResetForNewLive} className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold">
+              <Button onClick={handleResetForNewLive} className="gap-2 bg-primary hover:bg-primary/90 text-white font-semibold dark:bg-[hsl(344_90%_47%)] dark:hover:bg-[hsl(344_90%_42%)]">
                 <RefreshCw className="w-4 h-4" />
                 Nova Transmissão
               </Button>
@@ -762,14 +762,14 @@ export default function IrEmDireto() {
 
   // ─── ECRÃ PRINCIPAL DE TRANSMISSÃO ─────────────────────────────────────────
   return (
-    <div className="dark bg-background text-foreground w-full max-w-6xl mx-auto">
+    <div className="bg-background text-foreground w-full max-w-6xl mx-auto max-md:overflow-x-clip">
 
       {/* ═══════════════════════════════════════════════════════════════════════
           MOBILE: Layout fullscreen tipo Instagram Live (apenas < md)
       ═══════════════════════════════════════════════════════════════════════ */}
       <div className="md:hidden -mx-3 sm:-mx-4">
         <div
-          className="relative w-full bg-black overflow-hidden"
+          className="dark relative w-full bg-black overflow-hidden"
           style={{ height: 'calc(100dvh - 60px)' }}
         >
           {/* Vídeo fullscreen em fundo */}
@@ -818,7 +818,7 @@ export default function IrEmDireto() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute top-20 left-3 right-3 z-30 p-3 rounded-xl bg-destructive/90 backdrop-blur-md border border-destructive/50 flex items-start gap-2 text-white text-xs"
+              className="absolute top-20 left-3 right-3 z-30 p-3 rounded-xl bg-red-800/90 backdrop-blur-md border border-destructive/50 flex items-start gap-2 text-white text-xs"
             >
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -1122,7 +1122,7 @@ export default function IrEmDireto() {
               </div>
             </div>
             {isLive && (
-              <Button onClick={() => setShowEndDialog(true)} disabled={isEnding} variant="destructive" className="gap-2 font-semibold shadow-lg shadow-red-950/40">
+              <Button onClick={() => setShowEndDialog(true)} disabled={isEnding} variant="destructive" className="gap-2 font-semibold dark:bg-red-600 dark:hover:bg-red-700 shadow-none dark:shadow-lg dark:shadow-red-950/40">
                 <Square className="w-4 h-4 fill-current" />
                 Terminar Live
               </Button>
@@ -1150,7 +1150,7 @@ export default function IrEmDireto() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna de Vídeo */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
+            <div className="dark relative aspect-[3/4] sm:aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center group">
               <video
                 ref={setDesktopVideoRef}
                 autoPlay
@@ -1280,8 +1280,8 @@ export default function IrEmDireto() {
 
             <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
               <span>Câmara: <strong className="text-foreground">{publisher.facingMode === 'user' ? 'Frontal' : 'Traseira'}</strong></span>
-              <span>Microfone: <strong className={publisher.isAudioEnabled ? 'text-emerald-400' : 'text-red-400'}>{publisher.isAudioEnabled ? 'Ligado' : 'Mutado'}</strong></span>
-              <span>Vídeo: <strong className={publisher.isVideoEnabled ? 'text-emerald-400' : 'text-red-400'}>{publisher.isVideoEnabled ? 'Ativo' : 'Desligado'}</strong></span>
+              <span>Microfone: <strong className={publisher.isAudioEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>{publisher.isAudioEnabled ? 'Ligado' : 'Mutado'}</strong></span>
+              <span>Vídeo: <strong className={publisher.isVideoEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>{publisher.isVideoEnabled ? 'Ativo' : 'Desligado'}</strong></span>
             </div>
           </div>
 
@@ -1310,7 +1310,7 @@ export default function IrEmDireto() {
                   <Button
                     onClick={handleStartBroadcast}
                     disabled={isStarting || !publisher.mediaStream || liveMais18 === null}
-                    className="w-full h-12 text-base font-bold bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-xl shadow-red-950/40 gap-2.5 transition-all group"
+                    className="w-full h-12 text-base font-bold bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-none dark:shadow-xl dark:shadow-red-950/40 gap-2.5 transition-all group"
                   >
                     {isStarting ? (
                       <><Loader2 className="w-5 h-5 animate-spin" />A Preparar Live...</>
@@ -1336,7 +1336,7 @@ export default function IrEmDireto() {
                     <div className="flex items-center gap-2">
                       <Input readOnly value={streamId ? `${typeof window !== 'undefined' ? window.location.origin : ''}/live/${streamId}` : ''} className="bg-secondary/50 font-mono text-xs h-9 select-all" />
                       <Button onClick={handleCopyShareLink} variant="outline" size="sm" className="gap-1.5 h-9 shrink-0">
-                        {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        {copiedLink ? <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
                         <span className="hidden sm:inline">{copiedLink ? 'Copiado' : 'Copiar'}</span>
                       </Button>
                     </div>
@@ -1355,7 +1355,7 @@ export default function IrEmDireto() {
                       Chat e Gorjetas ao Vivo
                     </CardTitle>
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 gap-1 px-2">
+                      <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-400 border-amber-500/30 gap-1 px-2">
                         <Gift className="w-3 h-3" />{formatKz(totalTipsKz)}
                       </Badge>
                       <Badge variant="secondary" className="text-[10px] gap-1 px-1.5">
@@ -1369,7 +1369,7 @@ export default function IrEmDireto() {
                         <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full">
                           <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30 text-primary" />
                           <p className="font-medium">O chat está pronto e ligado.</p>
-                          <p className="text-[11px] opacity-70 mt-0.5">As mensagens dos espectadores aparecerão aqui.</p>
+                          <p className="text-[11px] dark:opacity-80 mt-0.5">As mensagens dos espectadores aparecerão aqui.</p>
                         </div>
                       ) : (
                         feed.map((item) => <CreatorFeedRow key={item.id} item={item} isPanel={true} />)
@@ -1418,7 +1418,7 @@ export default function IrEmDireto() {
             <AlertDialogAction
               onClick={handleEndBroadcast}
               disabled={isEnding}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 dark:bg-red-600 dark:hover:bg-red-700 gap-2"
             >
               {isEnding ? (
                 <><Loader2 className="w-4 h-4 animate-spin" />A Encerrar...</>
