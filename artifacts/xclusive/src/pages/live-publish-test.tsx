@@ -187,23 +187,23 @@ export default function LivePublishTest() {
   const getBadgeVariant = (state: LiveConnectionState) => {
     switch (state) {
       case 'live':
-        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+        return 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 border-emerald-500/40';
       case 'connecting':
       case 'requesting-permission':
-        return 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+        return 'bg-amber-500/20 text-amber-800 dark:text-amber-400 border-amber-500/40';
       case 'reconnecting':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/40';
+        return 'bg-orange-500/20 text-orange-800 dark:text-orange-400 border-orange-500/40';
       case 'error':
-        return 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+        return 'bg-rose-500/20 text-rose-700 dark:text-rose-400 border-rose-500/40';
       case 'preview-ready':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/40';
+        return 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40';
       default:
         return 'bg-muted text-muted-foreground';
     }
   };
 
   return (
-    <div className="dark bg-background text-foreground container mx-auto p-4 max-w-5xl space-y-6">
+    <div className="bg-background text-foreground container mx-auto p-4 max-w-5xl space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-border pb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -217,7 +217,7 @@ export default function LivePublishTest() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={getBadgeVariant(publisher.connectionState)}>
             {publisher.connectionState === 'live' && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1.5" />
+              <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400 animate-pulse mr-1.5" />
             )}
             {publisher.connectionState.toUpperCase()}
           </Badge>
@@ -230,11 +230,11 @@ export default function LivePublishTest() {
           <CardTitle className="text-sm font-medium flex items-center justify-between">
             <span>Sessão Atual</span>
             {isAuthenticated ? (
-              <span className="text-xs text-emerald-400 font-normal">
+              <span className="text-xs text-emerald-700 dark:text-emerald-400 font-normal">
                 Autenticado como: <strong>{user?.nomeExibicao || user?.username}</strong> ({user?.tipoConta})
               </span>
             ) : (
-              <span className="text-xs text-rose-400 font-normal flex items-center gap-1">
+              <span className="text-xs text-rose-700 dark:text-rose-400 font-normal flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" /> Não autenticado — faça login primeiro para testar o endpoint /start
               </span>
             )}
@@ -245,7 +245,7 @@ export default function LivePublishTest() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Painel Esquerdo: Vídeo de Preview e Ações */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-border shadow-inner flex items-center justify-center">
+          <div className="dark relative aspect-video bg-black rounded-xl overflow-hidden border border-border shadow-inner flex items-center justify-center">
             <video
               ref={videoRef}
               autoPlay
@@ -324,7 +324,7 @@ export default function LivePublishTest() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+              className="text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/30"
               onClick={() => publisher.cleanup()}
               disabled={!publisher.mediaStream && publisher.connectionState === 'idle'}
             >
@@ -365,7 +365,7 @@ export default function LivePublishTest() {
                 <div className="p-2.5 rounded bg-muted/60 text-xs space-y-1 font-mono break-all">
                   <div className="flex justify-between text-muted-foreground">
                     <span>ID: <strong>{streamId}</strong></span>
-                    <span>Status na BD: <strong className="text-amber-400">{backendStatus}</strong></span>
+                    <span>Status na BD: <strong className="text-amber-800 dark:text-amber-400">{backendStatus}</strong></span>
                   </div>
                   <div className="pt-1">
                     <span className="text-muted-foreground">StreamKey:</span> {streamKey}
@@ -424,7 +424,7 @@ export default function LivePublishTest() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="col-span-2 text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
+                    className="col-span-2 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
                     disabled
                   >
                     <CheckCircle2 className="h-4 w-4 mr-1.5" />
@@ -435,7 +435,7 @@ export default function LivePublishTest() {
                 <Button
                   variant="default"
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-medium"
                   onClick={handleStartPublishing}
                   disabled={
                     !streamKey ||
@@ -450,6 +450,7 @@ export default function LivePublishTest() {
                 <Button
                   variant="destructive"
                   size="sm"
+                  className="dark:bg-red-600 dark:hover:bg-red-700"
                   onClick={handleStopPublishing}
                   disabled={publisher.connectionState !== 'live' && publisher.connectionState !== 'connecting'}
                 >
@@ -487,7 +488,7 @@ export default function LivePublishTest() {
                   {activeLives.map((st) => (
                     <div key={st.id} className="text-xs p-2 rounded bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center">
                       <span>Live #{st.id} ({st.criador?.nomeExibicao || st.criador?.username})</span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-400">AO VIVO</Badge>
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400">AO VIVO</Badge>
                     </div>
                   ))}
                 </div>
@@ -498,7 +499,7 @@ export default function LivePublishTest() {
       </div>
 
       {/* Logs do Evento */}
-      <Card className="bg-black/40 border-border">
+      <Card className="bg-muted/40 dark:bg-black/40 border-border">
         <CardHeader className="py-2.5 px-4 flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-mono text-muted-foreground">Logs de Sinalização e Transmissão</CardTitle>
           <Button variant="ghost" size="sm" className="h-6 text-[11px]" onClick={() => setLogs([])}>
@@ -506,22 +507,22 @@ export default function LivePublishTest() {
           </Button>
         </CardHeader>
         <CardContent className="px-4 pb-3">
-          <div className="h-44 overflow-y-auto font-mono text-xs space-y-1 rounded bg-black/60 p-2 border border-border/50">
+          <div className="h-44 overflow-y-auto font-mono text-xs space-y-1 rounded bg-muted/60 dark:bg-black/60 p-2 border border-border/50">
             {logs.length === 0 ? (
               <span className="text-muted-foreground text-[11px]">Nenhum log registado ainda...</span>
             ) : (
               logs.map((lg, i) => (
                 <div key={i} className="flex gap-2">
-                  <span className="text-muted-foreground opacity-60">[{lg.time}]</span>
+                  <span className="text-muted-foreground dark:opacity-80">[{lg.time}]</span>
                   <span
                     className={
                       lg.type === 'success'
-                        ? 'text-emerald-400'
+                        ? 'text-emerald-700 dark:text-emerald-400'
                         : lg.type === 'error'
-                        ? 'text-rose-400 font-semibold'
+                        ? 'text-rose-700 dark:text-rose-400 font-semibold'
                         : lg.type === 'warn'
-                        ? 'text-amber-400'
-                        : 'text-zinc-300'
+                        ? 'text-amber-800 dark:text-amber-400'
+                        : 'text-zinc-700 dark:text-zinc-300'
                     }
                   >
                     {lg.msg}
