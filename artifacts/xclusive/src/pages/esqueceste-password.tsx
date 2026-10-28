@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { Input } from '@/components/ui/input';
 import {
   Form,
@@ -115,6 +116,7 @@ export default function EsquecestePassword() {
           )}
         </div>
       </div>
+      <RodapeLegal className="max-w-sm mx-auto px-4 pb-6" />
     </div>
   );
 }

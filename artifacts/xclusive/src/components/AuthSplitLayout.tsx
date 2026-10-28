@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BotaoTema } from '@/components/shared/BotaoTema';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
 
 /** Logo da versão telemóvel/tablet (< lg): fica no topo do conteúdo, centrado. A coluna esquerda só existe a partir de lg. */
 export function AuthLogoMobile() {
@@ -69,7 +70,7 @@ export function AuthSplitLayout({ frase, centroFixo = false, children }: { frase
 
       {/* Right side - Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md space-y-8">{children}</div>
+        <div className="w-full max-w-md space-y-8">{children}<RodapeLegal /></div>
       </div>
     </div>
   );

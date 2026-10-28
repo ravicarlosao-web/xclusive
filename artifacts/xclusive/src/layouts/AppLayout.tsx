@@ -13,7 +13,11 @@ import { ReactNode, useState } from 'react';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
 import { Mais18Card } from '@/components/shared/Mais18';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { useGetConversations, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
+
+// Rotas em que a página faz scroll no documento (o rodapé fica no fim). As de altura fixa / ecrã inteiro ficam de fora.
+const ROTAS_COM_RODAPE = ['/home', '/perfil/', '/definicoes', '/carteira'];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -46,6 +50,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     { name: 'Notificações', path: '/notificacoes', icon: Heart, badge: notifBadge },
   ];
 
+  const comRodape = ROTAS_COM_RODAPE.some((r) => (r.endsWith('/') ? location.startsWith(r) : location === r || location.startsWith(r + '/')));
   const isLiveWatching = location.startsWith('/live/') && !location.startsWith('/live-publish-test');
 
   return (
@@ -249,6 +254,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         isLiveWatching ? "pb-0" : "pb-[60px] md:pb-0"
       )}>
         {children}
+        {comRodape && <RodapeLegal className="max-w-screen-xl mx-auto px-4 mt-8 pb-4" />}
       </main>
 
       <CreatePostModal open={createPostOpen} onClose={() => setCreatePostOpen(false)} />

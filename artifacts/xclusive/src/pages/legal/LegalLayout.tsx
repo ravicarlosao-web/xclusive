@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { LEGAL_PAGES, useLegalConfig, type LegalDocKey } from './useLegalDocs';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { DOCUMENTOS_LEGAIS } from './conteudo';
 import { LegalDocumento } from './LegalDocumento';
 import { textoResolvido } from './resolver';
@@ -53,12 +54,9 @@ export function LegalLayout({ docKey, marcas }: { docKey: LegalDocKey; marcas?: 
           <p className="text-sm text-muted-foreground" data-testid="legal-a-carregar" aria-busy="true">A carregar…</p>
         )}
 
-        <nav aria-label="Outros documentos legais" className="mt-12 pt-6 border-t border-border/50 flex flex-wrap gap-x-6 gap-y-2">
-          {LEGAL_PAGES.filter((p) => p.key !== docKey).map((p) => (
-            <Link key={p.key} href={p.path} className="text-sm text-muted-foreground hover:text-primary transition-colors">{p.titulo}</Link>
-          ))}
-        </nav>
       </main>
+
+      <RodapeLegal config={config} className="max-w-3xl mx-auto px-4 mt-4 pb-8" />
     </div>
   );
 }
