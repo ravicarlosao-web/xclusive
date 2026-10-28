@@ -49,6 +49,8 @@ const CONFIGS = [
 // resolução independente (cross-check do resolver do site)
 const valor = (n, c) => ({ EMPRESA_NOME: c.empresaNome, EMPRESA_NIF: c.empresaNif ?? "", EMPRESA_SEDE: c.empresaSede ?? "", EMAIL_LEGAL: c.emailLegal, MINIMO_LEVANTAMENTO: String(c.minimoLevantamento).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " Kz", PRAZO_MIN: String(c.prazoLevantamentoMin), PRAZO_MAX: String(c.prazoLevantamentoMax) })[n];
 const resolverIndep = (t, c) => t.replace(/\{\{\?(\w+)\}\}([\s\S]*?)\{\{\/\}\}/g, (_, n, corpo) => valor(n, c) ? corpo : "").replace(/\{\{(\w+)\}\}/g, (_, n) => valor(n, c));
+// Só os documentos com `camposEmBranco` (o formulário 07) podem ter [..]; nos outros continuam proibidos.
+const PROIBIDOS_BRANCOS = (lista) => lista.filter((rx) => rx.source !== "\\[" && rx.source !== "\\]");
 const PROIBIDOS = [/\{\{/, /\}\}/, /\[/, /\]/, /\{/, /\}/, /Texto em preparação/i, /legal-placeholder/, /0\.1-rascunho/, /DENOMINAÇÃO SOCIAL/, /NIF DA SOCIEDADE/, /Endereço da sede social/, /valor em AOA/, /\[legal@/];
 
 // ── LEGAL_DOCS (servidor) ──
@@ -82,15 +84,23 @@ for (const d of DOCUMENTOS) {
     try { saida = doJson.map((t) => R.textoResolvido(t, cfg)); } catch (e) { falhas.push(`${etiqueta} [${nome}]: ${e.message}`); continue; }
     const indep = esperado.map((t) => resolverIndep(t, cfg));
     ok(saida.length === indep.length && saida.every((t, k) => t === indep[k]), `${etiqueta} [${nome}]: o texto resolvido difere do esperado.`);
-    for (const t of saida) for (const rx of PROIBIDOS) ok(!rx.test(t), `${etiqueta} [${nome}]: texto proibido (${rx}) em "${t.slice(0, 80)}".`);
+    for (const t of saida) for (const rx of (d.camposEmBranco ? PROIBIDOS_BRANCOS(PROIBIDOS) : PROIBIDOS)) ok(!rx.test(t), `${etiqueta} [${nome}]: texto proibido (${rx}) em "${t.slice(0, 80)}".`);
     ok(saida.every((t) => !/ ,|,\.|\s{2,}|\.\./.test(t.replace(/\n/g, " "))) , `${etiqueta} [${nome}]: sobraram vírgulas, pontos ou espaços a mais.`);
+  }
+  // 3b. campos em branco: só o documento marcado os tem (e tem-nos); a cópia para descarregar é igual ao original
+  const temColchetes = doJson.some((t) => /\[[^\]]+\]/.test(t));
+  if (d.camposEmBranco) ok(temColchetes, `${etiqueta}: documento marcado com camposEmBranco mas sem campos [..] (os campos em branco têm de ficar como no original).`);
+  else ok(!temColchetes, `${etiqueta}: tem campos [..] mas não está marcado com camposEmBranco.`);
+  if (d.descarregar) {
+    let copia = null; try { copia = fs.readFileSync(path.join(RAIZ, d.descarregar)); } catch { /* falha abaixo */ }
+    ok(!!copia && copia.equals(buf), `${etiqueta}: a cópia para descarregar (${d.descarregar}) não é igual, byte a byte, ao original.`);
   }
   // 4. versão e data
   const sub = commitado.blocos.find((b) => b.tipo === "subtitulo"); const linha = sub ? textoDeRuns(sub.runs).split("\n").pop() : "";
   const m = /^(\d{1,2}) de ([a-zç]+) de (\d{4}) • Versão (\d+(?:\.\d+)*)$/.exec(linha);
   ok(!!m, `${etiqueta}: não encontrei a linha "<data> • Versão X" no documento.`);
-  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = legalDocs[d.chave];
-    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`);
+  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = legalDocs[d.semLegalDocs ? "termos" : d.chave];
+    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.semLegalDocs ? "termos" : d.chave}".`);
     if (ld) { ok(ld.versao === m[4], `${etiqueta}: versão do documento (${m[4]}) ≠ LEGAL_DOCS (${ld.versao}).`); ok(ld.data === data, `${etiqueta}: data do documento (${data}) ≠ LEGAL_DOCS (${ld.data}).`); } }
 }
 for (const e of manifesto) ok(usadas.has(e.id), `Manifesto: a entrada "${e.id}" não foi aplicada.`);

@@ -49,6 +49,8 @@ export const LEGAL_DOCS = {
   conteudo:        { versao: "1.1", atualizadoEm: "2026-10-22" },
   direitosAutor:   { versao: "1.1", atualizadoEm: "2026-10-22" },
   reembolsos:      { versao: "1.1", atualizadoEm: "2026-10-22" },
+  // Termos para Criadoras: aceites na ativação de criadora, NÃO no registo (o registo só exige as 5 chaves acima).
+  criadoras:       { versao: "1.1", atualizadoEm: "2026-10-22" },
 } as const;
 
 /** Idade mínima para criar conta (plataforma de conteúdo adulto). */

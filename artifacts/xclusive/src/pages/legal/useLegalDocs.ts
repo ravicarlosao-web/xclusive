@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { validarConfig, type LegalConfig } from './resolver';
 
-export type LegalDocKey = 'termos' | 'privacidade' | 'conteudo' | 'direitosAutor' | 'reembolsos';
+export type LegalDocKey = 'termos' | 'privacidade' | 'conteudo' | 'direitosAutor' | 'reembolsos' | 'criadoras';
+/** Páginas legais públicas: as chaves de LEGAL_DOCS e o Modelo de Consentimento de Terceiros (não faz parte do aceite). */
+export type PaginaLegalKey = LegalDocKey | 'consentimento';
 export type LegalDocInfo = { versao: string; atualizadoEm: string };
 export type LegalDocs = Record<LegalDocKey, LegalDocInfo>;
 
@@ -13,7 +15,14 @@ export const LEGAL_PAGES: { key: LegalDocKey; path: string; titulo: string; curt
   { key: 'conteudo', path: '/politica-de-conteudo', titulo: 'Política de Conteúdo', curto: 'Política de Conteúdo' },
   { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor (DMCA)', curto: 'Direitos de Autor' },
   { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos', curto: 'Reembolsos' },
+  { key: 'criadoras', path: '/termos-criadoras', titulo: 'Termos para Criadoras', curto: 'Termos para Criadoras' },
 ];
+
+/** Modelo de Consentimento de Terceiros: página pública e documento para descarregar; fora do rodapé global. */
+export const PAGINA_CONSENTIMENTO = { key: 'consentimento' as const, path: '/modelo-consentimento', titulo: 'Modelo de Consentimento de Terceiros' };
+
+/** Ficheiro .docx original do Modelo de Consentimento (cópia byte a byte verificada no build). */
+export const CONSENTIMENTO_DOCX = 'documentos/modelo-consentimento-terceiros.docx';
 
 export async function fetchLegalDocs(): Promise<LegalDocs> {
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');

@@ -107,6 +107,24 @@
       "original": "Prazo normal: [5] a [10] dias úteis.",
       "resultado": "Prazo normal: {{PRAZO_MIN}} a {{PRAZO_MAX}} dias úteis.",
       "decisao": "Prazo de levantamento: lido do legal-config (5 a 10 dias úteis)."
+    },
+    {
+      "id": "criadoras-art5-custos",
+      "documento": "criadoras",
+      "onde": "Artigo 5.º, 3.º parágrafo",
+      "acao": "substituir",
+      "original": "Crédito líquido após dedução de comissões e custos aplicáveis.",
+      "resultado": "Crédito líquido após dedução da comissão.",
+      "decisao": "Os custos da AppyPay são suportados pela empresa e o sistema só deduz a comissão ao crédito da criadora (valor menos comissão em todas as vendas); por isso \"e custos aplicáveis\" sai."
+    },
+    {
+      "id": "criadoras-art5-minimo-prazo",
+      "documento": "criadoras",
+      "onde": "Artigo 5.º, 5.º parágrafo",
+      "acao": "substituir",
+      "original": "Mínimo: [valor em AOA]; prazo: [5] a [10] dias úteis.",
+      "resultado": "Mínimo: {{MINIMO_LEVANTAMENTO}}; prazo: {{PRAZO_MIN}} a {{PRAZO_MAX}} dias úteis.",
+      "decisao": "Levantamento mínimo e prazo: lidos do legal-config (platform_settings.min_withdrawal_amount e 5 a 10 dias úteis), os mesmos do documento 05."
     }
   ]
 }

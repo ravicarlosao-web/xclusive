@@ -11,13 +11,21 @@ import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-/** Documentos da v1.1: ficheiro original, ficheiro JSON e chave (a mesma de LEGAL_DOCS no servidor). */
+/**
+ * Documentos públicos da v1.1: ficheiro original, ficheiro JSON e chave (a mesma de LEGAL_DOCS no servidor).
+ * `camposEmBranco`: documento-formulário (07) cujos `[..]` são campos a preencher por quem o usa: só nele são aceites.
+ * `descarregar`: cópia pública do .docx original (botão "Descarregar"): tem de ser byte a byte igual ao original.
+ * `semLegalDocs`: documento que não faz parte do aceite (não tem chave em LEGAL_DOCS); a versão/data confere com a dos Termos.
+ * Os documentos internos (08, 09 e 10) NÃO estão aqui nem no repositório: ver docs/legal/v1.1/LEIA-ME.md.
+ */
 export const DOCUMENTOS = [
   { chave: "termos", docx: "01-termos.docx", json: "01-termos.json" },
   { chave: "privacidade", docx: "02-privacidade.docx", json: "02-privacidade.json" },
   { chave: "conteudo", docx: "03-politica-de-conteudo.docx", json: "03-politica-de-conteudo.json" },
   { chave: "direitosAutor", docx: "04-direitos-de-autor.docx", json: "04-direitos-de-autor.json" },
   { chave: "reembolsos", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
+  { chave: "criadoras", docx: "06-termos-criadoras.docx", json: "06-termos-criadoras.json" },
+  { chave: "consentimento", docx: "07-consentimento-terceiros.docx", json: "07-consentimento-terceiros.json", camposEmBranco: true, semLegalDocs: true, descarregar: "artifacts/xclusive/public/documentos/modelo-consentimento-terceiros.docx" },
 ];
 
 // ── Leitura de .docx (zip) sem dependências ──────────────────────────────────

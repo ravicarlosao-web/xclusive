@@ -35,6 +35,8 @@ import Privacidade from '@/pages/legal/privacidade';
 import PoliticaConteudo from '@/pages/legal/politica-de-conteudo';
 import DireitosAutor from '@/pages/legal/direitos-de-autor';
 import Reembolsos from '@/pages/legal/reembolsos';
+import TermosCriadoras from '@/pages/legal/termos-criadoras';
+import ModeloConsentimento from '@/pages/legal/modelo-consentimento';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -135,6 +137,8 @@ function Router() {
       <Route path="/politica-de-conteudo" component={PoliticaConteudo} />
       <Route path="/direitos-de-autor" component={DireitosAutor} />
       <Route path="/reembolsos" component={Reembolsos} />
+      <Route path="/termos-criadoras" component={TermosCriadoras} />
+      <Route path="/modelo-consentimento" component={ModeloConsentimento} />
       <Route path="/esqueceste-password">{() => <PublicOnlyRoute component={EsquecestePassword} path="/esqueceste-password" />}</Route>
       
       {/* Protected Routes */}

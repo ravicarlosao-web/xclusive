@@ -1,0 +1,173 @@
+{
+  "documento": "consentimento",
+  "origem": {
+    "ficheiro": "originais/07-consentimento-terceiros.docx",
+    "sha256": "f14c0c004e47df487dc7c65f5a8522eddca907550bae7c02eeff1e6820138e2c"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Modelo de Consentimento de Terceiros",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Declaração de participação e consentimento\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Identificação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Eu, [NOME COMPLETO], portador(a) do documento n.º [NÚMERO], nascido(a) em [DATA], residente em [MORADA], declaro e presto o seguinte consentimento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "1. Maioridade"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Declaro ter 18 anos ou mais e capacidade legal para consentir."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "2. Consentimento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Autorizo [NOME DA CRIADORA] a gravar, fotografar, filmar, transmitir e publicar conteúdo em que participo, incluindo conteúdo de natureza íntima ou destinado a maiores de 18 anos, na plataforma Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Confirmo participação voluntária, sem coação, ameaça, engano ou exploração."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "3. Âmbito"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O consentimento abrange publicação, exibição, transmissão e monetização na Xclusive, em ambiente privado e sujeito a verificação de idade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não autoriza uso fora da plataforma sem autorização separada."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "4. Revogação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Posso revogar por escrito à Criadora e à Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A revogação não é retroativa quanto a conteúdo já publicado, mas determina análise de remoção futura e, quando possível, desativação do acesso."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "5. Prova e conservação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Criadora deve enviar à Xclusive este documento assinado, documento de identificação e, quando exigido, selfie."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive conserva a prova com acesso restrito."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Assinaturas"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Local/data: __________________\nParticipante: __________________\nCriadora: __________________"
+        }
+      ]
+    }
+  ]
+}

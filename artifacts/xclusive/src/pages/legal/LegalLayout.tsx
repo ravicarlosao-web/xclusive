@@ -1,28 +1,36 @@
 import { Link } from 'wouter';
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { LEGAL_PAGES, useLegalConfig, type LegalDocKey } from './useLegalDocs';
+import { LEGAL_PAGES, PAGINA_CONSENTIMENTO, useLegalConfig, type PaginaLegalKey } from './useLegalDocs';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { DOCUMENTOS_LEGAIS } from './conteudo';
 import { LegalDocumento } from './LegalDocumento';
-import { textoResolvido } from './resolver';
+import { textoResolvido, type LegalConfig } from './resolver';
 
 /**
  * Estrutura comum das páginas legais (públicas, sem login). O texto vem dos documentos do advogado (v1.1), em JSON
  * gerado dos .docx; os dados variáveis (empresa, email, mínimo e prazos de levantamento) vêm de GET /api/auth/legal-config.
  * Se esses dados falharem, mostra um erro claro e NUNCA o texto com buracos.
  */
-export function LegalLayout({ docKey, marcas }: { docKey: LegalDocKey; marcas?: { emailTestId?: string; paragrafoComEmailTestId?: string }; children?: ReactNode }) {
+/** Config neutra para documentos SEM tokens (verificado no build): nunca é lida, só satisfaz o tipo. */
+const CFG_SEM_TOKENS: LegalConfig = { empresaNome: '', empresaNif: null, empresaSede: null, emailLegal: '', minimoLevantamento: 0, prazoLevantamentoMin: 0, prazoLevantamentoMax: 0 };
+
+/**
+ * `semTokens`: documento sem {{..}} (o Modelo de Consentimento): renderiza logo, sem esperar pelo legal-config e sem
+ * erro se ele falhar. O rodapé continua a usar o legal-config (só links se falhar). As outras páginas não o usam.
+ */
+export function LegalLayout({ docKey, marcas, acao, semTokens = false }: { docKey: PaginaLegalKey; marcas?: { emailTestId?: string; paragrafoComEmailTestId?: string }; acao?: ReactNode; semTokens?: boolean }) {
   const { config, erro, tentarOutraVez } = useLegalConfig();
   const doc = DOCUMENTOS_LEGAIS[docKey];
   const titulo = useMemo(() => {
     const b = doc.blocos.find((x) => x.tipo === 'titulo');
-    return b && b.tipo !== 'tabela' ? b.runs.map((r) => r.t).join('') : LEGAL_PAGES.find((p) => p.key === docKey)!.titulo;
+    return b && b.tipo !== 'tabela' ? b.runs.map((r) => r.t).join('') : (docKey === 'consentimento' ? PAGINA_CONSENTIMENTO : LEGAL_PAGES.find((p) => p.key === docKey)!).titulo;
   }, [doc, docKey]);
   // Antes de resolver os tokens, valida que o documento resolve por completo (senão mostra o erro em vez do texto).
   const conteudo = useMemo(() => {
+    if (semTokens) return <LegalDocumento doc={doc} cfg={CFG_SEM_TOKENS} marcas={marcas} />;
     if (!config) return null;
     try { doc.blocos.forEach((b) => { if (b.tipo !== 'tabela') b.runs.forEach((r) => textoResolvido(r.t, config)); }); return <LegalDocumento doc={doc} cfg={config} marcas={marcas} />; } catch { return 'erro' as const; }
-  }, [config, doc, marcas]);
+  }, [config, doc, marcas, semTokens]);
 
   useEffect(() => {
     const anterior = document.title;
@@ -44,7 +52,8 @@ export function LegalLayout({ docKey, marcas }: { docKey: LegalDocKey; marcas?: 
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-10">
-        {conteudo && conteudo !== 'erro' ? conteudo : erro || conteudo === 'erro' ? (
+        {acao && <div className="mb-6">{acao}</div>}
+        {conteudo && conteudo !== 'erro' ? conteudo : (erro || conteudo === 'erro') ? (
           <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-sm" data-testid="legal-erro">
             <p className="font-semibold text-destructive mb-1">Não foi possível carregar este documento</p>
             <p className="text-muted-foreground mb-4">Tenta novamente daqui a pouco. Se o problema continuar, contacta-nos.</p>
