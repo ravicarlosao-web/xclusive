@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, User, Camera, ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { fetchLegalDocs } from './legal/useLegalDocs';
+import { fetchLegalDocs, LEGAL_PAGES, type LegalDocKey } from './legal/useLegalDocs';
 import { AuthSplitLayout, AuthHeader, AuthLogoMobile } from '@/components/AuthSplitLayout';
 
 // ── Country / phone prefix config ──────────────────────────────────────────
@@ -38,8 +38,11 @@ const registerSchema = z.object({
   dataNascimento: z.string().min(1, 'Data de nascimento é obrigatória'),
   telefone: z.string().optional(),
   tipoConta: z.enum(['pessoal', 'criador']),
-  termos: z.literal(true, {
-    errorMap: () => ({ message: 'Tens de aceitar os termos e condições' }),
+  documentos: z.literal(true, {
+    errorMap: () => ({ message: 'Tens de aceitar os documentos legais' }),
+  }),
+  cookies: z.literal(true, {
+    errorMap: () => ({ message: 'Tens de aceitar a utilização de cookies e de armazenamento local' }),
   }),
   maioridade: z.literal(true, {
     errorMap: () => ({ message: 'Tens de declarar que tens 18 anos ou mais' }),
@@ -47,6 +50,16 @@ const registerSchema = z.object({
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
+
+// Nomes, na frase de aceite, dos 5 documentos (a rota de cada um vem de LEGAL_PAGES).
+const DOCS_ACEITE: { key: LegalDocKey; nome: string }[] = [
+  { key: 'termos', nome: 'Termos de Serviço' },
+  { key: 'privacidade', nome: 'Política de Privacidade' },
+  { key: 'conteudo', nome: 'Política de Conteúdo' },
+  { key: 'direitosAutor', nome: 'Política de Direitos de Autor' },
+  { key: 'reembolsos', nome: 'Política de Reembolsos' },
+];
+const rotaDoc = (key: LegalDocKey) => LEGAL_PAGES.find((p) => p.key === key)!.path;
 
 // ── Component ────────────────────────────────────────────────────────────────
 /** Estado público dos registos (GET /api/registos/estado). null = não foi possível ler (o servidor decide no envio). */
@@ -97,6 +110,8 @@ export default function Register() {
   const watchPassword = form.watch('password');
   const watchTipoConta = form.watch('tipoConta');
   const watchMaioridade = form.watch('maioridade');
+  const watchDocumentos = form.watch('documentos');
+  const watchCookies = form.watch('cookies');
 
   useEffect(() => {
     if (!watchPassword) { setPasswordStrength(0); return; }
@@ -115,7 +130,7 @@ export default function Register() {
     try {
       // O aceite leva as versões vigentes dos documentos (lidas do servidor no momento do envio).
       const docs = await fetchLegalDocs();
-      const payload: Parameters<typeof register>[0] & { aceite: { termos: string; privacidade: string; maioridade: true } } = {
+      const payload: Parameters<typeof register>[0] = {
         nomeCompleto: data.nomeCompleto,
         email: data.email,
         username: data.username,
@@ -124,7 +139,15 @@ export default function Register() {
         pais: country.name,
         telefone: data.telefone ? `${country.prefix}${data.telefone}` : undefined,
         tipoConta: data.tipoConta,
-        aceite: { termos: docs.termos.versao, privacidade: docs.privacidade.versao, maioridade: true },
+        aceite: {
+          termos: docs.termos.versao,
+          privacidade: docs.privacidade.versao,
+          conteudo: docs.conteudo.versao,
+          direitosAutor: docs.direitosAutor.versao,
+          reembolsos: docs.reembolsos.versao,
+          cookies: true,
+          maioridade: true,
+        },
       };
       await register(payload);
     } catch (error: any) {
@@ -370,18 +393,38 @@ export default function Register() {
                   </FormItem>
                 )} />
 
-                {/* Terms */}
-                <FormField control={form.control} name="termos" render={({ field }) => (
+                {/* Aceite dos 5 documentos legais: obrigatório (uma só caixa, cada nome liga à sua página) */}
+                <FormField control={form.control} name="documentos" render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0 min-h-[44px]">
                     <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      <Checkbox checked={field.value === true} onCheckedChange={(v) => field.onChange(v === true ? true : undefined)} data-testid="aceite-documentos" />
                     </FormControl>
                     <div className="space-y-1 leading-none">
                       <FormLabel className="text-sm font-normal text-muted-foreground">
-                        Concordo com os{' '}
-                        <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Termos de Serviço</a>{' '}
-                        e a{' '}
-                        <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Política de Privacidade</a>.
+                        Li e aceito os{' '}
+                        {DOCS_ACEITE.map((d, i) => (
+                          <span key={d.key}>
+                            {i > 0 && (i === DOCS_ACEITE.length - 1 ? ' e a ' : ', a ')}
+                            <a href={rotaDoc(d.key)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{d.nome}</a>
+                          </span>
+                        ))}
+                        .
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
+                  </FormItem>
+                )} />
+
+                {/* Cookies e armazenamento local: obrigatório */}
+                <FormField control={form.control} name="cookies" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 min-h-[44px]">
+                    <FormControl>
+                      <Checkbox checked={field.value === true} onCheckedChange={(v) => field.onChange(v === true ? true : undefined)} data-testid="cookies-aceite" />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal text-muted-foreground">
+                        Aceito a utilização de cookies e de armazenamento local no meu dispositivo, estritamente necessários ao funcionamento da plataforma (manter a sessão iniciada, guardar as minhas preferências e garantir a segurança), nos termos da{' '}
+                        <a href={rotaDoc('privacidade')} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Política de Privacidade</a>.
                       </FormLabel>
                       <FormMessage />
                     </div>
@@ -413,7 +456,7 @@ export default function Register() {
                   <Button
                     type="submit"
                     className="flex-1 h-12 text-base font-bold bg-primary hover:bg-primary/90 text-white rounded-xl"
-                    disabled={form.formState.isSubmitting || watchMaioridade !== true}
+                    disabled={form.formState.isSubmitting || watchDocumentos !== true || watchCookies !== true || watchMaioridade !== true}
                   >
                     {form.formState.isSubmitting ? (
                       <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> A criar...</>

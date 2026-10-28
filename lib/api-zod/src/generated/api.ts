@@ -31,6 +31,10 @@ export const RegisterBody = zod.object({
   "aceite": zod.object({
   "termos": zod.string(),
   "privacidade": zod.string(),
+  "conteudo": zod.string(),
+  "direitosAutor": zod.string(),
+  "reembolsos": zod.string(),
+  "cookies": zod.literal(true).describe('Obrigatório. Aceite de cookies e armazenamento local; só true é aceite (em falta, false ou de outro tipo => 400).'),
   "maioridade": zod.literal(true).describe('Obrigatório. Declaração de ter 18 anos ou mais; só true é aceite (em falta, false ou de outro tipo => 400).')
 }).describe('Versões vigentes dos documentos legais que a pessoa aceitou (GET \/auth\/legal-versions) e declaração de maioridade.')
 })

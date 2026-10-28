@@ -1170,12 +1170,22 @@ components:
         aceite:
           type: object
           description: Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade.
-          required: [termos, privacidade, maioridade]
+          required: [termos, privacidade, conteudo, direitosAutor, reembolsos, cookies, maioridade]
           properties:
             termos:
               type: string
             privacidade:
               type: string
+            conteudo:
+              type: string
+            direitosAutor:
+              type: string
+            reembolsos:
+              type: string
+            cookies:
+              type: boolean
+              enum: [true]
+              description: Obrigatório. Aceite de cookies e armazenamento local; só true é aceite (em falta, false ou de outro tipo => 400).
             maioridade:
               type: boolean
               enum: [true]

@@ -12,6 +12,11 @@
 export type RegisterInputAceite = {
   termos: string;
   privacidade: string;
+  conteudo: string;
+  direitosAutor: string;
+  reembolsos: string;
+  /** Obrigatório. Aceite de cookies e armazenamento local; só true é aceite (em falta, false ou de outro tipo => 400). */
+  cookies: true;
   /** Obrigatório. Declaração de ter 18 anos ou mais; só true é aceite (em falta, false ou de outro tipo => 400). */
   maioridade: true;
 };
