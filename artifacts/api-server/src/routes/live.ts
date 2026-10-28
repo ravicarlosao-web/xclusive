@@ -308,7 +308,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       res.status(err.statusCode).json({ error: err.message });
       return;
     }
-    req.log?.error({ err: err instanceof Error ? err.message : String(err) }, "Erro ao processar gorjeta na live");
+    req.log?.error({ err }, "Erro ao processar gorjeta na live");
     res.status(500).json({ error: "Erro interno do servidor." });
   }
 });
@@ -632,7 +632,7 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       res.status(err.statusCode).json({ error: err.message });
       return;
     }
-    req.log?.error({ err: err instanceof Error ? err.message : String(err) }, "Erro ao comprar bilhete da live");
+    req.log?.error({ err }, "Erro ao comprar bilhete da live");
     res.status(500).json({ error: "Erro interno do servidor." });
   }
 });

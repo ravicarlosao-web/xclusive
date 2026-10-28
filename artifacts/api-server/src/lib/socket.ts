@@ -251,7 +251,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           "chat:message emitido"
         );
       } catch (err) {
-        logger.error({ err, data }, "Erro ao processar chat:send");
+        logger.error({ err, streamId: data?.streamId }, "Erro ao processar chat:send");
         socket.emit("chat:error", { message: "Erro interno ao processar a mensagem." });
       }
     });

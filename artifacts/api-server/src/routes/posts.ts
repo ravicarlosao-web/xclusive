@@ -215,6 +215,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
       res.status(err.httpStatus).json({ error: err.message });
       return;
     }
+    req.log?.error({ err }, "Erro ao desbloquear conteúdo PPV");
     res.status(500).json({ error: "Erro interno ao processar desbloqueio." });
   }
 });

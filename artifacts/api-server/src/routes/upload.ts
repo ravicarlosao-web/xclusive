@@ -138,7 +138,7 @@ function transcodeAndFaststart(inputPath: string, outputPath: string): Promise<b
       if (code === 0) {
         resolve(true);
       } else {
-        logger.warn({ code, stderr: stderr.slice(-300) }, "FFmpeg transcode falhou; a usar vídeo original");
+        logger.warn({ code, stderrBytes: stderr.length }, "FFmpeg transcode falhou; a usar vídeo original");
         resolve(false);
       }
     });

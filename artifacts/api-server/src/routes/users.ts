@@ -398,14 +398,17 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     return;
   }
 
+  // Só os erros de validação das imagens têm mensagem própria para o cliente; qualquer outro erro (BD, storage) não.
+  class DocumentoKycInvalidoError extends Error {}
+
   function decodeCapturedImage(value: string, field: string): { buffer: Buffer; contentType: string; extension: string } {
     const match = value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/);
     if (!match) {
-      throw new Error(`${field} tem um formato de imagem inválido.`);
+      throw new DocumentoKycInvalidoError(`${field} tem um formato de imagem inválido.`);
     }
     const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
     if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) {
-      throw new Error(`${field} excede o tamanho permitido.`);
+      throw new DocumentoKycInvalidoError(`${field} excede o tamanho permitido.`);
     }
     // Conteúdo real (primeiros bytes), não só o tipo declarado.
     const detected =
@@ -414,7 +417,7 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
       : buffer.subarray(0, 4).toString("latin1") === "RIFF" && buffer.subarray(8, 12).toString("latin1") === "WEBP" ? "webp"
       : null;
     if (!detected || `image/${detected}` !== match[1]) {
-      throw new Error(`${field} não é uma imagem válida.`);
+      throw new DocumentoKycInvalidoError(`${field} não é uma imagem válida.`);
     }
     return { buffer, contentType: `image/${detected}`, extension: detected === "jpeg" ? "jpg" : detected };
   }
@@ -456,7 +459,8 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     });
   } catch (error) {
     await Promise.allSettled(uploadedKeys.map((key) => deletePrivate(key)));
-    const message = error instanceof Error ? error.message : "Não foi possível guardar os documentos.";
+    if (!(error instanceof DocumentoKycInvalidoError)) req.log?.error({ err: error }, "Erro ao guardar documentos KYC");
+    const message = error instanceof DocumentoKycInvalidoError ? error.message : "Não foi possível guardar os documentos.";
     res.status(400).json({ error: message });
     return;
   }
