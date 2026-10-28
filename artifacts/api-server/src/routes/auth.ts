@@ -93,6 +93,11 @@ const registerSchema = z.object({
   aceite: z.object({
     termos: z.string().min(1).max(40),
     privacidade: z.string().min(1).max(40),
+    conteudo: z.string().min(1).max(40),
+    direitosAutor: z.string().min(1).max(40),
+    reembolsos: z.string().min(1).max(40),
+    // Cookies e armazenamento local: obrigatório; só true é aceite (em falta, false ou de outro tipo => 400, nada é criado).
+    cookies: z.literal(true, { error: "Tens de aceitar a utilização de cookies e de armazenamento local." }),
     // Declaração de maioridade: boolean estrito e true. Em falta, false ou de outro tipo => 400 (nada é criado).
     maioridade: z.literal(true, { error: "Tens de declarar que tens 18 anos ou mais." }),
   }),
@@ -177,8 +182,14 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
     return;
   }
   // O aceite tem de ser das versões vigentes (senão o utilizador aceitou texto desatualizado).
-  if (aceite.termos !== LEGAL_DOCS.termos.versao || aceite.privacidade !== LEGAL_DOCS.privacidade.versao) {
-    res.status(400).json({ error: "Os Termos ou a Política de Privacidade foram atualizados. Recarrega a página e aceita as versões atuais." });
+  if (
+    aceite.termos !== LEGAL_DOCS.termos.versao ||
+    aceite.privacidade !== LEGAL_DOCS.privacidade.versao ||
+    aceite.conteudo !== LEGAL_DOCS.conteudo.versao ||
+    aceite.direitosAutor !== LEGAL_DOCS.direitosAutor.versao ||
+    aceite.reembolsos !== LEGAL_DOCS.reembolsos.versao
+  ) {
+    res.status(400).json({ error: "Os documentos legais foram atualizados. Recarrega a página e aceita as versões atuais." });
     return;
   }
 
@@ -220,6 +231,10 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
         userId: created.id,
         termosVersao: aceite.termos,
         privacidadeVersao: aceite.privacidade,
+        conteudoVersao: aceite.conteudo,
+        direitosAutorVersao: aceite.direitosAutor,
+        reembolsosVersao: aceite.reembolsos,
+        cookiesAceites: true,
         ip: aceiteIp,
         userAgent: aceiteUserAgent,
         maioridadeConfirmada: true,

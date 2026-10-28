@@ -69,6 +69,11 @@ export const userLegalAcceptancesTable = pgTable("user_legal_acceptances", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   termosVersao: varchar("termos_versao", { length: 40 }).notNull(),
   privacidadeVersao: varchar("privacidade_versao", { length: 40 }).notNull(),
+  /** Versões dos restantes documentos e aceite de cookies (NULL nas linhas anteriores ao aceite múltiplo). */
+  conteudoVersao: text("conteudo_versao"),
+  direitosAutorVersao: text("direitos_autor_versao"),
+  reembolsosVersao: text("reembolsos_versao"),
+  cookiesAceites: boolean("cookies_aceites"),
   aceiteEm: timestamp("aceite_em").notNull().defaultNow(),
   // Evidência do registo (ip, user_agent): dados pessoais — prazo de retenção a definir pelo advogado.
   ip: varchar("ip", { length: 45 }),
