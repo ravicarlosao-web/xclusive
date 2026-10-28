@@ -6,12 +6,13 @@ export type LegalDocInfo = { versao: string; atualizadoEm: string };
 export type LegalDocs = Record<LegalDocKey, LegalDocInfo>;
 
 /** Páginas legais: rota, título e chave no servidor (fonte única das versões: GET /api/auth/legal-versions). */
-export const LEGAL_PAGES: { key: LegalDocKey; path: string; titulo: string }[] = [
-  { key: 'termos', path: '/termos', titulo: 'Termos de Serviço' },
-  { key: 'privacidade', path: '/privacidade', titulo: 'Política de Privacidade' },
-  { key: 'conteudo', path: '/politica-de-conteudo', titulo: 'Política de Conteúdo' },
-  { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor (DMCA)' },
-  { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos' },
+/** `curto`: nome curto para o rodapé e listas compactas. */
+export const LEGAL_PAGES: { key: LegalDocKey; path: string; titulo: string; curto: string }[] = [
+  { key: 'termos', path: '/termos', titulo: 'Termos de Serviço', curto: 'Termos de Serviço' },
+  { key: 'privacidade', path: '/privacidade', titulo: 'Política de Privacidade', curto: 'Política de Privacidade' },
+  { key: 'conteudo', path: '/politica-de-conteudo', titulo: 'Política de Conteúdo', curto: 'Política de Conteúdo' },
+  { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor (DMCA)', curto: 'Direitos de Autor' },
+  { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos', curto: 'Reembolsos' },
 ];
 
 export async function fetchLegalDocs(): Promise<LegalDocs> {
@@ -42,17 +43,42 @@ export async function fetchLegalConfig(): Promise<LegalConfig> {
 
 export type EstadoLegalConfig = { config: LegalConfig | null; erro: boolean; tentarOutraVez: () => void };
 
-/** legal-config para as páginas legais: config é null enquanto carrega; erro=true se falhar ou vier incompleto. */
-export function useLegalConfig(): EstadoLegalConfig {
-  const [config, setConfig] = useState<LegalConfig | null>(null);
+// Cache simples (variável de módulo): evita um pedido novo por montagem (rodapé + páginas legais). Só guarda sucessos;
+// uma falha não fica em cache. Expira ao fim de 5 min para que uma alteração da configuração acabe por chegar.
+const CACHE_MS = 5 * 60 * 1000;
+let cache: { config: LegalConfig; em: number } | null = null;
+let emCurso: Promise<LegalConfig> | null = null;
+
+function configEmCache(): LegalConfig | null {
+  return cache && Date.now() - cache.em < CACHE_MS ? cache.config : null;
+}
+
+function carregarConfig(): Promise<LegalConfig> {
+  if (!emCurso) {
+    emCurso = fetchLegalConfig()
+      .then((c) => { cache = { config: c, em: Date.now() }; return c; })
+      .finally(() => { emCurso = null; });
+  }
+  return emCurso;
+}
+
+/** Esquece a cache (para os testes e para "Tentar novamente"). */
+export function limparCacheLegalConfig(): void { cache = null; }
+
+/** legal-config para as páginas legais e o rodapé: config é null enquanto carrega; erro=true se falhar ou vier incompleto. */
+export function useLegalConfig(ativo = true): EstadoLegalConfig {
+  const [config, setConfig] = useState<LegalConfig | null>(configEmCache);
   const [erro, setErro] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   useEffect(() => {
     let vivo = true;
     setErro(false);
-    fetchLegalConfig().then((c) => { if (vivo) setConfig(c); }).catch(() => { if (vivo) setErro(true); });
+    if (!ativo) return () => { vivo = false; };
+    const guardada = configEmCache();
+    if (guardada) { setConfig(guardada); return () => { vivo = false; }; }
+    carregarConfig().then((c) => { if (vivo) setConfig(c); }).catch(() => { if (vivo) setErro(true); });
     return () => { vivo = false; };
-  }, [tentativa]);
-  const tentarOutraVez = useCallback(() => { setConfig(null); setTentativa((n) => n + 1); }, []);
+  }, [tentativa, ativo]);
+  const tentarOutraVez = useCallback(() => { limparCacheLegalConfig(); setConfig(null); setTentativa((n) => n + 1); }, []);
   return { config, erro, tentarOutraVez };
 }

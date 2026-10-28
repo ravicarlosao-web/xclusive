@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
 
 /**
  * Barreira 18+ para visitantes SEM sessão (plataforma de conteúdo adulto).
@@ -72,6 +73,7 @@ export function AgeGate() {
         <p className="text-xs text-muted-foreground">
           Ao continuar, aceitas que és maior de idade na tua jurisdição.
         </p>
+        <RodapeLegal soLinks />
       </div>
     </div>
   );
