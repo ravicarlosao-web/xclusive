@@ -1,0 +1,303 @@
+{
+  "documento": "criadoras",
+  "origem": {
+    "ficheiro": "originais/06-termos-criadoras.docx",
+    "sha256": "4a9f07815a6627b55de9b506d07ac06bcf6d319a605986aa25abe2f80b1b1fcb"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Termos para Criadoras",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Contrato de utilização por criadores\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Objeto e natureza da plataforma"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Regula a utilização da plataforma Xclusive (xclusive.ao) por criadores de conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive fornece infraestrutura, carteira, moderação e processamento de pagamentos; a Criadora mantém a titularidade do conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Admissão e KYC"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Apenas pessoas singulares maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC obrigatório: documento, selfie/biometria quando exigido, dados bancários e informações antifraude."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC incompleto, falso ou não validado permite recusa, suspensão ou encerramento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conteúdo e responsabilidade"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Criadora é integralmente responsável pelo conteúdo, licenças e cumprimento das políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Garante maioridade, consentimento livre e Modelo de Consentimento de Terceiros quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Proibido conteúdo ilegal, não consentido, difamatório, infrator ou envolvendo menores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibida a utilização da plataforma para divulgação ou publicidade de conteúdo proibido por lei angolana."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Licença"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Licença não exclusiva, mundial e limitada ao necessário para alojar, reproduzir, exibir, distribuir, processar pagamentos, moderar e promover."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Cessa com remoção, salvo backup, prova, cumprimento legal ou disputa."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Comissão e pagamentos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Comissão de 15% sobre pagamentos dos utilizadores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Alterável com aviso prévio."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Crédito líquido após dedução da comissão."
+        }
+      ],
+      "alterado": "criadoras-art5-custos"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento manual por transferência bancária, após KYC."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Mínimo: {{MINIMO_LEVANTAMENTO}}; prazo: {{PRAZO_MIN}} a {{PRAZO_MAX}} dias úteis."
+        }
+      ],
+      "alterado": "criadoras-art5-minimo-prazo"
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Retenções"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Retenção por suspeita de fraude, estorno, conteúdo proibido, denúncia grave, menor, investigação ou ordem legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Comunicação à Criadora, salvo restrição legal."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Suspensão e cessação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Suspensão por violação das políticas ou risco jurídico/financeiro."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Cessação a qualquer momento pela Criadora."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Encerramento não afeta pagamentos devidos, conservação legal ou responsabilidades anteriores."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 8.º — Fiscalidade"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Criadora responde pelas suas obrigações fiscais e contributivas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode comunicar informação exigida por autoridade competente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 9.º — Lei aplicável"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Lei angolana; foro de Luanda, salvo competência imperativa."
+        }
+      ]
+    }
+  ]
+}

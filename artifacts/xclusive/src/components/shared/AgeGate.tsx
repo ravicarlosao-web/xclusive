@@ -12,7 +12,7 @@ import { RodapeLegal } from '@/components/shared/RodapeLegal';
  * Na entrada ("/") é a única coisa que o visitante vê; ao confirmar vai para /login.
  */
 const STORAGE_KEY = 'xclusive_idade_18';
-const PATHS_SEM_BARREIRA = ['/termos', '/privacidade', '/politica-de-conteudo', '/direitos-de-autor', '/reembolsos'];
+const PATHS_SEM_BARREIRA = ['/termos', '/privacidade', '/politica-de-conteudo', '/direitos-de-autor', '/reembolsos', '/termos-criadoras', '/modelo-consentimento'];
 
 function lerEscolha(): boolean {
   try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
