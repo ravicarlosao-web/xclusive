@@ -14,6 +14,7 @@ import {
 } from "../lib/registos";
 import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
+import { getMinWithdrawal } from "./wallet";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -41,13 +42,13 @@ const router = Router();
 // ── Documentos legais ────────────────────────────────────────────────────────
 // Versões VIGENTES. Quando o texto jurídico mudar, o advogado/dev altera a versão e a data aqui:
 // o registo passa a exigir o aceite da nova versão e as páginas legais mostram-na.
-// (Os textos são placeholders até haver redação jurídica: ver as páginas /termos, /privacidade, ...)
+// (As versões 1.1 são as dos documentos do advogado, de 22 de outubro de 2026: ver as páginas /termos, /privacidade, ...)
 export const LEGAL_DOCS = {
-  termos:          { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
-  privacidade:     { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
-  conteudo:        { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
-  direitosAutor:   { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
-  reembolsos:      { versao: "0.1-rascunho", atualizadoEm: "2026-10-10" },
+  termos:          { versao: "1.1", atualizadoEm: "2026-10-22" },
+  privacidade:     { versao: "1.1", atualizadoEm: "2026-10-22" },
+  conteudo:        { versao: "1.1", atualizadoEm: "2026-10-22" },
+  direitosAutor:   { versao: "1.1", atualizadoEm: "2026-10-22" },
+  reembolsos:      { versao: "1.1", atualizadoEm: "2026-10-22" },
 } as const;
 
 /** Idade mínima para criar conta (plataforma de conteúdo adulto). */
@@ -108,6 +109,39 @@ const loginSchema = z.object({
 /** Versões vigentes dos documentos legais (público): o registo e as páginas legais usam isto. */
 router.get("/auth/legal-versions", (_req, res): void => {
   res.json(LEGAL_DOCS);
+});
+
+/** Prazo normal de levantamento, em dias úteis (texto da Política de Reembolsos e Pagamentos). */
+const PRAZO_LEVANTAMENTO_MIN_DIAS = 5;
+const PRAZO_LEVANTAMENTO_MAX_DIAS = 10;
+
+/** Valor de uma variável de ambiente sem espaços; null se não existir ou estiver vazia. */
+function lerEnvOpcional(nome: string): string | null {
+  const valor = process.env[nome]?.trim();
+  return valor ? valor : null;
+}
+
+/**
+ * Dados variáveis dos textos legais (público, sem autenticação). O mínimo de levantamento vem da MESMA função que
+ * valida os levantamentos (platform_settings.min_withdrawal_amount), para o texto e a regra nunca divergirem.
+ * Falha a ler a base = 503 (nunca um mínimo inventado).
+ */
+router.get("/auth/legal-config", async (req, res): Promise<void> => {
+  try {
+    const minimoLevantamento = await getMinWithdrawal(db);
+    res.json({
+      empresaNome: lerEnvOpcional("LEGAL_EMPRESA_NOME") ?? "ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS",
+      empresaNif: lerEnvOpcional("LEGAL_EMPRESA_NIF"),
+      empresaSede: lerEnvOpcional("LEGAL_EMPRESA_SEDE"),
+      emailLegal: lerEnvOpcional("LEGAL_EMAIL") ?? "legal@xclusive.ao",
+      minimoLevantamento,
+      prazoLevantamentoMin: PRAZO_LEVANTAMENTO_MIN_DIAS,
+      prazoLevantamentoMax: PRAZO_LEVANTAMENTO_MAX_DIAS,
+    });
+  } catch (err) {
+    (req as any).log?.warn(erroSeguro(err), "Legal-config: falha ao ler o mínimo de levantamento");
+    res.status(503).json({ error: "Serviço temporariamente indisponível." });
+  }
 });
 
 /**

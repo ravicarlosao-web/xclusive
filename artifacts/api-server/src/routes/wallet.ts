@@ -371,7 +371,7 @@ class WithdrawalError extends Error {
 const DEFAULT_MIN_WITHDRAWAL = 5000;
 
 /** Mínimo de levantamento = definição `min_withdrawal_amount` (lida sempre da BD; default 5000). */
-async function getMinWithdrawal(q: Pick<typeof db, "select">): Promise<number> {
+export async function getMinWithdrawal(q: Pick<typeof db, "select">): Promise<number> {
   const [setting] = await q.select({ value: platformSettingsTable.value }).from(platformSettingsTable)
     .where(eq(platformSettingsTable.key, "min_withdrawal_amount")).limit(1);
   const rawMin = (setting?.value as { value?: number } | null)?.value;

@@ -76,6 +76,24 @@ paths:
         "401":
           description: Credenciais inválidas
 
+  /auth/legal-config:
+    get:
+      operationId: getLegalConfig
+      tags: [auth]
+      summary: Dados variáveis dos textos legais (público, sem autenticação)
+      description: >-
+        Empresa, contacto legal e regras de levantamento usadas nos textos legais. O mínimo de levantamento
+        vem da mesma definição (platform_settings.min_withdrawal_amount) que valida os levantamentos.
+      responses:
+        "200":
+          description: Configuração dos textos legais
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalConfig"
+        "503":
+          description: Serviço temporariamente indisponível (falha a ler as definições)
+
   /auth/logout:
     post:
       operationId: logout
@@ -1162,6 +1180,32 @@ components:
               type: boolean
               enum: [true]
               description: Obrigatório. Declaração de ter 18 anos ou mais; só true é aceite (em falta, false ou de outro tipo => 400).
+
+    LegalConfig:
+      type: object
+      required: [empresaNome, empresaNif, empresaSede, emailLegal, minimoLevantamento, prazoLevantamentoMin, prazoLevantamentoMax]
+      properties:
+        empresaNome:
+          type: string
+          description: Denominação da empresa (env LEGAL_EMPRESA_NOME).
+        empresaNif:
+          type: [string, "null"]
+          description: NIF da empresa (env LEGAL_EMPRESA_NIF); null se não estiver definido.
+        empresaSede:
+          type: [string, "null"]
+          description: Sede da empresa (env LEGAL_EMPRESA_SEDE); null se não estiver definida.
+        emailLegal:
+          type: string
+          description: Email de contacto legal (env LEGAL_EMAIL).
+        minimoLevantamento:
+          type: number
+          description: Mínimo de levantamento em Kz (platform_settings.min_withdrawal_amount).
+        prazoLevantamentoMin:
+          type: integer
+          description: Prazo normal de levantamento, mínimo, em dias úteis.
+        prazoLevantamentoMax:
+          type: integer
+          description: Prazo normal de levantamento, máximo, em dias úteis.
 
     LoginInput:
       type: object
