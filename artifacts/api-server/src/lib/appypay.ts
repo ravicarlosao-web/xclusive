@@ -142,8 +142,8 @@ async function getAccessToken(): Promise<string> {
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`[AppyPay] Falha ao obter token OAuth2: HTTP ${res.status} — ${text}`);
+    await res.text().catch(() => ""); // descarta o corpo (não vai para a mensagem de erro)
+    throw new Error(`[AppyPay] Falha ao obter token OAuth2: HTTP ${res.status}`);
   }
 
   const data = await res.json() as {
@@ -205,7 +205,7 @@ export async function createGpoCharge(
 
   if (!res.ok) {
     throw new Error(
-      `[AppyPay] createGpoCharge falhou: HTTP ${res.status} — ${JSON.stringify(data)}`
+      `[AppyPay] createGpoCharge falhou: HTTP ${res.status}`
     );
   }
 
@@ -233,7 +233,7 @@ export async function createRefCharge(
 
   if (!res.ok) {
     throw new Error(
-      `[AppyPay] createRefCharge falhou: HTTP ${res.status} — ${JSON.stringify(data)}`
+      `[AppyPay] createRefCharge falhou: HTTP ${res.status}`
     );
   }
 
@@ -255,7 +255,7 @@ export async function getCharge(chargeId: string): Promise<AppyPayChargeResponse
 
   if (!res.ok) {
     throw new Error(
-      `[AppyPay] getCharge(${chargeId}) falhou: HTTP ${res.status} — ${JSON.stringify(data)}`
+      `[AppyPay] getCharge(${chargeId}) falhou: HTTP ${res.status}`
     );
   }
 
