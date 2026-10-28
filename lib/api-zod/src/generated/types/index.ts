@@ -25,6 +25,7 @@ export * from './hashtagResult';
 export * from './healthStatus';
 export * from './highlight';
 export * from './highlightInput';
+export * from './legalConfig';
 export * from './loginInput';
 export * from './markConversationRead200';
 export * from './message';

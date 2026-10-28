@@ -97,6 +97,21 @@ export const LoginResponse = zod.object({
 
 
 /**
+ * Empresa, contacto legal e regras de levantamento usadas nos textos legais. O mínimo de levantamento vem da mesma definição (platform_settings.min_withdrawal_amount) que valida os levantamentos.
+ * @summary Dados variáveis dos textos legais (público, sem autenticação)
+ */
+export const GetLegalConfigResponse = zod.object({
+  "empresaNome": zod.string().describe('Denominação da empresa (env LEGAL_EMPRESA_NOME).'),
+  "empresaNif": zod.string().nullable().describe('NIF da empresa (env LEGAL_EMPRESA_NIF); null se não estiver definido.'),
+  "empresaSede": zod.string().nullable().describe('Sede da empresa (env LEGAL_EMPRESA_SEDE); null se não estiver definida.'),
+  "emailLegal": zod.string().describe('Email de contacto legal (env LEGAL_EMAIL).'),
+  "minimoLevantamento": zod.number().describe('Mínimo de levantamento em Kz (platform_settings.min_withdrawal_amount).'),
+  "prazoLevantamentoMin": zod.int().describe('Prazo normal de levantamento, mínimo, em dias úteis.'),
+  "prazoLevantamentoMax": zod.int().describe('Prazo normal de levantamento, máximo, em dias úteis.')
+})
+
+
+/**
  * @summary Terminar sessão
  */
 export const LogoutResponse = zod.unknown()

@@ -36,6 +36,7 @@ import type {
   HealthStatus,
   Highlight,
   HighlightInput,
+  LegalConfig,
   LoginInput,
   MarkConversationRead200,
   Message,
@@ -318,6 +319,84 @@ export const useLogin = <TError = ErrorType<void>,
       > => {
       return useMutation(getLoginMutationOptions(options));
     }
+
+export const getGetLegalConfigUrl = () => {
+
+
+
+
+  return `/api/auth/legal-config`
+}
+
+/**
+ * Empresa, contacto legal e regras de levantamento usadas nos textos legais. O mínimo de levantamento vem da mesma definição (platform_settings.min_withdrawal_amount) que valida os levantamentos.
+ * @summary Dados variáveis dos textos legais (público, sem autenticação)
+ */
+export const getLegalConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<LegalConfig> => {
+
+  return customFetch<LegalConfig>(getGetLegalConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLegalConfigQueryKey = () => {
+    return [
+    `/api/auth/legal-config`
+    ] as const;
+    }
+
+
+export const getGetLegalConfigQueryOptions = <TData = Awaited<ReturnType<typeof getLegalConfig>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLegalConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLegalConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLegalConfig>>> = ({ signal }) => getLegalConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLegalConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLegalConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getLegalConfig>>>
+export type GetLegalConfigQueryError = ErrorType<void>
+
+
+/**
+ * @summary Dados variáveis dos textos legais (público, sem autenticação)
+ */
+
+export function useGetLegalConfig<TData = Awaited<ReturnType<typeof getLegalConfig>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLegalConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLegalConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getLogoutUrl = () => {
 

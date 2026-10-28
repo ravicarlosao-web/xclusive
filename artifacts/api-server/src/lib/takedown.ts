@@ -22,7 +22,7 @@ export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "
 export type ReportReason = typeof REPORT_REASONS[number];
 
 /** E-mail de contacto para denúncias (configurável por REPORTS_CONTACT_EMAIL). */
-export const REPORTS_CONTACT_EMAIL = process.env.REPORTS_CONTACT_EMAIL || "denuncias@xclusive.ao";
+export const REPORTS_CONTACT_EMAIL = process.env.REPORTS_CONTACT_EMAIL || "legal@xclusive.ao";
 
 export const TARGET_LABEL: Record<TargetType, string> = {
   post: "publicação", reel: "reel", story: "story", comment: "comentário", user: "perfil", live: "live",
