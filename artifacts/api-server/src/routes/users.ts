@@ -10,6 +10,7 @@ import { lerVisualizador, postVisivelPara } from "../lib/conteudoMais18";
 import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
+import { logger } from "../lib/logger";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
@@ -230,7 +231,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
 
     res.json(ranked.slice(0, 5));
   } catch (error) {
-    console.error("[top-creators] error:", error);
+    logger.error({ err: error }, "Erro ao obter top criadoras");
     res.status(500).json({ error: "Erro ao carregar top criadores" });
   }
 });

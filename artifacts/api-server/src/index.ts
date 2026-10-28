@@ -11,6 +11,25 @@ import { initSocket } from "./lib/socket";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 import { startReportEscalationJob } from "./lib/reportEscalation";
 
+// Falhas não tratadas: regista (o hook do logger redige erros de BD: sem query nem parâmetros) e TERMINA com
+// código 1 após um pequeno atraso para o log sair; o PM2 reinicia. Nunca engole o erro e continua.
+let aTerminar = false;
+function terminarPorFalha(): void {
+  if (aTerminar) return;
+  aTerminar = true;
+  setTimeout(() => process.exit(1), 500);
+}
+process.on("unhandledRejection", (reason) => {
+  // Se o motivo não for um Error, só o tipo é registado (o valor pode conter dados).
+  const err = reason instanceof Error ? reason : new Error(`Promessa rejeitada sem tratamento (valor do tipo ${typeof reason})`);
+  logger.fatal({ err }, "Promessa rejeitada sem tratamento: a terminar");
+  terminarPorFalha();
+});
+process.on("uncaughtException", (err) => {
+  logger.fatal({ err }, "Exceção não tratada: a terminar");
+  terminarPorFalha();
+});
+
 if (!process.env.NODE_ENV) {
   // Falha fechada: sem NODE_ENV o servidor corre como produção (nunca como desenvolvimento).
   process.env.NODE_ENV = "production";
@@ -30,6 +49,15 @@ const server = app.listen(port, () => {
 
 // Inicializar Socket.io (partilha a mesma porta do HTTP)
 initSocket(server);
+
+// Intervalos efetivos dos jobs (só valores numéricos, em ms; mesma regra de validação dos jobs).
+logger.info(
+  {
+    subscriptionExpiryIntervalMs: Number(process.env.SUBSCRIPTION_EXPIRY_INTERVAL_MS) || 5 * 60 * 1000,
+    reportEscalationIntervalMs: Number(process.env.REPORT_ESCALATION_INTERVAL_MS) || 5 * 60 * 1000,
+  },
+  "Intervalos dos jobs periódicos (ms)",
+);
 
 // Expira subscrições vencidas e notifica (nunca cobra; renovação é manual)
 startSubscriptionExpiryJob();

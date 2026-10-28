@@ -38,6 +38,19 @@ const isLocal =
 export const pool = new Pool({
   connectionString,
   ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 15_000,
+  keepAlive: true,
+});
+
+// Ligações ociosas cortadas pelo servidor (ex.: Neon ao suspender) emitem "error" no pool; sem handler
+// isto lança uma exceção não tratada e derruba o processo. O pool descarta a ligação e abre outra no
+// pedido seguinte. Regista SÓ o nome e o código: nunca a mensagem, a query, os parâmetros nem a stack.
+pool.on("error", (err: Error & { code?: string }) => {
+  const nome = typeof err?.name === "string" ? err.name : "Error";
+  const codigo = typeof err?.code === "string" ? err.code : null;
+  console.error(JSON.stringify({ level: "error", msg: "Erro numa ligação ociosa do pool (descartada)", nome, codigo }));
 });
 
 export const db = drizzle(pool, { schema });
