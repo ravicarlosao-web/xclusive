@@ -8,6 +8,8 @@
     "dev:web": "pnpm --filter @workspace/xclusive run dev",
     "dev:admin": "pnpm --filter @workspace/admin run dev",
     "db:push": "pnpm --filter @workspace/db run push",
+    "legal:gerar": "node scripts/legal/docx-para-json.mjs",
+    "legal:verificar": "node scripts/legal/verificar.mjs",
     "db:push-force": "pnpm --filter @workspace/db run push-force",
     "db:seed": "pnpm --filter @workspace/scripts run seed",
     "db:test": "pnpm --filter @workspace/scripts exec tsx ./src/test-db.ts",

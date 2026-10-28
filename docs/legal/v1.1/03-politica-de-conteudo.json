@@ -1,0 +1,205 @@
+{
+  "documento": "conteudo",
+  "origem": {
+    "ficheiro": "originais/03-politica-de-conteudo.docx",
+    "sha256": "2ad06aec166dbcf541baf029d873f1111a7be42cc970e28d27564d9d3605a52c"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Política de Conteúdo",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Regras de publicação e moderação\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Natureza da plataforma"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A plataforma não é um serviço de divulgação pública de conteúdo pornográfico. O conteúdo é disponibilizado em ambiente privado, mediante conta, verificação de idade e, quando aplicável, pagamento ou subscrição."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Todo o conteúdo deve ser lícito, consentido e respeitar a lei angolana e as políticas da Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Requisitos obrigatórios"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Todos os participantes devem ter 18 anos ou mais no momento da gravação ou transmissão."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A criadora deve conservar consentimento e prova de maioridade, incluindo o Modelo de Consentimento de Terceiros."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não é permitida coação, engano, incapacidade, intoxicação severa, exploração, tráfico ou abuso."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conteúdo proibido"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É absolutamente proibido conteúdo envolvendo, representando ou sugerindo menores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "São proibidos conteúdo não consensual, vingança pornográfica, gravação oculta, deepfakes sexuais, violência extrema, tortura, bestialidade, tráfico, coerção, ameaças, difamação e incitamento ao ódio."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "São proibidos fraude, branqueamento, venda de substâncias ilegais, armas, malware e phishing."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibida a utilização da plataforma para divulgação, publicidade ou distribuição de conteúdo proibido por lei angolana."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Direitos de terceiros"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibido publicar conteúdo que viole direitos de autor, marca, imagem, privacidade ou outros direitos."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Moderação e consequências"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive utiliza denúncias, revisão humana e medidas técnicas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pode remover conteúdo, restringir funcionalidades, reter pagamentos, suspender ou encerrar contas e comunicar às autoridades."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Suspeita de menor ativa o Procedimento sobre Menores."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Denúncias"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Denúncias podem ser enviadas pelo suporte ou formulário, com ligação, descrição e motivo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Casos de menores, violência, coação ou tráfico têm prioridade urgente."
+        }
+      ]
+    }
+  ]
+}

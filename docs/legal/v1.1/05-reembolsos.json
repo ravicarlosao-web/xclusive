@@ -1,0 +1,240 @@
+{
+  "documento": "reembolsos",
+  "origem": {
+    "ficheiro": "originais/05-reembolsos.docx",
+    "sha256": "17834a21bcd28a8bc041ec4fe3b5a393ed4b47b62f8b203fa23e81e5c56e8ef4"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Política de Reembolsos e Pagamentos",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Saldo, compras e levantamentos\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Saldo"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Carregamentos em Kwanzas para a carteira Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Uso exclusivo para subscrições, publicações pagas, gorjetas e bilhetes."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Sem juros, transferência entre utilizadores ou natureza de depósito bancário."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Subscrições"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Acesso durante o período adquirido."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Renovação sempre manual; sem cobrança recorrente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Compras, gorjetas e transmissões"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Desbloqueio dá acesso pessoal, não exclusivo e não transferível."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjeta é pagamento voluntário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bilhete dá acesso à sessão adquirida."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Reembolsos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem ser reembolsados: cobrança duplicada, falha técnica imputável à Xclusive, transmissão cancelada antes do início, erro manifesto ou fraude contra o utilizador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pedido em até 14 dias para {{EMAIL_LEGAL}}, com comprovativo."
+        }
+      ],
+      "alterado": "reembolsos-art4-email"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Decisão em até 10 dias úteis; reembolso por saldo ou método original, conforme possível."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Sem direito a reembolso"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo já acedido, subscrição utilizada, gorjeta enviada, transmissão assistida, insatisfação subjetiva, violação dos Termos, fraude ou pedido fora do prazo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Levantamentos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento por transferência bancária manual."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Mínimo: {{MINIMO_LEVANTAMENTO}}."
+        }
+      ],
+      "alterado": "reembolsos-art6-minimo"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Exige KYC e validação bancária."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Prazo normal: {{PRAZO_MIN}} a {{PRAZO_MAX}} dias úteis."
+        }
+      ],
+      "alterado": "reembolsos-art6-prazo"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem ser retidos valores por fraude, estorno, conteúdo ilegal, denúncia ou ordem legal."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Comissão"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Comissão atual: 15%."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Alterável com aviso prévio razoável às criadoras."
+        }
+      ]
+    }
+  ]
+}

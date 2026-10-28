@@ -1,0 +1,198 @@
+{
+  "documento": "direitosAutor",
+  "origem": {
+    "ficheiro": "originais/04-direitos-de-autor.docx",
+    "sha256": "b55473047b030e42c0fb06392fc00638aa444cb47338ab09f7ed776d604a5983"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Direitos de Autor e Pedidos de Retirada",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Procedimento de notificação\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Respeito pelos direitos de autor"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive respeita direitos de autor e conexos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador responde pela titularidade ou autorização necessária para publicar o conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Quem pode apresentar pedido"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O titular dos direitos ou mandatário devidamente autorizado."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conteúdo do pedido"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação do requerente e mandatário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação da obra e ligação do conteúdo infrator."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Descrição do direito violado e fundamentação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Declaração de boa-fé e de exatidão das informações."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Assinatura e contactos."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Envio e prazo"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Enviar para {{EMAIL_LEGAL}} com assunto “Pedido de retirada — Direitos de Autor”."
+        }
+      ],
+      "alterado": "direitosAutor-art4-email"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Acusação de receção e decisão, em regra, em até sete dias úteis, prorrogável em casos complexos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo aparentemente infrator pode ser removido ou desativado provisoriamente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Contranotificação e reincidência"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador pode apresentar contranotificação fundamentada."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pode haver reposição, salvo ordem judicial, acordo ou necessidade probatória."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Reincidência pode determinar suspensão ou encerramento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Falsas notificações"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Notificações falsas ou de má-fé podem gerar responsabilidade civil e criminal."
+        }
+      ]
+    }
+  ]
+}

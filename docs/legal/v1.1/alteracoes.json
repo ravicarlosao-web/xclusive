@@ -1,0 +1,112 @@
+{
+  "descricao": "Únicas alterações ao texto do advogado (v1.1), decididas pelo dono. Cada entrada identifica UM parágrafo pelo texto original exato. Sintaxe do resultado: {{NOME}} (valor do legal-config) e {{?NOME}}…{{/}} (cláusula opcional: só aparece se NOME tiver valor). Qualquer outra diferença entre o .docx e o JSON faz falhar a verificação.",
+  "tokens": [
+    "EMPRESA_NOME",
+    "EMPRESA_NIF",
+    "EMPRESA_SEDE",
+    "EMAIL_LEGAL",
+    "MINIMO_LEVANTAMENTO",
+    "PRAZO_MIN",
+    "PRAZO_MAX"
+  ],
+  "alteracoes": [
+    {
+      "id": "termos-art1-empresa",
+      "documento": "termos",
+      "onde": "Artigo 1.º, 1.º parágrafo",
+      "acao": "substituir",
+      "original": "Os presentes Termos regulam o acesso e utilização da plataforma Xclusive (xclusive.ao), operada por [DENOMINAÇÃO SOCIAL DA SOCIEDADE, LDA.], com sede em [Endereço da sede social, Luanda, Angola], NIF [NIF DA SOCIEDADE].",
+      "resultado": "Os presentes Termos regulam o acesso e utilização da plataforma Xclusive (xclusive.ao), operada por {{EMPRESA_NOME}}{{?EMPRESA_SEDE}}, com sede em {{EMPRESA_SEDE}}{{/}}{{?EMPRESA_NIF}}, NIF {{EMPRESA_NIF}}{{/}}.",
+      "decisao": "Empresa: nome fixo (ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS, via legal-config) sem o \"LDA.\" do original; a cláusula da sede e a do NIF só aparecem se o legal-config tiver esses campos (omite-se a cláusula, não a frase)."
+    },
+    {
+      "id": "termos-art11-email",
+      "documento": "termos",
+      "onde": "Artigo 11.º, último parágrafo",
+      "acao": "substituir",
+      "original": "Contacto: [legal@xclusive.ao].",
+      "resultado": "Contacto: {{EMAIL_LEGAL}}.",
+      "decisao": "Email de contacto legal (legal-config)."
+    },
+    {
+      "id": "privacidade-s1-empresa",
+      "documento": "privacidade",
+      "onde": "1. Responsável pelo tratamento, 1.º parágrafo",
+      "acao": "substituir",
+      "original": "Responsável: [DENOMINAÇÃO SOCIAL DA SOCIEDADE, LDA.], sede em [Endereço da sede social, Luanda, Angola], NIF [NIF DA SOCIEDADE].",
+      "resultado": "Responsável: {{EMPRESA_NOME}}{{?EMPRESA_SEDE}}, sede em {{EMPRESA_SEDE}}{{/}}{{?EMPRESA_NIF}}, NIF {{EMPRESA_NIF}}{{/}}.",
+      "decisao": "Empresa: nome fixo (ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS, via legal-config) sem o \"LDA.\" do original; a cláusula da sede e a do NIF só aparecem se o legal-config tiver esses campos (omite-se a cláusula, não a frase)."
+    },
+    {
+      "id": "privacidade-s1-email",
+      "documento": "privacidade",
+      "onde": "1. Responsável pelo tratamento, 2.º parágrafo",
+      "acao": "substituir",
+      "original": "Contacto de privacidade: {EMAIL}.",
+      "resultado": "Contacto de privacidade: {{EMAIL_LEGAL}}.",
+      "decisao": "Email de contacto legal (legal-config)."
+    },
+    {
+      "id": "privacidade-s3-marketing",
+      "documento": "privacidade",
+      "onde": "3. Finalidades, último ponto",
+      "acao": "substituir",
+      "original": "Comunicação contratual e, mediante consentimento, marketing.",
+      "resultado": "Comunicação contratual.",
+      "decisao": "Marketing: remoção autorizada pelo dono; mantém-se só a comunicação contratual."
+    },
+    {
+      "id": "privacidade-s5-marketing",
+      "documento": "privacidade",
+      "onde": "5. Conservação, último ponto",
+      "acao": "remover",
+      "original": "Marketing: até retirada do consentimento.",
+      "decisao": "Marketing: linha removida por decisão do dono."
+    },
+    {
+      "id": "privacidade-s6-email",
+      "documento": "privacidade",
+      "onde": "6. Direitos dos titulares, 2.º parágrafo",
+      "acao": "substituir",
+      "original": "Pedidos para [legal@xclusive.ao], com identificação suficiente.",
+      "resultado": "Pedidos para {{EMAIL_LEGAL}}, com identificação suficiente.",
+      "decisao": "Email de contacto legal (legal-config)."
+    },
+    {
+      "id": "direitosAutor-art4-email",
+      "documento": "direitosAutor",
+      "onde": "Artigo 4.º, 1.º parágrafo",
+      "acao": "substituir",
+      "original": "Enviar para [legal@xclusive.ao] com assunto “Pedido de retirada — Direitos de Autor”.",
+      "resultado": "Enviar para {{EMAIL_LEGAL}} com assunto “Pedido de retirada — Direitos de Autor”.",
+      "decisao": "Email de contacto legal (legal-config); apresentado como ligação mailto: (o texto não muda)."
+    },
+    {
+      "id": "reembolsos-art4-email",
+      "documento": "reembolsos",
+      "onde": "Artigo 4.º, 2.º parágrafo",
+      "acao": "substituir",
+      "original": "Pedido em até 14 dias para [legal@xclusive.ao], com comprovativo.",
+      "resultado": "Pedido em até 14 dias para {{EMAIL_LEGAL}}, com comprovativo.",
+      "decisao": "Email de contacto legal (legal-config)."
+    },
+    {
+      "id": "reembolsos-art6-minimo",
+      "documento": "reembolsos",
+      "onde": "Artigo 6.º, 2.º parágrafo",
+      "acao": "substituir",
+      "original": "Mínimo: [valor em AOA].",
+      "resultado": "Mínimo: {{MINIMO_LEVANTAMENTO}}.",
+      "decisao": "Levantamento mínimo: lido do legal-config (platform_settings.min_withdrawal_amount) e escrito como \"5.000 Kz\"."
+    },
+    {
+      "id": "reembolsos-art6-prazo",
+      "documento": "reembolsos",
+      "onde": "Artigo 6.º, 5.º parágrafo",
+      "acao": "substituir",
+      "original": "Prazo normal: [5] a [10] dias úteis.",
+      "resultado": "Prazo normal: {{PRAZO_MIN}} a {{PRAZO_MAX}} dias úteis.",
+      "decisao": "Prazo de levantamento: lido do legal-config (5 a 10 dias úteis)."
+    }
+  ]
+}

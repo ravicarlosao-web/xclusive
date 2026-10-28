@@ -1,0 +1,321 @@
+{
+  "documento": "privacidade",
+  "origem": {
+    "ficheiro": "originais/02-privacidade.docx",
+    "sha256": "9712696350be37b3f01c3fd8a0ee682969872747143a8b2857fd5e3ef5b41052"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Política de Privacidade",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Proteção de dados pessoais\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "1. Responsável pelo tratamento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Responsável: {{EMPRESA_NOME}}{{?EMPRESA_SEDE}}, sede em {{EMPRESA_SEDE}}{{/}}{{?EMPRESA_NIF}}, NIF {{EMPRESA_NIF}}{{/}}."
+        }
+      ],
+      "alterado": "privacidade-s1-empresa"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contacto de privacidade: {{EMAIL_LEGAL}}."
+        }
+      ],
+      "alterado": "privacidade-s1-email"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "2. Dados recolhidos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação e contacto: nome, pseudónimo, confirmação de maioridade, e-mail, telefone, país e morada quando necessário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conta e utilização: credenciais, subscrições, aquisições, interações, mensagens e registos de acesso."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Técnicos: IP, dispositivo, navegador, sistema operativo, sessões, cookies e segurança."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC de criadores: documento de identidade ou passaporte, selfie, dados bancários, comprovativo de morada e outros documentos necessários."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pagamentos: método, carregamentos, compras, gorjetas, bilhetes, comissões e levantamentos."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "3. Finalidades"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Prestação do serviço e processamento de pagamentos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Verificação de idade e identidade, prevenção de fraude e proteção de menores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Cumprimento fiscal, contabilístico e legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Segurança, resposta a incidentes e investigação de denúncias."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Comunicação contratual."
+        }
+      ],
+      "alterado": "privacidade-s3-marketing"
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "4. Partilha e transferências internacionais"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os dados podem ser partilhados com prestadores de alojamento, nuvem, segurança, suporte, antifraude e pagamentos, apenas na medida necessária."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive utiliza alojamento e armazenamento no estrangeiro, com salvaguardas contratuais e medidas técnicas adequadas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados podem ser comunicados a bancos, autoridades tributárias, judiciárias, policiais ou de proteção de crianças quando legalmente exigido."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "5. Conservação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conta ativa: enquanto durar a relação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Transações e faturação: pelo menos cinco anos ou prazo fiscal mais longo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC e provas de maioridade: até cinco anos após encerramento, salvo obrigação legal ou investigação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo suspeito de envolver menores: conservação segura até conclusão da investigação e comunicação às autoridades."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "6. Direitos dos titulares"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Acesso, retificação, limitação, oposição e, quando aplicável, eliminação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pedidos para {{EMAIL_LEGAL}}, com identificação suficiente."
+        }
+      ],
+      "alterado": "privacidade-s6-email"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados necessários a obrigações legais, segurança, prevenção de fraude ou prova podem ser conservados."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Reclamação à Agência de Proteção de Dados, quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "7. Segurança"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Medidas técnicas e organizacionais: cifração, controlo de acessos, registos de auditoria, minimização e formação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Em caso de violação com risco, adotam-se contenção, avaliação e comunicação conforme a lei."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "8. Menores"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Plataforma exclusiva para maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Perante menor identificado: suspensão, remoção, conservação segura de prova e comunicação às autoridades quando exigido."
+        }
+      ]
+    }
+  ]
+}
