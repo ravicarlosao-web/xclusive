@@ -1,0 +1,407 @@
+{
+  "documento": "termos",
+  "origem": {
+    "ficheiro": "originais/01-termos.docx",
+    "sha256": "46119a100907b705c2cd676a702014ceab2b746db8abf6d77cf3bb0f3d1e977c"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Termos de Serviço",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Termos e condições de utilização\n22 de outubro de 2026 • Versão 1.1",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Objeto e aceitação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os presentes Termos regulam o acesso e utilização da plataforma Xclusive (xclusive.ao), operada por {{EMPRESA_NOME}}{{?EMPRESA_SEDE}}, com sede em {{EMPRESA_SEDE}}{{/}}{{?EMPRESA_NIF}}, NIF {{EMPRESA_NIF}}{{/}}."
+        }
+      ],
+      "alterado": "termos-art1-empresa"
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Ao criar conta, carregar saldo, subscrever criador, desbloquear publicação, adquirir bilhete ou enviar gorjeta, o utilizador aceita estes Termos, a Política de Privacidade, a Política de Conteúdo, a Política de Reembolsos e Pagamentos e a Política de Direitos de Autor."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive regista a versão aceite, data e hora da aceitação."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Idade mínima"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O acesso é reservado a maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador declara ter 18 anos ou mais e capacidade jurídica."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode exigir prova de idade e identidade; a recusa ou deteção de menor determina suspensão imediata, retenção de conteúdo e comunicação às autoridades quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conta de utilizador"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Para certas funcionalidades é necessária conta com correio eletrónico, palavra-passe e, quando exigido, dados de verificação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador responde pela veracidade dos dados, confidencialidade das credenciais e atividades na conta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "São proibidas contas em nome de terceiros, contas duplicadas, identidade falsa e partilha de credenciais."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Saldo, pagamentos e serviços"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os utilizadores carregam saldo em Kwanzas (AOA) para a carteira da plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O saldo serve para subscrições, desbloqueio de publicações pagas, gorjetas e bilhetes de transmissão em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O saldo não é depósito bancário, não rende juros e não é transferível entre utilizadores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As subscrições são renovadas manualmente; não há renovação automática."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A comissão da Xclusive é atualmente de 15% e é deduzida antes do crédito líquido ao criador; pode ser alterada com aviso prévio."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Regras de utilização"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador deve usar a plataforma de forma lícita, respeitosa e conforme as políticas aplicáveis."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "São proibidos conteúdo ilegal, envolvendo menores, não consentido, violento, coercivo, exploratório, difamatório, fraudulento, malware, phishing, evasão de controlos, lavagem de dinheiro e financiamento do terrorismo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibido assediar, ameaçar ou divulgar dados pessoais de outros utilizadores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A divulgação ou publicidade de conteúdo proibido por lei angolana não é permitida na plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Conteúdo e licenças"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador mantém a titularidade do conteúdo e concede à Xclusive licença não exclusiva e limitada para alojar, reproduzir, exibir, distribuir, moderar e promover o conteúdo na plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador adquire apenas acesso pessoal, não exclusivo e não transferível."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibida descarga, gravação, redistribuição ou revenda não autorizada de conteúdo pago."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode remover conteúdo e suspender ou encerrar contas em caso de violação."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Suspensão e encerramento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode suspender contas, reter pagamentos ou remover conteúdo por suspeita de fraude, ilegalidade, risco para menores, disputa de pagamento ou investigação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador pode encerrar a conta a qualquer momento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O encerramento não extingue obrigações vencidas nem deveres legais de conservação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O saldo remanescente pode ser reembolsado, salvo fraude, violação grave ou obrigação legal."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 8.º — Responsabilidade e limitação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A plataforma é fornecida conforme disponível, sem garantia de disponibilidade ininterrupta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dentro dos limites legais, exclui-se responsabilidade por danos indiretos, lucros cessantes e perda de dados, salvo dolo, negligência grave ou dever legal imperativo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive não é parte nas relações entre criadores e subscritores além da intermediação técnica e de pagamento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 9.º — Indemnização"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador indemniza a Xclusive por perdas, custos, multas ou despesas resultantes da violação destes Termos ou uso ilícito da plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 10.º — Alterações"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode alterar estes Termos, comunicando alterações relevantes com antecedência razoável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O uso continuado implica aceitação da nova versão."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 11.º — Lei aplicável e foro"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Aplica-se a lei da República de Angola."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O foro competente é o da comarca de Luanda, salvo competência legal imperativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contacto: {{EMAIL_LEGAL}}."
+        }
+      ],
+      "alterado": "termos-art11-email"
+    }
+  ]
+}

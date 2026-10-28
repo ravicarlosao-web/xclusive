@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { validarConfig, type LegalConfig } from './resolver';
 
 export type LegalDocKey = 'termos' | 'privacidade' | 'conteudo' | 'direitosAutor' | 'reembolsos';
 export type LegalDocInfo = { versao: string; atualizadoEm: string };
@@ -29,4 +30,29 @@ export function useLegalDocs(): LegalDocs | null {
     return () => { vivo = false; };
   }, []);
   return docs;
+}
+
+/** Dados variáveis dos textos legais (empresa, email, mínimo e prazos de levantamento): GET /api/auth/legal-config. */
+export async function fetchLegalConfig(): Promise<LegalConfig> {
+  const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+  const res = await fetch(`${base}/api/auth/legal-config`, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error('Não foi possível obter a configuração dos textos legais.');
+  return validarConfig(await res.json());
+}
+
+export type EstadoLegalConfig = { config: LegalConfig | null; erro: boolean; tentarOutraVez: () => void };
+
+/** legal-config para as páginas legais: config é null enquanto carrega; erro=true se falhar ou vier incompleto. */
+export function useLegalConfig(): EstadoLegalConfig {
+  const [config, setConfig] = useState<LegalConfig | null>(null);
+  const [erro, setErro] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    setErro(false);
+    fetchLegalConfig().then((c) => { if (vivo) setConfig(c); }).catch(() => { if (vivo) setErro(true); });
+    return () => { vivo = false; };
+  }, [tentativa]);
+  const tentarOutraVez = useCallback(() => { setConfig(null); setTentativa((n) => n + 1); }, []);
+  return { config, erro, tentarOutraVez };
 }
