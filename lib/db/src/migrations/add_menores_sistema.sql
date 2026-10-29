@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration (ADITIVA): procedimento sobre menores (registo interno de casos)
+-- Migration (ADITIVA): casos de menor (registo interno)
 --
 --   * menor_cases: um caso por conta (aberto → confirmado | arquivado). Guarda quem abriu, a descrição, a decisão, as
 --     ações tomadas (contagens), a autoridade comunicada (nome, data, referência) e a cópia dos acessos (IP e user-agent das
