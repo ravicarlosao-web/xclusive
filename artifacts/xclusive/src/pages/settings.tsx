@@ -12,11 +12,13 @@ import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star, Sun, Moon, Che
 import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
+import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
+  const [encerrarAberto, setEncerrarAberto] = useState(false);
   const updateProfile = useUpdateProfile();
   const { toast } = useToast();
   const { tema, definir: definirTema } = useTema();
@@ -313,6 +315,18 @@ export default function Settings() {
                 <LogOut className="w-5 h-5 mr-2" /> Terminar Sessão
               </Button>
             </div>
+
+            {/* Zona de perigo: encerrar a própria conta (só com a API real) */}
+            {!isMockMode && (
+              <div className="pt-8 mt-8 border-t border-destructive/40 space-y-3" data-testid="zona-perigo">
+                <h3 className="text-lg font-bold text-destructive">Zona de perigo</h3>
+                <p className="text-sm text-muted-foreground max-w-md">Encerrar a conta torna-a inacessível e invisível. Podes pedir a reabertura nos primeiros 30 dias.</p>
+                <Button variant="outline" onClick={() => setEncerrarAberto(true)} data-testid="encerrar-conta-abrir" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive min-h-[44px]">
+                  Encerrar a minha conta
+                </Button>
+                <EncerrarContaDialog aberto={encerrarAberto} onFechar={() => setEncerrarAberto(false)} />
+              </div>
+            )}
           </TabsContent>
         </div>
       </Tabs>

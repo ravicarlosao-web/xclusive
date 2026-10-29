@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
-import { requireAuth, type AuthRequest } from "../lib/auth";
+import { requireAuth, comparePassword, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
@@ -11,7 +11,12 @@ import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger";
-import { LEGAL_DOCS } from "./auth";
+import { LEGAL_DOCS, clearRefreshCookie } from "./auth";
+import { bloqueiosDeEncerramento, encerrarConta, EncerramentoErro, JANELA_DIAS, MSG_ENCERRADA_JANELA } from "../lib/encerramento";
+import { desligarSockets } from "../lib/suspensao";
+import { utilizadorAtivo } from "../lib/encerramento";
+import { commentVisivel } from "../lib/takedown";
+import { erroSeguro } from "../lib/erroSeguro";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
@@ -70,17 +75,18 @@ router.get("/users/suggestions", requireAuth, async (req: AuthRequest, res): Pro
   let excludeIds: number[] = userId ? [userId] : [];
 
   if (userId) {
-    const follows = await db.select({ seguidoId: followsTable.seguidoId }).from(followsTable).where(eq(followsTable.seguidorId, userId));
+    const follows = await db.select({ seguidoId: followsTable.seguidoId }).from(followsTable).where(and(eq(followsTable.seguidorId, userId), utilizadorAtivo(followsTable.seguidoId)));
     excludeIds = [userId, ...follows.map(f => f.seguidoId)];
   }
 
   const query = db.select().from(usersTable).limit(10);
+  // Contas inativas (suspensas, encerradas) não aparecem nas sugestões.
   const users = excludeIds.length > 0
-    ? await query.where(not(inArray(usersTable.id, excludeIds)))
-    : await query;
+    ? await query.where(and(eq(usersTable.ativo, true), not(inArray(usersTable.id, excludeIds))))
+    : await query.where(eq(usersTable.ativo, true));
 
   const result = await Promise.all(users.map(async (u) => {
-    const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, u.id));
+    const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, u.id), utilizadorAtivo(followsTable.seguidorId)));
     return {
       id: u.id,
       username: u.username,
@@ -112,7 +118,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
         tipoConta: usersTable.tipoConta,
       })
       .from(usersTable)
-      .where(eq(usersTable.tipoConta, "criador"))
+      .where(and(eq(usersTable.tipoConta, "criador"), eq(usersTable.ativo, true)))
       .limit(20);
 
     let candidateUsers = creators;
@@ -127,6 +133,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
           tipoConta: usersTable.tipoConta,
         })
         .from(usersTable)
+        .where(eq(usersTable.ativo, true))
         .limit(20);
     }
 
@@ -264,8 +271,8 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
 
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, userId)).returning();
 
-  const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, userId));
-  const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, userId));
+  const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, userId), utilizadorAtivo(followsTable.seguidorId)));
+  const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidorId, userId), utilizadorAtivo(followsTable.seguidoId)));
   const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(eq(postsTable.autorId, userId));
 
   res.json({
@@ -497,6 +504,62 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
   });
 });
 
+// ── Encerramento da própria conta ─────────────────────────────────────────────────────────────────────────────
+// GET /users/me/encerramento: bloqueios resolúveis (sem revelar denúncias). POST /users/me/encerrar: confirma a password,
+// encerra numa transação (lib/encerramento.ts) e termina a sessão. Limite: 5 tentativas por 15 minutos por utilizador.
+
+const limiteEncerrar = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Demasiadas tentativas. Tenta novamente dentro de alguns minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `user:${(req as AuthRequest).userId}`,
+});
+
+const encerrarSchema = z.object({ password: z.string().min(1, "Indica a tua password.").max(128) });
+
+router.get("/users/me/encerramento", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const [u] = await db.select({ id: usersTable.id, saldo: usersTable.saldo, ganhos: usersTable.ganhos, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, req.userId!));
+    if (!u) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+    const bloqueios = await bloqueiosDeEncerramento(db, u);
+    res.json({ podeEncerrar: bloqueios.length === 0 && u.role !== "admin" && u.role !== "superadmin", bloqueios, janelaDias: JANELA_DIAS });
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "Erro ao verificar o encerramento");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.post("/users/me/encerrar", requireAuth, limiteEncerrar, validate(encerrarSchema), async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId!;
+  try {
+    const [u] = await db.select({ passwordHash: usersTable.passwordHash, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
+    if (!u) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+    if (u.role === "admin" || u.role === "superadmin") { res.status(403).json({ error: "As contas de administrador não se encerram por aqui." }); return; }
+    if (!(await comparePassword(req.body.password, u.passwordHash))) {
+      res.status(403).json({ error: "Password incorreta.", codigo: "password_incorreta" });
+      return;
+    }
+    const uaHeader = req.headers["user-agent"];
+    const r = await encerrarConta({
+      userId,
+      ip: (req.ip ?? "").slice(0, 45) || null,
+      userAgent: (typeof uaHeader === "string" ? uaHeader : "").slice(0, 400) || null,
+    });
+    desligarSockets(userId);
+    clearRefreshCookie(res);
+    res.json({ ok: true, apagarApos: r.apagarApos.toISOString(), janelaDias: JANELA_DIAS, mensagem: MSG_ENCERRADA_JANELA() });
+  } catch (err) {
+    if (err instanceof EncerramentoErro) {
+      res.status(err.httpStatus).json({ error: err.message, ...(err.bloqueios ? { codigo: "encerramento_bloqueado", bloqueios: err.bloqueios } : {}) });
+      return;
+    }
+    req.log?.error(erroSeguro(err), "Erro ao encerrar a conta");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 // Obter perfil por username
 router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const { username } = req.params;
@@ -507,8 +570,8 @@ router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promi
   // Conta suspensa (inclui perfis retirados por denúncia): o perfil deixa de ser servido
   if (!user || !user.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
-  const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
-  const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
+  const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, user.id), utilizadorAtivo(followsTable.seguidorId)));
+  const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidorId, user.id), utilizadorAtivo(followsTable.seguidoId)));
   const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivelPara(await lerVisualizador(viewerId))));
 
   let estaASeguir = false;
@@ -585,7 +648,7 @@ router.get("/users/:username/followers", requireAuth, async (req: AuthRequest, r
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const followers = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidorId, usersTable.id)).where(eq(followsTable.seguidoId, user.id)).limit(50);
+  const followers = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidorId, usersTable.id)).where(and(eq(followsTable.seguidoId, user.id), eq(usersTable.ativo, true))).limit(50);
   const users = followers.map(f => ({
     id: f.u.id,
     username: f.u.username,
@@ -610,7 +673,7 @@ router.get("/users/:username/following", requireAuth, async (req: AuthRequest, r
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const following = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidoId, usersTable.id)).where(eq(followsTable.seguidorId, user.id)).limit(50);
+  const following = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidoId, usersTable.id)).where(and(eq(followsTable.seguidorId, user.id), eq(usersTable.ativo, true))).limit(50);
   const users = following.map(f => ({
     id: f.u.id,
     username: f.u.username,
@@ -643,7 +706,7 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
   const result = await Promise.all(posts.map(async (p) => {
     const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);
     const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, p.id)));
-    const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(eq(commentsTable.postId, p.id));
+    const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(and(eq(commentsTable.postId, p.id), commentVisivel()));
     const acesso = p.exclusivo
       ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
       : true;

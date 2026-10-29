@@ -23,6 +23,13 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 /** Marca (por sessão do browser) de que a conta foi suspensa; também é posta pelo AuthContext ao expulsar uma sessão ativa. */
 const CHAVE_SUSPENSA = 'xclusive_conta_suspensa';
 
+/** Mensagem (por sessão do browser) de que a conta foi encerrada pelo próprio; posta ao encerrar, pelo AuthContext ao expulsar a sessão e aqui. */
+const CHAVE_ENCERRADA = 'xclusive_conta_encerrada';
+
+function lerMensagemEncerrada(): string | null {
+  try { return sessionStorage.getItem(CHAVE_ENCERRADA); } catch { return null; }
+}
+
 function lerFlagSuspensa(): boolean {
   try { return sessionStorage.getItem(CHAVE_SUSPENSA) === '1'; } catch { return false; }
 }
@@ -57,6 +64,7 @@ export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
   const [suspensa, setSuspensa] = useState<boolean>(() => lerFlagSuspensa());
+  const [encerrada, setEncerrada] = useState<string | null>(() => lerMensagemEncerrada());
   const [emailContacto, setEmailContacto] = useState<string | null>(null);
   // false = registos fechados pelo admin (null = ainda não sabemos / não foi possível ler: mostra o link normal)
   const [registosAbertos, setRegistosAbertos] = useState<boolean | null>(null);
@@ -86,8 +94,14 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       await login({ email: data.email, password: data.password, lembrar: data.lembrar });
-      try { sessionStorage.removeItem(CHAVE_SUSPENSA); } catch { /* sem armazenamento */ }
+      try { sessionStorage.removeItem(CHAVE_SUSPENSA); sessionStorage.removeItem(CHAVE_ENCERRADA); } catch { /* sem armazenamento */ }
     } catch (error: any) {
+      // Conta encerrada (403 + codigo): aviso persistente com a mensagem do servidor, sem toast e sem sessão.
+      if (error?.status === 403 && error?.data?.codigo === 'conta_encerrada' && typeof error?.data?.error === 'string') {
+        try { sessionStorage.setItem(CHAVE_ENCERRADA, error.data.error); } catch { /* sem armazenamento */ }
+        setEncerrada(error.data.error);
+        return;
+      }
       // Conta suspensa (403 + codigo): aviso persistente na página, sem toast e sem sessão.
       if (error?.status === 403 && error?.data?.codigo === 'conta_suspensa') {
         try { sessionStorage.setItem(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
@@ -105,6 +119,12 @@ export default function Login() {
   return (
     <AuthSplitLayout frase="Entra na tua conta e descobre o conteúdo mais exclusivo dos teus criadores favoritos.">
           <AuthHeader titulo="Bem-vindo de volta" subtitulo="Insere os teus dados para entrares na tua conta." />
+
+          {encerrada && (
+            <div role="alert" data-testid="aviso-conta-encerrada" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm text-foreground">
+              {encerrada}
+            </div>
+          )}
 
           {suspensa && (
             <div role="alert" data-testid="aviso-conta-suspensa" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm text-foreground">

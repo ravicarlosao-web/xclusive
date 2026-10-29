@@ -53,10 +53,39 @@ export const usersTable = pgTable("users", {
    */
   preferenciaMais18: text("preferencia_mais18"),
   preferenciaMais18Em: timestamp("preferencia_mais18_em"),
+  /**
+   * Conta encerrada pelo próprio utilizador (ver routes/users.ts: POST /users/me/encerrar). Uma conta encerrada tem SEMPRE
+   * ativo=false (CHECK abaixo): a BD recusa reativá-la sem reabrir (POST /admin/users/:id/reabrir limpa os dois campos).
+   */
+  encerradaEm: timestamp("encerrada_em"),
 }, (table) => [
+  check("users_encerrada_inativa_chk", sql`${table.encerradaEm} IS NULL OR ${table.ativo} = false`),
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
   check("users_ganhos_nao_negativo", sql`${table.ganhos} >= 0`),
   check("users_preferencia_mais18_check", sql`${table.preferenciaMais18} IN ('ver', 'filtrar')`),
+]);
+
+/**
+ * Fila de encerramento de contas: uma linha por encerramento (a janela de arrependimento termina em `apagar_apos`; a
+ * purga real é do PR de retenção). `ON DELETE RESTRICT`: a prova do encerramento conserva-se.
+ */
+export const accountClosuresTable = pgTable("account_closures", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  encerradaEm: timestamp("encerrada_em").notNull().defaultNow(),
+  origem: varchar("origem", { length: 20 }).notNull().default("utilizador"),
+  tipoConta: varchar("tipo_conta", { length: 20 }).notNull(),
+  ip: varchar("ip", { length: 45 }),
+  userAgent: varchar("user_agent", { length: 400 }),
+  apagarApos: timestamp("apagar_apos").notNull(),
+  /** pendente | reaberta | processada */
+  estado: varchar("estado", { length: 20 }).notNull().default("pendente"),
+  reabertaEm: timestamp("reaberta_em"),
+  reabertaPor: integer("reaberta_por").references(() => usersTable.id, { onDelete: "set null" }),
+  reabertaMotivo: text("reaberta_motivo"),
+  processadaEm: timestamp("processada_em"),
+}, (t) => [
+  index("account_closures_fila_idx").on(t.estado, t.apagarApos),
 ]);
 
 /**

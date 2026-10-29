@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 import { db, usersTable, followsTable, revokedTokensTable, userLegalAcceptancesTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
   signAccessToken, signRefreshToken, verifyToken,
@@ -16,6 +16,7 @@ import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 import { getMinWithdrawal } from "./wallet";
 import { erroSeguro } from "../lib/erroSeguro";
+import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from "../lib/encerramento";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -34,7 +35,7 @@ function setRefreshCookie(res: Response, token: string) {
   res.cookie(REFRESH_COOKIE, token, COOKIE_OPTS);
 }
 
-function clearRefreshCookie(res: Response) {
+export function clearRefreshCookie(res: Response) {
   res.clearCookie(REFRESH_COOKIE, { ...COOKIE_OPTS, maxAge: 0 });
 }
 
@@ -296,6 +297,11 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
     // Conta suspensa: SÓ depois de a password estar certa (quem não a sabe não descobre que a conta existe
     // nem o seu estado). Sem token, sem sessão, sem cookie.
     if (!user.ativo) {
+      if (user.encerradaEm) {
+        // Encerrada pelo próprio: mensagem própria (depende de a janela de 30 dias ainda estar aberta).
+        res.status(403).json({ error: await mensagemContaEncerrada(db, user.id), codigo: CODIGO_CONTA_ENCERRADA });
+        return;
+      }
       res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
       return;
     }
@@ -310,8 +316,8 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
       (req.ip ?? "").slice(0, 45) || undefined, // req.ip respeita "trust proxy": não aceita o X-Forwarded-For forjado
     );
 
-    const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
-    const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
+    const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, user.id), utilizadorAtivo(followsTable.seguidorId)));
+    const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidorId, user.id), utilizadorAtivo(followsTable.seguidoId)));
     const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(usersTable).where(eq(usersTable.id, user.id));
 
     res.json({ token: accessToken, user: formatUser(user, posts || 0, seguidores || 0, seguindo || 0) });
@@ -414,7 +420,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
 
   // Conta suspensa (ou inexistente): não renova a sessão. Falha de DB = negar (fail-closed).
   try {
-    const [conta] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
+    const [conta] = await db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
     if (!conta) {
       clearRefreshCookie(res);
       res.status(401).json({ error: "Sessão inválida. Faz login novamente." });
@@ -422,6 +428,10 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     }
     if (!conta.ativo) {
       clearRefreshCookie(res);
+      if (conta.encerradaEm) {
+        res.status(403).json({ error: await mensagemContaEncerrada(db, payload.userId), codigo: CODIGO_CONTA_ENCERRADA });
+        return;
+      }
       res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
       return;
     }
@@ -481,8 +491,8 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void>
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
     if (!user) { res.status(401).json({ error: "Utilizador não encontrado" }); return; }
 
-    const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidoId, user.id));
-    const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(eq(followsTable.seguidorId, user.id));
+    const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, user.id), utilizadorAtivo(followsTable.seguidorId)));
+    const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidorId, user.id), utilizadorAtivo(followsTable.seguidoId)));
 
     res.json(formatUser(user, 0, seguidores || 0, seguindo || 0));
   } catch (err) {

@@ -6,7 +6,7 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { comInfracaoAtiva } from "../lib/infracoesMais18";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
-import { reelVisivel } from "../lib/takedown";
+import { reelVisivel, commentVisivel } from "../lib/takedown";
 import {
   lerVisualizador, reelPermitido, reelBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
   lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
@@ -110,7 +110,7 @@ router.delete("/reels/:id/like", requireAuth, async (req: AuthRequest, res): Pro
 async function formatReel(reel: any, userId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, reel.autorId));
   const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "reel"), eq(likesTable.alvoId, reel.id)));
-  const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(eq(commentsTable.postId, reel.id));
+  const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(and(eq(commentsTable.postId, reel.id), commentVisivel()));
   let curtido = false;
   if (userId) {
     const [like] = await db.select().from(likesTable).where(and(eq(likesTable.utilizadorId, userId), eq(likesTable.alvoTipo, "reel"), eq(likesTable.alvoId, reel.id)));

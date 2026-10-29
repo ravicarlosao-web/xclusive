@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Ban, Trash2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Ban, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { InfracoesMais18 } from '@/components/mais18/InfracoesMais18';
@@ -31,6 +31,26 @@ export default function UserDetail() {
     }
   });
 
+  // Conta encerrada pelo próprio utilizador: só se reabre (dentro dos 30 dias), com motivo obrigatório.
+  const reabrir = useMutation({
+    mutationFn: async (motivo: string) => {
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(`/api/admin/users/${id}/reabrir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ motivo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', id] });
+      toast({ title: 'Conta reaberta' });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Não foi possível reabrir a conta', description: e.message }),
+  });
+
   const deleteUser = useMutation({
     mutationFn: () => adminApi.deleteUser(id),
     onSuccess: () => {
@@ -43,6 +63,7 @@ export default function UserDetail() {
   if (!user) return <div>Utilizador não encontrado</div>;
 
   const isSuspended = user.estado === 'suspenso';
+  const isEncerrada = user.estado === 'encerrada';
 
   return (
     <div className="space-y-6">
@@ -60,7 +81,20 @@ export default function UserDetail() {
         </div>
         
         <div className="flex items-center gap-2">
-          {isSuspended ? (
+          {isEncerrada ? (
+            user.encerramento?.podeReabrir ? (
+              <Button variant="outline" className="border-green-500/50 text-green-500 hover:bg-green-500/10" onClick={() => {
+                const motivo = (prompt('Motivo da reabertura (obrigatório, mínimo 10 caracteres; fica registado):') ?? '').trim();
+                if (!motivo) return;
+                if (motivo.length < 10) { toast({ variant: 'destructive', title: 'Motivo demasiado curto', description: 'Indica um motivo com pelo menos 10 caracteres.' }); return; }
+                reabrir.mutate(motivo);
+              }}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Reabrir conta
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground max-w-[14rem]">Conta encerrada pelo utilizador. A janela de reabertura terminou.</span>
+            )
+          ) : isSuspended ? (
             <Button variant="outline" className="border-green-500/50 text-green-500 hover:bg-green-500/10" onClick={() => updateStatus.mutate('ativo')}>
               <CheckCircle2 className="mr-2 h-4 w-4" /> Reactivar Conta
             </Button>

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export type StatusVariant = 
-  | 'ativo' | 'suspenso' | 'eliminado' | 'pendente' | 'aprovado' | 'rejeitado' | 'pago' | 'reviewing' | 'resolved' | 'dismissed';
+  | 'ativo' | 'suspenso' | 'encerrada' | 'eliminado' | 'pendente' | 'aprovado' | 'rejeitado' | 'pago' | 'reviewing' | 'resolved' | 'dismissed';
 
 interface StatusBadgeProps {
   status: string;
@@ -22,6 +22,9 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     case 'suspenso':
     case 'reviewing':
       variantClass = "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
+      break;
+    case 'encerrada':
+      variantClass = "bg-slate-500/10 text-slate-300 border-slate-500/30";
       break;
     case 'eliminado':
     case 'rejeitado':

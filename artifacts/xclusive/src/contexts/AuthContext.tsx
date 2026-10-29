@@ -47,6 +47,11 @@ if (!import.meta.env.DEV) {
 
 /** Conta suspensa: marca (por sessão do browser) para o ecrã de login mostrar o aviso. */
 const CHAVE_CONTA_SUSPENSA = 'xclusive_conta_suspensa';
+/** Conta encerrada pelo próprio: guarda a mensagem (por sessão do browser) para o ecrã de login a mostrar. */
+const CHAVE_CONTA_ENCERRADA = 'xclusive_conta_encerrada';
+function marcarContaEncerrada(mensagem: string) {
+  try { sessionStorage.setItem(CHAVE_CONTA_ENCERRADA, mensagem); } catch { /* sem armazenamento */ }
+}
 function marcarContaSuspensa() {
   try { sessionStorage.setItem(CHAVE_CONTA_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
 }
@@ -421,7 +426,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: 'same-origin',
       });
       if (!res.ok) {
-        if (res.status === 403 && (await res.json().catch(() => null))?.codigo === 'conta_suspensa') marcarContaSuspensa();
+        if (res.status === 403) {
+          const corpo = await res.json().catch(() => null);
+          if (corpo?.codigo === 'conta_suspensa') marcarContaSuspensa();
+          else if (corpo?.codigo === 'conta_encerrada') marcarContaEncerrada(typeof corpo?.error === 'string' ? corpo.error : 'A tua conta foi encerrada.');
+        }
         return false;
       }
       const data = await res.json();
@@ -440,7 +449,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           credentials: 'same-origin',
         });
         if (!res.ok) {
-          if (res.status === 403 && (await res.json().catch(() => null))?.codigo === 'conta_suspensa') marcarContaSuspensa();
+          if (res.status === 403) {
+            const corpo = await res.json().catch(() => null);
+            if (corpo?.codigo === 'conta_suspensa') marcarContaSuspensa();
+            else if (corpo?.codigo === 'conta_encerrada') marcarContaEncerrada(typeof corpo?.error === 'string' ? corpo.error : 'A tua conta foi encerrada.');
+          }
           return null;
         }
         const data = await res.json();
@@ -487,6 +500,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error && !isMockToken) {
       const status = (error as any)?.response?.status;
       // Conta suspensa a meio da sessão: limpa a sessão e leva ao login com o aviso (sem tentar renovar).
+      // Conta encerrada (noutro dispositivo): mesma saída, com a mensagem própria.
+      if (status === 401 && (error as any)?.data?.codigo === 'conta_encerrada') {
+        marcarContaEncerrada('A tua conta foi encerrada.');
+        setToken(null);
+        queryClient.clear();
+        setLocation('/login');
+        return;
+      }
       if (status === 401 && /conta suspensa/i.test(String((error as any)?.data?.error ?? ''))) {
         marcarContaSuspensa();
         setToken(null);
