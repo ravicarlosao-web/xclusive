@@ -301,6 +301,14 @@ export const GetUserPostsParams = zod.object({
   "username": zod.coerce.string()
 })
 
+export const getUserPostsQueryPageDefault = 1;
+export const getUserPostsQueryLimitDefault = 20;
+
+export const GetUserPostsQueryParams = zod.object({
+  "page": zod.coerce.number().int().default(getUserPostsQueryPageDefault).describe('Página (a partir de 1). Sem este parâmetro devolve a primeira página.'),
+  "limit": zod.coerce.number().int().default(getUserPostsQueryLimitDefault).describe('Publicações por página (1 a 20).')
+})
+
 export const GetUserPostsResponse = zod.object({
   "posts": zod.array(zod.object({
   "id": zod.int(),

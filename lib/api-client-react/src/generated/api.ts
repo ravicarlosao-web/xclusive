@@ -33,6 +33,7 @@ import type {
   GetFeedParams,
   GetNotificationsParams,
   GetReelsParams,
+  GetUserPostsParams,
   HealthStatus,
   Highlight,
   HighlightInput,
@@ -1067,20 +1068,29 @@ export function useGetUserFollowing<TData = Awaited<ReturnType<typeof getUserFol
 
 
 
-export const getGetUserPostsUrl = (username: string,) => {
+export const getGetUserPostsUrl = (username: string,
+    params?: GetUserPostsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/users/${username}/posts`
+  return stringifiedParams.length > 0 ? `/api/users/${username}/posts?${stringifiedParams}` : `/api/users/${username}/posts`
 }
 
 /**
  * @summary Posts de um utilizador
  */
-export const getUserPosts = async (username: string, options?: Parameters<typeof customFetch>[1]): Promise<PaginatedPosts> => {
+export const getUserPosts = async (username: string,
+    params?: GetUserPostsParams, options?: Parameters<typeof customFetch>[1]): Promise<PaginatedPosts> => {
 
-  return customFetch<PaginatedPosts>(getGetUserPostsUrl(username),
+  return customFetch<PaginatedPosts>(getGetUserPostsUrl(username,params),
   {
     ...options,
     method: 'GET'
@@ -1093,23 +1103,25 @@ export const getUserPosts = async (username: string, options?: Parameters<typeof
 
 
 
-export const getGetUserPostsQueryKey = (username: string,) => {
+export const getGetUserPostsQueryKey = (username: string,
+    params?: GetUserPostsParams,) => {
     return [
-    `/api/users/${username}/posts`
+    `/api/users/${username}/posts`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetUserPostsQueryOptions = <TData = Awaited<ReturnType<typeof getUserPosts>>, TError = ErrorType<unknown>>(username: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetUserPostsQueryOptions = <TData = Awaited<ReturnType<typeof getUserPosts>>, TError = ErrorType<unknown>>(username: string,
+    params?: GetUserPostsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetUserPostsQueryKey(username);
+  const queryKey =  queryOptions?.queryKey ?? getGetUserPostsQueryKey(username,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserPosts>>> = ({ signal }) => getUserPosts(username, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserPosts>>> = ({ signal }) => getUserPosts(username,params, { signal, ...requestOptions });
 
 
 
@@ -1127,11 +1139,12 @@ export type GetUserPostsQueryError = ErrorType<unknown>
  */
 
 export function useGetUserPosts<TData = Awaited<ReturnType<typeof getUserPosts>>, TError = ErrorType<unknown>>(
- username: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ username: string,
+    params?: GetUserPostsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserPosts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetUserPostsQueryOptions(username,options)
+  const queryOptions = getGetUserPostsQueryOptions(username,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

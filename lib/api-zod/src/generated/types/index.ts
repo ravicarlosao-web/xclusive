@@ -22,6 +22,7 @@ export * from './getFeedFiltro';
 export * from './getFeedParams';
 export * from './getNotificationsParams';
 export * from './getReelsParams';
+export * from './getUserPostsParams';
 export * from './hashtagResult';
 export * from './healthStatus';
 export * from './highlight';

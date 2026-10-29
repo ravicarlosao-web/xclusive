@@ -621,6 +621,17 @@ export interface SubscriptionInput {
   precoEsperado: number;
 }
 
+export type GetUserPostsParams = {
+/**
+ * Página (a partir de 1). Sem este parâmetro devolve a primeira página.
+ */
+page?: number;
+/**
+ * Publicações por página (1 a 20).
+ */
+limit?: number;
+};
+
 export type GetFeedParams = {
 page?: number;
 limit?: number;
