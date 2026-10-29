@@ -27,8 +27,8 @@ const createPostSchema = z.object({
     .optional(),
   exclusivo: z.boolean().optional(),
   precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
-  // Marcação +18 obrigatória (boolean estrito): em falta ou de outro tipo => 400.
-  mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }),
+  // Marcação +18: boolean estrito. Pode faltar só num post sem media (texto); com media é obrigatória (verificado no handler).
+  mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }).optional(),
 }).refine(
   data => data.tipo === 'texto' ? (data.legenda && data.legenda.trim().length > 0) : true,
   { message: 'Posts de texto precisam de conteúdo na legenda.' }
@@ -80,7 +80,9 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
   }
 
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
-  const marcacao = lerMarcacaoMais18(req.body.mais18);
+  // Com media a marcação +18 é obrigatória (como sempre); num post só de texto pode faltar e fica false.
+  const temMedia = Array.isArray(media) && media.length > 0;
+  const marcacao = req.body.mais18 === undefined && !temMedia ? { ok: true as const, mais18: false } : lerMarcacaoMais18(req.body.mais18);
   if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
   // Média paga: o upload devolve "private://paid/<autorId>/<ficheiro>"; guardamos só a chave.

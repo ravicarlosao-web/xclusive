@@ -245,8 +245,8 @@ export interface PostInput {
   media?: PostInputMediaItem[];
   exclusivo?: boolean;
   precoDesbloqueio?: number;
-  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400. */
-  mais18: boolean;
+  /** Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400. */
+  mais18?: boolean;
 }
 
 export interface PostMais18Input {

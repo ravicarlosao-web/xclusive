@@ -17,6 +17,7 @@ import { PostSkeleton } from '@/components/shared/SkeletonLoaders';
 import { PerfilBanner } from '@/components/perfil/PerfilBanner';
 import { PerfilIdentidade, BotaoRedondo } from '@/components/perfil/PerfilIdentidade';
 import { PerfilColuna } from '@/components/perfil/PerfilColuna';
+import { BannerEditor } from '@/components/perfil/BannerEditor';
 import { PerfilCabecalhoFixo } from '@/components/perfil/PerfilCabecalhoFixo';
 import { OutrasCriadoras } from '@/components/perfil/OutrasCriadoras';
 import { GradeMidia, GradeEsqueleto, FiltrosMidia, temMidia, passaFiltro, type FiltroMidia } from '@/components/perfil/GradeMidia';
@@ -94,6 +95,8 @@ export default function Profile() {
   // Cabeçalho compacto: surge quando o banner sai do ecrã.
   const bannerRef = useRef<HTMLDivElement>(null);
   const [compacto, setCompacto] = useState(false);
+  // Pré-visualização do novo banner (só o dono): substitui a capa até Guardar/Cancelar.
+  const [previewCapa, setPreviewCapa] = useState<string | null>(null);
 
   // Verificar se este criador tem uma live activa
   const { data: activeStreams } = useQuery<Array<{
@@ -250,7 +253,7 @@ export default function Profile() {
           onCopiarLigacao={() => { void copiarLigacao(); }} onDenunciar={isMe ? undefined : () => setReportOpen(true)} />
         <div ref={bannerRef}>
         <PerfilBanner
-          capaUrl={profile.capaUrl}
+          capaUrl={previewCapa ?? profile.capaUrl}
           nome={profile.nomeExibicao}
           verificado={profile.verificado}
           stats={stats}
@@ -259,6 +262,7 @@ export default function Profile() {
           onAbrirSeguindo={() => setFollowModal({ type: 'following' })}
           onCopiarLigacao={() => { void copiarLigacao(); }}
           onDenunciar={isMe ? undefined : () => setReportOpen(true)}
+          slotDono={isMe ? <BannerEditor username={profile.username} temCapa={!!profile.capaUrl} onPreview={setPreviewCapa} /> : undefined}
         />
         </div>
 

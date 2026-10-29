@@ -15,6 +15,7 @@ import { Mais18Opcoes } from '@/components/shared/Mais18';
 import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
+import { enviarImagem } from '@/lib/uploadImagem';
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
@@ -65,24 +66,9 @@ export default function Settings() {
         // Em modo mock não há servidor disponível — usamos um blob URL local
         avatarUrl = URL.createObjectURL(file);
       } else {
-        const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-        const formData = new FormData();
-        formData.append('files', file);
-        const token = localStorage.getItem('xclusive_token');
-        const res = await fetch(`${base}/api/upload`, {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: formData,
-        });
-        if (!res.ok) throw new Error('Erro no upload');
-        const data = await res.json();
-        const relativeUrl = data.files?.[0]?.url;
-        const urlVisualizacao = data.files?.[0]?.urlVisualizacao;
-        if (!relativeUrl) throw new Error('URL não devolvida pelo servidor');
-        // O backend valida com z.url() que requer URL absoluto
-        avatarUrl = new URL(relativeUrl, window.location.origin).href;
-
-        avatarVisualizacao = urlVisualizacao ? new URL(urlVisualizacao, window.location.origin).href : null;
+        const enviado = await enviarImagem(file);
+        avatarUrl = enviado.url;
+        avatarVisualizacao = enviado.urlVisualizacao;
         await updateProfile.mutateAsync({ data: { avatarUrl } });
       }
 

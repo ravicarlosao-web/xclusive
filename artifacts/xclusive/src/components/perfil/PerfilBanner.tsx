@@ -16,7 +16,7 @@ export interface EstatisticasPerfil {
  * de entrada da imagem (hoje definida em Definições); sem capa mostra o cinzento neutro do tema. Seta de voltar, nome e estatísticas
  * em cima à esquerda; menu ⋮ (copiar ligação, denunciar) em cima à direita.
  */
-export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbrirFas, onAbrirSeguindo, onCopiarLigacao, onDenunciar }: {
+export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbrirFas, onAbrirSeguindo, onCopiarLigacao, onDenunciar, slotDono }: {
   capaUrl?: string | null;
   nome: string;
   verificado: boolean;
@@ -26,6 +26,8 @@ export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbr
   onAbrirSeguindo: () => void;
   onCopiarLigacao: () => void;
   onDenunciar?: () => void;
+  /** Só para o dono: botão de alterar banner e pré-visualização (sobre a faixa). */
+  slotDono?: React.ReactNode;
 }) {
   const btn = 'flex h-11 w-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white';
   const tem = stats.publicacoes !== null || stats.fas !== null || stats.seguindo !== null;
@@ -51,6 +53,7 @@ export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbr
         <PerfilMenu onCopiarLigacao={onCopiarLigacao} onDenunciar={onDenunciar} />
       </div>
 
+      {slotDono}
     </div>
   );
 }
