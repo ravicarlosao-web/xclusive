@@ -26,9 +26,12 @@ interface PostCardProps {
   onUnlike?: (postId: number) => void;
   onSave?: (postId: number) => void;
   onUnsave?: (postId: number) => void;
+  /** 'feed': publicação contínua (sem cartão: linha divisória entre posts). 'cartao' (por omissão): cartão individual, como no modal de detalhe. */
+  variante?: 'feed' | 'cartao';
 }
 
-export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardProps) {
+export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 'cartao' }: PostCardProps) {
+  const noFeed = variante === 'feed';
   const { user, isSubscribed, isPostUnlocked } = useAuth();
   // Estado real das minhas subscrições (servidor): faz o cartão reagir a subscrever, renovar, cancelar ou expirar.
   useMinhasSubscricoes();
@@ -261,23 +264,26 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
 
   return (
     <>
-      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[640px] mx-auto w-full shadow-none">
+      <article className={cn(
+        'overflow-hidden w-full',
+        noFeed ? 'border-b border-border bg-background' : 'bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl mb-6 max-w-[640px] mx-auto shadow-none',
+      )}>
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4">
+        <div className={cn('flex items-center justify-between', noFeed ? 'px-4 py-2.5' : 'p-3 sm:p-4')}>
           <Link href={`/perfil/${post.autor.username}`} className="flex items-center gap-3 group">
-            <Avatar className="w-11 h-11 border border-border group-hover:scale-105 transition-transform">
+            <Avatar className={cn('border border-border group-hover:scale-105 transition-transform', noFeed ? 'w-10 h-10' : 'w-11 h-11')}>
               <AvatarImage src={post.autor.avatarUrl || ''} />
               <AvatarFallback>{post.autor.nomeExibicao?.[0] || 'U'}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-[15px] font-bold hover:underline flex items-center gap-1.5">
+              <span className={cn('font-bold hover:underline flex items-center gap-1.5', noFeed ? 'text-sm' : 'text-[15px]')}>
                 {post.autor.username}
                 <SeloMais18 mais18={post.mais18} />
                 {post.autor.verificado && (
                   <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
                 )}
               </span>
-              <span className="text-sm text-muted-foreground" data-testid="post-tempo">
+              <span className={cn('text-muted-foreground', noFeed ? 'text-xs' : 'text-sm')} data-testid="post-tempo">
                 <time dateTime={post.criadoEm}>{haTempo(post.criadoEm)}</time>
                 {post.localizacao ? ` · ${post.localizacao}` : ''}
               </span>
@@ -328,14 +334,14 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
 
         {/* Legenda por cima da imagem (posts de texto já mostram o texto no próprio cartão) */}
         {post.legenda && !isTextPost && (
-          <p className="whitespace-pre-wrap break-words px-3 pb-3 text-[15px] leading-snug text-foreground sm:px-4" data-testid="post-legenda">{post.legenda}</p>
+          <p className={cn('whitespace-pre-wrap break-words text-[15px] leading-snug text-foreground', noFeed ? 'px-4 pb-2.5' : 'px-3 pb-3 sm:px-4')} data-testid="post-legenda">{post.legenda}</p>
         )}
 
         {/* Text post — rendered inline, no media container */}
         {isTextPost ? (
           <div
             className={cn(
-              "mx-3 sm:mx-4 mb-1 rounded-2xl px-5 py-5 cursor-pointer select-none relative",
+              noFeed ? "mx-4 mb-1 rounded-xl px-4 py-4 cursor-pointer select-none relative" : "mx-3 sm:mx-4 mb-1 rounded-2xl px-5 py-5 cursor-pointer select-none relative",
               "bg-gradient-to-br from-secondary/60 to-secondary/30 border border-border/50",
             )}
             onClick={handleMediaClick}
@@ -393,7 +399,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           /* Media — aspect ratio adapts to the actual media dimensions (clamped 9:16 → 16:9) */
           <div
             className={cn(
-              "relative bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none mx-3 sm:mx-4 rounded-2xl w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)]",
+              "relative bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
+              noFeed ? "w-full max-h-[520px]" : "mx-3 sm:mx-4 rounded-2xl w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)]",
               !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
             )}
             style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
@@ -462,7 +469,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         )}
 
         {/* Actions */}
-        <div className="px-3 pb-2 pt-1 sm:px-4">
+        <div className={cn(noFeed ? 'px-4 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-1 sm:px-4')}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button onClick={handleLikeToggle} className="group flex min-h-[44px] min-w-[44px] items-center gap-1.5" aria-pressed={isLiked} aria-label={`${isLiked ? 'Retirar gosto' : 'Gostar'}. ${likesCount} ${likesCount === 1 ? 'gosto' : 'gostos'}`} data-testid="post-gostar">
