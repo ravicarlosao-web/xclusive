@@ -90,42 +90,54 @@ export class BanimentoErro extends Error {
   constructor(msg: string, public readonly httpStatus: number, public readonly codigo?: string) { super(msg); this.name = "BanimentoErro"; }
 }
 
-/** Bane a conta de forma permanente (só o admin). Funciona sobre contas ativas, suspensas ou encerradas. */
-export async function banirConta(o: { userId: number; adminId: number; motivo: string; ip: string | null }): Promise<{ hashesEmail: number; hashesDocumento: number }> {
-  // Sem pepper não se bane (nada é alterado): falha clara ANTES de abrir a transação.
+export type BanirOpcoes = { userId: number; adminId: number; motivo: string; ip: string | null; origem?: "banimento" | "menor"; casoId?: number };
+export type BanirResultado = { hashesEmail: number; hashesDocumento: number };
+
+/**
+ * Bane a conta DENTRO da transação do chamador (o chamador bloqueia a linha do utilizador antes, se precisar).
+ * Sem pepper não se bane (nada é alterado). Funciona sobre contas ativas, suspensas ou encerradas.
+ */
+export async function banirContaNaTransacao(tx: Tx, o: BanirOpcoes): Promise<BanirResultado> {
   if (!pepperConfigurado()) hashIdentificador("email", "x");
   if (o.userId === o.adminId) throw new BanimentoErro("Não podes banir a tua própria conta.", 403);
 
-  return db.transaction(async (tx) => {
-    const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, o.userId)).for("update");
-    if (!u) throw new BanimentoErro("Utilizador não encontrado.", 404);
-    if (u.role === "admin" || u.role === "superadmin") throw new BanimentoErro("Não é possível banir uma conta de administrador.", 403);
-    if (u.banidaEm) throw new BanimentoErro("Esta conta já está banida.", 409);
+  const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, o.userId)).for("update");
+  if (!u) throw new BanimentoErro("Utilizador não encontrado.", 404);
+  if (u.role === "admin" || u.role === "superadmin") throw new BanimentoErro("Não é possível banir uma conta de administrador.", 403);
+  if (u.banidaEm) throw new BanimentoErro("Esta conta já está banida.", 409);
 
-    // Hashes ANTES de qualquer escrita: o email da conta e todos os números de documento que já submeteu ao KYC.
-    const documentos = await tx.select({ n: kycSubmissionsTable.numeroDocumento }).from(kycSubmissionsTable).where(eq(kycSubmissionsTable.userId, o.userId));
-    const hDocs = [...new Set(documentos.map((d) => normalizarDocumento(d.n)).filter((n) => n.length > 0))].map((n) => hashIdentificador("documento", n));
-    const hEmail = hashEmail(u.email);
+  // Hashes ANTES de qualquer escrita: o email da conta e todos os números de documento que já submeteu ao KYC.
+  const documentos = await tx.select({ n: kycSubmissionsTable.numeroDocumento }).from(kycSubmissionsTable).where(eq(kycSubmissionsTable.userId, o.userId));
+  const hDocs = [...new Set(documentos.map((d) => normalizarDocumento(d.n)).filter((n) => n.length > 0))].map((n) => hashIdentificador("documento", n));
+  const hEmail = hashEmail(u.email);
+  const origem = o.origem ?? "banimento";
 
-    // Suspensão partilhada (ativo=false, sessões e refresh tokens revogados) e só depois a marca de banida (CHECK da BD).
-    await suspenderConta(tx, o.userId, { adminId: o.adminId, ip: o.ip, origem: "banimento" });
-    await tx.update(usersTable).set({ banidaEm: new Date() }).where(eq(usersTable.id, o.userId));
+  // Suspensão partilhada (ativo=false, sessões e refresh tokens revogados) e só depois a marca de banida (CHECK da BD).
+  await suspenderConta(tx, o.userId, { adminId: o.adminId, ip: o.ip, origem: origem === "menor" ? "menor" : "banimento" });
+  await tx.update(usersTable).set({ banidaEm: new Date() }).where(eq(usersTable.id, o.userId));
 
-    const base = { origem: "banimento" as const, userId: o.userId, banidaPor: o.adminId, motivo: o.motivo };
-    await tx.insert(identifierBlocksTable).values([
-      { ...base, tipo: "email", hash: hEmail },
-      ...hDocs.map((h) => ({ ...base, tipo: "documento" as const, hash: h })),
-    ]).onConflictDoNothing();
+  const base = { origem, userId: o.userId, banidaPor: o.adminId, motivo: o.motivo, casoId: o.casoId ?? null };
+  await tx.insert(identifierBlocksTable).values([
+    { ...base, tipo: "email", hash: hEmail },
+    ...hDocs.map((h) => ({ ...base, tipo: "documento" as const, hash: h })),
+  ]).onConflictDoNothing();
 
-    // Encerramento pendente deste utilizador: sai da fila de purga (os dados de um banido conservam-se como prova).
-    await tx.update(accountClosuresTable).set({ estado: "banida", processadaEm: new Date() })
-      .where(and(eq(accountClosuresTable.userId, o.userId), eq(accountClosuresTable.estado, "pendente")));
+  // Encerramento pendente deste utilizador: sai da fila de purga (os dados de um banido conservam-se como prova).
+  await tx.update(accountClosuresTable).set({ estado: "banida", processadaEm: new Date() })
+    .where(and(eq(accountClosuresTable.userId, o.userId), eq(accountClosuresTable.estado, "pendente")));
 
-    await tx.insert(auditLogTable).values({
-      adminId: o.adminId, action: "conta_banida", targetType: "user", targetId: o.userId,
-      details: { motivo: o.motivo, bloqueios: { email: 1, documento: hDocs.length }, estavaEncerrada: !!u.encerradaEm },
-      ipAddress: o.ip,
-    });
-    return { hashesEmail: 1, hashesDocumento: hDocs.length };
+  await tx.insert(auditLogTable).values({
+    adminId: o.adminId, action: "conta_banida", targetType: "user", targetId: o.userId,
+    details: { motivo: o.motivo, bloqueios: { email: 1, documento: hDocs.length }, estavaEncerrada: !!u.encerradaEm, origem },
+    ipAddress: o.ip,
   });
+  return { hashesEmail: 1, hashesDocumento: hDocs.length };
+}
+
+/** Bane a conta de forma permanente (só o admin), numa transação própria. */
+export async function banirConta(o: BanirOpcoes): Promise<BanirResultado> {
+  // Sem pepper não se bane (nada é alterado): falha clara ANTES de abrir a transação.
+  if (!pepperConfigurado()) hashIdentificador("email", "x");
+  if (o.userId === o.adminId) throw new BanimentoErro("Não podes banir a tua própria conta.", 403);
+  return db.transaction((tx) => banirContaNaTransacao(tx, o));
 }

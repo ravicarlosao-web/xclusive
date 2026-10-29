@@ -55,7 +55,7 @@ export async function runReportEscalation(now: Date = new Date()): Promise<{ esc
     const envios: AlertaUrgente[] = [];
     for (const d of due) {
       const nivel = d.criadoEm <= h24 ? "24h" : "1h";
-      const alerta: AlertaUrgente = { reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, nivel, idadeMin: idade(d.criadoEm) };
+      const alerta: AlertaUrgente = { reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, nivel, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user" };
       await notificarAdmins(tx, textoAlerta(alerta), d.id);
       await tx.update(reportsTable).set(
         nivel === "24h" ? { escalada1hEm: now, escalada24hEm: now } : { escalada1hEm: now },
@@ -86,7 +86,7 @@ export async function runReportEscalation(now: Date = new Date()): Promise<{ esc
       for (const d of pend) {
         if (jaNaLista.has(d.id)) continue;
         envios.push({
-          reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, idadeMin: idade(d.criadoEm),
+          reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user",
           nivel: d.e24 ? "24h" : d.e1 ? "1h" : "nova",
         });
       }

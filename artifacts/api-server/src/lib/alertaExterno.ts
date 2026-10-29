@@ -23,6 +23,8 @@ export interface AlertaUrgente {
   motivo: string;
   nivel: AlertaNivel;
   idadeMin: number;
+  /** Denúncia urgente a um PERFIL: nunca se suspende sozinho, por isso o alerta sai reforçado. */
+  perfil?: boolean;
 }
 
 const TIMEOUT_MS = 5_000;
@@ -39,7 +41,8 @@ export function textoAlerta(a: AlertaUrgente): string {
   const prefixo = a.nivel === "nova"
     ? "Nova denúncia URGENTE"
     : a.nivel === "1h" ? "Denúncia URGENTE por tratar" : "ESCALADA: denúncia URGENTE por tratar";
-  return `${prefixo} #${a.reportId} — ${a.alvo} — motivo: ${a.motivo} — ${idadeLegivel(a.idadeMin)}`;
+  const reforco = a.perfil ? " — PERFIL SEM SUSPENSÃO AUTOMÁTICA: avaliar já" : "";
+  return `${prefixo} #${a.reportId} — ${a.alvo} — motivo: ${a.motivo} — ${idadeLegivel(a.idadeMin)}${reforco}`;
 }
 
 function eDiscord(url: URL): boolean {

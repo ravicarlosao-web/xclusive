@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRoute, useLocation } from 'wouter';
+import { useRoute, useLocation, Link } from 'wouter';
 import { adminApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -151,6 +151,12 @@ export default function UserDetail() {
           </Button>
         </div>
       </div>
+
+      {user.casoMenor && (
+        <div role="status" data-testid="aviso-caso" className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm">
+          Caso em curso nesta conta: <Link href={`/menores/${user.casoMenor.id}`} className="text-primary underline" data-testid="aviso-caso-ligacao">caso #{user.casoMenor.id}</Link> ({user.casoMenor.estado}).
+        </div>
+      )}
 
       <Dialog open={banirAberto} onOpenChange={(o) => { if (!banir.isPending) { setBanirAberto(o); if (!o) { setBanirMotivo(''); setBanirConfirma(''); } } }}>
         <DialogContent data-testid="banir-dialogo">

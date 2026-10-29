@@ -111,6 +111,19 @@ export const adminApi = {
     return res.blob();
   },
 
+  // Casos de menor (interno). Os erros trazem a mensagem do servidor.
+  getMenores: (params?: Record<string, string>) => adminFetchMsg('/admin/menores?' + new URLSearchParams(params)),
+  getMenor: (id: number) => adminFetchMsg('/admin/menores/' + id),
+  getMenorAcessos: (id: number) => adminFetchMsg('/admin/menores/' + id + '/acessos'),
+  abrirMenor: (data: { userId: number; descricao: string; reportId?: number | null }) =>
+    adminFetchMsg('/admin/menores', { method: 'POST', body: JSON.stringify(data) }),
+  confirmarMenor: (id: number, motivo: string) =>
+    adminFetchMsg('/admin/menores/' + id + '/confirmar', { method: 'POST', body: JSON.stringify({ motivo }) }),
+  arquivarMenor: (id: number, motivo: string) =>
+    adminFetchMsg('/admin/menores/' + id + '/arquivar', { method: 'POST', body: JSON.stringify({ motivo }) }),
+  registarAutoridadeMenor: (id: number, data: { autoridade: string; comunicadaEm: string; referencia?: string }) =>
+    adminFetchMsg('/admin/menores/' + id + '/autoridade', { method: 'PATCH', body: JSON.stringify(data) }),
+
   getWithdrawals: (params?: Record<string, string>) =>
     adminFetch('/admin/withdrawals?' + new URLSearchParams(params)),
   updateWithdrawal: (id: number, data: any) =>

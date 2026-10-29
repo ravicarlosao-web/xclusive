@@ -11,3 +11,4 @@ export * from "./tokens";
 export * from "./kyc";
 export * from "./live";
 
+export * from "./menores";

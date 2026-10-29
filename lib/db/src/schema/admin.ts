@@ -59,6 +59,10 @@ export const reportsTable = pgTable("reports", {
   escalada24hEm: timestamp("escalada_24h_em"),
   /** Preenchido quando o alerta externo (webhook) foi entregue com sucesso; o job reenvia os que faltam. */
   alertaExternoEm: timestamp("alerta_externo_em"),
+  /** Denúncia pública que retirou o conteúdo automaticamente (conta os limites de 3 por 24 h por IP e por contacto). */
+  retiradaAuto: boolean("retirada_auto").notNull().default(false),
+  /** SHA-256 (JSON canónico) da cópia do alvo guardada em `alvo_snapshot`: cadeia de custódia. */
+  alvoSnapshotSha256: varchar("alvo_snapshot_sha256", { length: 64 }),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 }, (t) => [
   // Um só denunciante por alvo (utilizador com conta, ou contacto na rota pública).

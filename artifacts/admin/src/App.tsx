@@ -18,6 +18,8 @@ import Reports from '@/pages/reports/index';
 import Finance from '@/pages/finance/index';
 import Commissions from '@/pages/commissions/index';
 import Withdrawals from '@/pages/withdrawals/index';
+import Menores from '@/pages/menores/index';
+import MenorDetail from '@/pages/menores/[id]';
 import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
 import AuditLog from '@/pages/audit-log/index';
@@ -66,6 +68,8 @@ function Router() {
             <Route path="/commissions"><ProtectedRoute component={Commissions} /></Route>
             <Route path="/topups"><ProtectedRoute component={TopUps} /></Route>
             <Route path="/withdrawals"><ProtectedRoute component={Withdrawals} /></Route>
+            <Route path="/menores"><ProtectedRoute component={Menores} /></Route>
+            <Route path="/menores/:id"><ProtectedRoute component={MenorDetail} /></Route>
             <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
             <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
             <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>

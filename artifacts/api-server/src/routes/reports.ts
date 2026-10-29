@@ -1,12 +1,13 @@
 import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { z } from "zod/v4";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, count, sql } from "drizzle-orm";
 import { db, reportsTable, auditLogTable } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { enviarEMarcarAlerta, textoAlerta } from "../lib/alertaExterno";
 import { bloquearAlvo } from "../lib/provaProtegida";
+import { jsonCanonico, sha256Hex } from "../lib/hashCanonico";
 import {
   TARGET_TYPES, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
   lerAlvo, retirarAlvo, notificarSistema, notificarAdmins, TakedownError, type TargetType,
@@ -18,8 +19,10 @@ import {
  *  - POST /reports/public   (sem sessão)  — direitos de autor / conteúdo não consentido / menor; contacto obrigatório
  *  - GET  /reports/contact                — e-mail de contacto (REPORTS_CONTACT_EMAIL)
  * Um só denunciante por alvo (índice único), auto-denúncia recusada, alvo validado, limite de taxa.
- * Categoria 'menor': denúncia urgente e, se feita com sessão, o conteúdo é retirado de imediato (escondido,
- * nada apagado) enquanto aguarda análise. O IP da rota pública fica só na BD, nunca em logs.
+ * Categoria 'menor': denúncia urgente e o conteúdo é retirado de imediato (escondido, nada apagado) enquanto aguarda
+ * análise: com sessão sempre; sem sessão até 3 retiradas automáticas por 24 h por IP e por contacto (contadas sobre os
+ * dados que a denúncia já guarda; passado o limite a denúncia fica criada, urgente e com alerta, mas sem retirada).
+ * Perfis nunca se suspendem nem retiram automaticamente: só alerta reforçado. O IP da rota pública fica só na BD, nunca em logs.
  */
 const router = Router();
 
@@ -63,6 +66,29 @@ const publicSchema = z.object({
   declaracao: z.literal(true, { error: "É necessário confirmar a declaração." }),
 });
 
+const LIMITE_RETIRADAS_PUBLICAS = 3;
+const JANELA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Limite das retiradas automáticas de denúncias públicas: no máximo 3 por 24 h por IP e por contacto. Conta as próprias
+ * denúncias (reports.retirada_auto) sobre o IP e o contacto que elas já guardam: não se grava mais nada. Os locks
+ * consultivos (ordenados) serializam denúncias simultâneas da mesma origem, para o limite não ser contornado em paralelo.
+ */
+async function dentroDoLimitePublico(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], ip: string | null, contacto: string | null): Promise<boolean> {
+  const chaves = [ip ? `ip:${ip}` : null, contacto ? `email:${contacto}` : null].filter((k): k is string => k !== null).sort();
+  for (const k of chaves) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"pubmenor:" + k}, 0))`);
+  const desde = new Date(Date.now() - JANELA_MS);
+  if (ip) {
+    const [{ n }] = await tx.select({ n: count() }).from(reportsTable).where(and(eq(reportsTable.reporterIp, ip), eq(reportsTable.retiradaAuto, true), gt(reportsTable.criadoEm, desde)));
+    if (Number(n) >= LIMITE_RETIRADAS_PUBLICAS) return false;
+  }
+  if (contacto) {
+    const [{ n }] = await tx.select({ n: count() }).from(reportsTable).where(and(eq(reportsTable.reporterContact, contacto), eq(reportsTable.retiradaAuto, true), gt(reportsTable.criadoEm, desde)));
+    if (Number(n) >= LIMITE_RETIRADAS_PUBLICAS) return false;
+  }
+  return true;
+}
+
 /** Cria a denúncia na transação do chamador, validando o alvo; devolve os dados para a resposta. */
 async function criarDenuncia(opts: {
   reporterId: number | null;
@@ -73,8 +99,12 @@ async function criarDenuncia(opts: {
   contacto?: string;
   ip?: string | null;
   autoRetirar: boolean;
+  /** Denúncia pública (sem sessão): retirada automática sujeita aos limites por IP e por contacto. */
+  autoRetirarPublico?: boolean;
 }): Promise<{ id: number; retiradoAuto: boolean }> {
   const urgente = opts.reason === "menor";
+  // Perfil denunciado por menor: nunca se suspende sozinho; o alerta sai reforçado (a equipa avalia abrir um caso).
+  const perfil = urgente && opts.targetType === "user";
   const resultado = await db.transaction(async (tx) => {
     // Bloqueia a linha do alvo (FOR SHARE): uma eliminação concorrente espera por esta denúncia e vê-a (ou a denúncia
     // espera pela eliminação e o alvo já não existe).
@@ -91,6 +121,15 @@ async function criarDenuncia(opts: {
       throw new TakedownError("Não podes denunciar o teu próprio conteúdo.", 400);
     }
 
+    // Cópia leve do alvo: sobrevive a um apagamento posterior. Só o admin a lê; nunca em logs nem em rotas públicas.
+    const snapshot = {
+      tipo: opts.targetType, id: opts.targetId, donoId: alvo.ownerId,
+      resumo: alvo.resumo ? alvo.resumo.slice(0, 2000) : null,
+      ficheiros: alvo.media.map((m) => ({ tipo: m.tipo, chave: m.url })),
+      mais18: alvo.mais18 ?? null,
+      criadoEmConteudo: alvo.criadoEm ? alvo.criadoEm.toISOString() : null,
+      capturadoEm: new Date().toISOString(),
+    };
     const [rep] = await tx.insert(reportsTable).values({
       reporterId: opts.reporterId,
       targetType: opts.targetType,
@@ -101,33 +140,37 @@ async function criarDenuncia(opts: {
       urgente,
       reporterContact: opts.contacto ?? null,
       reporterIp: opts.ip ?? null,
-      // Cópia leve do alvo: sobrevive a um apagamento posterior. Só o admin a lê; nunca em logs nem em rotas públicas.
-      alvoSnapshot: {
-        tipo: opts.targetType, id: opts.targetId, donoId: alvo.ownerId,
-        resumo: alvo.resumo ? alvo.resumo.slice(0, 2000) : null,
-        ficheiros: alvo.media.map((m) => ({ tipo: m.tipo, chave: m.url })),
-        mais18: alvo.mais18 ?? null,
-        criadoEmConteudo: alvo.criadoEm ? alvo.criadoEm.toISOString() : null,
-        capturadoEm: new Date().toISOString(),
-      },
+      alvoSnapshot: snapshot,
+      // Cadeia de custódia: SHA-256 (JSON canónico) da cópia do alvo no momento da denúncia/retirada.
+      alvoSnapshotSha256: sha256Hex(jsonCanonico(snapshot)),
     }).returning({ id: reportsTable.id });
 
     // Urgente: avisa TODOS os admins na mesma transação (se falhar, a denúncia não fica por avisar).
     if (urgente) {
-      await notificarAdmins(tx, textoAlerta({ reportId: rep.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0 }), rep.id);
+      await notificarAdmins(tx, textoAlerta({ reportId: rep.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0, perfil }), rep.id);
     }
 
-    // Menor: retirada automática imediata (esconde, não apaga) — só com sessão (denunciante identificável)
-    // e nunca para perfis (suspender uma conta por uma única denúncia é abusável: fica na fila urgente).
+    // Menor: retirada automática imediata (esconde, não apaga). Com sessão: sempre. Sem sessão: até 3 retiradas automáticas por
+    // 24 h por IP e por contacto. Nunca para perfis. O ator fica em details.ator (a coluna admin_id é NOT NULL e exige um utilizador).
     let retiradoAuto = false;
-    if (urgente && opts.autoRetirar && opts.reporterId !== null && opts.targetType !== "user") {
+    let ator: { tipo: "utilizador" | "publico"; id?: number } | null = null;
+    if (urgente && opts.targetType !== "user") {
+      if (opts.autoRetirar && opts.reporterId !== null) {
+        ator = { tipo: "utilizador", id: opts.reporterId };
+      } else if (opts.autoRetirarPublico && opts.reporterId === null && (await dentroDoLimitePublico(tx, opts.ip ?? null, opts.contacto ?? null))) {
+        ator = { tipo: "publico" };
+      }
+    }
+    if (ator) {
       const r = await retirarAlvo(tx, opts.targetType, opts.targetId, null, "Retirado automaticamente por denúncia de menor (a aguardar análise).");
       retiradoAuto = r.mudou;
       if (r.mudou) {
+        if (ator.tipo === "publico") await tx.update(reportsTable).set({ retiradaAuto: true }).where(eq(reportsTable.id, rep.id));
         await notificarSistema(tx, alvo.ownerId, `O teu ${TARGET_LABEL[opts.targetType]} foi retirado temporariamente e está em análise pela equipa.`);
         await tx.insert(auditLogTable).values({
-          adminId: opts.reporterId, action: "conteudo_retirado_auto", targetType: opts.targetType, targetId: opts.targetId,
-          details: { reportId: rep.id, motivo: "menor" },
+          // admin_id é NOT NULL: o denunciante (com sessão) ou, na rota pública, o dono do alvo. Quem agiu está em details.ator.
+          adminId: opts.reporterId ?? alvo.ownerId, action: "conteudo_retirado_auto", targetType: opts.targetType, targetId: opts.targetId,
+          details: { reportId: rep.id, motivo: "menor", ator },
         });
       }
     }
@@ -135,7 +178,7 @@ async function criarDenuncia(opts: {
   });
   // Canal externo só depois do commit; nunca lança nem atrasa a resposta.
   if (urgente) {
-    void enviarEMarcarAlerta({ reportId: resultado.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0 });
+    void enviarEMarcarAlerta({ reportId: resultado.id, alvo: TARGET_LABEL[opts.targetType], motivo: opts.reason, nivel: "nova", idadeMin: 0, perfil });
   }
   return resultado;
 }
@@ -163,7 +206,7 @@ router.post("/reports/public", limitePublico, validate(publicSchema), async (req
   try {
     await criarDenuncia({
       reporterId: null, targetType, targetId, reason, description,
-      contacto: contactoEmail.trim().toLowerCase(), ip: (req.ip ?? "").slice(0, 45) || null, autoRetirar: false,
+      contacto: contactoEmail.trim().toLowerCase(), ip: (req.ip ?? "").slice(0, 45) || null, autoRetirar: false, autoRetirarPublico: true,
     });
     // Resposta genérica: não devolve ids nem confirma o estado interno do conteúdo.
     res.status(201).json({ ok: true });
