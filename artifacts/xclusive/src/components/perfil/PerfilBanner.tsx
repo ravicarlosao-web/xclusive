@@ -1,5 +1,5 @@
-import { ArrowLeft, Flag, Image as ImagemIcone, Link2, MoreVertical, Users } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ArrowLeft, Image as ImagemIcone, Users } from 'lucide-react';
+import { PerfilMenu } from './PerfilMenu';
 
 const Verificado = () => (
   <svg className="h-5 w-5 shrink-0 fill-current text-white" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z" /></svg>
@@ -48,15 +48,7 @@ export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbr
         )}
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" aria-label="Mais opções do perfil" className={btn} data-testid="perfil-menu"><MoreVertical className="h-5 w-5" aria-hidden="true" /></button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem data-testid="perfil-copiar-ligacao" onSelect={onCopiarLigacao} className="min-h-[44px] gap-2"><Link2 className="h-4 w-4" aria-hidden="true" /> Copiar ligação</DropdownMenuItem>
-            {onDenunciar && <DropdownMenuItem data-testid="perfil-denunciar" onSelect={onDenunciar} className="min-h-[44px] gap-2 text-destructive focus:text-destructive"><Flag className="h-4 w-4" aria-hidden="true" /> Denunciar perfil</DropdownMenuItem>}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <PerfilMenu onCopiarLigacao={onCopiarLigacao} onDenunciar={onDenunciar} />
       </div>
 
     </div>
