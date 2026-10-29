@@ -109,6 +109,9 @@ export default function KycQueue() {
                   <span className="text-xs text-muted-foreground font-mono">#{req.id}</span>
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">Submetido: {req.kycSubmissao?.submissaoEm ? format(new Date(req.kycSubmissao.submissaoEm), 'dd MMM yyyy, HH:mm') : '—'}</p>
+                <p className="text-xs text-muted-foreground" data-testid="kyc-termos-criadoras">
+                  Termos para Criadoras: {req.termosCriadoras ? `v${req.termosCriadoras.versao} em ${format(new Date(req.termosCriadoras.aceiteEm), 'dd/MM/yyyy')}` : 'sem registo (conta anterior)'}
+                </p>
               </CardHeader>
               <CardContent className="flex-1">
                 <div className="grid grid-cols-2 gap-2">

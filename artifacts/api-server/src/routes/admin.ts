@@ -27,6 +27,7 @@ import {
   followsTable,
   subscriptionsTable,
   kycSubmissionsTable,
+  creatorTermsAcceptancesTable,
   topupRequestsTable,
   notificationsTable,
   infracoesMais18Table,
@@ -841,10 +842,20 @@ router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, 
       : [];
     const submissionByUser = new Map(submissions.map((submission) => [submission.userId, submission]));
 
+    // Aceite dos Termos para Criadoras da submissão mostrada (só leitura; sem IP nem User-Agent). Sem linha = conta anterior.
+    const submissionIds = [...submissionByUser.values()].map((submission) => submission.id);
+    const aceites = submissionIds.length > 0
+      ? await db.select({ kycSubmissionId: creatorTermsAcceptancesTable.kycSubmissionId, versao: creatorTermsAcceptancesTable.versao, aceiteEm: creatorTermsAcceptancesTable.aceiteEm })
+          .from(creatorTermsAcceptancesTable).where(inArray(creatorTermsAcceptancesTable.kycSubmissionId, submissionIds))
+      : [];
+    const aceiteBySubmission = new Map(aceites.map((a) => [a.kycSubmissionId, a]));
+
     res.json(queue.map(u => {
       const submission = submissionByUser.get(u.id);
+      const aceite = submission ? aceiteBySubmission.get(submission.id) : undefined;
       return {
         ...mapUser(u),
+        termosCriadoras: aceite ? { versao: aceite.versao, aceiteEm: aceite.aceiteEm } : null,
         kycSubmissao: submission ? {
           documentoFrente: kycAccess(submission.id, "documento", submission.documentoKey),
           documentoVerso: null,
