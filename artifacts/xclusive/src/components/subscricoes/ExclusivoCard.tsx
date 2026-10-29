@@ -39,7 +39,7 @@ export function ExclusivoCard({ username, nomeExibicao, avatarUrl, verificado }:
   function atualizar() {
     void queryClient.invalidateQueries({ queryKey: MINHAS_SUBS_KEY });
     void queryClient.invalidateQueries({ queryKey: ['/api/users', username, 'subscription-plan'] });
-    void queryClient.invalidateQueries({ queryKey: ['/api/users', username, 'posts'] });
+    void queryClient.invalidateQueries({ queryKey: [`/api/users/${username}/posts`] });
     void queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
   }
 
@@ -50,15 +50,15 @@ export function ExclusivoCard({ username, nomeExibicao, avatarUrl, verificado }:
     : p?.tipoSubscricao === 'gratuita' ? 'Subscrever grátis' : p ? `Subscrever por ${kz(p.preco)} / mês` : 'Subscrever';
 
   return (
-    <div className="text-center py-20 max-w-md mx-auto border border-primary/20 rounded-2xl bg-primary/5 p-8 relative overflow-hidden" data-testid="exclusivo-card">
+    <div className="text-center border border-primary/20 rounded-2xl bg-primary/5 p-5 relative overflow-hidden" data-testid="exclusivo-card">
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
       <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -ml-10 -mb-10" />
 
-      <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/30 shadow-none dark:shadow-[0_0_20px_rgba(255,62,114,0.2)] relative">
-        <Lock className="w-10 h-10 text-primary" />
+      <div className="w-12 h-12 bg-background rounded-full flex items-center justify-center mx-auto mb-3 border border-primary/30 relative">
+        <Lock className="w-6 h-6 text-primary" />
       </div>
-      <h3 className="text-2xl font-bold mb-2 relative">Clube Exclusivo</h3>
-      <p className="text-muted-foreground mb-6 relative">
+      <h3 className="text-lg font-bold mb-1 relative">Clube Exclusivo</h3>
+      <p className="text-sm text-muted-foreground mb-4 relative">
         Desbloqueia conteúdos privados, bastidores e interação direta com {nomeExibicao}.
       </p>
 

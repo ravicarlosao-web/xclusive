@@ -148,3 +148,25 @@ export async function lerFeed(o: { userId: number; filtro: FiltroFeed; page: num
   const formatados = await formatarPostsEmLote(posts, o.userId);
   return { posts: formatados, total, page: o.page, hasMore: offset + posts.length < total };
 }
+
+/**
+ * Publicações de um perfil, mais recentes primeiro, paginadas. Mesma visibilidade (`postVisivelPara`) e mesma formatação em
+ * lote do feed: `curtido` e `guardado` são os do visitante e o nº de consultas não cresce com o nº de posts.
+ */
+export async function lerPostsDoAutor(o: { viewerId: number; autorId: number; page: number; limit: number }) {
+  const offset = (o.page - 1) * o.limit;
+  const visualizador = await lerVisualizador(o.viewerId);
+  const total = sql<number>`count(*) over()::int`;
+  const rows = await db.select({ p: postsTable, total }).from(postsTable)
+    .where(and(eq(postsTable.autorId, o.autorId), postVisivelPara(visualizador)))
+    .orderBy(desc(postsTable.criadoEm), desc(postsTable.id)).limit(o.limit).offset(offset);
+  const posts = await formatarPostsEmLote(rows.map((r) => r.p), o.viewerId);
+  // Fora do fim da lista a janela vem vazia e o `count(*) over()` não existe: o total só é exato dentro do intervalo.
+  const totalReal = rows[0]?.total ?? (offset === 0 ? 0 : await totalDoAutor(o.viewerId, o.autorId, visualizador));
+  return { posts, total: totalReal, page: o.page, hasMore: offset + posts.length < totalReal };
+}
+
+async function totalDoAutor(_viewerId: number, autorId: number, visualizador: Awaited<ReturnType<typeof lerVisualizador>>): Promise<number> {
+  const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(postsTable).where(and(eq(postsTable.autorId, autorId), postVisivelPara(visualizador)));
+  return r?.n ?? 0;
+}

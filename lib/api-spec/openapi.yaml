@@ -252,6 +252,18 @@ paths:
           required: true
           schema:
             type: string
+        - name: page
+          in: query
+          description: "Página (a partir de 1). Sem este parâmetro devolve a primeira página."
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: "Publicações por página (1 a 20)."
+          schema:
+            type: integer
+            default: 20
       responses:
         "200":
           description: Lista de posts

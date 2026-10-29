@@ -1,13 +1,11 @@
 import { Router } from "express";
-import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
+import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, likesTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, comparePassword, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, resolveMediaUrl, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
-import { temAcessoExclusivo } from "../lib/exclusiveAccess";
+import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
 import { lerVisualizador, postVisivelPara } from "../lib/conteudoMais18";
-import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger";
@@ -15,8 +13,8 @@ import { LEGAL_DOCS, clearRefreshCookie } from "./auth";
 import { bloqueiosDeEncerramento, encerrarConta, EncerramentoErro, JANELA_DIAS, MSG_ENCERRADA_JANELA } from "../lib/encerramento";
 import { desligarSockets } from "../lib/suspensao";
 import { utilizadorAtivo } from "../lib/encerramento";
-import { commentVisivel } from "../lib/takedown";
 import { erroSeguro } from "../lib/erroSeguro";
+import { lerPostsDoAutor } from "../lib/feed";
 import { identificadorBloqueado, MSG_PEDIDO_RECUSADO } from "../lib/banimento";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
@@ -733,42 +731,15 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const posts = await db.select().from(postsTable).where(and(eq(postsTable.autorId, user.id), postVisivelPara(await lerVisualizador(req.userId)))).orderBy(sql`${postsTable.criadoEm} DESC`).limit(30);
-
-  // Só a própria criadora precisa de saber que não pode desmarcar (infração +18 ativa)
-  const comInfracao = req.userId === user.id ? await postsComInfracaoAtiva(db, posts.map((p) => p.id)) : new Set<number>();
-
-  const result = await Promise.all(posts.map(async (p) => {
-    const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, p.id)).orderBy(postMediaTable.ordem);
-    const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, p.id)));
-    const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(and(eq(commentsTable.postId, p.id), commentVisivel()));
-    const acesso = p.exclusivo
-      ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
-      : true;
-    const mediaSegura = acesso
-      ? media.map(m => ({ id: m.id, url: resolveMediaUrl(m.url), tipo: m.tipo, ordem: m.ordem }))
-      : media.map(m => ({ id: m.id, url: null, tipo: m.tipo, ordem: m.ordem, bloqueado: true }));
-    return {
-      id: p.id,
-      autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
-      legenda: p.legenda,
-      localizacao: p.localizacao,
-      tipo: p.tipo,
-      media: mediaSegura,
-      exclusivo: p.exclusivo,
-      mais18: p.mais18,
-      mais18Bloqueado: comInfracao.has(p.id),
-      bloqueado: p.exclusivo && !acesso,
-      precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
-      totalCurtidas: likes || 0,
-      totalComentarios: comments || 0,
-      curtido: false,
-      guardado: false,
-      criadoEm: p.criadoEm.toISOString(),
-    };
-  }));
-
-  res.json({ posts: result, total: result.length, page: 1, hasMore: false });
+  // Paginação opcional (?page=&limit=), com os mesmos limites do /feed; sem ?page= devolve a primeira página.
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1")) || 1));
+  const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit || "20")) || 20));
+  try {
+    res.json(await lerPostsDoAutor({ viewerId: req.userId!, autorId: user.id, page, limit }));
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "Erro ao carregar as publicações do perfil");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // Reels do utilizador
