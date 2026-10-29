@@ -5,18 +5,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Grid, PlaySquare, Settings, Radio, Star, BarChart, UserPlus, UserCheck, MessageCircle, Forward } from 'lucide-react';
+import { Grid, Image as ImagemIcone, Settings, Radio, Star, BarChart, UserPlus, UserCheck, MessageCircle, Forward } from 'lucide-react';
 import { BotaoTema } from '@/components/shared/BotaoTema';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { PostCard } from '@/components/shared/PostCard';
 import { PostSkeleton } from '@/components/shared/SkeletonLoaders';
 import { PerfilBanner } from '@/components/perfil/PerfilBanner';
 import { PerfilIdentidade, BotaoRedondo } from '@/components/perfil/PerfilIdentidade';
 import { PerfilColuna } from '@/components/perfil/PerfilColuna';
+import { PerfilCabecalhoFixo } from '@/components/perfil/PerfilCabecalhoFixo';
+import { OutrasCriadoras } from '@/components/perfil/OutrasCriadoras';
+import { GradeMidia, GradeEsqueleto, FiltrosMidia, temMidia, passaFiltro, type FiltroMidia } from '@/components/perfil/GradeMidia';
 import { Link, useLocation } from 'wouter';
 import { ExclusivoCard } from '@/components/subscricoes/ExclusivoCard';
 import { PostDetailModal } from '@/components/shared/PostDetailModal';
@@ -26,7 +29,7 @@ import type { Post } from '@workspace/api-client-react';
 export default function Profile() {
   const [, params] = useRoute('/perfil/:username');
   const username = params?.username || '';
-  const { user: me } = useAuth();
+  const { user: me, isMockMode } = useAuth();
   
   const isMe = me?.username === username;
 
@@ -50,6 +53,27 @@ export default function Profile() {
     return (paginas?.pages ?? []).flatMap((p) => p.posts).filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)));
   }, [paginas]);
 
+  // Separador ativo, filtro da mídia e nº de páginas pedidas automaticamente nesta ação (a mídia só pede dados quando se abre).
+  const [aba, setAba] = useState('posts');
+  const [autoPaginas, setAutoPaginas] = useState(0);
+  const [filtroMidia, setFiltroMidia] = useState<FiltroMidia>('tudo');
+  const [midiaAberta, setMidiaAberta] = useState(false);
+  useEffect(() => { if (aba === 'midia') setMidiaAberta(true); }, [aba]);
+  // Mídia: mesma rota, páginas de 20 para a grelha encher; só pede depois de abrir o separador (sem polling).
+  const midia = useInfiniteQuery({
+    queryKey: [`/api/users/${username}/posts`, 'midia'],
+    queryFn: ({ pageParam }) => getUserPosts(username, { page: pageParam, limit: 20 }),
+    initialPageParam: 1,
+    getNextPageParam: (ultima) => (ultima.hasMore ? ultima.page + 1 : undefined),
+    enabled: !!username && midiaAberta,
+    retry: 1,
+  });
+  const celulas = useMemo(() => {
+    const vistos = new Set<number>();
+    return (midia.data?.pages ?? []).flatMap((p) => p.posts).filter((p) => temMidia(p) && (vistos.has(p.id) ? false : (vistos.add(p.id), true)));
+  }, [midia.data]);
+  const celulasFiltradas = celulas.filter((p) => passaFiltro(p, filtroMidia));
+
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
   const createConversationMutation = useCreateConversation();
@@ -67,9 +91,9 @@ export default function Profile() {
   useEffect(() => { setPesquisa(''); }, [username]);
   // Miniaturas que falharam a carregar saem do bloco RECENTE (não ficam quebradas).
   const [imagensFalhadas, setImagensFalhadas] = useState<Set<number>>(new Set());
-  // Separador ativo (controlado: a aba Reels pode pedir mais páginas) e nº de páginas pedidas automaticamente nesta ação.
-  const [aba, setAba] = useState('posts');
-  const [autoPaginas, setAutoPaginas] = useState(0);
+  // Cabeçalho compacto: surge quando o banner sai do ecrã.
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const [compacto, setCompacto] = useState(false);
 
   // Verificar se este criador tem uma live activa
   const { data: activeStreams } = useQuery<Array<{
@@ -125,17 +149,24 @@ export default function Profile() {
 
   const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const filtradas = termo ? publicacoes.filter((p) => norm(p.legenda ?? '').includes(norm(termo))) : publicacoes;
-  const reelPosts = publicacoes.filter((p) => p.tipo === 'video' || p.media?.[0]?.tipo === 'video');
   const privada = (postsError as { status?: number } | null)?.status === 403;
 
-  // Reels vêm dos posts já carregados: se a lista ainda não tem vídeos mas há mais páginas, vai buscá-las (máx. 5 por ação, sem polling).
+  // Mídia: se o filtro atual ainda não tem células mas há mais páginas, vai buscá-las (máx. 5 por ação, sem polling).
   const LIMITE_AUTO = 5;
-  useEffect(() => { setAutoPaginas(0); }, [aba, username]);
+  useEffect(() => { setAutoPaginas(0); }, [aba, username, filtroMidia]);
   useEffect(() => {
-    if (aba !== 'reels' || isLoadingPosts || isPostsError || isFetchingNextPage) return;
-    if (reelPosts.length === 0 && hasNextPage && autoPaginas < LIMITE_AUTO) { setAutoPaginas((n) => n + 1); void fetchNextPage(); }
-  }, [aba, isLoadingPosts, isPostsError, isFetchingNextPage, reelPosts.length, hasNextPage, autoPaginas, fetchNextPage]);
-  const aProcurarReels = aba === 'reels' && reelPosts.length === 0 && !!hasNextPage && autoPaginas < LIMITE_AUTO;
+    if (aba !== 'midia' || !midiaAberta || midia.isLoading || midia.isError || midia.isFetchingNextPage) return;
+    if (celulasFiltradas.length === 0 && midia.hasNextPage && autoPaginas < LIMITE_AUTO) { setAutoPaginas((n) => n + 1); void midia.fetchNextPage(); }
+  }, [aba, midiaAberta, midia.isLoading, midia.isError, midia.isFetchingNextPage, midia.hasNextPage, celulasFiltradas.length, autoPaginas, midia]);
+  const aProcurarMidia = aba === 'midia' && celulasFiltradas.length === 0 && !!midia.hasNextPage && autoPaginas < LIMITE_AUTO;
+  const midiaPrivada = (midia.error as { status?: number } | null)?.status === 403;
+  useEffect(() => {
+    const el = bannerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const o = new IntersectionObserver(([e]) => setCompacto(!e.isIntersecting));
+    o.observe(el);
+    return () => o.disconnect();
+  }, [profile?.id]);
 
   const voltar = () => { if (window.history.length > 1) window.history.back(); else setLocation('/home'); };
   const copiarLigacao = async () => {
@@ -215,6 +246,9 @@ export default function Profile() {
     <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 pb-20 sm:pb-0">
       {/* Coluna central: banner, identidade, assinatura, separadores e lista contínua */}
       <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+        <PerfilCabecalhoFixo visivel={compacto} nome={profile.nomeExibicao} verificado={profile.verificado} onVoltar={voltar}
+          onCopiarLigacao={() => { void copiarLigacao(); }} onDenunciar={isMe ? undefined : () => setReportOpen(true)} />
+        <div ref={bannerRef}>
         <PerfilBanner
           capaUrl={profile.capaUrl}
           nome={profile.nomeExibicao}
@@ -226,6 +260,7 @@ export default function Profile() {
           onCopiarLigacao={() => { void copiarLigacao(); }}
           onDenunciar={isMe ? undefined : () => setReportOpen(true)}
         />
+        </div>
 
         <PerfilIdentidade
           nome={profile.nomeExibicao}
@@ -269,7 +304,7 @@ export default function Profile() {
         <Tabs value={aba} onValueChange={setAba} className="w-full border-t border-border">
           <TabsList className="grid h-12 w-full grid-cols-2 rounded-none border-b border-border bg-transparent p-0">
             <TabsTrigger value="posts" className={tabCls} data-testid="perfil-aba-publicacoes">Publicações{profile.totalPublicacoes != null ? ` ${profile.totalPublicacoes}` : ''}</TabsTrigger>
-            <TabsTrigger value="reels" className={tabCls} data-testid="perfil-aba-reels">Reels</TabsTrigger>
+            <TabsTrigger value="midia" className={tabCls} data-testid="perfil-aba-midia">Mídia</TabsTrigger>
           </TabsList>
 
           <TabsContent value="posts" className="mt-0 focus-visible:outline-none">
@@ -303,32 +338,33 @@ export default function Profile() {
             {!isLoadingPosts && !isPostsError && !(termo && filtradas.length === 0) && carregarMais}
           </TabsContent>
 
-          <TabsContent value="reels" className="mt-0 focus-visible:outline-none">
-            {isLoadingPosts || aProcurarReels ? (
-              <div className="grid grid-cols-3 gap-1 p-1" data-testid="perfil-reels-a-procurar">{Array(6).fill(0).map((_, i) => <Skeleton key={i} className="aspect-square w-full" />)}</div>
-            ) : reelPosts.length > 0 ? (
-              <div className="grid grid-cols-3 gap-1 p-1 sm:gap-2 sm:p-2">
-                {reelPosts.map((post) => (
-                  <Link key={post.id} href={`/reels?id=${post.id}`} aria-label={`Abrir reel${post.legenda ? `: ${post.legenda.slice(0, 60)}` : ''}`} className="relative aspect-square bg-secondary group cursor-pointer overflow-hidden rounded-sm block">
-                    <video src={post.bloqueado ? undefined : post.media?.[0]?.url ?? undefined} className="w-full h-full object-cover" muted preload="metadata" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm"><PlaySquare className="w-5 h-5 text-white" aria-hidden="true" /></div>
-                    </div>
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-bold text-sm">
-                      <div className="flex items-center gap-1">
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
-                        {post.totalCurtidas}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          <TabsContent value="midia" className="mt-0 focus-visible:outline-none" data-testid="perfil-midia">
+            <h2 className="border-b border-border px-4 py-3 text-xs font-extrabold uppercase tracking-wide text-foreground">Recente</h2>
+            <FiltrosMidia filtro={filtroMidia} onMudar={setFiltroMidia} />
+            {!midiaAberta || midia.isLoading || aProcurarMidia ? (
+              <GradeEsqueleto />
+            ) : midia.isError ? (
+              midiaPrivada ? vazio(Grid, 'Esta conta é privada', `Segue ${profile.username} para veres a mídia.`) : (
+                <div role="alert" className="border-b border-border px-6 py-12 text-center" data-testid="perfil-midia-erro">
+                  <h3 className="mb-1 text-lg font-bold">Não foi possível carregar a mídia</h3>
+                  <p className="mb-4 text-sm text-muted-foreground">Verifica a ligação e tenta novamente.</p>
+                  <Button variant="outline" className="min-h-[44px]" onClick={() => { void midia.refetch(); }}>Tentar novamente</Button>
+                </div>
+              )
+            ) : celulasFiltradas.length > 0 ? (
+              <GradeMidia posts={celulasFiltradas} onAbrir={setSelectedPost} />
+            ) : midia.hasNextPage ? (
+              vazio(ImagemIcone, 'Sem resultados na mídia carregada', 'Ainda há publicações por carregar; carrega mais para continuar a procurar.')
             ) : (
-              hasNextPage
-                ? vazio(PlaySquare, 'Sem reels nas publicações carregadas', 'Ainda há publicações por carregar; carrega mais para continuar a procurar.')
-                : vazio(PlaySquare, 'Ainda sem Reels', `Os vídeos que ${profile.username} partilhar aparecerão aqui.`)
+              vazio(ImagemIcone, filtroMidia === 'tudo' ? 'Ainda sem fotos nem vídeos' : filtroMidia === 'foto' ? 'Ainda sem fotos' : 'Ainda sem vídeos', `A mídia que ${profile.username} partilhar aparecerá aqui.`)
             )}
-            {!isLoadingPosts && !isPostsError && carregarMais}
+            {midiaAberta && !midia.isLoading && !midia.isError && midia.hasNextPage && (
+              <div className="flex justify-center border-b border-border p-4">
+                <Button variant="outline" className="min-h-[44px]" onClick={() => { setAutoPaginas(0); void midia.fetchNextPage(); }} disabled={midia.isFetchingNextPage} data-testid="midia-carregar-mais">
+                  {midia.isFetchingNextPage ? 'A carregar…' : 'Carregar mais'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
@@ -342,6 +378,7 @@ export default function Profile() {
           onAbrir={setSelectedPost}
           onImagemFalhou={(id) => setImagensFalhadas((s) => new Set(s).add(id))}
         />
+        <OutrasCriadoras ativo={!isMockMode} perfilUsername={profile.username} meuUsername={me?.username} />
       </aside>
 
       {/* Post detail modal */}
