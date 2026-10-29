@@ -17,7 +17,8 @@ import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { useGetConversations, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
 // Rotas em que a página faz scroll no documento (o rodapé fica no fim). As de altura fixa / ecrã inteiro ficam de fora.
-const ROTAS_COM_RODAPE = ['/home', '/perfil/', '/definicoes', '/carteira'];
+// O /home saiu da lista (o feed tem o seu próprio desenho): o rodapé legal está nas Definições, em "Mais" → Definições.
+const ROTAS_COM_RODAPE = ['/perfil/', '/definicoes', '/carteira'];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();

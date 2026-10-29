@@ -624,7 +624,21 @@ export interface SubscriptionInput {
 export type GetFeedParams = {
 page?: number;
 limit?: number;
+/**
+ * Separador do feed: tudo (por omissão), seguindo, para-ti ou em-alta.
+ */
+filtro?: GetFeedFiltro;
 };
+
+export type GetFeedFiltro = typeof GetFeedFiltro[keyof typeof GetFeedFiltro];
+
+
+export const GetFeedFiltro = {
+  tudo: 'tudo',
+  seguindo: 'seguindo',
+  'para-ti': 'para-ti',
+  'em-alta': 'em-alta',
+} as const;
 
 export type GetReelsParams = {
 page?: number;

@@ -14,6 +14,8 @@ import {
 } from "../lib/conteudoMais18";
 import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
+import { lerFeed, lerFiltro } from "../lib/feed";
+import { erroSeguro } from "../lib/erroSeguro";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -49,20 +51,18 @@ class PaymentError extends Error {
 
 // Feed
 router.get("/feed", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const userId = req.userId;
-  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1"))));
-  const limit = Math.min(20, parseInt(String(req.query.limit || "12")));
-  const offset = (page - 1) * limit;
-
-  // Filtro +18 na própria query: total, página e hasMore ficam coerentes.
-  const visualizador = await lerVisualizador(userId);
-  const condicao = postVisivelPara(visualizador);
-  const [{ totalCount }] = await db.select({ totalCount: sql<number>`count(*)::int` }).from(postsTable).where(condicao);
-  const posts = await db.select().from(postsTable).where(condicao).orderBy(desc(postsTable.criadoEm)).limit(limit).offset(offset);
-
-  const result = await Promise.all(posts.map(p => formatPost(p, userId)));
-
-  res.json({ posts: result, total: totalCount || 0, page, hasMore: offset + posts.length < (totalCount || 0) });
+  const userId = req.userId!;
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1")) || 1));
+  const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit || "12")) || 12));
+  // Separador: tudo (por omissão, como antes) | seguindo | para-ti | em-alta. Uma só chamada por separador.
+  const filtro = lerFiltro(req.query.filtro);
+  if (!filtro) { res.status(400).json({ error: "Filtro inválido." }); return; }
+  try {
+    res.json(await lerFeed({ userId, filtro, page, limit }));
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "Erro ao carregar o feed");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // Criar post (apenas criadores)

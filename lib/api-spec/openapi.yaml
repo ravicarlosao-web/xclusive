@@ -296,6 +296,13 @@ paths:
           schema:
             type: integer
             default: 12
+        - name: filtro
+          in: query
+          description: "Separador do feed: tudo (por omissão), seguindo, para-ti ou em-alta."
+          schema:
+            type: string
+            enum: [tudo, seguindo, para-ti, em-alta]
+            default: tudo
       responses:
         "200":
           description: Posts do feed

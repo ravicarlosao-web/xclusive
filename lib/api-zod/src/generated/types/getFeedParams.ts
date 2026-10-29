@@ -5,8 +5,13 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { GetFeedFiltro } from './getFeedFiltro';
 
 export type GetFeedParams = {
 page?: number;
 limit?: number;
+/**
+ * Separador do feed: tudo (por omissão), seguindo, para-ti ou em-alta.
+ */
+filtro?: GetFeedFiltro;
 };
