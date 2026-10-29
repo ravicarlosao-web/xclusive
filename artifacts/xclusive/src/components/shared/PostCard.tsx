@@ -18,6 +18,7 @@ import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
 import { SeloMais18 } from './MarcacaoMais18';
 import { haTempo } from '@/lib/tempoRelativo';
+import { EnqueteCorpo } from './EnqueteCorpo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface PostCardProps {
@@ -290,7 +291,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
             </div>
           </Link>
           <div className="flex items-center gap-1">
-            {canDeletePost && isOwnPost && !post.mais18Bloqueado && (
+            {canDeletePost && isOwnPost && !post.mais18Bloqueado && !post.enquete && (
               <button
                 data-testid="alternar-mais18"
                 className="min-h-[44px] rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
@@ -467,6 +468,9 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
             </AnimatePresence>
           </div>
         )}
+
+        {/* Enquete (post de texto com opções): fora do cartão clicável do texto */}
+        {post.enquete && <EnqueteCorpo post={post} />}
 
         {/* Actions */}
         <div className={cn(noFeed ? 'px-4 pb-1.5 pt-0.5' : 'px-3 pb-2 pt-1 sm:px-4')}>

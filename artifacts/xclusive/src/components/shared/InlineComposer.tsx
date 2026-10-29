@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreatePost } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Image, Film, Type, Send, X, Smile, Hash, AtSign, Radio } from 'lucide-react';
+import { Image, Film, Type, Send, X, Smile, Hash, AtSign, Radio, BarChart2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -19,12 +19,14 @@ interface InlineComposerProps {
   };
   /** Called when the user selects files — parent opens the full modal with those files */
   onOpenWithFiles: (files: File[]) => void;
+  /** Abre o modal diretamente no passo "Enquete" */
+  onAbrirEnquete?: () => void;
 }
 
 const MAX_TEXTO = 2200;
 const MAX_SIZE_MB = 500;
 
-export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
+export function InlineComposer({ user, onOpenWithFiles, onAbrirEnquete }: InlineComposerProps) {
   const queryClient = useQueryClient();
   const { mutate: createPost, isPending } = useCreatePost();
 
@@ -222,6 +224,19 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
           <Type className="w-5 h-5 text-primary" />
           <span className="hidden sm:inline text-xs">Texto</span>
         </button>
+
+        {onAbrirEnquete && (
+          <button
+            onClick={onAbrirEnquete}
+            className="flex min-h-[44px] items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-all text-sm font-medium"
+            title="Enquete"
+            aria-label="Enquete"
+            data-testid="compositor-enquete"
+          >
+            <BarChart2 className="w-5 h-5 text-primary" aria-hidden="true" />
+            <span className="hidden sm:inline text-xs">Enquete</span>
+          </button>
+        )}
 
         <Link href="/ir-em-direto">
           <button

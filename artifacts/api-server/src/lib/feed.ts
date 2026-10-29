@@ -8,6 +8,7 @@ import { resolveMediaUrl, urlMedia } from "./storage";
 import { commentVisivel } from "./takedown";
 import { lerVisualizador, postVisivelPara } from "./conteudoMais18";
 import { postsComInfracaoAtiva } from "./infracoesMais18";
+import { lerEnquetesEmLote } from "./enquetes";
 
 /**
  * Feed por separadores: Tudo | Seguindo | Para ti | Em alta.
@@ -76,13 +77,15 @@ export async function formatarPostsEmLote(posts: Linha[], userId: number) {
   const ids = posts.map((p) => p.id);
   const autorIds = [...new Set(posts.map((p) => p.autorId))];
 
-  const [autores, medias, gostos, comentarios, meusGostos, meusGuardados] = await Promise.all([
+  const [autores, medias, gostos, comentarios, meusGostos, meusGuardados, enquetes] = await Promise.all([
     db.select().from(usersTable).where(inArray(usersTable.id, autorIds)),
     db.select().from(postMediaTable).where(inArray(postMediaTable.postId, ids)).orderBy(postMediaTable.ordem),
     db.select({ id: likesTable.alvoId, n: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), inArray(likesTable.alvoId, ids))).groupBy(likesTable.alvoId),
     db.select({ id: commentsTable.postId, n: sql<number>`count(*)::int` }).from(commentsTable).where(and(inArray(commentsTable.postId, ids), commentVisivel())).groupBy(commentsTable.postId),
     db.select({ id: likesTable.alvoId }).from(likesTable).where(and(eq(likesTable.utilizadorId, userId), eq(likesTable.alvoTipo, "post"), inArray(likesTable.alvoId, ids))),
     db.select({ id: savedPostsTable.postId }).from(savedPostsTable).where(and(eq(savedPostsTable.utilizadorId, userId), inArray(savedPostsTable.postId, ids))),
+    // Enquetes (posts de texto): no máximo 2 consultas, em paralelo; a 0 se a página não tiver posts de texto.
+    lerEnquetesEmLote(posts, userId),
   ]);
 
   // Conteúdo exclusivo: acesso do próprio autor, por subscrição com acesso ou por compra PPV (uma consulta cada, em lote).
@@ -138,6 +141,7 @@ export async function formatarPostsEmLote(posts: Linha[], userId: number) {
       curtido: curtidos.has(post.id),
       guardado: guardados.has(post.id),
       criadoEm: post.criadoEm.toISOString(),
+      ...(enquetes.has(post.id) ? { enquete: enquetes.get(post.id) } : {}),
     };
   });
 }

@@ -16,6 +16,7 @@ import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 import { lerFeed, lerFiltro } from "../lib/feed";
 import { erroSeguro } from "../lib/erroSeguro";
+import { criarEnquete, validarNovaEnquete, lerEnquetesEmLote, votar, EnqueteErro, MSG_ENQUETE } from "../lib/enquetes";
 
 const createPostSchema = z.object({
   legenda: z.string().max(2200).optional(),
@@ -29,6 +30,8 @@ const createPostSchema = z.object({
   precoDesbloqueio: z.number().min(0).max(10_000_000).optional(),
   // Marcação +18: boolean estrito. Pode faltar só num post sem media (texto); com media é obrigatória (verificado no handler).
   mais18: z.boolean({ error: "O campo mais18 é obrigatório e tem de ser verdadeiro ou falso." }).optional(),
+  // Enquete (post de texto com pergunta e 2 a 4 opções): validada em lib/enquetes.ts.
+  enquete: z.unknown().optional(),
 }).refine(
   data => data.tipo === 'texto' ? (data.legenda && data.legenda.trim().length > 0) : true,
   { message: 'Posts de texto precisam de conteúdo na legenda.' }
@@ -80,9 +83,19 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
   }
 
   const { legenda, localizacao, tipo, media, exclusivo, precoDesbloqueio } = req.body;
+  // Enquete: sempre texto, gratuita e sem ficheiros; sem pergunta +18 (grava false).
+  let novaEnquete: ReturnType<typeof validarNovaEnquete> | null = null;
+  if (req.body.enquete !== undefined) {
+    if (tipo !== undefined && tipo !== "texto") { res.status(400).json({ error: MSG_ENQUETE.soTexto }); return; }
+    if (Array.isArray(media) && media.length > 0) { res.status(400).json({ error: MSG_ENQUETE.semMedia }); return; }
+    if (exclusivo === true || (precoDesbloqueio !== undefined && precoDesbloqueio !== 0)) { res.status(400).json({ error: MSG_ENQUETE.gratuita }); return; }
+    if (typeof legenda !== "string" || legenda.trim().length === 0) { res.status(400).json({ error: MSG_ENQUETE.pergunta }); return; }
+    novaEnquete = validarNovaEnquete(req.body.enquete);
+    if (!novaEnquete.ok) { res.status(400).json({ error: novaEnquete.erro }); return; }
+  }
   // Com media a marcação +18 é obrigatória (como sempre); num post só de texto pode faltar e fica false.
   const temMedia = Array.isArray(media) && media.length > 0;
-  const marcacao = req.body.mais18 === undefined && !temMedia ? { ok: true as const, mais18: false } : lerMarcacaoMais18(req.body.mais18);
+  const marcacao = req.body.enquete !== undefined || (req.body.mais18 === undefined && !temMedia) ? { ok: true as const, mais18: false } : lerMarcacaoMais18(req.body.mais18);
   if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
   // Média paga: o upload devolve "private://paid/<autorId>/<ficheiro>"; guardamos só a chave.
@@ -107,15 +120,31 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
     }
   }
 
-  const [post] = await db.insert(postsTable).values({
-    autorId: userId,
-    legenda: legenda || null,
-    localizacao: localizacao || null,
-    tipo: tipo || "imagem",
-    exclusivo: exclusivo || false,
-    mais18: marcacao.mais18,
-    precoDesbloqueio: precoDesbloqueio ? String(precoDesbloqueio) : null,
-  }).returning();
+  let post: typeof postsTable.$inferSelect;
+  if (novaEnquete && novaEnquete.ok) {
+    const valor = novaEnquete.valor;
+    try {
+      post = await db.transaction(async (tx) => {
+        const [p] = await tx.insert(postsTable).values({ autorId: userId, legenda: String(legenda).trim(), localizacao: localizacao || null, tipo: "texto", exclusivo: false, mais18: false }).returning();
+        await criarEnquete(tx, p.id, valor);
+        return p;
+      });
+    } catch (err) {
+      req.log?.error(erroSeguro(err), "Erro ao criar a enquete");
+      res.status(500).json({ error: "Erro interno." });
+      return;
+    }
+  } else {
+    [post] = await db.insert(postsTable).values({
+      autorId: userId,
+      legenda: legenda || null,
+      localizacao: localizacao || null,
+      tipo: tipo || "imagem",
+      exclusivo: exclusivo || false,
+      mais18: marcacao.mais18,
+      precoDesbloqueio: precoDesbloqueio ? String(precoDesbloqueio) : null,
+    }).returning();
+  }
 
   {
     for (let i = 0; i < mediaToStore.length; i++) {
@@ -232,6 +261,21 @@ router.get("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<voi
   if (bloqueadoMais18(await lerVisualizador(req.userId), post)) { res.status(403).json({ error: MSG_CONTEUDO_MAIS18, codigo: CODIGO_CONTEUDO_MAIS18 }); return; }
 
   res.json(await formatPost(post, req.userId));
+});
+
+// Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros; o autor não vota).
+const votoSchema = z.object({ opcaoId: z.number().int().positive() }).strict();
+router.post("/posts/:id/enquete/voto", requireAuth, validate(votoSchema), async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+  try {
+    res.json(await votar({ postId: id, userId: req.userId!, opcaoId: req.body.opcaoId }));
+  } catch (err) {
+    if (err instanceof EnqueteErro) { res.status(err.httpStatus).json({ error: err.message, ...(err.codigo ? { codigo: err.codigo } : {}) }); return; }
+    // Nunca se regista quem votou em quê.
+    req.log?.error(erroSeguro(err), "Erro ao votar na enquete");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 // Eliminar post (só o autor; conteúdo retirado ou denunciado não se apaga: lib/provaProtegida.ts)
@@ -388,6 +432,8 @@ async function formatPost(post: any, userId?: number) {
     guardado = !!saved;
   }
 
+  const enquete = (await lerEnquetesEmLote([post], userId ?? 0)).get(post.id);
+
   // Conteúdo exclusivo: ocultar media se utilizador não tem acesso
   const acesso = post.exclusivo ? await temAcessoExclusivo(userId, post.autorId, post.id) : true;
   const mediaSegura = acesso
@@ -416,6 +462,7 @@ async function formatPost(post: any, userId?: number) {
     curtido,
     guardado,
     criadoEm: post.criadoEm.toISOString(),
+    ...(enquete ? { enquete } : {}),
   };
 }
 

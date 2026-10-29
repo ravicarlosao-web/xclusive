@@ -341,7 +341,23 @@ export const GetUserPostsResponse = zod.object({
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
   "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "enquete": zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).optional().describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 })),
   "total": zod.int(),
   "page": zod.int(),
@@ -433,7 +449,23 @@ export const GetFeedResponse = zod.object({
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
   "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "enquete": zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).optional().describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 })),
   "total": zod.int(),
   "page": zod.int(),
@@ -445,6 +477,13 @@ export const GetFeedResponse = zod.object({
  * @summary Criar nova publicação
  */
 export const createPostBodyExclusivoDefault = false;
+export const createPostBodyEnqueteOpcoesItemMax = 60;
+
+export const createPostBodyEnqueteOpcoesMin = 2;
+export const createPostBodyEnqueteOpcoesMax = 4;
+
+export const createPostBodyEnqueteDuracaoDiasDefault = 1;
+export const createPostBodyEnqueteAudienciaDefault = `todos`;
 
 export const CreatePostBody = zod.object({
   "legenda": zod.string().optional(),
@@ -456,7 +495,12 @@ export const CreatePostBody = zod.object({
 })).optional(),
   "exclusivo": zod.boolean().default(createPostBodyExclusivoDefault),
   "precoDesbloqueio": zod.number().optional(),
-  "mais18": zod.boolean().optional().describe('Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400.')
+  "mais18": zod.boolean().optional().describe('Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400.'),
+  "enquete": zod.object({
+  "opcoes": zod.array(zod.string().max(createPostBodyEnqueteOpcoesItemMax)).min(createPostBodyEnqueteOpcoesMin).max(createPostBodyEnqueteOpcoesMax),
+  "duracaoDias": zod.union([zod.literal(1),zod.literal(3),zod.literal(7)]).default(createPostBodyEnqueteDuracaoDiasDefault),
+  "audiencia": zod.enum(['todos', 'seguidores']).default(createPostBodyEnqueteAudienciaDefault)
+}).optional().describe('Cria uma enquete (post de texto, gratuito e sem ficheiros; a legenda é a pergunta; mais18 fica false).')
 })
 
 export const CreatePostResponse = zod.object({
@@ -490,7 +534,23 @@ export const CreatePostResponse = zod.object({
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
   "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "enquete": zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).optional().describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 })
 
 
@@ -532,7 +592,23 @@ export const GetPostResponse = zod.object({
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
   "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "enquete": zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).optional().describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 })
 
 
@@ -578,6 +654,35 @@ export const UpdateReelMais18Response = zod.object({
   "id": zod.int(),
   "mais18": zod.boolean()
 })
+
+
+/**
+ * @summary Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros)
+ */
+export const VotarEnqueteParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const VotarEnqueteBody = zod.object({
+  "opcaoId": zod.int()
+})
+
+export const VotarEnqueteResponse = zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 
 
 /**
@@ -1001,7 +1106,23 @@ export const GetExploreResponse = zod.object({
   "totalComentarios": zod.int(),
   "curtido": zod.boolean(),
   "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "enquete": zod.object({
+  "id": zod.int(),
+  "audiencia": zod.enum(['todos', 'seguidores']),
+  "terminaEm": zod.coerce.date(),
+  "encerrada": zod.boolean(),
+  "totalVotos": zod.int(),
+  "opcoes": zod.array(zod.object({
+  "id": zod.int(),
+  "texto": zod.string(),
+  "votos": zod.int().nullable(),
+  "percentagem": zod.int().nullable()
+})),
+  "meuVoto": zod.int().nullable(),
+  "podeVotar": zod.boolean(),
+  "motivo": zod.union([zod.literal('autor'),zod.literal('seguidores'),zod.literal('encerrada'),zod.literal('ja_votou'),zod.literal(null)]).nullable()
+}).optional().describe('Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.')
 })),
   "total": zod.int(),
   "page": zod.int(),

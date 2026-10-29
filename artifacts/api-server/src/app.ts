@@ -177,6 +177,16 @@ const createPostLimiter = rateLimit({
   keyGenerator: userIdKey,
 });
 
+// Votos em enquetes — 30 votos/minuto por utilizador
+const votoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Demasiados votos num curto espaço de tempo. Tenta novamente dentro de 1 minuto." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userIdKey,
+});
+
 // Envio de mensagens — 30 mensagens/minuto por utilizador
 const sendMessageLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -222,6 +232,7 @@ app.post(
 app.post("/api/users/:username/follow", followLimiter);
 app.delete("/api/users/:username/follow", followLimiter);
 app.post("/api/posts", createPostLimiter);
+app.post("/api/posts/:id/enquete/voto", votoLimiter);
 app.post(["/api/conversations", "/api/conversations/:id/messages"], sendMessageLimiter);
 app.use("/api", globalAuthLimiter);             // limiter global autenticado (defesa de profundidade)
 
