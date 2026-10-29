@@ -16,7 +16,6 @@ import { ReportDialog } from '@/components/shared/ReportDialog';
 import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
-import { SeloMais18 } from './MarcacaoMais18';
 import { haTempo } from '@/lib/tempoRelativo';
 import { EnqueteCorpo } from './EnqueteCorpo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -279,7 +278,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
             <div className="flex flex-col">
               <span className={cn('font-bold hover:underline flex items-center gap-1.5', noFeed ? 'text-sm' : 'text-[15px]')}>
                 {post.autor.username}
-                <SeloMais18 mais18={post.mais18} />
                 {post.autor.verificado && (
                   <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
                 )}
