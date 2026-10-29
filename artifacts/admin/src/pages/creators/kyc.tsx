@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, XCircle, FileImage, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
@@ -68,18 +70,25 @@ export default function KycQueue() {
     mutationFn: ({ id, status, reason }: { id: number, status: string, reason?: string }) => 
       adminApi.updateKyc(id, { status, reason }),
     onSuccess: () => {
+      setRecusar(null); setRecusarMotivo('');
       queryClient.invalidateQueries({ queryKey: ['kyc-queue'] });
       toast({ title: 'KYC avaliado com sucesso' });
-    }
+    },
+    onError: (e: any) => toast({ variant: 'destructive', title: 'Não foi possível avaliar o KYC', description: String(e?.message ?? '').slice(0, 200) }),
   });
 
-  const handleAction = (id: number, action: 'aprovado' | 'rejeitado') => {
-    let reason;
-    if (action === 'rejeitado') {
-      reason = prompt('Motivo da rejeição (obrigatório):');
-      if (!reason) return;
-    }
-    resolveKyc.mutate({ id, status: action, reason });
+  // Recusa: diálogo com o motivo (10 a 500 caracteres). O motivo vai à criadora numa notificação: nunca documento, nome nem emails.
+  const [recusar, setRecusar] = useState<{ id: number; username: string } | null>(null);
+  const [recusarMotivo, setRecusarMotivo] = useState('');
+  const motivoLimpo = recusarMotivo.trim();
+  const erroMotivo = motivoLimpo.length > 0 && (/\d{6,}/.test(motivoLimpo) || motivoLimpo.includes('@'))
+    ? 'O motivo não pode conter números de documento nem emails.'
+    : motivoLimpo.length > 0 && motivoLimpo.length < 10 ? 'Mínimo de 10 caracteres.' : null;
+  const motivoOk = motivoLimpo.length >= 10 && motivoLimpo.length <= 500 && !erroMotivo;
+
+  const handleAction = (id: number, action: 'aprovado' | 'rejeitado', username?: string) => {
+    if (action === 'rejeitado') { setRecusar({ id, username: username ?? '' }); return; }
+    resolveKyc.mutate({ id, status: action });
   };
 
   const queueList: any[] = (queue as any)?.data ?? queue ?? [];
@@ -130,7 +139,7 @@ export default function KycQueue() {
                 <Button 
                   variant="outline" 
                   className="w-full border-red-500/30 text-red-500 hover:bg-red-500/10"
-                  onClick={() => handleAction(req.id, 'rejeitado')}
+                  onClick={() => handleAction(req.id, 'rejeitado', req.username)}
                   disabled={resolveKyc.isPending}
                 >
                   <XCircle className="mr-2 h-4 w-4" /> Rejeitar
@@ -167,6 +176,32 @@ export default function KycQueue() {
           {viewer?.status === 'ready' && viewer.kind === 'image' && (
             <img src={viewer.src} alt={viewer.label} className="w-full max-h-[70vh] object-contain rounded-md" onError={failViewer} />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={recusar !== null} onOpenChange={(o) => { if (!o && !resolveKyc.isPending) { setRecusar(null); setRecusarMotivo(''); } }}>
+        <DialogContent className="max-w-lg" data-testid="recusar-dialogo">
+          <DialogHeader>
+            <DialogTitle>Recusar verificação{recusar?.username ? ` de @${recusar.username}` : ''}</DialogTitle>
+            <DialogDescription>A criadora recebe uma notificação com este motivo e pode submeter de novo.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="recusar-motivo">Motivo (obrigatório, 10 a 500 caracteres)</Label>
+            <Textarea id="recusar-motivo" data-testid="recusar-motivo" rows={4} maxLength={500} value={recusarMotivo} onChange={(e) => setRecusarMotivo(e.target.value)} aria-describedby="recusar-ajuda" />
+            <p id="recusar-ajuda" className="text-xs text-muted-foreground">Não escrevas números de documento nem dados pessoais. {motivoLimpo.length}/500</p>
+            {erroMotivo && <p role="alert" data-testid="recusar-erro" className="text-sm text-red-400">{erroMotivo}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecusar(null)} disabled={resolveKyc.isPending}>Cancelar</Button>
+            <Button
+              data-testid="recusar-confirmar"
+              className="bg-red-700 hover:bg-red-800 text-white"
+              disabled={!motivoOk || resolveKyc.isPending}
+              onClick={() => recusar && resolveKyc.mutate({ id: recusar.id, status: 'rejeitado', reason: motivoLimpo })}
+            >
+              Recusar verificação
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -57,6 +57,7 @@ import {
 import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
 import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
 import { banirConta, BanimentoErro } from "../lib/banimento.js";
+import { emailLegal } from "../lib/encerramento.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
@@ -434,6 +435,7 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "withdrawal_aprovado": return `${admin} aprovou levantamento${target}`;
     case "withdrawal_rejeitado": return `${admin} rejeitou levantamento${target}`;
     case "withdrawal_pago": return `${admin} marcou levantamento${target} como pago`;
+    case "withdrawal_retido": return `${admin} reteve o levantamento${target}`;
     case "withdrawal_dados_vistos": return `${admin} consultou os dados de pagamento do levantamento${target}`;
     case "withdrawal_approved": return `${admin} aprovou levantamento${target}`;
     case "withdrawal_rejected": return `${admin} rejeitou levantamento${target}`;
@@ -984,6 +986,9 @@ router.get("/admin/kyc/:submissionId/:tipo", requireAdmin, async (req: AdminRequ
   }
 });
 
+/** Motivo da recusa de KYC: 10 a 500 caracteres; nunca números de documento (6+ dígitos seguidos) nem emails. */
+const MSG_MOTIVO_KYC_INVALIDO = "O motivo não pode conter números de documento nem emails";
+
 router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
@@ -992,45 +997,64 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
     if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
 
     const acao = req.body?.acao ?? (req.body?.status === "aprovado" ? "aprovar" : req.body?.status === "rejeitado" ? "rejeitar" : undefined);
-    const motivo = req.body?.motivo ?? req.body?.reason;
     if (!["aprovar", "rejeitar"].includes(acao)) {
       return void res.status(400).json({ error: "Acção inválida. Use 'aprovar' ou 'rejeitar'." });
     }
 
-    const verificadoAnterior = user.verificado;
-    const updateData = acao === "aprovar" 
-      ? { verificado: true, tipoConta: "criador" as const }
-      : { verificado: false, tipoConta: "pessoal" as const };
-
-    const [updated] = await db.update(usersTable)
-      .set(updateData)
-      .where(eq(usersTable.id, id))
-      .returning();
-
-    const [submission] = await db.select({ id: kycSubmissionsTable.id })
-      .from(kycSubmissionsTable)
-      .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
-      .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`)
-      .limit(1);
-    if (submission) {
-      await db.update(kycSubmissionsTable)
-        .set({
-          status: acao === "aprovar" ? "aprovado" : "rejeitado",
-          motivoRejeicao: acao === "rejeitar" ? (motivo ?? null) : null,
-          revistoEm: new Date(),
-          revistoPor: req.adminId!,
-        })
-        .where(eq(kycSubmissionsTable.id, submission.id));
+    // Motivo opcional no servidor; se vier (na recusa), 10 a 500 caracteres e sem dados sensíveis (rede de segurança).
+    const bruto = req.body?.motivo ?? req.body?.reason;
+    if (bruto !== undefined && bruto !== null && typeof bruto !== "string") {
+      return void res.status(400).json({ error: "Motivo inválido." });
+    }
+    const motivo = acao === "rejeitar" && typeof bruto === "string" && bruto.trim() ? bruto.trim() : null;
+    if (motivo !== null) {
+      if (motivo.length < 10 || motivo.length > 500) {
+        return void res.status(400).json({ error: "O motivo deve ter entre 10 e 500 caracteres." });
+      }
+      if (/\d{6,}/.test(motivo) || motivo.includes("@")) {
+        return void res.status(400).json({ error: MSG_MOTIVO_KYC_INVALIDO });
+      }
     }
 
-    await logAudit(req, `kyc_${acao}`, "user", id, {
-      before: { verificado: verificadoAnterior },
-      after: { verificado: updated.verificado },
-      motivo: motivo ?? null,
+    // Transação única: utilizador, submissão, audit e notificação. Se uma falhar, reverte tudo.
+    const updated = await db.transaction(async (tx) => {
+      const [u] = await tx.update(usersTable)
+        .set(acao === "aprovar" ? { verificado: true, tipoConta: "criador" as const } : { verificado: false, tipoConta: "pessoal" as const })
+        .where(eq(usersTable.id, id))
+        .returning();
+
+      // Nota: aprova/recusa mesmo sem submissão pendente (comportamento anterior mantido).
+      const [submission] = await tx.select({ id: kycSubmissionsTable.id })
+        .from(kycSubmissionsTable)
+        .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
+        .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`)
+        .limit(1);
+      if (submission) {
+        await tx.update(kycSubmissionsTable)
+          .set({
+            status: acao === "aprovar" ? "aprovado" : "rejeitado",
+            motivoRejeicao: motivo,
+            revistoEm: new Date(),
+            revistoPor: req.adminId!,
+          })
+          .where(eq(kycSubmissionsTable.id, submission.id));
+      }
+
+      await tx.insert(auditLogTable).values({
+        adminId: req.adminId!, action: `kyc_${acao}`, targetType: "user", targetId: id,
+        details: { before: { verificado: user.verificado }, after: { verificado: u.verificado }, motivo },
+        ipAddress: req.ip ?? null,
+      });
+
+      // Resultado para a criadora, na interface (sem dados sensíveis: nada de documento, nome ou números).
+      await notificarSistema(tx, id, acao === "aprovar"
+        ? "A tua verificação de identidade foi aprovada. Já podes usar a tua conta de criadora."
+        : `A tua verificação de identidade não foi aprovada.${motivo ? ` Motivo: ${motivo.replace(/[.\s]+$/, "")}.` : ""} Podes submeter de novo em «Tornar-se Criador».`);
+      return u;
     });
     res.json({ success: true, user: mapUser(updated) });
   } catch (err) {
-    (req as any).log?.error({ err }, "Erro ao processar KYC");
+    (req as any).log?.error(erroSeguro(err), "Erro ao processar KYC");
     res.status(500).json({ error: "Erro interno." });
   }
 });
@@ -1696,12 +1720,17 @@ router.get("/admin/finance/transactions/export", async (req, res) => {
   }
 });
 
-const WITHDRAWAL_STATUSES = ["pendente", "aprovado", "rejeitado", "pago"] as const;
+const WITHDRAWAL_STATUSES = ["pendente", "aprovado", "rejeitado", "pago", "retido"] as const;
 type WithdrawalStatus = typeof WITHDRAWAL_STATUSES[number];
-/** Máquina de estados rígida: pendente→aprovado→pago; pendente→rejeitado; pago e rejeitado são finais. */
+/**
+ * Máquina de estados rígida: pendente→aprovado→pago; pendente→rejeitado; pago e rejeitado são finais.
+ * Retenção (Termos para Criadoras, Art. 6.º): pendente|aprovado→retido→aprovado (libertar) | rejeitado. O retido não vai a pago
+ * nem volta a pendente; os ganhos ficam reservados enquanto está retido e só voltam na rejeição (uma vez).
+ */
 const WITHDRAWAL_TRANSITIONS: Record<WithdrawalStatus, WithdrawalStatus[]> = {
-  pendente: ["aprovado", "rejeitado"],
-  aprovado: ["pago"],
+  pendente: ["aprovado", "rejeitado", "retido"],
+  aprovado: ["pago", "retido"],
+  retido: ["aprovado", "rejeitado"],
   rejeitado: [],
   pago: [],
 };
@@ -1738,6 +1767,10 @@ router.get("/admin/withdrawals", async (req, res) => {
         processedAt: withdrawalRequestsTable.processedAt,
         notes: withdrawalRequestsTable.notes,
         criadoEm: withdrawalRequestsTable.criadoEm,
+        retidoEm: withdrawalRequestsTable.retidoEm,
+        retidoMotivo: withdrawalRequestsTable.retidoMotivo,
+        retidoMotivoVisivel: withdrawalRequestsTable.retidoMotivoVisivel,
+        creatorBanidaEm: usersTable.banidaEm,
         // destinationDetails (IBAN) NUNCA em listagens: só no detalhe, com audit_log.
       })
         .from(withdrawalRequestsTable)
@@ -1750,7 +1783,7 @@ router.get("/admin/withdrawals", async (req, res) => {
     ]);
 
     res.json(paginate(
-      rows.map(r => ({ ...r, amount: Number(r.amount) })),
+      rows.map(({ creatorBanidaEm, ...r }) => ({ ...r, amount: Number(r.amount), creatorBanida: creatorBanidaEm !== null })),
       Number(total), pageNum, limitNum
     ));
   } catch (err) {
@@ -1800,6 +1833,13 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
     }
     const notes = typeof req.body.notes === "string" ? req.body.notes.slice(0, 500) : undefined;
 
+    // Retenção: motivo obrigatório (10 a 500 caracteres, validado AQUI e depois do trim) antes de abrir a transação.
+    const motivoRetencao = typeof req.body.motivo === "string" ? req.body.motivo.trim() : "";
+    const ocultarMotivo = req.body.ocultarMotivo === true;
+    if (novo === "retido" && (motivoRetencao.length < 10 || motivoRetencao.length > 500)) {
+      return void res.status(400).json({ error: "Indica o motivo da retenção (entre 10 e 500 caracteres)." });
+    }
+
     const updated = await db.transaction(async (tx) => {
       const [peek] = await tx.select({ creatorId: withdrawalRequestsTable.creatorId }).from(withdrawalRequestsTable)
         .where(eq(withdrawalRequestsTable.id, id)).limit(1);
@@ -1821,8 +1861,23 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
       }
 
       const [u] = await tx.update(withdrawalRequestsTable)
-        .set({ status: novo, processedBy: req.adminId ?? undefined, processedAt: new Date(), ...(notes !== undefined ? { notes } : {}) })
+        .set({
+          status: novo, processedBy: req.adminId ?? undefined, processedAt: new Date(), ...(notes !== undefined ? { notes } : {}),
+          ...(novo === "retido" ? { retidoEm: new Date(), retidoPor: req.adminId ?? null, retidoMotivo: motivoRetencao, retidoMotivoVisivel: !ocultarMotivo } : {}),
+        })
         .where(eq(withdrawalRequestsTable.id, id)).returning();
+
+      // Retenção e libertação: notificam a criadora NA MESMA transação (sem IBAN; o motivo só se não estiver escondido).
+      // Se a notificação falhar, reverte tudo (estado, auditoria).
+      if (novo === "retido") {
+        const valor = Number(w.amount).toLocaleString("pt-PT");
+        const base = `O teu pedido de levantamento de ${valor} Kz foi retido ao abrigo do Artigo 6.º dos Termos para Criadoras.`;
+        await notificarSistema(tx, w.creatorId, ocultarMotivo
+          ? `${base} Para mais informações contacta ${emailLegal()}.`
+          : `${base} Motivo: ${motivoRetencao.replace(/[.\s]+$/, "")}.`);
+      } else if (w.status === "retido" && novo === "aprovado") {
+        await notificarSistema(tx, w.creatorId, `O teu levantamento de ${Number(w.amount).toLocaleString("pt-PT")} Kz foi libertado e segue para pagamento.`);
+      }
 
       // Rejeição: notifica a criadora NA MESMA transação (motivo, sem IBAN nem dados bancários).
       // Se a notificação falhar, reverte tudo (estado, reembolso e auditoria).
@@ -1842,7 +1897,10 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
         action: `withdrawal_${novo}`,
         targetType: "withdrawal",
         targetId: id,
-        details: { before: { status: w.status }, after: { status: novo, notes: u.notes }, amount: Number(w.amount), reembolso: novo === "rejeitado" },
+        details: {
+          before: { status: w.status }, after: { status: novo, notes: u.notes }, amount: Number(w.amount), reembolso: novo === "rejeitado",
+          ...(novo === "retido" ? { retencao: { motivo: motivoRetencao, motivoVisivel: !ocultarMotivo } } : {}),
+        },
         ipAddress: req.ip ?? null,
       });
       return u;

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
-import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
+import { eq, and, ne, sql, not, inArray, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, comparePassword, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
@@ -532,6 +532,23 @@ const limiteEncerrar = rateLimit({
 });
 
 const encerrarSchema = z.object({ password: z.string().min(1, "Indica a tua password.").max(128) });
+
+/**
+ * GET /users/me/kyc: estado da última verificação de identidade da própria conta (para o passo inicial do KYC).
+ * `nunca` | `pendente` | `aprovado` | `rejeitado`. O motivo só vem na recusa; nunca documento, nome nem chaves de ficheiros.
+ */
+router.get("/users/me/kyc", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const [k] = await db.select({ status: kycSubmissionsTable.status, motivo: kycSubmissionsTable.motivoRejeicao, revistoEm: kycSubmissionsTable.revistoEm })
+      .from(kycSubmissionsTable).where(eq(kycSubmissionsTable.userId, req.userId!))
+      .orderBy(desc(kycSubmissionsTable.submetidoEm), desc(kycSubmissionsTable.id)).limit(1);
+    if (!k) { res.json({ estado: "nunca", motivo: null, revistoEm: null }); return; }
+    res.json({ estado: k.status, motivo: k.status === "rejeitado" ? k.motivo : null, revistoEm: k.revistoEm?.toISOString() ?? null });
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "Erro ao ler o estado do KYC");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
 
 router.get("/users/me/encerramento", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   try {

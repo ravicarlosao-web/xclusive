@@ -64,12 +64,15 @@ const MOCK_SESSION_KEY = import.meta.env.DEV ? 'xclusive_mock_session' : ''; // 
 export const XCLUSIVE_IBAN = 'AO06 0040 0000 1234 5678 9012 3';
 export const XCLUSIVE_IBAN_RAW = 'AO06004000001234567890123';
 
-export type WithdrawalStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'pago';
+export type WithdrawalStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'pago' | 'retido';
 export interface WithdrawalItem {
   id: number;
   valor: number;
   status: WithdrawalStatus;
+  /** Rejeitado: motivo da rejeição. Retido: motivo da retenção, só se o admin não o escondeu. */
   motivo: string | null;
+  /** Retido sem motivo visível (restrição legal): contacto para mais informações. */
+  contacto?: string;
   criadoEm: string;
   processadoEm: string | null;
 }
