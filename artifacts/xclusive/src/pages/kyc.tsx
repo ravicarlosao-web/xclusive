@@ -16,6 +16,7 @@ import {
   Eye, Loader2, RefreshCw, Info, Wallet, Smile
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchLegalDocs } from './legal/useLegalDocs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'intro' | 'personal' | 'document' | 'selfie' | 'liveness' | 'review' | 'success';
@@ -120,6 +121,9 @@ export default function KYCPage() {
 
   const [step, setStep] = useState<Step>('intro');
   const [submitting, setSubmitting] = useState(false);
+  // Aceite dos Termos para Criadoras (obrigatório, além do consentimento do KYC). `tocouTermos`: só mostra o erro depois de mexer na caixa.
+  const [aceiteTermos, setAceiteTermos] = useState(false);
+  const [tocouTermos, setTocouTermos] = useState(false);
   const [livenessChallenge, setLivenessChallenge] = useState(0);
   const [livenesDone, setLivenessDone] = useState(false);
   const [captureSignal, setCaptureSignal] = useState(0);
@@ -193,6 +197,11 @@ export default function KYCPage() {
       toast({ variant: 'destructive', title: 'Consentimento necessário', description: 'Confirma que as informações são verdadeiras.' });
       return;
     }
+    if (!aceiteTermos) {
+      setTocouTermos(true);
+      toast({ variant: 'destructive', title: 'Termos para Criadoras', description: 'Tens de aceitar os Termos para Criadoras.' });
+      return;
+    }
     setSubmitting(true);
     try {
       if (isMockMode) {
@@ -202,6 +211,8 @@ export default function KYCPage() {
       } else {
         // Modo real: chamar o backend — única via para promover a criador
         const token = localStorage.getItem('xclusive_token');
+        // Versão vigente dos Termos para Criadoras, lida do servidor no momento do envio.
+        const docs = await fetchLegalDocs();
         const res = await fetch(`${import.meta.env.BASE_URL}api/users/me/tornar-criador`, {
           method: 'POST',
           headers: {
@@ -218,6 +229,7 @@ export default function KYCPage() {
             documentoFoto: data.documentoFoto ?? '[captured]',
             selfieFoto: data.selfieFoto ?? '[captured]',
             livenessFoto: data.livenessFoto ?? '[captured]',
+            aceiteCriadora: { versao: docs.criadoras.versao },
           }),
         });
 
@@ -338,6 +350,13 @@ export default function KYCPage() {
                 <p>As tuas informações são processadas de forma segura e nunca partilhadas com terceiros. O processo leva cerca de <strong>5 minutos</strong>.</p>
               </div>
             </div>
+
+            <p className="text-xs text-muted-foreground text-center" data-testid="kyc-intro-documentos">
+              Antes de começares, lê os{' '}
+              <a href="/termos-criadoras" target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-primary hover:underline">Termos para Criadoras</a>
+              {' '}e o{' '}
+              <a href="/modelo-consentimento" target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-primary hover:underline">Modelo de Consentimento de Terceiros</a>.
+            </p>
 
             <Button
               onClick={() => goTo('personal')}
@@ -691,9 +710,26 @@ export default function KYCPage() {
               </p>
             </div>
 
+            {/* Aceite dos Termos para Criadoras */}
+            <div className="space-y-1.5">
+              <div
+                className="flex items-start gap-3 bg-secondary/40 border border-border rounded-2xl p-4 cursor-pointer"
+                onClick={() => { setTocouTermos(true); setAceiteTermos(v => !v); }}
+              >
+                <Checkbox checked={aceiteTermos} className="mt-0.5 shrink-0" data-testid="aceite-termos-criadoras" onCheckedChange={(v) => { setTocouTermos(true); setAceiteTermos(v === true); }} onClick={(e) => e.stopPropagation()} />
+                <p className="text-sm text-muted-foreground leading-relaxed select-none">
+                  Li e aceito os{' '}
+                  <a href="/termos-criadoras" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>Termos para Criadoras</a>.
+                </p>
+              </div>
+              {tocouTermos && !aceiteTermos && (
+                <p role="alert" className="text-sm font-medium text-destructive px-1" data-testid="erro-termos-criadoras">Tens de aceitar os Termos para Criadoras.</p>
+              )}
+            </div>
+
             <Button
               onClick={handleSubmit}
-              disabled={!data.consentimento || submitting}
+              disabled={!data.consentimento || !aceiteTermos || submitting}
               className="w-full h-13 font-bold bg-primary hover:bg-primary/90 text-white rounded-2xl disabled:opacity-40 gap-2"
             >
               {submitting ? (

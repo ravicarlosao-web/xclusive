@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable } from "@workspace/db";
+import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, postMediaTable, likesTable, commentsTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
@@ -11,6 +11,7 @@ import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { desligarSocketsLivesMais18 } from "../lib/socket";
 import rateLimit from "express-rate-limit";
 import { logger } from "../lib/logger";
+import { LEGAL_DOCS } from "./auth";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
@@ -34,6 +35,8 @@ const kycSubmissionSchema = z.object({
   documentoFoto: z.string().min(1),
   selfieFoto: z.string().min(1),
   livenessFoto: z.string().min(1),
+  // Aceite dos Termos para Criadoras (versão vigente). Opcional no schema para a falta ter a mesma resposta que a versão errada (400).
+  aceiteCriadora: z.object({ versao: z.string().max(40) }).optional(),
 });
 
 const router = Router();
@@ -391,6 +394,12 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
     return;
   }
 
+  // O aceite tem de ser da versão vigente dos Termos para Criadoras. Validado ANTES de qualquer upload: nada é criado.
+  if (req.body.aceiteCriadora?.versao !== LEGAL_DOCS.criadoras.versao) {
+    res.status(400).json({ error: "Os Termos para Criadoras foram atualizados (ou não foram aceites). Recarrega a página e aceita a versão atual." });
+    return;
+  }
+
   // Os documentos KYC só vão para a zona privada: sem ela configurada falha (nunca usa a pública).
   if (!isPrivateStorageConfigured()) {
     req.log?.error({ missing: getMissingPrivateStorageEnv() }, "KYC: armazenamento privado não configurado — submissão recusada.");
@@ -438,8 +447,13 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
       uploadedKeys.push(key);
     }
 
+    // IP (req.ip respeita "trust proxy") e User-Agent (cortado a 400): só na base de dados, nunca em logs.
+    const aceiteIp = (req.ip ?? "").slice(0, 45) || null;
+    const uaHeader = req.headers["user-agent"];
+    const aceiteUserAgent = (typeof uaHeader === "string" ? uaHeader : "").slice(0, 400) || null;
+
     await db.transaction(async (tx) => {
-      await tx.insert(kycSubmissionsTable).values({
+      const [submissao] = await tx.insert(kycSubmissionsTable).values({
         userId,
         nomeCompleto: req.body.nomeCompleto,
         dataNascimento: req.body.dataNascimento,
@@ -449,6 +463,16 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
         documentoKey: keys[0],
         selfieKey: keys[1],
         livenessKey: keys[2],
+      }).returning({ id: kycSubmissionsTable.id });
+
+      // Aceite dos Termos para Criadoras na MESMA transação: se falhar, reverte tudo (o catch apaga os ficheiros enviados).
+      await tx.insert(creatorTermsAcceptancesTable).values({
+        userId,
+        versao: req.body.aceiteCriadora.versao,
+        kycSubmissionId: submissao.id,
+        ip: aceiteIp,
+        userAgent: aceiteUserAgent,
+        origem: "tornar-criador",
       });
 
       // A conta passa a aparecer na fila de revisão, mas só fica verificada
