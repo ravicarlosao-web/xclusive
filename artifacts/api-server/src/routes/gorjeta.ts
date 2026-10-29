@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { lerVisualizador, bloqueadoMais18 } from "../lib/conteudoMais18";
+import { postVisivel } from "../lib/takedown";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 
 const router = Router();
@@ -43,7 +44,8 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
     const [post] = await db
       .select({ autorId: postsTable.autorId, mais18: postsTable.mais18 })
       .from(postsTable)
-      .where(eq(postsTable.id, postId))
+      // postVisivel: não se dá gorjeta a conteúdo retirado nem a uma conta inativa (suspensa ou encerrada).
+      .where(and(eq(postsTable.id, postId), postVisivel()))
       .limit(1);
 
     if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }

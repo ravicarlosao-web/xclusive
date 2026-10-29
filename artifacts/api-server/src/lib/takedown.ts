@@ -37,7 +37,7 @@ const autorAtivo = (col: unknown): SQL => sql`${col} IN (SELECT id FROM users WH
 export const postVisivel = (): SQL => and(isNull(postsTable.retiradoEm), autorAtivo(postsTable.autorId))!;
 export const reelVisivel = (): SQL => and(isNull(reelsTable.retiradoEm), autorAtivo(reelsTable.autorId))!;
 export const storyVisivel = (): SQL => and(isNull(storiesTable.retiradoEm), autorAtivo(storiesTable.autorId))!;
-export const commentVisivel = (): SQL => isNull(commentsTable.retiradoEm);
+export const commentVisivel = (): SQL => and(isNull(commentsTable.retiradoEm), autorAtivo(commentsTable.autorId))!;
 export const liveVisivel = (): SQL => and(isNull(liveStreamsTable.retiradoEm), autorAtivo(liveStreamsTable.criadorId))!;
 
 export interface TargetInfo {
@@ -131,7 +131,12 @@ export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promi
     case "story": return { mudou: (await tx.update(storiesTable).set(limpa).where(eq(storiesTable.id, id)).returning({ id: storiesTable.id })).length > 0 };
     case "comment": return { mudou: (await tx.update(commentsTable).set(limpa).where(eq(commentsTable.id, id)).returning({ id: commentsTable.id })).length > 0 };
     case "live": return { mudou: (await tx.update(liveStreamsTable).set(limpa).where(eq(liveStreamsTable.id, id)).returning({ id: liveStreamsTable.id })).length > 0 };
-    case "user": return { mudou: (await tx.update(usersTable).set({ ativo: true }).where(eq(usersTable.id, id)).returning({ id: usersTable.id })).length > 0 };
+    case "user": {
+      // Conta encerrada pelo próprio: não se repõe por aqui (só "Reabrir conta" no admin).
+      const [u] = await tx.select({ encerradaEm: usersTable.encerradaEm }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      if (u?.encerradaEm) throw new TakedownError("Esta conta foi encerrada pelo próprio utilizador: não se repõe por aqui.", 409);
+      return { mudou: (await tx.update(usersTable).set({ ativo: true }).where(eq(usersTable.id, id)).returning({ id: usersTable.id })).length > 0 };
+    }
   }
 }
 

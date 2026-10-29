@@ -375,7 +375,7 @@ async function formatPost(post: any, userId?: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, post.autorId));
   const media = await db.select().from(postMediaTable).where(eq(postMediaTable.postId, post.id)).orderBy(postMediaTable.ordem);
   const [{ likes }] = await db.select({ likes: sql<number>`count(*)::int` }).from(likesTable).where(and(eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, post.id)));
-  const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(eq(commentsTable.postId, post.id));
+  const [{ comments }] = await db.select({ comments: sql<number>`count(*)::int` }).from(commentsTable).where(and(eq(commentsTable.postId, post.id), commentVisivel()));
 
   let curtido = false;
   let guardado = false;

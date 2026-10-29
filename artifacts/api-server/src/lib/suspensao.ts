@@ -22,7 +22,7 @@ export const CODIGO_CONTA_SUSPENSA = "conta_suspensa";
 export async function suspenderConta(
   tx: Tx,
   userId: number,
-  ctx: { adminId: number | null; ip?: string | null; origem: "admin" | "eliminacao" | "denuncia" | "infracao_mais18" },
+  ctx: { adminId: number | null; ip?: string | null; origem: "admin" | "eliminacao" | "denuncia" | "infracao_mais18" | "encerramento" },
 ): Promise<{ mudou: boolean; sessoesRevogadas: number }> {
   const alterada = await tx.update(usersTable).set({ ativo: false })
     .where(and(eq(usersTable.id, userId), eq(usersTable.ativo, true)))

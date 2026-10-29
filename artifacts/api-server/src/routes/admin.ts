@@ -28,6 +28,7 @@ import {
   subscriptionsTable,
   kycSubmissionsTable,
   creatorTermsAcceptancesTable,
+  accountClosuresTable,
   topupRequestsTable,
   notificationsTable,
   infracoesMais18Table,
@@ -44,6 +45,7 @@ import {
   count,
   sum,
   isNotNull,
+  isNull,
   inArray,
   notInArray,
 } from "drizzle-orm";
@@ -53,6 +55,8 @@ import {
   TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
 import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
+import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
+import { erroSeguro } from "../lib/erroSeguro.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
@@ -96,7 +100,8 @@ function paginate<T>(items: T[], total: number, page: number, limit: number) {
 
 // ── Mapeamento ativo boolean → estado string ──────────────────────────────────
 
-function mapEstado(ativo: boolean): string {
+function mapEstado(ativo: boolean, encerradaEm?: Date | null): string {
+  if (encerradaEm) return "encerrada";
   return ativo ? "ativo" : "suspenso";
 }
 
@@ -113,7 +118,7 @@ function mapUser(u: typeof usersTable.$inferSelect) {
     verificado: u.verificado,
     privado: u.privado,
     role: u.role,
-    estado: mapEstado(u.ativo),
+    estado: mapEstado(u.ativo, u.encerradaEm),
     saldo: Number(u.saldo),
     ganhos: Number(u.ganhos),
     comissaoPersonalizada: u.comissaoPersonalizada !== null && u.comissaoPersonalizada !== undefined
@@ -466,7 +471,8 @@ router.get("/admin/users", async (req, res) => {
     } else {
       conditions.push(notInArray(usersTable.role, ['admin', 'superadmin']));
     }
-    if (estado === "suspenso") conditions.push(eq(usersTable.ativo, false));
+    if (estado === "suspenso") conditions.push(and(eq(usersTable.ativo, false), isNull(usersTable.encerradaEm)));
+    if (estado === "encerrada") conditions.push(isNotNull(usersTable.encerradaEm));
     if (estado === "ativo") conditions.push(eq(usersTable.ativo, true));
     if (search) {
       conditions.push(or(
@@ -622,11 +628,20 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
       db.select({ totalSeguindo: count() }).from(followsTable).where(eq(followsTable.seguidorId, id)),
     ]);
 
+    // Encerramento pelo próprio: quando, até quando pode ser reaberta (janela de 30 dias) e se ainda pode.
+    let encerramento: { encerradaEm: Date; apagarApos: Date; podeReabrir: boolean } | null = null;
+    if (user.encerradaEm) {
+      const [c] = await db.select({ apagarApos: accountClosuresTable.apagarApos, estado: accountClosuresTable.estado }).from(accountClosuresTable)
+        .where(and(eq(accountClosuresTable.userId, id), eq(accountClosuresTable.estado, "pendente"))).limit(1);
+      encerramento = c ? { encerradaEm: user.encerradaEm, apagarApos: c.apagarApos, podeReabrir: c.apagarApos.getTime() > Date.now() } : { encerradaEm: user.encerradaEm, apagarApos: user.encerradaEm, podeReabrir: false };
+    }
+
     res.json({
       ...mapUser(user),
       totalPosts: Number(totalPosts),
       totalSeguidores: Number(totalSeguidores),
       totalSeguindo: Number(totalSeguindo),
+      encerramento,
     });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao obter utilizador");
@@ -668,12 +683,17 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
+    // Conta encerrada pelo próprio: nem suspende nem reativa; só se reabre (POST /admin/users/:id/reabrir).
+    if (user.encerradaEm) {
+      return void res.status(409).json({ error: "Esta conta foi encerrada pelo próprio utilizador: não se suspende nem se reativa. Se for para a reabrir, usa «Reabrir conta» (dentro dos 30 dias)." });
+    }
+
     const { estado } = req.body;
     if (!["ativo", "suspenso"].includes(estado)) {
       return void res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
     }
     const novoAtivo = estado === "ativo";
-    const estadoAnterior = mapEstado(user.ativo);
+    const estadoAnterior = mapEstado(user.ativo, user.encerradaEm);
 
     if (!novoAtivo) {
       if (user.id === req.adminId) {
@@ -768,6 +788,28 @@ router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): 
     res.json({ success: true });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao eliminar utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * Reabre uma conta encerrada pelo próprio utilizador, dentro da janela de 30 dias. Motivo obrigatório (10 a 500
+ * caracteres), audit na mesma transação. Repõe ativo=true e encerrada_em=null e marca a fila como reaberta; NÃO repõe
+ * sessões, subscrições nem lives.
+ */
+router.post("/admin/users/:id/reabrir", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (motivo.length < 10 || motivo.length > 500) {
+    return void res.status(400).json({ error: "Indica o motivo da reabertura (entre 10 e 500 caracteres)." });
+  }
+  try {
+    await reabrirConta({ userId: id, adminId: req.adminId!, motivo, ip: (req.ip ?? "").slice(0, 45) || null });
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof EncerramentoErro) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error(erroSeguro(err), "Erro ao reabrir conta");
     res.status(500).json({ error: "Erro interno." });
   }
 });

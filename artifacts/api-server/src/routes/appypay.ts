@@ -11,7 +11,8 @@
  *      a AppyPay repetir: nunca se confia no estado do corpo do webhook.
  *   4. Localiza o topup_request pela referência interna (merchantTransactionId) e confirma que o
  *      charge, a referência e o valor coincidem com o pedido original.
- *   5. Se APPROVED: numa só transação marca "aprovado" (UPDATE … WHERE status em curso … RETURNING)
+ *   5. Se APPROVED: numa só transação (conta bloqueada FOR UPDATE; se estiver inativa ou encerrada NÃO credita e o
+ *      pedido passa a "revisao_manual") marca "aprovado" (UPDATE … WHERE status em curso … RETURNING)
  *      e só então credita o saldo, com o valor da base de dados. Webhooks repetidos não creditam.
  *   6. Se REJECTED/EXPIRED/FAILED: marca rejeitado (também atómico).
  *   7. Não regista o corpo, cabeçalhos nem segredos: só id do pedido, estado e resultado.
@@ -30,6 +31,7 @@ import {
   REJECTED_STATUSES,
   type AppyPayWebhookPayload,
 } from "../lib/appypay";
+import { erroSeguro } from "../lib/erroSeguro";
 
 const router = Router();
 
@@ -131,28 +133,37 @@ router.post("/appypay/webhook", async (req: Request, res: Response): Promise<voi
         return;
       }
 
-      // Atómico e idempotente: só quem passa o pedido de "em curso" a "aprovado" credita.
-      const credited = await db.transaction(async (tx) => {
+      // Atómico e idempotente. A linha da conta bloqueia-se primeiro (FOR UPDATE, a mesma ordem do encerramento):
+      // conta inativa (suspensa ou encerrada) NÃO é creditada; o pedido passa a "revisao_manual" (o valor e a
+      // referência já estão na própria linha) e a AppyPay recebe 200 para não repetir.
+      const resultado = await db.transaction(async (tx) => {
+        const [conta] = await tx.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, topup.userId)).for("update");
+        const contaInativa = !conta || !conta.ativo;
+
         const [claimed] = await tx
           .update(topupRequestsTable)
-          .set({
-            status: "aprovado",
-            processadoEm: new Date(),
-            notas: "Aprovado automaticamente via AppyPay webhook (estado confirmado na AppyPay).",
-          })
+          .set(contaInativa
+            ? { status: "revisao_manual", processadoEm: new Date(), notas: "Pagamento confirmado na AppyPay, mas a conta está inativa: NÃO creditado. Tratar manualmente." }
+            : { status: "aprovado", processadoEm: new Date(), notas: "Aprovado automaticamente via AppyPay webhook (estado confirmado na AppyPay)." })
           .where(and(eq(topupRequestsTable.id, topup.id), inArray(topupRequestsTable.status, IN_FLIGHT)))
           .returning({ userId: topupRequestsTable.userId, amount: topupRequestsTable.amount });
-        if (!claimed) return false;
+        if (!claimed) return "ja_processado" as const;
+        if (contaInativa) return "revisao_manual" as const;
 
         // Valor da base de dados (pedido original), nunca o do corpo do webhook.
         await tx
           .update(usersTable)
           .set({ saldo: sql`${usersTable.saldo} + ${claimed.amount}` })
           .where(eq(usersTable.id, claimed.userId));
-        return true;
+        return "creditado" as const;
       });
 
-      req.log?.info({ topupId: topup.id, status: confirmedStatus, result: credited ? "creditado" : "ja_processado" }, "AppyPay webhook");
+      if (resultado === "revisao_manual") {
+        // Só um código e uma contagem: nada de utilizador, valor, referência, IP ou email.
+        req.log?.warn({ codigo: "appypay_conta_inativa", total: 1 }, "AppyPay webhook: pagamento de conta inativa marcado para revisão manual");
+      } else {
+        req.log?.info({ topupId: topup.id, status: confirmedStatus, result: resultado }, "AppyPay webhook");
+      }
     } else if (REJECTED_STATUSES.has(confirmedStatus)) {
       const [rejected] = await db
         .update(topupRequestsTable)
@@ -173,7 +184,7 @@ router.post("/appypay/webhook", async (req: Request, res: Response): Promise<voi
     res.status(200).json({ received: true });
   } catch (err) {
     // Falha temporária (ex.: base de dados): erro para a AppyPay repetir; o processamento é idempotente.
-    req.log?.error({ err }, "AppyPay webhook: erro interno ao processar.");
+    req.log?.error(erroSeguro(err), "AppyPay webhook: erro interno ao processar.");
     res.status(500).json({ error: "Erro interno." });
   }
 });

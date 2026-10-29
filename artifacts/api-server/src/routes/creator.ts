@@ -351,8 +351,9 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
       if (criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
 
       // O tipo da conta é lido AGORA: só vale para novas subscrições.
-      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao }).from(usersTable).where(eq(usersTable.id, criadorId));
-      if (!criador || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
+      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, criadorId));
+      // Conta inativa (suspensa ou encerrada): não recebe subscrições.
+      if (!criador || !criador.ativo || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
       if (gratuita && criador.tipoSubscricao !== "gratuita") throw new PaymentError("Este criador tem subscrição paga: escolhe um plano.", 409);
       if (!gratuita && criador.tipoSubscricao === "gratuita") throw new PaymentError("Este criador passou a ter subscrição gratuita: subscreve sem plano.", 409);
 
@@ -462,8 +463,8 @@ router.post("/subscriptions/:id/renovar", requireAuth, validate(renewSchema), as
         throw new PaymentError("Esta subscrição já foi renovada ou foi alterada. Atualiza a página.", 409);
       }
 
-      const [criador] = await tx.select({ tipoSubscricao: usersTable.tipoSubscricao }).from(usersTable).where(eq(usersTable.id, sub.criadorId));
-      if (!criador) throw new PaymentError("Criador não encontrado.", 404);
+      const [criador] = await tx.select({ tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, sub.criadorId));
+      if (!criador || !criador.ativo) throw new PaymentError("Criador não encontrado.", 404);
       if (criador.tipoSubscricao === "gratuita") throw new PaymentError("Este criador passou a ter subscrição gratuita: subscreve sem custo.", 409);
       if (!sub.planoId) throw new PaymentError("O plano desta subscrição já não existe.", 400);
 

@@ -23,7 +23,7 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
 
   const participations = await db.select({ conversationId: conversationParticipantsTable.conversationId })
     .from(conversationParticipantsTable)
-    .where(eq(conversationParticipantsTable.utilizadorId, userId))
+    .where(and(eq(conversationParticipantsTable.utilizadorId, userId), semParticipanteInativo(conversationParticipantsTable.conversationId)))
     .limit(limit)
     .offset(offset);
 
@@ -81,6 +81,9 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
   const { participanteId } = req.body;
 
   if (!participanteId) { res.status(400).json({ error: "participanteId é obrigatório" }); return; }
+  // Não se abre conversa com uma conta inativa (suspensa ou encerrada).
+  const [alvo] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, Number(participanteId)));
+  if (!alvo || !alvo.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
   // Verificar se já existe
   const myConvs = await db.select({ conversationId: conversationParticipantsTable.conversationId })
@@ -140,10 +143,23 @@ router.get("/conversations/unread-count", requireAuth, async (req: AuthRequest, 
       eq(conversationParticipantsTable.utilizadorId, userId),
       eq(messagesTable.lido, false),
       sql`${messagesTable.autorId} != ${userId}`,
+      semParticipanteInativo(messagesTable.conversationId),
     ));
 
   res.json({ count: count || 0 });
 });
+
+/** Conversa com um participante inativo (conta suspensa ou encerrada): fica invisível e não aceita mensagens. */
+async function temParticipanteInativo(conversationId: number): Promise<boolean> {
+  const r = await db.select({ id: conversationParticipantsTable.utilizadorId }).from(conversationParticipantsTable)
+    .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
+    .where(and(eq(conversationParticipantsTable.conversationId, conversationId), eq(usersTable.ativo, false)))
+    .limit(1);
+  return r.length > 0;
+}
+
+/** SQL: a conversa (coluna) NÃO tem participantes inativos. */
+const semParticipanteInativo = (col: unknown) => sql`NOT EXISTS (SELECT 1 FROM conversation_participants cp2 JOIN users u2 ON u2.id = cp2.utilizador_id WHERE cp2.conversation_id = ${col} AND NOT u2.ativo)`;
 
 /** Verifica se o utilizador é participante da conversa */
 async function verificarParticipante(conversationId: number, userId: number): Promise<boolean> {
@@ -167,6 +183,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
     res.status(403).json({ error: "Sem acesso a esta conversa" });
     return;
   }
+  if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
 
   const messages = await db.select({ m: messagesTable, u: usersTable })
     .from(messagesTable)
@@ -222,6 +239,7 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     res.status(403).json({ error: "Sem acesso a esta conversa" });
     return;
   }
+  if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
 
   const parsed = sendMessageSchema.safeParse(req.body);
   if (!parsed.success) {
