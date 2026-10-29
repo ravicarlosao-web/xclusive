@@ -1354,7 +1354,7 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         reporterUsername: r.reporterId ? (await tx.select({ u: usersTable.username }).from(usersTable).where(eq(usersTable.id, r.reporterId)))[0]?.u ?? null : null,
         totalDenunciasDoAlvo: Number(outras),
         casoMenor,
-        alvo: alvo ? { existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null } : { existe: false },
+        alvo: alvo ? { existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null, enquete: alvo.enquete ?? null } : { existe: false },
       };
     });
 
