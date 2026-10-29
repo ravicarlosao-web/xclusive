@@ -18,6 +18,7 @@ export * from './getCreatorEarningsParams';
 export * from './getCreatorEarningsPeriod';
 export * from './getCreatorTransactionsParams';
 export * from './getExploreParams';
+export * from './getFeedFiltro';
 export * from './getFeedParams';
 export * from './getNotificationsParams';
 export * from './getReelsParams';

@@ -86,19 +86,23 @@ router.get("/users/suggestions", requireAuth, async (req: AuthRequest, res): Pro
     ? await query.where(and(eq(usersTable.ativo, true), not(inArray(usersTable.id, excludeIds))))
     : await query.where(eq(usersTable.ativo, true));
 
-  const result = await Promise.all(users.map(async (u) => {
-    const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, u.id), utilizadorAtivo(followsTable.seguidorId)));
-    return {
-      id: u.id,
-      username: u.username,
-      nomeExibicao: u.nomeExibicao,
-      avatarUrl: urlMedia(u.avatarUrl),
-      verificado: u.verificado,
-      tipoConta: u.tipoConta,
-      estaASeguir: false,
-      segueVoce: false,
-      totalSeguidores: cnt || 0,
-    };
+  // Seguidores ativos de cada sugestão: UMA agregação para todas (antes era uma consulta por utilizador).
+  const contagens = users.length > 0
+    ? await db.select({ id: followsTable.seguidoId, cnt: sql<number>`count(*)::int` }).from(followsTable)
+        .where(and(inArray(followsTable.seguidoId, users.map((u) => u.id)), utilizadorAtivo(followsTable.seguidorId))).groupBy(followsTable.seguidoId)
+    : [];
+  const porId = new Map(contagens.map((c) => [c.id, c.cnt]));
+  const result = users.map((u) => ({
+    id: u.id,
+    username: u.username,
+    nomeExibicao: u.nomeExibicao,
+    avatarUrl: urlMedia(u.avatarUrl),
+    capaUrl: urlMedia(u.capaUrl),
+    verificado: u.verificado,
+    tipoConta: u.tipoConta,
+    estaASeguir: false,
+    segueVoce: false,
+    totalSeguidores: porId.get(u.id) || 0,
   }));
 
   res.json(result);

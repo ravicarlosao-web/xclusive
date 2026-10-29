@@ -385,10 +385,12 @@ export const GetUserReelsResponse = zod.object({
  */
 export const getFeedQueryPageDefault = 1;
 export const getFeedQueryLimitDefault = 12;
+export const getFeedQueryFiltroDefault = `tudo`;
 
 export const GetFeedQueryParams = zod.object({
   "page": zod.coerce.number().int().default(getFeedQueryPageDefault),
-  "limit": zod.coerce.number().int().default(getFeedQueryLimitDefault)
+  "limit": zod.coerce.number().int().default(getFeedQueryLimitDefault),
+  "filtro": zod.enum(['tudo', 'seguindo', 'para-ti', 'em-alta']).default(getFeedQueryFiltroDefault).describe('Separador do feed: tudo (por omissão), seguindo, para-ti ou em-alta.')
 })
 
 export const GetFeedResponse = zod.object({

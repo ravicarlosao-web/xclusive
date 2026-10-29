@@ -1,6 +1,6 @@
 import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost, useUpdatePostMais18 } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, Flag, Coins, Play, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Forward, Bookmark, Flag, Coins, Play, Trash2, MoreHorizontal, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
@@ -17,6 +17,8 @@ import { CommentsSection } from './CommentsSection';
 import { MOCK_COMMENTS } from '@/data/mockComments';
 import { getLocalCommentsForPost } from '@/lib/localComments';
 import { SeloMais18 } from './MarcacaoMais18';
+import { haTempo } from '@/lib/tempoRelativo';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface PostCardProps {
   post: Post;
@@ -58,17 +60,29 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
     await Promise.allSettled(keys.map(queryKey => queryClient.invalidateQueries({ queryKey })));
   }
 
+  // Ligação do post: os vídeos abrem nos reels (?id=); os restantes não têm página própria, por isso a ligação leva ao perfil do autor.
+  const linkDoPost = () => (post.tipo === 'video' || post.media?.[0]?.tipo === 'video'
+    ? `${window.location.origin}/reels?id=${post.id}`
+    : `${window.location.origin}/perfil/${post.autor.username}`);
+
+  async function copiarLigacao() {
+    try {
+      await navigator.clipboard.writeText(linkDoPost());
+      toast({ title: 'Ligação copiada', description: 'A ligação foi copiada para a área de transferência.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Não foi possível copiar a ligação' });
+    }
+  }
+
   const handleShare = async () => {
-    const url = `${window.location.origin}/perfil/${post.autor.username}`;
-    if (navigator.share) {
+    if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: post.autor.nomeExibicao || post.autor.username, url });
+        await navigator.share({ title: post.autor.nomeExibicao || post.autor.username, url: linkDoPost() });
       } catch {
         // utilizador cancelou — sem ação
       }
     } else {
-      await navigator.clipboard.writeText(url);
-      toast({ title: 'Link copiado!', description: 'O link do perfil foi copiado para a área de transferência.' });
+      await copiarLigacao();
     }
   };
   const [isLiked, setIsLiked] = useState(post.curtido);
@@ -247,60 +261,75 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
 
   return (
     <>
-      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[540px] mx-auto w-full shadow-none sm:shadow-md sm:dark:shadow-2xl">
+      <article className="bg-background sm:bg-card sm:border sm:border-border sm:rounded-2xl overflow-hidden mb-6 max-w-[640px] mx-auto w-full shadow-none">
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4">
           <Link href={`/perfil/${post.autor.username}`} className="flex items-center gap-3 group">
-            <Avatar className="w-9 h-9 border border-border group-hover:scale-105 transition-transform">
+            <Avatar className="w-11 h-11 border border-border group-hover:scale-105 transition-transform">
               <AvatarImage src={post.autor.avatarUrl || ''} />
               <AvatarFallback>{post.autor.nomeExibicao?.[0] || 'U'}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold hover:underline flex items-center gap-1">
+              <span className="text-[15px] font-bold hover:underline flex items-center gap-1.5">
                 {post.autor.username}
                 <SeloMais18 mais18={post.mais18} />
                 {post.autor.verificado && (
-                  <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                  <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
                 )}
               </span>
-              {post.localizacao && <span className="text-xs text-muted-foreground">{post.localizacao}</span>}
+              <span className="text-sm text-muted-foreground" data-testid="post-tempo">
+                <time dateTime={post.criadoEm}>{haTempo(post.criadoEm)}</time>
+                {post.localizacao ? ` · ${post.localizacao}` : ''}
+              </span>
             </div>
           </Link>
-          {canDeletePost ? (
-            <div className="flex items-center gap-1">
-              {isOwnPost && !post.mais18Bloqueado && (
-                <button
-                  data-testid="alternar-mais18"
-                  className="text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 transition-colors disabled:opacity-50"
-                  onClick={handleToggleMais18}
-                  disabled={isUpdatingMais18}
-                  title={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
-                  aria-label={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
-                >
-                  {post.mais18 ? 'Tirar +18' : 'Marcar +18'}
-                </button>
-              )}
+          <div className="flex items-center gap-1">
+            {canDeletePost && isOwnPost && !post.mais18Bloqueado && (
               <button
-                className="text-muted-foreground hover:text-destructive transition-colors p-2 disabled:opacity-50"
-                onClick={handleDeletePost}
-                disabled={isDeletingPost}
-                title="Apagar publicação"
-                aria-label="Apagar publicação"
+                data-testid="alternar-mais18"
+                className="min-h-[44px] rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                onClick={handleToggleMais18}
+                disabled={isUpdatingMais18}
+                title={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
+                aria-label={post.mais18 ? 'Tirar a marca +18 deste post' : 'Marcar este post como +18'}
               >
-                <Trash2 className="w-5 h-5" />
+                {post.mais18 ? 'Tirar +18' : 'Marcar +18'}
               </button>
-            </div>
-          ) : (
-            <button
-              className="text-muted-foreground hover:text-destructive transition-colors p-2"
-              onClick={() => setReportOpen(true)}
-              title="Denunciar publicação"
-              aria-label="Denunciar publicação"
-            >
-              <Flag className="w-5 h-5" />
-            </button>
-          )}
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="post-menu"
+                  aria-label="Mais opções da publicação"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {canDeletePost ? (
+                  <DropdownMenuItem data-testid="post-eliminar" disabled={isDeletingPost} onSelect={handleDeletePost} className="min-h-[44px] gap-2 text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar publicação
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem data-testid="post-denunciar" onSelect={() => setReportOpen(true)} className="min-h-[44px] gap-2">
+                    <Flag className="h-4 w-4" aria-hidden="true" /> Denunciar
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-testid="post-copiar-ligacao" onSelect={copiarLigacao} className="min-h-[44px] gap-2">
+                  <Link2 className="h-4 w-4" aria-hidden="true" /> Copiar ligação
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
+
+        {/* Legenda por cima da imagem (posts de texto já mostram o texto no próprio cartão) */}
+        {post.legenda && !isTextPost && (
+          <p className="whitespace-pre-wrap break-words px-3 pb-3 text-[15px] leading-snug text-foreground sm:px-4" data-testid="post-legenda">{post.legenda}</p>
+        )}
 
         {/* Text post — rendered inline, no media container */}
         {isTextPost ? (
@@ -364,7 +393,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
           /* Media — aspect ratio adapts to the actual media dimensions (clamped 9:16 → 16:9) */
           <div
             className={cn(
-              "relative w-full bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
+              "relative bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none mx-3 sm:mx-4 rounded-2xl w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)]",
               !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
             )}
             style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
@@ -433,17 +462,19 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         )}
 
         {/* Actions */}
-        <div className="p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="px-3 pb-2 pt-1 sm:px-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={handleLikeToggle} className="group">
-                <Heart className={cn("w-7 h-7 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} />
+              <button onClick={handleLikeToggle} className="group flex min-h-[44px] min-w-[44px] items-center gap-1.5" aria-pressed={isLiked} aria-label={`${isLiked ? 'Retirar gosto' : 'Gostar'}. ${likesCount} ${likesCount === 1 ? 'gosto' : 'gostos'}`} data-testid="post-gostar">
+                <Heart className={cn("w-6 h-6 transition-colors group-active:scale-90", isLiked ? "fill-primary text-primary" : "text-foreground hover:text-muted-foreground")} aria-hidden="true" />
+                <span className="text-sm font-semibold tabular-nums text-foreground" data-testid="post-gostos">{likesCount.toLocaleString('pt-PT')}</span>
               </button>
-              <button onClick={() => setCommentsOpen(v => !v)} className="group">
-                <MessageCircle className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
+              <button onClick={() => setCommentsOpen(v => !v)} className="group flex min-h-[44px] min-w-[44px] items-center gap-1.5" aria-expanded={commentsOpen} aria-label={`Comentários. ${commentsCount} ${commentsCount === 1 ? 'comentário' : 'comentários'}`} data-testid="post-comentarios">
+                <MessageCircle className="w-6 h-6 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-semibold tabular-nums text-foreground" data-testid="post-n-comentarios">{commentsCount.toLocaleString('pt-PT')}</span>
               </button>
-              <button className="group" onClick={handleShare} title="Partilhar">
-                <Send className="w-7 h-7 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" />
+              <button className="group flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={handleShare} title="Partilhar" aria-label="Partilhar" data-testid="post-partilhar">
+                <Forward className="w-6 h-6 transition-transform group-active:scale-90 text-foreground hover:text-muted-foreground" aria-hidden="true" />
               </button>
 
               {/* Gorjeta — só aparece em posts de outros utilizadores */}
@@ -465,25 +496,10 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
                 </button>
               )}
             </div>
-            <button onClick={handleSaveToggle} className="group">
-              <Bookmark className={cn("w-7 h-7 transition-transform group-active:scale-90", isSaved ? "fill-foreground text-foreground" : "text-foreground hover:text-muted-foreground")} />
+            <button onClick={handleSaveToggle} className="group flex min-h-[44px] min-w-[44px] items-center justify-center" aria-pressed={isSaved} aria-label={isSaved ? 'Remover dos guardados' : 'Guardar'} data-testid="post-guardar">
+              <Bookmark className={cn("w-6 h-6 transition-transform group-active:scale-90", isSaved ? "fill-foreground text-foreground" : "text-foreground hover:text-muted-foreground")} aria-hidden="true" />
             </button>
           </div>
-
-          {/* Likes Count */}
-          <div className="font-semibold text-sm mb-2">
-            {likesCount.toLocaleString()} {likesCount === 1 ? 'Gosto' : 'Gostos'}
-          </div>
-
-          {/* Caption — hidden for text posts (content already shown above) */}
-          {post.legenda && !isTextPost && (
-            <div className="text-sm mb-2">
-              <Link href={`/perfil/${post.autor.username}`} className="font-semibold hover:underline mr-2">
-                {post.autor.username}
-              </Link>
-              <span className="whitespace-pre-wrap">{post.legenda}</span>
-            </div>
-          )}
 
           {/* Comments link */}
           {commentsCount > 0 && (
@@ -492,9 +508,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
             </button>
           )}
 
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
-            {new Date(post.criadoEm).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
-          </div>
         </div>
 
         {/* Inline comments, embutidas no próprio card (não é um pop-up) */}
