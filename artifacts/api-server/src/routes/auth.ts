@@ -16,6 +16,7 @@ import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 import { getMinWithdrawal } from "./wallet";
 import { erroSeguro } from "../lib/erroSeguro";
+import { MSG_CONTA_BANIDA, MSG_REGISTO_RECUSADO, identificadorBloqueado } from "../lib/banimento";
 import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from "../lib/encerramento";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
@@ -188,6 +189,13 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
   }
 
   try {
+    // Email banido (ou variante normalizada): recusa genérica, sem dizer porquê. Antes de bcrypt e de qualquer escrita; uma só
+    // consulta indexada, como as outras recusas deste ponto. Sem BAN_HASH_PEPPER a verificação fica desligada (aviso seguro).
+    if (await identificadorBloqueado(db, "email", email)) {
+      res.status(400).json({ error: MSG_REGISTO_RECUSADO });
+      return;
+    }
+
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     if (existing) {
       res.status(400).json({ error: "Email ou username já em uso" });
@@ -297,6 +305,11 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
     // Conta suspensa: SÓ depois de a password estar certa (quem não a sabe não descobre que a conta existe
     // nem o seu estado). Sem token, sem sessão, sem cookie.
     if (!user.ativo) {
+      if (user.banidaEm) {
+        // Banida: mensagem permanente, sem motivo (e antes do encerramento: uma conta encerrada e depois banida é banida).
+        res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA });
+        return;
+      }
       if (user.encerradaEm) {
         // Encerrada pelo próprio: mensagem própria (depende de a janela de 30 dias ainda estar aberta).
         res.status(403).json({ error: await mensagemContaEncerrada(db, user.id), codigo: CODIGO_CONTA_ENCERRADA });
@@ -420,7 +433,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
 
   // Conta suspensa (ou inexistente): não renova a sessão. Falha de DB = negar (fail-closed).
   try {
-    const [conta] = await db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
+    const [conta] = await db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
     if (!conta) {
       clearRefreshCookie(res);
       res.status(401).json({ error: "Sessão inválida. Faz login novamente." });
@@ -428,6 +441,10 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     }
     if (!conta.ativo) {
       clearRefreshCookie(res);
+      if (conta.banidaEm) {
+        res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA });
+        return;
+      }
       if (conta.encerradaEm) {
         res.status(403).json({ error: await mensagemContaEncerrada(db, payload.userId), codigo: CODIGO_CONTA_ENCERRADA });
         return;

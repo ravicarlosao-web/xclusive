@@ -176,7 +176,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
         .from(revokedTokensTable)
         .where(eq(revokedTokensTable.jti, payload.jti))
         .limit(1),
-      db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm })
+      db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm })
         .from(usersTable)
         .where(eq(usersTable.id, payload.userId))
         .limit(1),
@@ -186,8 +186,8 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
       return;
     }
-    if (userRows[0] && !userRows[0].ativo && userRows[0].encerradaEm) {
-      // Conta encerrada pelo próprio (noutro dispositivo): mensagem própria, distinta da suspensão.
+    if (userRows[0] && !userRows[0].ativo && (userRows[0].encerradaEm || userRows[0].banidaEm)) {
+      // Conta encerrada (pelo próprio) ou banida (noutro dispositivo): mensagem própria, distinta da suspensão; sem motivo.
       res.status(401).json({ error: "Conta encerrada.", codigo: "conta_encerrada" });
       return;
     }

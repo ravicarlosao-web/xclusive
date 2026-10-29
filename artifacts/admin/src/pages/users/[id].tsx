@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRoute, useLocation } from 'wouter';
 import { adminApi } from '@/lib/api';
@@ -5,7 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Ban, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Ban, Trash2, CheckCircle2, RotateCcw, ShieldX } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { InfracoesMais18 } from '@/components/mais18/InfracoesMais18';
@@ -51,6 +56,30 @@ export default function UserDetail() {
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Não foi possível reabrir a conta', description: e.message }),
   });
 
+  // Banimento permanente: motivo obrigatório (10 a 500) e confirmação reforçada (escrever o username).
+  const [banirAberto, setBanirAberto] = useState(false);
+  const [banirMotivo, setBanirMotivo] = useState('');
+  const [banirConfirma, setBanirConfirma] = useState('');
+  const banir = useMutation({
+    mutationFn: async (motivo: string) => {
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(`/api/admin/users/${id}/banir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ motivo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      return json;
+    },
+    onSuccess: () => {
+      setBanirAberto(false); setBanirMotivo(''); setBanirConfirma('');
+      queryClient.invalidateQueries({ queryKey: ['user', id] });
+      toast({ title: 'Conta banida de forma permanente' });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Não foi possível banir a conta', description: e.message }),
+  });
+
   const deleteUser = useMutation({
     mutationFn: () => adminApi.deleteUser(id),
     onSuccess: () => {
@@ -64,6 +93,9 @@ export default function UserDetail() {
 
   const isSuspended = user.estado === 'suspenso';
   const isEncerrada = user.estado === 'encerrada';
+  const isBanida = user.estado === 'banida';
+  const motivoBanirOk = banirMotivo.trim().length >= 10 && banirMotivo.trim().length <= 500;
+  const podeBanir = motivoBanirOk && banirConfirma.trim() === user.username && !banir.isPending;
 
   return (
     <div className="space-y-6">
@@ -81,7 +113,9 @@ export default function UserDetail() {
         </div>
         
         <div className="flex items-center gap-2">
-          {isEncerrada ? (
+          {isBanida ? (
+            <span className="text-xs text-muted-foreground max-w-[14rem]" data-testid="conta-banida-aviso">Conta banida de forma permanente. Não se reabre nem se reativa.</span>
+          ) : isEncerrada ? (
             user.encerramento?.podeReabrir ? (
               <Button variant="outline" className="border-green-500/50 text-green-500 hover:bg-green-500/10" onClick={() => {
                 const motivo = (prompt('Motivo da reabertura (obrigatório, mínimo 10 caracteres; fica registado):') ?? '').trim();
@@ -103,6 +137,11 @@ export default function UserDetail() {
               <Ban className="mr-2 h-4 w-4" /> Suspender
             </Button>
           )}
+          {!isBanida && user.role !== 'admin' && user.role !== 'superadmin' && (
+            <Button variant="outline" className="border-red-700/60 text-red-400 hover:bg-red-500/10" data-testid="banir-abrir" onClick={() => setBanirAberto(true)}>
+              <ShieldX className="mr-2 h-4 w-4" /> Banir permanentemente
+            </Button>
+          )}
           <Button variant="destructive" onClick={() => {
             if(confirm('Tem a certeza que deseja eliminar este utilizador permanentemente?')) {
               deleteUser.mutate();
@@ -112,6 +151,34 @@ export default function UserDetail() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={banirAberto} onOpenChange={(o) => { if (!banir.isPending) { setBanirAberto(o); if (!o) { setBanirMotivo(''); setBanirConfirma(''); } } }}>
+        <DialogContent data-testid="banir-dialogo">
+          <DialogHeader>
+            <DialogTitle>Banir @{user.username} permanentemente</DialogTitle>
+            <DialogDescription>
+              Isto é definitivo: a conta fica inacessível, as sessões terminam, e o email e o documento de identificação ficam bloqueados para novos registos. Não se pode desfazer por aqui.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="banir-motivo">Motivo (obrigatório, 10 a 500 caracteres; fica registado)</Label>
+              <Textarea id="banir-motivo" data-testid="banir-motivo" value={banirMotivo} maxLength={500} onChange={(e) => setBanirMotivo(e.target.value)} rows={4} />
+              <p className="text-xs text-muted-foreground">{banirMotivo.trim().length}/500</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="banir-confirma">Para confirmar, escreve o username: <strong>{user.username}</strong></Label>
+              <Input id="banir-confirma" data-testid="banir-confirma" value={banirConfirma} autoComplete="off" onChange={(e) => setBanirConfirma(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBanirAberto(false)} disabled={banir.isPending}>Cancelar</Button>
+            <Button variant="destructive" className="bg-red-700 hover:bg-red-800 text-white" data-testid="banir-confirmar" disabled={!podeBanir} onClick={() => banir.mutate(banirMotivo.trim())}>
+              Banir permanentemente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="perfil" className="w-full">
         <TabsList className="bg-card border border-border h-12 w-full justify-start rounded-none border-b-0 px-2">
