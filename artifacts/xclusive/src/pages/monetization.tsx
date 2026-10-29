@@ -534,11 +534,13 @@ export default function Monetization() {
 
             <Button
               className="w-full h-12 font-bold rounded-xl gap-2 bg-green-500 hover:bg-green-400 text-black shadow-none dark:shadow-[0_0_20px_rgba(34,197,94,0.3)]"
-              disabled={withdrawing || (ganhos ?? 0) <= 0 || !dadosBancarios || withdrawals.some(w => w.status === 'pendente')}
+              disabled={withdrawing || (ganhos ?? 0) <= 0 || !dadosBancarios || withdrawals.some(w => w.status === 'pendente' || w.status === 'retido')}
               onClick={handleWithdrawal}
             >
               {withdrawing ? (
                 'A processar...'
+              ) : withdrawals.some(w => w.status === 'retido') ? (
+                'Tens um levantamento por resolver'
               ) : withdrawals.some(w => w.status === 'pendente') ? (
                 'Tens um levantamento pendente'
               ) : (
@@ -550,10 +552,16 @@ export default function Monetization() {
               <div className="space-y-2 pt-1">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Os teus levantamentos</p>
                 {withdrawals.slice(0, 5).map(w => (
-                  <div key={w.id} className="flex items-center justify-between text-sm bg-secondary/50 rounded-lg px-3 py-2">
+                  <div key={w.id} className="flex flex-wrap items-center justify-between gap-x-2 text-sm bg-secondary/50 rounded-lg px-3 py-2" data-testid={`levantamento-${w.status}-${w.id}`}>
                     <span className="font-semibold">{w.valor.toLocaleString('pt-PT')} Kz</span>
                     <span className="text-xs text-muted-foreground">{new Date(w.criadoEm).toLocaleDateString('pt-PT')}</span>
                     <span className={cn('text-xs font-bold capitalize', w.status === 'pago' ? 'text-green-700 dark:text-green-400' : w.status === 'rejeitado' ? 'text-destructive' : 'text-yellow-700 dark:text-yellow-400')}>{w.status}</span>
+                    {w.status === 'retido' && (
+                      <p className="basis-full text-xs text-muted-foreground pt-1" data-testid="levantamento-retido-detalhe">
+                        Retido ao abrigo do Artigo 6.º dos Termos para Criadoras.{' '}
+                        {w.motivo ? `Motivo: ${w.motivo}` : w.contacto ? `Para mais informações contacta ${w.contacto}.` : null}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

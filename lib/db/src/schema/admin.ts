@@ -71,12 +71,13 @@ export type Report = typeof reportsTable.$inferSelect;
 
 // ─── withdrawal_requests ─────────────────────────────────────────────────────
 
-export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["pendente", "aprovado", "rejeitado", "pago"]);
+export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["pendente", "aprovado", "rejeitado", "pago", "retido"]);
 
 /**
  * Pedidos de levantamento. Máquina de estados rígida (aplicada em routes/admin.ts, sob FOR UPDATE):
  *   pendente → aprovado → pago      pendente → rejeitado      (pago e rejeitado são finais)
- * Os ganhos são debitados ao criar o pedido (reserva) e devolvidos UMA vez, na rejeição.
+ *   pendente | aprovado → retido → aprovado | rejeitado   (retenção do Art. 6.º dos Termos para Criadoras; o retido não vai a pago)
+ * Os ganhos são debitados ao criar o pedido (reserva) e devolvidos UMA vez, na rejeição (nunca enquanto está retido).
  */
 export const withdrawalRequestsTable = pgTable("withdrawal_requests", {
   id: serial("id").primaryKey(),
@@ -91,6 +92,11 @@ export const withdrawalRequestsTable = pgTable("withdrawal_requests", {
   processedBy: integer("processed_by").references(() => usersTable.id),
   processedAt: timestamp("processed_at"),
   notes: text("notes"),
+  /** Retenção (Art. 6.º): quando, por quem e porquê. O motivo é interno; `retidoMotivoVisivel=false` esconde-o à criadora. */
+  retidoEm: timestamp("retido_em"),
+  retidoPor: integer("retido_por").references(() => usersTable.id, { onDelete: "set null" }),
+  retidoMotivo: text("retido_motivo"),
+  retidoMotivoVisivel: boolean("retido_motivo_visivel").notNull().default(true),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 }, (t) => [
   // Um só pedido pendente por criadora (clique duplo = conflito).

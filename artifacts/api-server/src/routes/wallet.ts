@@ -3,11 +3,12 @@ import {
   db, usersTable, purchasesTable, topupRequestsTable,
   withdrawalRequestsTable, creatorPayoutAccountsTable, platformSettingsTable, auditLogTable,
 } from "@workspace/db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
+import { emailLegal } from "../lib/encerramento";
 import { createGpoCharge, createRefCharge } from "../lib/appypay";
 
 const router = Router();
@@ -453,9 +454,10 @@ router.post("/wallet/withdrawals", requireAuth, requireCreator, validate(withdra
       const [acc] = await tx.select().from(creatorPayoutAccountsTable).where(eq(creatorPayoutAccountsTable.userId, userId));
       if (!acc) throw new WithdrawalError("Adiciona os teus dados de pagamento (IBAN) antes de pedir um levantamento.", 400);
 
-      const [pendente] = await tx.select({ id: withdrawalRequestsTable.id }).from(withdrawalRequestsTable)
-        .where(and(eq(withdrawalRequestsTable.creatorId, userId), eq(withdrawalRequestsTable.status, "pendente"))).limit(1);
-      if (pendente) throw new WithdrawalError("Já tens um levantamento pendente.", 409);
+      const [emCurso] = await tx.select({ status: withdrawalRequestsTable.status }).from(withdrawalRequestsTable)
+        .where(and(eq(withdrawalRequestsTable.creatorId, userId), inArray(withdrawalRequestsTable.status, ["pendente", "retido"]))).limit(1);
+      if (emCurso?.status === "retido") throw new WithdrawalError("Tens um levantamento por resolver.", 409);
+      if (emCurso) throw new WithdrawalError("Já tens um levantamento pendente.", 409);
 
       // Mínimo lido a cada pedido (definições da plataforma).
       const minimo = await getMinWithdrawal(tx);
@@ -505,12 +507,18 @@ router.get("/wallet/withdrawals", requireAuth, async (req: AuthRequest, res): Pr
     notes: withdrawalRequestsTable.notes,
     criadoEm: withdrawalRequestsTable.criadoEm,
     processedAt: withdrawalRequestsTable.processedAt,
+    retidoMotivo: withdrawalRequestsTable.retidoMotivo,
+    retidoMotivoVisivel: withdrawalRequestsTable.retidoMotivoVisivel,
   }).from(withdrawalRequestsTable)
     .where(eq(withdrawalRequestsTable.creatorId, req.userId!))
     .orderBy(desc(withdrawalRequestsTable.criadoEm))
     .limit(100);
   res.json(rows.map((r) => ({
-    id: r.id, valor: Number(r.amount), status: r.status, motivo: r.status === "rejeitado" ? r.notes : null,
+    id: r.id, valor: Number(r.amount), status: r.status,
+    // Rejeitado: o motivo da rejeição. Retido: o motivo da retenção só se o admin não o escondeu (restrição legal);
+    // escondido, a criadora recebe só o contacto.
+    motivo: r.status === "rejeitado" ? r.notes : r.status === "retido" && r.retidoMotivoVisivel ? r.retidoMotivo : null,
+    ...(r.status === "retido" && !r.retidoMotivoVisivel ? { contacto: emailLegal() } : {}),
     criadoEm: r.criadoEm.toISOString(), processadoEm: r.processedAt?.toISOString() ?? null,
   })));
 });

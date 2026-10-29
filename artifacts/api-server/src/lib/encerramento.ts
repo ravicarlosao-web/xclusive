@@ -53,7 +53,7 @@ export async function bloqueiosDeEncerramento(q: Q, u: { id: number; saldo: stri
   if (Number(u.ganhos) > 0) out.push({ codigo: "ganhos", mensagem: `Tens ${kz(u.ganhos)} em ganhos por levantar. Levanta-os (ou contacta ${emailLegal()}) antes de encerrares.` });
 
   const [lev] = await q.select({ id: withdrawalRequestsTable.id }).from(withdrawalRequestsTable)
-    .where(and(eq(withdrawalRequestsTable.creatorId, u.id), inArray(withdrawalRequestsTable.status, ["pendente", "aprovado"]))).limit(1);
+    .where(and(eq(withdrawalRequestsTable.creatorId, u.id), inArray(withdrawalRequestsTable.status, ["pendente", "aprovado", "retido"]))).limit(1);
   if (lev) out.push({ codigo: "levantamento", mensagem: "Tens um levantamento por concluir. Aguarda que fique pago ou rejeitado antes de encerrares." });
 
   const [live] = await q.select({ id: liveStreamsTable.id }).from(liveStreamsTable)

@@ -120,6 +120,19 @@ export default function KYCPage() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>('intro');
+  // Resultado da última verificação (só API real): aviso de recusa com motivo, ou "em análise", no passo inicial.
+  const [kycAnterior, setKycAnterior] = useState<{ estado: string; motivo: string | null } | null>(null);
+  useEffect(() => {
+    if (isMockMode) return;
+    const token = localStorage.getItem('xclusive_token');
+    if (!token) return;
+    let vivo = true;
+    fetch(`${import.meta.env.BASE_URL}api/users/me/kyc`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d && typeof d.estado === 'string') setKycAnterior({ estado: d.estado, motivo: typeof d.motivo === 'string' ? d.motivo : null }); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [isMockMode]);
   const [submitting, setSubmitting] = useState(false);
   // Aceite dos Termos para Criadoras (obrigatório, além do consentimento do KYC). `tocouTermos`: só mostra o erro depois de mexer na caixa.
   const [aceiteTermos, setAceiteTermos] = useState(false);
@@ -308,6 +321,20 @@ export default function KYCPage() {
                 <p className="text-muted-foreground mt-1.5">Verifica a tua identidade para desbloquear todas as ferramentas de monetização.</p>
               </div>
             </div>
+
+            {kycAnterior?.estado === 'rejeitado' && (
+              <div role="alert" data-testid="kyc-aviso-recusado" className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm space-y-1">
+                <p className="font-semibold text-destructive">A tua última verificação de identidade não foi aprovada.</p>
+                {kycAnterior.motivo && <p className="text-foreground">Motivo: {kycAnterior.motivo}</p>}
+                <p className="text-muted-foreground">Podes submeter de novo abaixo.</p>
+              </div>
+            )}
+            {kycAnterior?.estado === 'pendente' && (
+              <div role="status" data-testid="kyc-aviso-analise" className="rounded-2xl border border-border bg-secondary/50 p-4 text-sm">
+                <p className="font-semibold">A tua verificação de identidade está em análise.</p>
+                <p className="text-muted-foreground">Receberás uma notificação com o resultado.</p>
+              </div>
+            )}
 
             {/* Benefits */}
             <div className="grid grid-cols-3 gap-3">
