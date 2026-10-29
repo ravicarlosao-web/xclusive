@@ -17,6 +17,7 @@ import { desligarSockets } from "../lib/suspensao";
 import { utilizadorAtivo } from "../lib/encerramento";
 import { commentVisivel } from "../lib/takedown";
 import { erroSeguro } from "../lib/erroSeguro";
+import { identificadorBloqueado, MSG_PEDIDO_RECUSADO } from "../lib/banimento";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
@@ -404,6 +405,19 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
   // O aceite tem de ser da versão vigente dos Termos para Criadoras. Validado ANTES de qualquer upload: nada é criado.
   if (req.body.aceiteCriadora?.versao !== LEGAL_DOCS.criadoras.versao) {
     res.status(400).json({ error: "Os Termos para Criadoras foram atualizados (ou não foram aceites). Recarrega a página e aceita a versão atual." });
+    return;
+  }
+
+  // Documento banido: recusa genérica, sem dizer porquê e ANTES de qualquer upload (nada é criado). Sem BAN_HASH_PEPPER a
+  // verificação fica desligada (aviso seguro) e o pedido segue.
+  try {
+    if (await identificadorBloqueado(db, "documento", String(req.body.numeroDocumento ?? ""))) {
+      res.status(400).json({ error: MSG_PEDIDO_RECUSADO });
+      return;
+    }
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "KYC: falha ao verificar identificadores bloqueados");
+    res.status(500).json({ error: "Erro interno." });
     return;
   }
 

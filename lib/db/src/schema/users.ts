@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -58,7 +58,13 @@ export const usersTable = pgTable("users", {
    * ativo=false (CHECK abaixo): a BD recusa reativá-la sem reabrir (POST /admin/users/:id/reabrir limpa os dois campos).
    */
   encerradaEm: timestamp("encerrada_em"),
+  /**
+   * Conta banida de forma permanente (ver lib/banimento.ts). Tem SEMPRE ativo=false (CHECK abaixo); não se reabre nem se reativa.
+   * Os identificadores (email, documento) ficam bloqueados em `identifier_blocks`, só como hash.
+   */
+  banidaEm: timestamp("banida_em"),
 }, (table) => [
+  check("users_banida_inativa_chk", sql`${table.banidaEm} IS NULL OR ${table.ativo} = false`),
   check("users_encerrada_inativa_chk", sql`${table.encerradaEm} IS NULL OR ${table.ativo} = false`),
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),
   check("users_ganhos_nao_negativo", sql`${table.ganhos} >= 0`),
@@ -86,6 +92,28 @@ export const accountClosuresTable = pgTable("account_closures", {
   processadaEm: timestamp("processada_em"),
 }, (t) => [
   index("account_closures_fila_idx").on(t.estado, t.apagarApos),
+]);
+
+/**
+ * Bloqueios de identificadores (banimento permanente; reutilizável pelo PR dos menores). Guarda SÓ HASHES (HMAC-SHA256 com
+ * BAN_HASH_PEPPER), nunca o email nem o documento em claro. Único por (tipo, hash). `user_id` ON DELETE RESTRICT.
+ */
+export const identifierBlocksTable = pgTable("identifier_blocks", {
+  id: serial("id").primaryKey(),
+  /** email | documento */
+  tipo: varchar("tipo", { length: 20 }).notNull(),
+  hash: varchar("hash", { length: 64 }).notNull(),
+  /** banimento | menor */
+  origem: varchar("origem", { length: 20 }).notNull().default("banimento"),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  banidaPor: integer("banida_por").references(() => usersTable.id, { onDelete: "set null" }),
+  motivo: text("motivo"),
+  criadaEm: timestamp("criada_em").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("identifier_blocks_tipo_hash_uq").on(t.tipo, t.hash),
+  index("identifier_blocks_user_idx").on(t.userId),
+  check("identifier_blocks_tipo_chk", sql`${t.tipo} IN ('email', 'documento')`),
+  check("identifier_blocks_origem_chk", sql`${t.origem} IN ('banimento', 'menor')`),
 ]);
 
 /**

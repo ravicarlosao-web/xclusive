@@ -133,7 +133,8 @@ export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promi
     case "live": return { mudou: (await tx.update(liveStreamsTable).set(limpa).where(eq(liveStreamsTable.id, id)).returning({ id: liveStreamsTable.id })).length > 0 };
     case "user": {
       // Conta encerrada pelo próprio: não se repõe por aqui (só "Reabrir conta" no admin).
-      const [u] = await tx.select({ encerradaEm: usersTable.encerradaEm }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      const [u] = await tx.select({ encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      if (u?.banidaEm) throw new TakedownError("Esta conta está banida de forma permanente: não se repõe.", 409);
       if (u?.encerradaEm) throw new TakedownError("Esta conta foi encerrada pelo próprio utilizador: não se repõe por aqui.", 409);
       return { mudou: (await tx.update(usersTable).set({ ativo: true }).where(eq(usersTable.id, id)).returning({ id: usersTable.id })).length > 0 };
     }

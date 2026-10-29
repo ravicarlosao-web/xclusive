@@ -56,6 +56,7 @@ import {
 } from "../lib/takedown.js";
 import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
 import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
+import { banirConta, BanimentoErro } from "../lib/banimento.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
@@ -100,7 +101,8 @@ function paginate<T>(items: T[], total: number, page: number, limit: number) {
 
 // ── Mapeamento ativo boolean → estado string ──────────────────────────────────
 
-function mapEstado(ativo: boolean, encerradaEm?: Date | null): string {
+function mapEstado(ativo: boolean, encerradaEm?: Date | null, banidaEm?: Date | null): string {
+  if (banidaEm) return "banida";
   if (encerradaEm) return "encerrada";
   return ativo ? "ativo" : "suspenso";
 }
@@ -118,7 +120,7 @@ function mapUser(u: typeof usersTable.$inferSelect) {
     verificado: u.verificado,
     privado: u.privado,
     role: u.role,
-    estado: mapEstado(u.ativo, u.encerradaEm),
+    estado: mapEstado(u.ativo, u.encerradaEm, u.banidaEm),
     saldo: Number(u.saldo),
     ganhos: Number(u.ganhos),
     comissaoPersonalizada: u.comissaoPersonalizada !== null && u.comissaoPersonalizada !== undefined
@@ -471,8 +473,9 @@ router.get("/admin/users", async (req, res) => {
     } else {
       conditions.push(notInArray(usersTable.role, ['admin', 'superadmin']));
     }
-    if (estado === "suspenso") conditions.push(and(eq(usersTable.ativo, false), isNull(usersTable.encerradaEm)));
-    if (estado === "encerrada") conditions.push(isNotNull(usersTable.encerradaEm));
+    if (estado === "suspenso") conditions.push(and(eq(usersTable.ativo, false), isNull(usersTable.encerradaEm), isNull(usersTable.banidaEm)));
+    if (estado === "encerrada") conditions.push(and(isNotNull(usersTable.encerradaEm), isNull(usersTable.banidaEm)));
+    if (estado === "banida") conditions.push(isNotNull(usersTable.banidaEm));
     if (estado === "ativo") conditions.push(eq(usersTable.ativo, true));
     if (search) {
       conditions.push(or(
@@ -630,7 +633,7 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
 
     // Encerramento pelo próprio: quando, até quando pode ser reaberta (janela de 30 dias) e se ainda pode.
     let encerramento: { encerradaEm: Date; apagarApos: Date; podeReabrir: boolean } | null = null;
-    if (user.encerradaEm) {
+    if (user.encerradaEm && !user.banidaEm) {
       const [c] = await db.select({ apagarApos: accountClosuresTable.apagarApos, estado: accountClosuresTable.estado }).from(accountClosuresTable)
         .where(and(eq(accountClosuresTable.userId, id), eq(accountClosuresTable.estado, "pendente"))).limit(1);
       encerramento = c ? { encerradaEm: user.encerradaEm, apagarApos: c.apagarApos, podeReabrir: c.apagarApos.getTime() > Date.now() } : { encerradaEm: user.encerradaEm, apagarApos: user.encerradaEm, podeReabrir: false };
@@ -683,6 +686,11 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
+    // Conta banida: definitiva. Nem suspende, nem reativa, nem reabre.
+    if (user.banidaEm) {
+      return void res.status(409).json({ error: "Esta conta está banida de forma permanente: não se suspende, não se reativa nem se reabre." });
+    }
+
     // Conta encerrada pelo próprio: nem suspende nem reativa; só se reabre (POST /admin/users/:id/reabrir).
     if (user.encerradaEm) {
       return void res.status(409).json({ error: "Esta conta foi encerrada pelo próprio utilizador: não se suspende nem se reativa. Se for para a reabrir, usa «Reabrir conta» (dentro dos 30 dias)." });
@@ -693,7 +701,7 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
       return void res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
     }
     const novoAtivo = estado === "ativo";
-    const estadoAnterior = mapEstado(user.ativo, user.encerradaEm);
+    const estadoAnterior = mapEstado(user.ativo, user.encerradaEm, user.banidaEm);
 
     if (!novoAtivo) {
       if (user.id === req.adminId) {
@@ -788,6 +796,29 @@ router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): 
     res.json({ success: true });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao eliminar utilizador");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * Bane uma conta de forma permanente. Motivo obrigatório (10 a 500 caracteres). Transação única (lib/banimento.ts):
+ * ativo=false + banida_em, sessões/tokens revogados, hashes do email e do documento bloqueados, audit. Sem BAN_HASH_PEPPER
+ * recusa com erro claro (503) e não altera nada. Nunca escreve email, documento nem hash em respostas ou logs.
+ */
+router.post("/admin/users/:id/banir", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (motivo.length < 10 || motivo.length > 500) {
+    return void res.status(400).json({ error: "Indica o motivo do banimento (entre 10 e 500 caracteres)." });
+  }
+  try {
+    await banirConta({ userId: id, adminId: req.adminId!, motivo, ip: (req.ip ?? "").slice(0, 45) || null });
+    desligarSockets(id);
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof BanimentoErro) return void res.status(err.httpStatus).json({ error: err.message, ...(err.codigo ? { codigo: err.codigo } : {}) });
+    (req as any).log?.error(erroSeguro(err), "Erro ao banir conta");
     res.status(500).json({ error: "Erro interno." });
   }
 });

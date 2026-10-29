@@ -121,6 +121,7 @@ export async function reabrirConta(o: { userId: number; adminId: number; motivo:
   await db.transaction(async (tx) => {
     const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, o.userId)).for("update");
     if (!u) throw new EncerramentoErro("Utilizador não encontrado.", 404);
+    if (u.banidaEm) throw new EncerramentoErro("Esta conta está banida de forma permanente: não se reabre.", 409);
     if (!u.encerradaEm) throw new EncerramentoErro("Esta conta não está encerrada.", 409);
     const [c] = await tx.select().from(accountClosuresTable)
       .where(and(eq(accountClosuresTable.userId, o.userId), eq(accountClosuresTable.estado, "pendente"))).for("update").limit(1);
