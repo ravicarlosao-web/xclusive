@@ -4,6 +4,7 @@ import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
+import { eliminarStory, responderErroEliminacao } from "../lib/provaProtegida";
 import { lerVisualizador, storyPermitida, storyBloqueada, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
 import { urlMedia, urlCanonico } from "../lib/storage";
 
@@ -99,10 +100,13 @@ router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void
 // Eliminar story
 router.delete("/stories/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
-  const [story] = await db.select().from(storiesTable).where(eq(storiesTable.id, id));
-  if (!story || story.autorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
-  await db.delete(storiesTable).where(eq(storiesTable.id, id));
-  res.sendStatus(204);
+  if (isNaN(id)) { res.status(403).json({ error: "Sem permissão" }); return; }
+  try {
+    await eliminarStory({ storyId: id, userId: req.userId!, ip: (req.ip ?? "").slice(0, 45) || null });
+    res.sendStatus(204);
+  } catch (err) {
+    responderErroEliminacao(err, res, req.log);
+  }
 });
 
 // Ver story

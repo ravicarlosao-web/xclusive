@@ -24,15 +24,25 @@ export default function Content() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       toast({ title: 'Publicação eliminada' });
-    }
+    },
+    // O servidor explica porquê (ex.: 409 conteúdo retirado ou denúncia de menor por decidir). A resposta de erro vem em JSON.
+    onError: (e: Error) => {
+      let mensagem = 'Não foi possível eliminar a publicação.';
+      try { mensagem = JSON.parse(e.message)?.error ?? mensagem; } catch { /* mensagem não é JSON */ }
+      toast({ variant: 'destructive', title: 'Publicação não eliminada', description: mensagem });
+    },
   });
 
   const handleDelete = (id: number) => {
     if (!window.confirm('Tens a certeza que queres apagar este post? Esta acção é irreversível e remove também a media associada.')) {
       return;
     }
-    const motivo = prompt('Motivo da remoção (obrigatório para notificar o criador):');
+    const motivo = (prompt('Motivo da eliminação (obrigatório, mínimo 10 caracteres; fica registado):') ?? '').trim();
     if (!motivo) return;
+    if (motivo.length < 10) {
+      toast({ variant: 'destructive', title: 'Motivo demasiado curto', description: 'Indica um motivo com pelo menos 10 caracteres.' });
+      return;
+    }
     deletePost.mutate({ id, motivo });
   };
 

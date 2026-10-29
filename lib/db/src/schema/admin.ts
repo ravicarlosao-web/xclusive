@@ -11,6 +11,7 @@ import {
   boolean,
   pgEnum,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
@@ -43,6 +44,11 @@ export const reportsTable = pgTable("reports", {
   adminNotes: text("admin_notes"),
   acaoRetirou: boolean("acao_retirou").notNull().default(false),
   acaoSuspendeu: boolean("acao_suspendeu").notNull().default(false),
+  /**
+   * Cópia leve do alvo no momento da denúncia (tipo, texto, chaves dos ficheiros, dono, datas): sobrevive a um
+   * apagamento posterior do conteúdo. Só o admin a lê; nunca em logs nem em rotas públicas.
+   */
+  alvoSnapshot: jsonb("alvo_snapshot"),
   /** Só na rota pública (sem conta): contacto e IP (apenas na BD; nunca em logs). */
   reporterContact: varchar("reporter_contact", { length: 255 }),
   reporterIp: varchar("reporter_ip", { length: 45 }),
@@ -57,6 +63,7 @@ export const reportsTable = pgTable("reports", {
 }, (t) => [
   // Um só denunciante por alvo (utilizador com conta, ou contacto na rota pública).
   uniqueIndex("reports_um_por_utilizador").on(t.reporterId, t.targetType, t.targetId).where(sql`${t.reporterId} IS NOT NULL`),
+  index("reports_alvo_estado_idx").on(t.targetType, t.targetId, t.status),
   uniqueIndex("reports_um_por_contacto").on(t.reporterContact, t.targetType, t.targetId).where(sql`${t.reporterId} IS NULL AND ${t.reporterContact} IS NOT NULL`),
 ]);
 

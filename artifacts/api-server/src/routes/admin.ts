@@ -50,9 +50,9 @@ import {
 import bcrypt from "bcryptjs";
 import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor } from "../lib/storage.js";
 import {
-  TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, apagarFicheiros, notificarSistema, TakedownError, type TargetType,
+  TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
-import { deletePostWithMedia } from "../lib/postDeletion.js";
+import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
@@ -440,6 +440,8 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "conteudo_restaurado": return `${admin} repôs conteúdo${target}`;
     case "conteudo_ficheiros_apagar_pedido": return `${admin} pediu a eliminação dos ficheiros do conteúdo${target}`;
     case "conteudo_ficheiros_apagados": return `${admin} eliminou os ficheiros do conteúdo${target}`;
+    case "eliminacao_recusada": return `Tentativa de eliminar conteúdo protegido recusada${target}`;
+    case "conteudo_eliminado_autor": return `O autor eliminou conteúdo${target}`;
     case "settings_update": return `${admin} actualizou definições da plataforma`;
     case "broadcast_send": return `${admin} enviou comunicado: ${details?.titulo ?? ""}`;
     case "balance_adjustment": return `${admin} ajustou saldo do criador${target}`;
@@ -1113,17 +1115,18 @@ router.get("/admin/posts", async (req, res) => {
 });
 
 router.delete("/admin/posts/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  // Motivo obrigatório (fica no audit_log, na mesma transação da eliminação).
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (motivo.length < 10 || motivo.length > 500) {
+    return void res.status(400).json({ error: "Indica o motivo da eliminação (entre 10 e 500 caracteres)." });
+  }
   try {
-    const id = Number(req.params.id);
-    const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
-    if (!post) return void res.status(404).json({ error: "Post não encontrado" });
-
-    await deletePostWithMedia(id);
-    await logAudit(req, "post_delete", "post", id, { motivo: req.body?.motivo ?? null });
+    await eliminarPost({ postId: id, userId: req.adminId!, ator: "admin", motivo, ip: (req.ip ?? "").slice(0, 45) || null });
     res.json({ success: true });
   } catch (err) {
-    (req as any).log?.error({ err }, "Erro ao eliminar post");
-    res.status(500).json({ error: "Erro interno." });
+    responderErroEliminacao(err, res, (req as any).log);
   }
 });
 
@@ -1507,32 +1510,10 @@ router.get("/admin/users/:id/infracoes", requireAdmin, async (req: AdminRequest,
   }
 });
 
-// Eliminar os FICHEIROS no Bunny (privado e público) de conteúdo JÁ retirado. Ação explícita e irreversível:
-// exige { confirmar: true }; o pedido é auditado ANTES de apagar (se o audit falhar, nada é apagado).
-router.delete("/admin/content/:type/:id/ficheiros", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
-  const p = parseAlvoParams(req);
-  if (!p) return void res.status(400).json({ error: "Tipo ou ID inválido" });
-  if (req.body?.confirmar !== true) return void res.status(400).json({ error: "Confirmação em falta (confirmar: true)." });
-  try {
-    const media = await db.transaction(async (tx) => {
-      const alvo = await lerAlvo(tx, p.type, p.id);
-      if (!alvo) throw new TakedownError("Conteúdo não encontrado", 404);
-      if (!alvo.removido) throw new TakedownError("O conteúdo tem de estar retirado antes de apagar os ficheiros.", 409);
-      if (alvo.media.length === 0) throw new TakedownError("Este conteúdo não tem ficheiros.", 400);
-      await tx.insert(auditLogTable).values({
-        adminId: req.adminId!, action: "conteudo_ficheiros_apagar_pedido", targetType: p.type, targetId: p.id,
-        details: { ficheiros: alvo.media.length }, ipAddress: req.ip ?? null,
-      });
-      return alvo.media;
-    });
-    const resultado = await apagarFicheiros(media);
-    await logAudit(req, "conteudo_ficheiros_apagados", p.type, p.id, resultado);
-    res.json({ ok: true, ...resultado });
-  } catch (err) {
-    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
-    (req as any).log?.error({ err }, "Erro ao apagar ficheiros");
-    res.status(500).json({ error: "Erro interno." });
-  }
+// DESATIVADO: eliminar só os ficheiros de conteúdo retirado destruía a prova. O conteúdo retirado fica retido;
+// para apagar de vez, a denúncia tem de estar decidida e o conteúdo é eliminado por inteiro (com motivo): DELETE /admin/posts/:id.
+router.delete("/admin/content/:type/:id/ficheiros", requireAdmin, (_req: AdminRequest, res): void => {
+  res.status(409).json({ error: "Eliminar apenas os ficheiros está desativado: o conteúdo retirado fica retido como prova. Para o apagar de vez, a denúncia tem de estar decidida e arquivada, e o conteúdo é eliminado por inteiro, com motivo." });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

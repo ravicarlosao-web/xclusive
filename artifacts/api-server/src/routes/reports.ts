@@ -6,6 +6,7 @@ import { db, reportsTable, auditLogTable } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { enviarEMarcarAlerta, textoAlerta } from "../lib/alertaExterno";
+import { bloquearAlvo } from "../lib/provaProtegida";
 import {
   TARGET_TYPES, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
   lerAlvo, retirarAlvo, notificarSistema, notificarAdmins, TakedownError, type TargetType,
@@ -75,6 +76,9 @@ async function criarDenuncia(opts: {
 }): Promise<{ id: number; retiradoAuto: boolean }> {
   const urgente = opts.reason === "menor";
   const resultado = await db.transaction(async (tx) => {
+    // Bloqueia a linha do alvo (FOR SHARE): uma eliminação concorrente espera por esta denúncia e vê-a (ou a denúncia
+    // espera pela eliminação e o alvo já não existe).
+    await bloquearAlvo(tx, opts.targetType, opts.targetId, "share");
     const alvo = await lerAlvo(tx, opts.targetType, opts.targetId);
     // Conteúdo inexistente ou já retirado: mesma resposta (não revela o estado interno).
     if (!alvo || alvo.removido) throw new TakedownError("Conteúdo indisponível.", 404);
@@ -97,6 +101,15 @@ async function criarDenuncia(opts: {
       urgente,
       reporterContact: opts.contacto ?? null,
       reporterIp: opts.ip ?? null,
+      // Cópia leve do alvo: sobrevive a um apagamento posterior. Só o admin a lê; nunca em logs nem em rotas públicas.
+      alvoSnapshot: {
+        tipo: opts.targetType, id: opts.targetId, donoId: alvo.ownerId,
+        resumo: alvo.resumo ? alvo.resumo.slice(0, 2000) : null,
+        ficheiros: alvo.media.map((m) => ({ tipo: m.tipo, chave: m.url })),
+        mais18: alvo.mais18 ?? null,
+        criadoEmConteudo: alvo.criadoEm ? alvo.criadoEm.toISOString() : null,
+        capturadoEm: new Date().toISOString(),
+      },
     }).returning({ id: reportsTable.id });
 
     // Urgente: avisa TODOS os admins na mesma transação (se falhar, a denúncia não fica por avisar).

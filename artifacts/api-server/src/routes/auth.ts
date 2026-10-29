@@ -15,6 +15,7 @@ import {
 import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 import { getMinWithdrawal } from "./wallet";
+import { erroSeguro } from "../lib/erroSeguro";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -150,16 +151,6 @@ router.get("/auth/legal-config", async (req, res): Promise<void> => {
     res.status(503).json({ error: "Serviço temporariamente indisponível." });
   }
 });
-
-/**
- * Para logs do registo: só o nome e o código do erro. NUNCA o erro bruto: o do Drizzle traz a query e os
- * parâmetros (email, hash da password, data de nascimento, IP e user-agent).
- */
-function erroSeguro(err: unknown): { nome: string; codigo?: string } {
-  const e = err as { name?: unknown; code?: unknown; cause?: { code?: unknown } };
-  const codigo = typeof e?.code === "string" ? e.code : typeof e?.cause?.code === "string" ? e.cause.code : undefined;
-  return { nome: typeof e?.name === "string" ? e.name : "desconhecido", ...(codigo ? { codigo } : {}) };
-}
 
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
   const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;

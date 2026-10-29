@@ -233,7 +233,13 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave }: PostCardP
         invalidateFeed();
         toast({ title: 'Publicação eliminada' });
       },
-      onError: () => {
+      onError: (err) => {
+        // Conteúdo retirado ou em análise: o servidor explica porquê (eliminacao_bloqueada).
+        const bloqueada = (err as { data?: { codigo?: string; error?: string } } | null)?.data;
+        if (bloqueada?.codigo === 'eliminacao_bloqueada') {
+          toast({ variant: 'destructive', title: 'Não foi possível eliminar a publicação', description: bloqueada.error });
+          return;
+        }
         toast({ variant: 'destructive', title: 'Não foi possível eliminar a publicação' });
       },
     });
