@@ -92,7 +92,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
 
   return (
     <div className={cn(
-      'bg-card border border-border rounded-2xl mb-6 transition-all duration-200',
+      'bg-background transition-all duration-200',
       expanded ? 'shadow-md dark:shadow-lg' : 'shadow-none',
     )}>
       {/* Top row: avatar + input */}

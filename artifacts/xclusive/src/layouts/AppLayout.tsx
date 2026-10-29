@@ -86,7 +86,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 flex flex-col gap-2 px-3 lg:px-4">
+        <nav className="flex-1 flex flex-col gap-2 px-3 lg:px-4 [@media(min-height:900px)]:gap-3 [@media(min-height:900px)]:[&_svg]:h-7 [@media(min-height:900px)]:[&_svg]:w-7">
           {navItems.map((item) => {
             const isActive = location.startsWith(item.path);
             return (
@@ -103,7 +103,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       </span>
                     )}
                   </div>
-                  <span className="hidden lg:block text-[15px]">{item.name}</span>
+                  <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">{item.name}</span>
                 </div>
               </Link>
             );
@@ -124,7 +124,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               )}
             >
               <PlusSquare className={cn("w-6 h-6 stroke-[1.5px]", user.verificado && "group-hover:scale-110 transition-transform")} />
-              <span className="hidden lg:block text-[15px]">Criar</span>
+              <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Criar</span>
             </button>
           )}
 
@@ -141,7 +141,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       ? "stroke-[2.5px] text-red-600 dark:text-red-500 animate-pulse"
                       : "stroke-[1.5px] text-red-600 dark:text-red-500 group-hover:scale-110 transition-transform"
                   )} />
-                  <span className="hidden lg:block text-[15px]">Ir em Direto</span>
+                  <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Ir em Direto</span>
                 </div>
               </Link>
             ) : (
@@ -150,7 +150,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 className="flex items-center gap-4 p-3 rounded-xl opacity-50 cursor-not-allowed text-foreground"
               >
                 <Radio className="w-6 h-6 stroke-[1.5px] text-muted-foreground" />
-                <span className="hidden lg:block text-[15px]">Ir em Direto</span>
+                <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Ir em Direto</span>
               </div>
             )
           )}
@@ -164,7 +164,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <AvatarImage src={user?.avatarUrl || ''} />
                 <AvatarFallback className="bg-secondary text-[10px]"><UserIcon className="w-4 h-4" /></AvatarFallback>
               </Avatar>
-              <span className="hidden lg:block text-[15px]">Perfil</span>
+              <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Perfil</span>
             </div>
           </Link>
 
@@ -175,7 +175,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 location.startsWith('/definicoes/monetizacao') ? "text-primary font-semibold" : "text-foreground"
               )}>
                 <BarChart className={cn("w-6 h-6", location.startsWith('/definicoes/monetizacao') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
-                <span className="hidden lg:block text-[15px]">Painel Criador</span>
+                <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Painel Criador</span>
               </div>
             </Link>
           ) : (
@@ -185,7 +185,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 location.startsWith('/tornar-criador') ? "text-primary font-semibold bg-primary/10 border-primary/30" : "text-primary dark:text-primary/70"
               )}>
                 <Sparkles className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
-                <span className="hidden lg:block text-[14px] font-semibold">Tornar-se Criador</span>
+                <span className="hidden lg:block text-[14px] [@media(min-height:900px)]:text-[16px] font-semibold">Tornar-se Criador</span>
               </div>
             </Link>
           )}
@@ -223,13 +223,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {noturno
               ? <Sun className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
               : <Moon className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />}
-            <span className="hidden lg:block text-[15px]">{noturno ? 'Modo diurno' : 'Modo noturno'}</span>
+            <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">{noturno ? 'Modo diurno' : 'Modo noturno'}</span>
           </button>
           <Popover>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full">
                 <Menu className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
-                <span className="hidden lg:block text-[15px]">Mais</span>
+                <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Mais</span>
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-2 rounded-xl border-border bg-card shadow-lg dark:shadow-2xl mb-2" side="top" align="start">

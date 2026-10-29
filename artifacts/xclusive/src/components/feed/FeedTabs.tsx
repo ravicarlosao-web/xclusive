@@ -20,7 +20,7 @@ export function FeedTabs({ ativo, onMudar }: { ativo: FiltroFeed; onMudar: (f: F
     refs.current[j]?.focus();
   }
   return (
-    <div role="tablist" aria-label="Filtrar o feed" className="flex gap-2 overflow-x-auto px-4 pb-3 pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="feed-separadores">
+    <div role="tablist" aria-label="Filtrar o feed" className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="feed-separadores">
       {SEPARADORES.map((s, i) => {
         const sel = s.id === ativo;
         return (

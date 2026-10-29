@@ -267,7 +267,7 @@ export default function Home() {
   return (
     <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4">
       {/* Coluna central: cabeçalho fixo, stories + lives, compositor, separadores e posts */}
-      <div className="w-full min-w-0 max-w-[640px] shrink">
+      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
         <FeedHeader onAtualizar={() => { void refetchFeed(); }} aAtualizar={isFetchingFeed} />
 
         <input
@@ -300,7 +300,7 @@ export default function Home() {
 
         {/* Inline Composer — only for creators */}
         {user?.tipoConta === 'criador' && (
-          <div className="pt-4">
+          <div className="border-b border-border">
             <InlineComposer
               user={user}
               onOpenWithFiles={handleOpenWithFiles}
@@ -311,11 +311,11 @@ export default function Home() {
         <FeedTabs ativo={filtro} onMudar={setFiltro} />
 
         {/* Posts do separador ativo */}
-        <div id="feed-painel" role="tabpanel" aria-labelledby={`feed-tab-${filtro}`} className="flex flex-col pt-1" data-testid="feed-painel">
+        <div id="feed-painel" role="tabpanel" aria-labelledby={`feed-tab-${filtro}`} className="flex flex-col" data-testid="feed-painel">
           {isLoadingFeed && !isMockMode ? (
             Array(3).fill(0).map((_, i) => <PostSkeleton key={i} />)
           ) : isFeedError && !isMockMode ? (
-            <div role="alert" className="mx-4 text-center p-10 bg-card border border-border rounded-xl" data-testid="feed-erro">
+            <div role="alert" className="mx-4 my-6 text-center p-10 bg-card border border-border rounded-xl" data-testid="feed-erro">
               <h3 className="text-lg font-bold mb-2">Não foi possível carregar o feed</h3>
               <p className="text-muted-foreground mb-4">Verifica a ligação e tenta novamente.</p>
               <Button variant="outline" onClick={() => { void refetchFeed(); }}>Tentar novamente</Button>
@@ -325,10 +325,11 @@ export default function Home() {
               <PostCard
                 key={post.id}
                 post={post}
+                variante="feed"
               />
             ))
           ) : (
-            <div className="mx-4 text-center p-12 bg-card border border-border rounded-xl" data-testid="feed-vazio">
+            <div className="mx-4 my-6 text-center p-12 bg-card border border-border rounded-xl" data-testid="feed-vazio">
               <h3 className="text-xl font-bold mb-2">{vazio.titulo}</h3>
               <p className="text-muted-foreground mb-6">{vazio.texto}</p>
               {vazio.acao === 'explorar' ? (
