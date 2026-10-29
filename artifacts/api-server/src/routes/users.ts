@@ -261,13 +261,13 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
   if (link !== undefined) updates.link = link;
   // Avatar e capa: só ficheiros do nosso CDN (guardados sem token) ou vazio para remover.
   if (avatarUrl !== undefined) {
-    const v = urlAvatarOuCapa(avatarUrl);
-    if (v === null) { res.status(400).json({ error: "A foto de perfil tem de ser um ficheiro carregado no Xclusive." }); return; }
+    const v = urlAvatarOuCapa(avatarUrl, userId, { gif: true });
+    if (v === null) { res.status(400).json({ error: "A foto de perfil tem de ser uma imagem carregada no Xclusive." }); return; }
     updates.avatarUrl = v;
   }
   if (capaUrl !== undefined) {
-    const v = urlAvatarOuCapa(capaUrl);
-    if (v === null) { res.status(400).json({ error: "A capa tem de ser um ficheiro carregado no Xclusive." }); return; }
+    const v = urlAvatarOuCapa(capaUrl, userId);
+    if (v === null) { res.status(400).json({ error: "A capa tem de ser uma imagem carregada no Xclusive." }); return; }
     updates.capaUrl = v;
   }
   if (privado !== undefined) updates.privado = privado;

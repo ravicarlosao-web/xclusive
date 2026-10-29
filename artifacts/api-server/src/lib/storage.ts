@@ -385,15 +385,26 @@ export function urlCanonico(url: string): string {
   return `https://${publicHost()}/${publicKeyPath(key)}`;
 }
 
+const EXT_IMAGEM = ["jpg", "jpeg", "png", "webp"];
+
 /**
- * Avatar/capa: só ficheiros do nosso CDN ("users/…") ou vazio (remove). Devolve o URL canónico, ou null se
- * o valor for recusado. Sem BUNNY_CDN_HOSTNAME configurado não há como distinguir, e aceita-se como antes.
+ * Avatar/capa: só imagens do nosso CDN e DO PRÓPRIO utilizador ("users/<id>/…"), ou vazio (remove). Devolve o URL canónico, ou
+ * null se o valor for recusado. Valida a chave (não o ficheiro no CDN): do próprio utilizador, sem segmentos perigosos
+ * (.., //, barras invertidas, "%" depois de decodificar, caracteres de controlo), com extensão de imagem (jpg, jpeg, png, webp;
+ * gif só se `gif`), e nunca vídeo. Sem BUNNY_CDN_HOSTNAME configurado não há como distinguir, e aceita-se como antes.
  */
-export function urlAvatarOuCapa(url: string): string | null {
+export function urlAvatarOuCapa(url: string, userId: number, opcoes: { gif?: boolean } = {}): string | null {
   if (url === "") return "";
   if (!publicHost()) return url;
+  if (/[\\\u0000-\u001f]/.test(url)) return null;
   const key = /^https?:\/\//i.test(url) ? getStorageKeyFromPublicUrl(url) : null;
-  if (!key || !key.startsWith("users/") || key.includes("..")) return null;
+  if (!key) return null;
+  if (/[\\%\u0000-\u001f]/.test(key) || key.includes("..") || key.includes("//")) return null;
+  const partes = key.split("/");
+  if (partes.some((p) => p === "" || p === "." || p === "..")) return null;
+  if (partes[0] !== "users" || partes[1] !== String(userId) || partes.length < 3) return null;
+  const ext = /\.([a-z0-9]+)$/i.exec(key)?.[1]?.toLowerCase();
+  if (!ext || ehVideoKey(key) || ![...EXT_IMAGEM, ...(opcoes.gif ? ["gif"] : [])].includes(ext)) return null;
   return urlCanonico(url);
 }
 

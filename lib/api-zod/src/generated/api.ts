@@ -456,7 +456,7 @@ export const CreatePostBody = zod.object({
 })).optional(),
   "exclusivo": zod.boolean().default(createPostBodyExclusivoDefault),
   "precoDesbloqueio": zod.number().optional(),
-  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.')
+  "mais18": zod.boolean().optional().describe('Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400.')
 })
 
 export const CreatePostResponse = zod.object({

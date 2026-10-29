@@ -172,7 +172,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   const [exclusivo, setExclusivo] = useState(false);
   // Marcação +18 obrigatória, sem valor pré-selecionado (null = ainda não escolhida)
   const [mais18, setMais18] = useState<boolean | null>(null);
-  const [textoMais18, setTextoMais18] = useState<boolean | null>(null);
   const [preco, setPreco] = useState('');
   const [audiencia, setAudiencia] = useState<'todos' | 'seguidores' | 'subscritores'>('todos');
 
@@ -252,7 +251,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     setLocalizacao('');
     setExclusivo(false);
     setMais18(null);
-    setTextoMais18(null);
     setPreco('');
     setAudiencia('todos');
     setTextoConteudo('');
@@ -459,7 +457,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   // ── Submit: text post ──
   async function handleSubmitTexto() {
     if (!textoConteudo.trim()) { toast.error('Escreve algo para publicar.'); return; }
-    if (textoMais18 === null) { toast.error('Indica se o conteúdo é +18 (Sim ou Não).'); return; }
 
     const precoNumerico = textoExclusivo && textoPreco
       ? (() => { const v = parseFloat(textoPreco); return Number.isFinite(v) && v >= 0 ? v : undefined; })()
@@ -473,7 +470,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
           tipo: 'texto' as any,
           media: [],
           exclusivo: textoExclusivo,
-          mais18: textoMais18,
           precoDesbloqueio: precoNumerico,
         },
       },
@@ -631,7 +627,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   </Button>
                 )}
                 {step === 'texto' && (
-                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-lg h-8 px-4 text-sm font-semibold" onClick={handleSubmitTexto} disabled={isCreatingPost || !textoConteudo.trim() || textoMais18 === null}>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-lg h-8 px-4 text-sm font-semibold" onClick={handleSubmitTexto} disabled={isCreatingPost || !textoConteudo.trim()}>
                     Publicar
                   </Button>
                 )}
@@ -810,8 +806,6 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                       ))}
                     </div>
                   </div>
-
-                  <SeletorMais18 valor={textoMais18} onChange={setTextoMais18} disabled={isCreatingPost} />
 
                   {/* Exclusive */}
                   <div className="flex items-center justify-between">

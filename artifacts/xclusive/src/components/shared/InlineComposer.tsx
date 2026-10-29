@@ -9,7 +9,6 @@ import { Link } from 'wouter';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SeletorMais18 } from './MarcacaoMais18';
 
 interface InlineComposerProps {
   user: {
@@ -31,13 +30,12 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
 
   const [expanded, setExpanded] = useState(false);
   const [texto, setTexto] = useState('');
-  // Marcação +18 obrigatória, sem valor pré-selecionado
-  const [mais18, setMais18] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const remaining = MAX_TEXTO - texto.length;
-  const canSubmit = texto.trim().length > 0 && mais18 !== null && !isPending;
+  // Post só de texto: sem pergunta +18 (a marcação só é pedida quando há media, no fluxo de Foto/Vídeo/Reel).
+  const canSubmit = texto.trim().length > 0 && !isPending;
 
   function handleFocus() {
     setExpanded(true);
@@ -45,7 +43,6 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
 
   function handleDiscard() {
     setTexto('');
-    setMais18(null);
     setExpanded(false);
     textareaRef.current?.blur();
   }
@@ -53,7 +50,7 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
   function handleSubmit() {
     if (!canSubmit) return;
     createPost(
-      { data: { legenda: texto.trim(), tipo: 'texto' as any, media: [], mais18: mais18 as boolean } },
+      { data: { legenda: texto.trim(), tipo: 'texto' as any, media: [] } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
@@ -184,11 +181,6 @@ export function InlineComposer({ user, onOpenWithFiles }: InlineComposerProps) {
         )}
       </AnimatePresence>
 
-      {texto.trim() && (
-        <div className="px-4 pb-3">
-          <SeletorMais18 valor={mais18} onChange={setMais18} disabled={isPending} />
-        </div>
-      )}
 
       {/* Divider */}
       <div className="mx-4 border-t border-border" />
