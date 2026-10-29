@@ -228,6 +228,16 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 <>
                   <p>Autor: {d.alvo.dono ? `@${d.alvo.dono.username}${d.alvo.dono.ativo ? '' : ' (suspenso)'}` : '—'} · {d.alvo.removido ? <strong className="text-red-400">RETIRADO</strong> : 'visível'}</p>
                   {d.alvo.resumo && <p className="whitespace-pre-wrap">{d.alvo.resumo}</p>}
+                  {d.alvo.enquete && (
+                    <div className="rounded border p-2 space-y-1" data-testid="denuncia-enquete">
+                      <p className="text-xs uppercase text-muted-foreground">
+                        Enquete · {d.alvo.enquete.audiencia === 'seguidores' ? 'só seguidores' : 'todos'} · termina em {new Date(d.alvo.enquete.terminaEm).toLocaleString('pt-PT')} · {d.alvo.enquete.totalVotos} {d.alvo.enquete.totalVotos === 1 ? 'voto' : 'votos'}
+                      </p>
+                      <ol className="list-decimal pl-5 text-sm">
+                        {d.alvo.enquete.opcoes.map((o: any) => <li key={o.ordem} className="whitespace-pre-wrap break-words">{o.texto} <span className="text-muted-foreground">({o.votos})</span></li>)}
+                      </ol>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     {d.alvo.media.map((m: any, i: number) => m.url ? (
                       m.tipo === 'video'

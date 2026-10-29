@@ -7,6 +7,7 @@ import {
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
 import { suspenderConta, desligarSocketsDepois } from "./suspensao";
 import { temMenorAberta } from "./provaProtegida";
+import { enquetePara, type AlvoEnquete } from "./enquetes";
 
 /**
  * Retirada de conteúdo (takedown) e denúncias.
@@ -54,6 +55,8 @@ export interface TargetInfo {
   expirada?: boolean;
   /** Data de criação do alvo (para o snapshot da denúncia). */
   criadoEm?: Date;
+  /** Enquete do post (só se for uma enquete): audiência, fim, opções e TOTAIS; nunca quem votou. */
+  enquete?: AlvoEnquete;
 }
 
 /** Lê o alvo (existência, dono, estado, resumo e média). null se não existir. */
@@ -63,7 +66,8 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
       const [p] = await q.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
       if (!p) return null;
       const media = await q.select().from(postMediaTable).where(eq(postMediaTable.postId, id)).orderBy(postMediaTable.ordem);
-      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18, criadoEm: p.criadoEm };
+      const enquete = p.tipo === "texto" ? await enquetePara(q, id) : null;
+      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18, criadoEm: p.criadoEm, ...(enquete ? { enquete } : {}) };
     }
     case "reel": {
       const [r] = await q.select().from(reelsTable).where(eq(reelsTable.id, id)).limit(1);

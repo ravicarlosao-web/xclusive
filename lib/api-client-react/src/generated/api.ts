@@ -27,6 +27,7 @@ import type {
   ConversationInput,
   CreatorStats,
   EarningPoint,
+  Enquete,
   GetCreatorEarningsParams,
   GetCreatorTransactionsParams,
   GetExploreParams,
@@ -72,7 +73,8 @@ import type {
   SubscriptionPlanUpdate,
   UnreadCount,
   UserProfile,
-  UserSummary
+  UserSummary,
+  VotoEnqueteInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1679,6 +1681,78 @@ export const useUpdateReelMais18 = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateReelMais18MutationOptions(options));
+    }
+
+export const getVotarEnqueteUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/enquete/voto`
+}
+
+/**
+ * @summary Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros)
+ */
+export const votarEnquete = async (id: number,
+    votoEnqueteInput: VotoEnqueteInput, options?: Parameters<typeof customFetch>[1]): Promise<Enquete> => {
+
+  return customFetch<Enquete>(getVotarEnqueteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(votoEnqueteInput)
+  }
+);}
+
+
+
+
+
+export const getVotarEnqueteMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof votarEnquete>>, TError,{id: number;data: BodyType<VotoEnqueteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof votarEnquete>>, TError,{id: number;data: BodyType<VotoEnqueteInput>}, TContext> => {
+
+const mutationKey = ['votarEnquete'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof votarEnquete>>, {id: number;data: BodyType<VotoEnqueteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  votarEnquete(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VotarEnqueteMutationResult = NonNullable<Awaited<ReturnType<typeof votarEnquete>>>
+    export type VotarEnqueteMutationBody = BodyType<VotoEnqueteInput>
+    export type VotarEnqueteMutationError = ErrorType<void>
+
+    /**
+ * @summary Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros)
+ */
+export const useVotarEnquete = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof votarEnquete>>, TError,{id: number;data: BodyType<VotoEnqueteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof votarEnquete>>,
+        TError,
+        {id: number;data: BodyType<VotoEnqueteInput>},
+        TContext
+      > => {
+      return useMutation(getVotarEnqueteMutationOptions(options));
     }
 
 export const getLikePostUrl = (id: number,) => {

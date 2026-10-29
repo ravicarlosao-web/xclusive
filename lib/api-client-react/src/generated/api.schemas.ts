@@ -191,6 +191,53 @@ export interface PostMedia {
   bloqueado?: boolean;
 }
 
+export type EnqueteAudiencia = typeof EnqueteAudiencia[keyof typeof EnqueteAudiencia];
+
+
+export const EnqueteAudiencia = {
+  todos: 'todos',
+  seguidores: 'seguidores',
+} as const;
+
+/**
+ * @nullable
+ */
+export type EnqueteMotivo = typeof EnqueteMotivo[keyof typeof EnqueteMotivo] | null;
+
+
+export const EnqueteMotivo = {
+  autor: 'autor',
+  seguidores: 'seguidores',
+  encerrada: 'encerrada',
+  ja_votou: 'ja_votou',
+} as const;
+
+export type EnqueteOpcoesItem = {
+  id: number;
+  texto: string;
+  /** @nullable */
+  votos: number | null;
+  /** @nullable */
+  percentagem: number | null;
+};
+
+/**
+ * Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.
+ */
+export interface Enquete {
+  id: number;
+  audiencia: EnqueteAudiencia;
+  terminaEm: string;
+  encerrada: boolean;
+  totalVotos: number;
+  opcoes: EnqueteOpcoesItem[];
+  /** @nullable */
+  meuVoto: number | null;
+  podeVotar: boolean;
+  /** @nullable */
+  motivo: EnqueteMotivo;
+}
+
 export interface Post {
   id: number;
   autor: UserSummary;
@@ -213,6 +260,11 @@ export interface Post {
   curtido: boolean;
   guardado: boolean;
   criadoEm: string;
+  enquete?: Enquete;
+}
+
+export interface VotoEnqueteInput {
+  opcaoId: number;
 }
 
 export type PostInputTipo = typeof PostInputTipo[keyof typeof PostInputTipo];
@@ -238,6 +290,37 @@ export type PostInputMediaItem = {
   tipo: PostInputMediaItemTipo;
 };
 
+export type PostInputEnqueteDuracaoDias = typeof PostInputEnqueteDuracaoDias[keyof typeof PostInputEnqueteDuracaoDias];
+
+
+export const PostInputEnqueteDuracaoDias = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
+  NUMBER_7: 7,
+} as const;
+
+export type PostInputEnqueteAudiencia = typeof PostInputEnqueteAudiencia[keyof typeof PostInputEnqueteAudiencia];
+
+
+export const PostInputEnqueteAudiencia = {
+  todos: 'todos',
+  seguidores: 'seguidores',
+} as const;
+
+/**
+ * Cria uma enquete (post de texto, gratuito e sem ficheiros; a legenda é a pergunta; mais18 fica false).
+ */
+export type PostInputEnquete = {
+  /**
+     * @minItems 2
+     * @maxItems 4
+     * @items.maxLength 60
+     */
+  opcoes: string[];
+  duracaoDias?: PostInputEnqueteDuracaoDias;
+  audiencia?: PostInputEnqueteAudiencia;
+};
+
 export interface PostInput {
   legenda?: string;
   localizacao?: string;
@@ -247,6 +330,8 @@ export interface PostInput {
   precoDesbloqueio?: number;
   /** Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400. */
   mais18?: boolean;
+  /** Cria uma enquete (post de texto, gratuito e sem ficheiros; a legenda é a pergunta; mais18 fica false). */
+  enquete?: PostInputEnquete;
 }
 
 export interface PostMais18Input {

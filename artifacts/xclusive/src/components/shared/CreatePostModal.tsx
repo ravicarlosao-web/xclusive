@@ -12,24 +12,25 @@ import {
   ImagePlus, MapPin, Lock, X, ChevronLeft, ChevronRight,
   Film, Upload, Hash, AtSign, Smile, Layers, Type,
   Clock, HardDrive, CheckCircle2, AlertCircle,
-  Video, RefreshCw
+  Video, RefreshCw, BarChart2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SeletorMais18 } from './MarcacaoMais18';
+import { FormularioEnquete, type DadosEnquete } from './FormularioEnquete';
 import { UploadProgressCircle } from './UploadProgressCircle';
 
 interface CreatePostModalProps {
   open: boolean;
   onClose: () => void;
   /** Jump straight to a specific step when the modal opens */
-  defaultStep?: 'select' | 'preview' | 'details' | 'texto';
+  defaultStep?: 'select' | 'preview' | 'details' | 'texto' | 'enquete';
   /** Pre-load these files (e.g. from the inline composer's file picker) */
   initialFiles?: File[];
 }
 
-type Step = 'select' | 'preview' | 'details' | 'texto';
+type Step = 'select' | 'preview' | 'details' | 'texto' | 'enquete';
 
 interface MediaFile {
   file: File;
@@ -487,6 +488,23 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     );
   }
 
+  // ── Submit: enquete (post de texto com opções; sem media nem pergunta +18) ──
+  function handleSubmitEnquete(d: DadosEnquete) {
+    createPost(
+      { data: { tipo: 'texto' as any, legenda: d.pergunta, enquete: { opcoes: d.opcoes, duracaoDias: d.duracaoDias, audiencia: d.audiencia } } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
+          toast.success('Enquete publicada!');
+          handleClose();
+        },
+        onError: (err: any) => {
+          toast.error(err?.data?.error || 'Não foi possível publicar a enquete.');
+        },
+      }
+    );
+  }
+
   const current = mediaFiles[currentIndex];
   const charCount = legenda.length;
   const textoRemaining = MAX_TEXTO - textoConteudo.length;
@@ -591,25 +609,26 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
             {/* ── Normal Header ── */}
             <DialogHeader className="px-4 py-3 border-b border-border">
               <div className="flex items-center justify-between">
-                {(step === 'preview' || step === 'details' || step === 'texto') && (
+                {(step === 'preview' || step === 'details' || step === 'texto' || step === 'enquete') && (
                   <Button
                     variant="ghost" size="sm"
                     className="text-muted-foreground hover:text-foreground -ml-2 gap-1"
                     onClick={() => {
                       if (step === 'preview') setStep('select');
                       else if (step === 'details') setStep('preview');
-                      else if (step === 'texto') setStep('select');
+                      else if (step === 'texto' || step === 'enquete') setStep('select');
                     }}
                     disabled={isCreatingPost}
                   >
                     <ChevronLeft className="w-4 h-4" /> Voltar
                   </Button>
                 )}
-                <DialogTitle className={cn('text-[15px] font-semibold', (step === 'select') && 'mx-auto')}>
+                <DialogTitle className={cn('text-[15px] font-semibold', (step === 'select') && 'mx-auto', step === 'enquete' && 'pr-8')}>
                   {step === 'select' && 'Nova publicação'}
                   {step === 'preview' && 'Pré-visualização'}
                   {step === 'details' && 'Detalhes'}
                   {step === 'texto' && 'Nova publicação'}
+                  {step === 'enquete' && 'Nova enquete'}
                 </DialogTitle>
                 {step === 'preview' && (
                   <Button size="sm" className="bg-transparent text-primary hover:bg-primary/10 font-semibold rounded-lg h-8 px-4 text-sm" onClick={() => setStep('details')}>
@@ -699,6 +718,21 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   </div>
                 </button>
 
+                {/* Enquete Option */}
+                <button
+                  onClick={() => setStep('enquete')}
+                  data-testid="criar-enquete"
+                  className="flex items-center gap-4 p-4 rounded-2xl border border-border hover:border-primary/50 hover:bg-secondary/50 transition-all text-left group"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                    <BarChart2 className="w-6 h-6 text-primary" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-foreground">Enquete</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Faz uma pergunta com 2 a 4 opções para votarem</p>
+                  </div>
+                </button>
+
                 {/* If already has some files */}
                 {mediaFiles.length > 0 && (
                   <div className="flex flex-col gap-2">
@@ -730,6 +764,9 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                 )}
               </div>
             )}
+
+            {/* ══════════════ STEP: ENQUETE ══════════════ */}
+            {step === 'enquete' && <FormularioEnquete aPublicar={isCreatingPost} onPublicar={handleSubmitEnquete} />}
 
             {/* ══════════════ STEP: TEXTO ══════════════ */}
             {step === 'texto' && (

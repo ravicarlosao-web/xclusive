@@ -129,6 +129,8 @@ async function criarDenuncia(opts: {
       mais18: alvo.mais18 ?? null,
       criadoEmConteudo: alvo.criadoEm ? alvo.criadoEm.toISOString() : null,
       capturadoEm: new Date().toISOString(),
+      // Enquete: pergunta (no resumo), audiência, fim, opções e totais no momento. Só nas enquetes (o hash dos outros não muda).
+      enquete: alvo.enquete,
     };
     const [rep] = await tx.insert(reportsTable).values({
       reporterId: opts.reporterId,

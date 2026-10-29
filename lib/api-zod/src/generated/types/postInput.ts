@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { PostInputEnquete } from './postInputEnquete';
 import type { PostInputMediaItem } from './postInputMediaItem';
 import type { PostInputTipo } from './postInputTipo';
 
@@ -17,4 +18,6 @@ export interface PostInput {
   precoDesbloqueio?: number;
   /** Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400. */
   mais18?: boolean;
+  /** Cria uma enquete (post de texto, gratuito e sem ficheiros; a legenda é a pergunta; mais18 fica false). */
+  enquete?: PostInputEnquete;
 }

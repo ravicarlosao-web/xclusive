@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { Enquete } from './enquete';
 import type { PostMedia } from './postMedia';
 import type { PostTipo } from './postTipo';
 import type { UserSummary } from './userSummary';
@@ -31,4 +32,5 @@ export interface Post {
   curtido: boolean;
   guardado: boolean;
   criadoEm: Date;
+  enquete?: Enquete;
 }

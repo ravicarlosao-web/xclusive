@@ -36,6 +36,7 @@ export default function Home() {
   // Inline composer → full modal (for media posts)
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialFiles, setModalInitialFiles] = useState<File[]>([]);
+  const [modalPasso, setModalPasso] = useState<'enquete' | undefined>(undefined);
 
   function handleOpenWithFiles(files: File[]) {
     setModalInitialFiles(files);
@@ -45,6 +46,7 @@ export default function Home() {
   function handleModalClose() {
     setModalOpen(false);
     setModalInitialFiles([]);
+    setModalPasso(undefined);
     queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
   }
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -304,6 +306,7 @@ export default function Home() {
             <InlineComposer
               user={user}
               onOpenWithFiles={handleOpenWithFiles}
+              onAbrirEnquete={() => { setModalPasso('enquete'); setModalOpen(true); }}
             />
           </div>
         )}
@@ -360,6 +363,7 @@ export default function Home() {
         open={modalOpen}
         onClose={handleModalClose}
         initialFiles={modalInitialFiles}
+        defaultStep={modalPasso}
       />
 
       {/* Story Preview Modal — Instagram-style editor before publishing */}

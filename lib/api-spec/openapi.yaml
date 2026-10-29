@@ -440,6 +440,41 @@ paths:
         "404":
           description: Reel não encontrado
 
+  /posts/{id}/enquete/voto:
+    post:
+      operationId: votarEnquete
+      tags: [posts]
+      summary: Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VotoEnqueteInput"
+      responses:
+        "200":
+          description: A enquete atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enquete"
+        "400":
+          description: Opção que não pertence à enquete
+        "403":
+          description: O autor não vota, ou a enquete é só para seguidores (codigo enquete_autor ou enquete_so_seguidores)
+        "404":
+          description: Post inexistente, não visível ou sem enquete
+        "409":
+          description: Já votaste (enquete_ja_votou) ou a enquete já terminou (enquete_encerrada)
+        "429":
+          description: Demasiados votos (30 por minuto)
+
   /posts/{id}/like:
     post:
       operationId: likePost
@@ -1402,6 +1437,54 @@ components:
         criadoEm:
           type: string
           format: date-time
+        enquete:
+          $ref: "#/components/schemas/Enquete"
+
+    VotoEnqueteInput:
+      type: object
+      required: [opcaoId]
+      properties:
+        opcaoId:
+          type: integer
+
+    Enquete:
+      type: object
+      description: Só existe nos posts que são enquetes. Os votos por opção só vêm a quem já votou, ao autor, ou quando a enquete terminou.
+      required: [id, audiencia, terminaEm, encerrada, totalVotos, opcoes, meuVoto, podeVotar, motivo]
+      properties:
+        id:
+          type: integer
+        audiencia:
+          type: string
+          enum: [todos, seguidores]
+        terminaEm:
+          type: string
+          format: date-time
+        encerrada:
+          type: boolean
+        totalVotos:
+          type: integer
+        opcoes:
+          type: array
+          items:
+            type: object
+            required: [id, texto, votos, percentagem]
+            properties:
+              id:
+                type: integer
+              texto:
+                type: string
+              votos:
+                type: ["integer", "null"]
+              percentagem:
+                type: ["integer", "null"]
+        meuVoto:
+          type: ["integer", "null"]
+        podeVotar:
+          type: boolean
+        motivo:
+          type: ["string", "null"]
+          enum: [autor, seguidores, encerrada, ja_votou, null]
 
     PostMedia:
       type: object
@@ -1449,6 +1532,26 @@ components:
         mais18:
           type: boolean
           description: Marcação +18 feita pela criadora (Sim = true, Não = false). Obrigatória quando o post tem media (sem ela, 400); num post só de texto pode ser omitida e fica false. Se vier e não for boolean, 400.
+        enquete:
+          type: object
+          description: Cria uma enquete (post de texto, gratuito e sem ficheiros; a legenda é a pergunta; mais18 fica false).
+          required: [opcoes]
+          properties:
+            opcoes:
+              type: array
+              minItems: 2
+              maxItems: 4
+              items:
+                type: string
+                maxLength: 60
+            duracaoDias:
+              type: integer
+              enum: [1, 3, 7]
+              default: 1
+            audiencia:
+              type: string
+              enum: [todos, seguidores]
+              default: todos
 
     PostMais18Input:
       type: object
