@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
 import { suspenderConta, desligarSocketsDepois } from "./suspensao";
+import { temMenorAberta } from "./provaProtegida";
 
 /**
  * Retirada de conteúdo (takedown) e denúncias.
@@ -51,6 +52,8 @@ export interface TargetInfo {
   mais18?: boolean;
   /** Story cuja validade já passou. */
   expirada?: boolean;
+  /** Data de criação do alvo (para o snapshot da denúncia). */
+  criadoEm?: Date;
 }
 
 /** Lê o alvo (existência, dono, estado, resumo e média). null se não existir. */
@@ -60,32 +63,32 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
       const [p] = await q.select().from(postsTable).where(eq(postsTable.id, id)).limit(1);
       if (!p) return null;
       const media = await q.select().from(postMediaTable).where(eq(postMediaTable.postId, id)).orderBy(postMediaTable.ordem);
-      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18 };
+      return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18, criadoEm: p.criadoEm };
     }
     case "reel": {
       const [r] = await q.select().from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
       if (!r) return null;
-      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }], mais18: r.mais18 };
+      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }], mais18: r.mais18, criadoEm: r.criadoEm };
     }
     case "story": {
       const [s] = await q.select().from(storiesTable).where(eq(storiesTable.id, id)).limit(1);
       if (!s) return null;
-      return { ownerId: s.autorId, removido: !!s.retiradoEm, resumo: null, media: [{ tipo: s.tipo === "video" ? "video" : "imagem", url: s.mediaUrl }], mais18: s.mais18, expirada: s.expiraEm < new Date() };
+      return { ownerId: s.autorId, removido: !!s.retiradoEm, resumo: null, media: [{ tipo: s.tipo === "video" ? "video" : "imagem", url: s.mediaUrl }], mais18: s.mais18, expirada: s.expiraEm < new Date(), criadoEm: s.criadoEm };
     }
     case "comment": {
       const [c] = await q.select().from(commentsTable).where(eq(commentsTable.id, id)).limit(1);
       if (!c) return null;
-      return { ownerId: c.autorId, removido: !!c.retiradoEm, resumo: c.texto, media: [] };
+      return { ownerId: c.autorId, removido: !!c.retiradoEm, resumo: c.texto, media: [], criadoEm: c.criadoEm };
     }
     case "live": {
       const [l] = await q.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, id)).limit(1);
       if (!l) return null;
-      return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [], mais18: l.mais18 };
+      return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [], mais18: l.mais18, criadoEm: l.criadoEm };
     }
     case "user": {
       const [u] = await q.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
       if (!u) return null;
-      return { ownerId: u.id, removido: !u.ativo, resumo: `@${u.username}`, media: [], ownerRole: u.role };
+      return { ownerId: u.id, removido: !u.ativo, resumo: `@${u.username}`, media: [], ownerRole: u.role, criadoEm: u.criadoEm };
     }
   }
 }
@@ -117,6 +120,10 @@ export async function retirarAlvo(tx: Tx, type: TargetType, id: number, porAdmin
 
 /** Repõe o alvo (desfaz a retirada). Live fica terminada; perfil volta a ativo. */
 export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promise<{ mudou: boolean }> {
+  // Com uma denúncia de menor por decidir, o conteúdo não volta a ficar visível.
+  if (await temMenorAberta(tx, type, id)) {
+    throw new TakedownError("Há uma denúncia de menor por decidir sobre este conteúdo: não pode ser reposto enquanto a denúncia não estiver decidida e arquivada.", 409);
+  }
   const limpa = { retiradoEm: null, retiradoMotivo: null, retiradoPor: null };
   switch (type) {
     case "post": return { mudou: (await tx.update(postsTable).set(limpa).where(eq(postsTable.id, id)).returning({ id: postsTable.id })).length > 0 };

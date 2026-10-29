@@ -4,7 +4,7 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { deletePostWithMedia } from "../lib/postDeletion";
+import { eliminarPost, eliminarComentario, responderErroEliminacao } from "../lib/provaProtegida";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
 import { resolveMediaUrl, urlMedia, urlCanonico } from "../lib/storage";
 import { postVisivel, commentVisivel } from "../lib/takedown";
@@ -232,26 +232,16 @@ router.get("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<voi
   res.json(await formatPost(post, req.userId));
 });
 
-// Eliminar post
+// Eliminar post (só o autor; conteúdo retirado ou denunciado não se apaga: lib/provaProtegida.ts)
 router.delete("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-  const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id));
-  if (!post) { res.status(404).json({ error: "Post não encontrado" }); return; }
-
-  const [requestingUser] = await db
-    .select({ role: usersTable.role })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId!))
-    .limit(1);
-  const isAdmin = requestingUser?.role === "admin" || requestingUser?.role === "superadmin";
-  if (post.autorId !== req.userId && !isAdmin) {
-    res.status(403).json({ error: "Sem permissão" });
-    return;
+  try {
+    await eliminarPost({ postId: id, userId: req.userId!, ator: "autor", ip: (req.ip ?? "").slice(0, 45) || null });
+    res.sendStatus(204);
+  } catch (err) {
+    responderErroEliminacao(err, res, req.log);
   }
-
-  await deletePostWithMedia(id);
-  res.sendStatus(204);
 });
 
 // Curtir
@@ -372,10 +362,13 @@ router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), a
 
 router.delete("/comments/:id", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
-  const [comment] = await db.select().from(commentsTable).where(eq(commentsTable.id, id));
-  if (!comment || comment.autorId !== req.userId) { res.status(403).json({ error: "Sem permissão" }); return; }
-  await db.delete(commentsTable).where(eq(commentsTable.id, id));
-  res.sendStatus(204);
+  if (isNaN(id)) { res.status(403).json({ error: "Sem permissão" }); return; }
+  try {
+    await eliminarComentario({ commentId: id, userId: req.userId!, ip: (req.ip ?? "").slice(0, 45) || null });
+    res.sendStatus(204);
+  } catch (err) {
+    responderErroEliminacao(err, res, req.log);
+  }
 });
 
 async function formatPost(post: any, userId?: number) {

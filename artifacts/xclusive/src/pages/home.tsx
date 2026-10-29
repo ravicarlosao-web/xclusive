@@ -299,8 +299,10 @@ export default function Home() {
           queryClient.invalidateQueries({ queryKey: ['/api/stories/feed'] });
           setViewerGroupIndex(null);
         },
-        onError: () => {
-          toast.error('Não foi possível eliminar o story. Tenta novamente.');
+        onError: (err) => {
+          // Story retirado ou em análise: o servidor explica porquê (eliminacao_bloqueada).
+          const bloqueada = (err as { data?: { codigo?: string; error?: string } } | null)?.data;
+          toast.error(bloqueada?.codigo === 'eliminacao_bloqueada' && bloqueada.error ? bloqueada.error : 'Não foi possível eliminar o story. Tenta novamente.');
         },
       });
     }

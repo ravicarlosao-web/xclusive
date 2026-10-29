@@ -301,9 +301,6 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 {d.alvo.removido ? (
                   <>
                     <Button size="sm" variant="outline" onClick={() => acaoDireta(`/admin/content/${d.targetType}/${d.targetId}/repor`, 'POST', {}, 'Conteúdo reposto', 'Repor este conteúdo? Volta a ficar visível.')}>Repor conteúdo</Button>
-                    {d.targetType !== 'user' && d.targetType !== 'comment' && d.targetType !== 'live' && (
-                      <Button size="sm" variant="destructive" onClick={() => acaoDireta(`/admin/content/${d.targetType}/${d.targetId}/ficheiros`, 'DELETE', { confirmar: true }, 'Ficheiros eliminados', 'ELIMINAR os ficheiros deste conteúdo? Esta ação é irreversível e fica registada.')}>Eliminar ficheiros (irreversível)</Button>
-                    )}
                   </>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => acaoDireta(`/admin/content/${d.targetType}/${d.targetId}/retirar`, 'POST', { motivo: motivo || undefined }, 'Conteúdo retirado', 'Retirar este conteúdo agora (fica escondido; nada é apagado)?')}>Retirar conteúdo já</Button>
