@@ -58,6 +58,7 @@ import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js"
 import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
 import { banirConta, BanimentoErro } from "../lib/banimento.js";
 import { emailLegal } from "../lib/encerramento.js";
+import { casoAtivoDaConta } from "../lib/menores.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
 import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
@@ -445,6 +446,11 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "report_improcedente": return `${admin} deu como improcedente a denúncia${target}`;
     case "report_conteudo_visto": return `${admin} consultou o conteúdo denunciado${target}`;
     case "conteudo_retirado": return `${admin} retirou conteúdo${target}`;
+    case "menor_caso_aberto": return `${admin} abriu um caso${target}`;
+    case "menor_confirmado": return `${admin} confirmou um caso${target}`;
+    case "menor_caso_arquivado": return `${admin} arquivou um caso${target}`;
+    case "menor_autoridade_registada": return `${admin} registou uma comunicação no caso${target}`;
+    case "menor_caso_visto": return `${admin} consultou um caso${target}`;
     case "conteudo_retirado_auto": return `Retirada automática (denúncia de menor)${target}`;
     case "conteudo_restaurado": return `${admin} repôs conteúdo${target}`;
     case "conteudo_ficheiros_apagar_pedido": return `${admin} pediu a eliminação dos ficheiros do conteúdo${target}`;
@@ -641,8 +647,11 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
       encerramento = c ? { encerradaEm: user.encerradaEm, apagarApos: c.apagarApos, podeReabrir: c.apagarApos.getTime() > Date.now() } : { encerradaEm: user.encerradaEm, apagarApos: user.encerradaEm, podeReabrir: false };
     }
 
+    const casoMenor = await casoAtivoDaConta(db, id);
+
     res.json({
       ...mapUser(user),
+      casoMenor,
       totalPosts: Number(totalPosts),
       totalSeguidores: Number(totalSeguidores),
       totalSeguindo: Number(totalSeguindo),
@@ -1323,6 +1332,15 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         details: { alvo: { tipo: r.targetType, id: r.targetId } }, ipAddress: req.ip ?? null,
       });
 
+      // Provas de um caso de menor: cada acesso fica registado também como `menor_caso_visto` (cadeia de custódia).
+      if (r.reason === "menor") {
+        await tx.insert(auditLogTable).values({
+          adminId: req.adminId!, action: "menor_caso_visto", targetType: "report", targetId: id,
+          details: { parte: "denuncia" }, ipAddress: req.ip ?? null,
+        });
+      }
+      const casoMenor = r.targetOwnerId && r.reason === "menor" ? await casoAtivoDaConta(tx, r.targetOwnerId) : null;
+
       const media = (alvo?.media ?? []).map((m) => {
         // Média privado ("paid/..."): URL assinado de 5 minutos (nunca guardado nem registado)
         if (isPaidKey(m.url)) {
@@ -1335,6 +1353,7 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         ...rSemIp,
         reporterUsername: r.reporterId ? (await tx.select({ u: usersTable.username }).from(usersTable).where(eq(usersTable.id, r.reporterId)))[0]?.u ?? null : null,
         totalDenunciasDoAlvo: Number(outras),
+        casoMenor,
         alvo: alvo ? { existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null } : { existe: false },
       };
     });

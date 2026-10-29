@@ -108,6 +108,8 @@ export const identifierBlocksTable = pgTable("identifier_blocks", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   banidaPor: integer("banida_por").references(() => usersTable.id, { onDelete: "set null" }),
   motivo: text("motivo"),
+  /** Caso de menor que originou o bloqueio (FK para menor_cases na BD; sem referência aqui para evitar import circular). */
+  casoId: integer("caso_id"),
   criadaEm: timestamp("criada_em").notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("identifier_blocks_tipo_hash_uq").on(t.tipo, t.hash),

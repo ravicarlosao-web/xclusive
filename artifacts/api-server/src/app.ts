@@ -231,7 +231,9 @@ app.use(
     logger,
     serializers: {
       req(req) {
-        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
+        // As rotas dos casos internos nunca aparecem nos logs (nem o nome nem o id do caso).
+        const caminho = req.url?.split("?")[0];
+        return { id: req.id, method: req.method, url: caminho && /^\/api\/admin\/menores(\/|$)/.test(caminho) ? "/api/admin/[reservado]" : caminho };
       },
       res(res) {
         return { statusCode: res.statusCode };

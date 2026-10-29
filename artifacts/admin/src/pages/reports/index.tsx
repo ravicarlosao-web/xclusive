@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { AlertTriangle, Eye } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
+import { Textarea } from '@/components/ui/textarea';
 import { AcoesMais18, ResumoInfracaoMais18, TIPOS_MAIS18, useResumoInfracao, type TipoMais18 } from '@/components/mais18/AcoesMais18';
 
 type Estado = 'pendente' | 'em_analise' | 'procedente' | 'improcedente';
@@ -143,6 +145,15 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
   const [notas, setNotas] = useState('');
   const [marcarMais18, setMarcarMais18] = useState(false);
   const [confirmarInfracao, setConfirmarInfracao] = useState(false);
+  // Abrir caso (denúncia de menor): suspensão preventiva da conta do autor, com descrição obrigatória (10 a 2000).
+  const [, setLocation] = useLocation();
+  const [casoAberto, setCasoAberto] = useState(false);
+  const [casoDescricao, setCasoDescricao] = useState('');
+  const abrirCaso = useMutation({
+    mutationFn: () => adminApi.abrirMenor({ userId: d.alvo.dono.id, descricao: casoDescricao.trim(), reportId: d.id }),
+    onSuccess: (r: any) => { queryClient.invalidateQueries({ queryKey: ['report-detail', id] }); setLocation(`/menores/${r.id}`); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Não foi possível abrir o caso', description: e.message }),
+  });
 
   const final = d && (d.status === 'procedente' || d.status === 'improcedente');
 
@@ -227,6 +238,27 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 </>
               )}
             </div>
+
+            {d.reason === 'menor' && d.alvo?.dono?.id && (
+              <div className="rounded-lg border border-red-500/40 p-3 space-y-2" data-testid="caso-bloco">
+                <p className="text-xs uppercase text-muted-foreground">Caso</p>
+                {d.casoMenor ? (
+                  <p>Esta conta já tem o <Link href={`/menores/${d.casoMenor.id}`} className="text-primary underline" data-testid="caso-ligacao">caso #{d.casoMenor.id}</Link> ({d.casoMenor.estado}).</p>
+                ) : !casoAberto ? (
+                  <Button variant="outline" size="sm" className="border-red-500/50 text-red-400" data-testid="caso-abrir" onClick={() => setCasoAberto(true)}>Abrir caso</Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Suspende a conta de @{d.alvo.dono.username}, retira todo o conteúdo e retém os levantamentos pendentes e aprovados. Nada se apaga.</p>
+                    <label htmlFor="caso-descricao" className="text-xs">Descrição (obrigatória, 10 a 2000 caracteres)</label>
+                    <Textarea id="caso-descricao" data-testid="caso-descricao-nova" rows={3} maxLength={2000} value={casoDescricao} onChange={(e) => setCasoDescricao(e.target.value)} />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setCasoAberto(false)} disabled={abrirCaso.isPending}>Cancelar</Button>
+                      <Button size="sm" className="bg-red-700 hover:bg-red-800 text-white" data-testid="caso-abrir-confirmar" disabled={casoDescricao.trim().length < 10 || abrirCaso.isPending} onClick={() => abrirCaso.mutate()}>Abrir caso e suspender a conta</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {d.adminNotes && <p className="text-xs text-muted-foreground">Notas internas: {d.adminNotes}</p>}
 

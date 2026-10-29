@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, 
   Flag, TrendingUp, Wallet, Bell, Settings, ClipboardList,
-  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent
+  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent, ShieldAlert
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/creators/kyc', label: 'Fila KYC', icon: ShieldCheck, badge: kpis?.kycPendente || undefined },
     { href: '/content', label: 'Conteúdo', icon: ImageIcon },
     { href: '/reports', label: 'Denúncias', icon: Flag, badge: kpis?.denunciasPendentes || undefined, urgent: kpis?.denunciasUrgentes || undefined },
+    { href: '/menores', label: 'Menores', icon: ShieldAlert },
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
     { href: '/commissions', label: 'Comissões', icon: Percent },
     { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine },

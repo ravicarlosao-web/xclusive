@@ -17,6 +17,7 @@ import appypayRouter from "./appypay";
 import liveRouter from "./live";
 import reportsRouter from "./reports";
 import registosRouter from "./registos";
+import menoresRouter from "./menores";
 
 const router: Router = Router();
 
@@ -38,5 +39,6 @@ router.use(appypayRouter);
 router.use(liveRouter);
 router.use(reportsRouter);
 router.use(registosRouter);
+router.use(menoresRouter);
 
 export default router;
