@@ -28,6 +28,7 @@ import { FollowListModal } from '@/components/shared/FollowListModal';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { useDesktop } from '@/hooks/useDesktop';
 import { useColunaParada } from '@/hooks/useColunaParada';
+import { useAjusteColuna } from '@/hooks/useAjusteColuna';
 import type { Post } from '@workspace/api-client-react';
 
 export default function Profile() {
@@ -37,11 +38,13 @@ export default function Profile() {
   
   const isMe = me?.username === username;
   const desktop = useDesktop();
-  const colunaRef = useColunaParada<HTMLElement>();
-
   const { data: profile, isLoading: isLoadingProfile, isError: isProfileError, error: profileError, refetch: refetchProfile } = useGetUserProfile(username, {
     query: { queryKey: ['/api/users', username], enabled: !!username }
   });
+
+  // A coluna só existe depois de o perfil carregar: os hooks voltam a ligar-se quando o perfil (id) muda
+  const colunaRef = useColunaParada<HTMLElement>(profile?.id);
+  useAjusteColuna(colunaRef, profile?.id);
 
   // Publicações por páginas ("Carregar mais"). A chave começa por /api/users/:u/posts: o PostCard e o ExclusivoCard invalidam-na.
   const {

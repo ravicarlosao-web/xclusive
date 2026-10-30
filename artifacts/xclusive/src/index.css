@@ -236,33 +236,30 @@
   .menu-lateral::-webkit-scrollbar { display: none; }
 }
 
-/* ── Colunas direitas paradas (início e perfil, md+) ──
-   A coluna é sticky dentro do contentor de scroll do centro e tem a altura do ecrã. NUNCA se esconde um bloco: compacta-se por
-   degraus de altura (variáveis --cd-*, como no menu lateral) e só depois se reduz o número de linhas do Top Criadores (mínimo 3)
-   e de cartões de Sugestões (mínimo 1; ver SugestoesParaTi). Abaixo de ~700px a própria coluna rola, com a barra escondida, sem
-   encadear no centro (overscroll-behavior: contain; o listener da roda em useColunaParada não a bloqueia nesse caso). */
+/* ── Colunas direitas paradas (início e perfil, lg+) ──
+   A coluna é sticky dentro do contentor de scroll do centro e tem a altura do ecrã. O tamanho é escolhido POR MEDIÇÃO
+   (hooks/useAjusteColuna): --t1..--t3 vão de 0 (tamanhos originais) a 1 (mais compacto), por esta ordem: t1 espaçamentos,
+   t2 banner, t3 cartões, linhas e botão. Só depois se reduz o número de cartões de Sugestões (mín. 1) e de linhas do Top
+   Criadores (mín. 3, data-linhas). Nunca se esconde um bloco. Se nem o mínimo couber (<~571px) a própria coluna rola, com a
+   barra escondida e sem encadear no centro (overscroll-behavior: contain; useColunaParada não bloqueia a roda nesse caso). */
 .coluna-direita {
   overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none;
-  padding-top: var(--cd-pad); padding-bottom: var(--cd-pad);
-  --cd-pad: 16px; --cd-gap: 12px; --cd-pesq: 40px; --cd-seta: 32px;
-  --cd-ban-py: 12px; --cd-ban-logo: 24px; --cd-ban-mb: 6px; --cd-ban-txt: 13px; --cd-ban-sub: 12px;
-  --cd-row-py: 6px; --cd-av: 36px; --cd-row-gap: 4px;
-  --cd-card: 88px; --cd-card-av: 40px; --cd-cards-gap: 8px; --cd-thumb: 84px; --cd-capa: 48px;
+  --t1: 0; --t2: 0; --t3: 0;
+  padding-top: var(--cd-pad); padding-bottom: var(--cd-padb);
+  --cd-pad: calc(24px - 14px * var(--t1)); --cd-padb: calc(32px - 22px * var(--t1));
+  --cd-gap-a: calc(20px - 12px * var(--t1)); --cd-gap-b: calc(24px - 16px * var(--t1));
+  --cd-hmb: calc(12px - 6px * var(--t1)); --cd-hmb2: calc(8px - 4px * var(--t1));
+  --cd-pesq: calc(44px - 4px * var(--t1)); --cd-row-gap: calc(6px - 2px * var(--t1));
+  --cd-cards-gap: calc(12px - 4px * var(--t1)); --cd-dots: calc(8px - 6px * var(--t1));
+  --cd-ban-py: calc(24px - 16px * var(--t2)); --cd-ban-logo: calc(40px - 22px * var(--t2)); --cd-ban-mb: calc(12px - 9px * var(--t2));
+  --cd-ban-txt: calc(14px - 2px * var(--t2)); --cd-ban-sub: calc(12px - 1px * var(--t2));
+  --cd-row-py: calc(12px - 9px * var(--t3)); --cd-av: calc(48px - 18px * var(--t3)); --cd-l1: calc(20px - 4px * var(--t3)); --cd-l2: calc(16.5px - 2.5px * var(--t3));
+  --cd-card: calc(120px - 48px * var(--t3)); --cd-card-av: calc(48px - 16px * var(--t3)); --cd-card-p: calc(12px - 4px * var(--t3)); --cd-badge-py: calc(4px - 2px * var(--t3));
+  --cd-btn: calc(48px - 4px * var(--t3)); --cd-bt: calc(36px - 4px * var(--t3)); --cd-seta: calc(32px - 4px * var(--t3)); --cd-seta-lg: calc(44px - 12px * var(--t3));
+  --cd-thumb: calc(200px - 136px * var(--t3)); --cd-capa: calc(64px - 24px * var(--t3)); --cd-out-p: calc(16px - 4px * var(--t3));
+  --cd-out-pb: calc(12px - 4px * var(--t3)); --cd-ul: calc(8px - 4px * var(--t3)); --cd-nm: calc(6px - 2px * var(--t3));
 }
 .coluna-direita::-webkit-scrollbar { display: none; }
 .coluna-direita > :last-child { margin-bottom: 0; }
-@media (min-width: 1024px) {
-  @media (max-height: 892px) {
-    .coluna-direita { --cd-pad: 12px; --cd-gap: 10px; --cd-pesq: 38px; --cd-ban-py: 10px; --cd-ban-logo: 20px; --cd-ban-mb: 4px; --cd-ban-txt: 12px; --cd-ban-sub: 11px;
-      --cd-row-py: 4px; --cd-av: 32px; --cd-row-gap: 4px; --cd-card: 80px; --cd-card-av: 36px; --cd-cards-gap: 6px; --cd-thumb: 72px; --cd-capa: 44px; }
-  }
-  @media (max-height: 823px) {
-    .coluna-direita { --cd-pad: 8px; --cd-gap: 8px; --cd-pesq: 36px; --cd-seta: 28px; --cd-ban-py: 8px; --cd-ban-logo: 18px; --cd-ban-mb: 3px; --cd-ban-txt: 12px; --cd-ban-sub: 11px;
-      --cd-row-py: 3px; --cd-av: 30px; --cd-row-gap: 3px; --cd-card: 72px; --cd-card-av: 32px; --cd-cards-gap: 6px; --cd-thumb: 64px; --cd-capa: 40px; }
-  }
-  /* Menos linhas do Top Criadores só depois de compactar (mínimo 3). Alturas mínimas para caberem inteiros (conteúdo medido):
-     T1 (≥893): 5 linhas + 2 cartões = 892 · T2 (824–892): 822 · T3 (≤823): 5 linhas + 2 cartões 759 · 5 linhas + 1 cartão 681
-     · 4 linhas + 1 cartão 625 · 3 linhas + 1 cartão 571 (abaixo disto a coluna rola por dentro). Cartões: ver SugestoesParaTi (761). */
-  @media (max-height: 682px) { .coluna-direita .cd-top-linha:nth-child(n+5) { display: none; } }
-  @media (max-height: 626px) { .coluna-direita .cd-top-linha:nth-child(n+4) { display: none; } }
-}
+.coluna-direita[data-linhas="4"] .cd-top-linha:nth-child(n+5) { display: none; }
+.coluna-direita[data-linhas="3"] .cd-top-linha:nth-child(n+4) { display: none; }
