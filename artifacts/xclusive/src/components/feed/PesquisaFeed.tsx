@@ -35,7 +35,7 @@ export function PesquisaFeed({ desativada = false }: { desativada?: boolean }) {
   const mostrar = aberto && pesquisar;
 
   return (
-    <div ref={raiz} className="relative mb-[var(--cd-gap,20px)] shrink-0" data-testid="pesquisa-feed">
+    <div ref={raiz} className="relative mb-[var(--cd-gap-a,20px)] shrink-0" data-testid="pesquisa-feed">
       <div className="flex h-[var(--cd-pesq,44px)] items-center gap-2 rounded-xl border border-border bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <input

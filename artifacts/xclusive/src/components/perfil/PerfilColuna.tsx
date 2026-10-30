@@ -16,7 +16,7 @@ export function PerfilColuna({ pesquisa, onPesquisa, publicacoes, onAbrir, onIma
   const miniaturas = miniaturasElegiveis(publicacoes);
   return (
     <>
-      <div className="relative mb-[var(--cd-gap,20px)] shrink-0" data-testid="perfil-pesquisa">
+      <div className="relative mb-[var(--cd-gap-a,20px)] shrink-0" data-testid="perfil-pesquisa">
         <div className="flex h-[var(--cd-pesq,44px)] items-center gap-2 rounded-xl border border-border bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input type="search" value={pesquisa} onChange={(e) => onPesquisa(e.target.value)} placeholder="Pesquisar publicações do utilizador"
@@ -27,13 +27,13 @@ export function PerfilColuna({ pesquisa, onPesquisa, publicacoes, onAbrir, onIma
       </div>
 
       {miniaturas.length > 0 && (
-        <section aria-labelledby="perfil-recente-titulo" className="cd-recente mb-[var(--cd-gap,24px)] shrink-0 rounded-xl border border-border p-3" data-testid="perfil-recente">
-          <h2 id="perfil-recente-titulo" className="mb-2 text-xs font-extrabold uppercase tracking-wide text-foreground">Recente</h2>
+        <section aria-labelledby="perfil-recente-titulo" className="cd-recente mb-[var(--cd-gap-b,24px)] shrink-0 rounded-xl border border-border p-[var(--cd-out-p,16px)]" data-testid="perfil-recente">
+          <h2 id="perfil-recente-titulo" className="mb-[var(--cd-hmb,12px)] text-xs font-extrabold uppercase tracking-wide text-foreground">Recente</h2>
           <ul className="grid grid-cols-3 gap-2">
             {miniaturas.map((p) => (
               <li key={p.id}>
                 <button type="button" onClick={() => onAbrir(p)} aria-label={`Abrir publicação${p.legenda ? `: ${p.legenda.slice(0, 60)}` : ''}`} data-testid="perfil-miniatura"
-                  className="block h-[var(--cd-thumb,117px)] min-h-[44px] w-full overflow-hidden rounded-md bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  className="block aspect-square max-h-[var(--cd-thumb,200px)] min-h-[44px] w-full overflow-hidden rounded-md bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <img src={p.media?.[0]?.url ?? ''} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => onImagemFalhou(p.id)} />
                 </button>
               </li>

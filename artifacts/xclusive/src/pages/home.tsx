@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { ChevronRight } from 'lucide-react';
 import { useColunaParada } from '@/hooks/useColunaParada';
+import { useAjusteColuna } from '@/hooks/useAjusteColuna';
 import { MOCK_FEED_POSTS } from '@/data/mockPosts';
 import { MOCK_STORY_GROUPS } from '@/data/mockStories';
 import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToStory, markStoryViewed } from '@/lib/localStories';
@@ -30,6 +31,7 @@ const MAX_STORY_SIZE_MB = 500;
 export default function Home() {
   const { user, isMockMode } = useAuth();
   const colunaRef = useColunaParada<HTMLElement>();
+  const { cartoes } = useAjusteColuna(colunaRef);
   const queryClient = useQueryClient();
   const deleteStoryMutation = useDeleteStory();
   // Separador ativo do feed: uma só chamada por separador (sem polling).
@@ -354,9 +356,9 @@ export default function Home() {
         <PesquisaFeed desativada={isMockMode} />
         <BannerSugestoes />
         <TopCriadores ativo={!isMockMode} />
-        <SugestoesParaTi ativo={!isMockMode} />
-        <Link href="/explorar" className="cd-descubra mt-auto shrink-0">
-          <Button className="h-11 w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
+        <SugestoesParaTi ativo={!isMockMode} porPagina={cartoes} />
+        <Link href="/explorar" className="cd-descubra shrink-0">
+          <Button className="h-[var(--cd-btn,48px)] w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
         </Link>
       </aside>
 

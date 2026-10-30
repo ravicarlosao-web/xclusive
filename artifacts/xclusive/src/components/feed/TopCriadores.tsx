@@ -40,8 +40,8 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
   const criadores = (ativo && data ? data : []).slice(0, 5);
 
   return (
-    <section aria-labelledby="top-criadores-titulo" className="cd-top mb-[var(--cd-gap,24px)] shrink-0" data-testid="top-criadores">
-      <div className="mb-2 flex items-center justify-between px-0.5">
+    <section aria-labelledby="top-criadores-titulo" className="cd-top mb-[var(--cd-gap-b,24px)] shrink-0" data-testid="top-criadores">
+      <div className="mb-[var(--cd-hmb,12px)] flex items-center justify-between px-0.5">
         <h2 id="top-criadores-titulo" className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
           <Flame className="h-5 w-5 fill-orange-400 text-orange-500" aria-hidden="true" /> Top Criadores
         </h2>
@@ -70,13 +70,13 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
                     <AvatarFallback className="text-xs font-bold">{c.nomeExibicao?.[0] || c.username[0]}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1 text-sm font-bold leading-4 text-foreground"><span className="truncate">{c.username}</span>{c.verificado && <Verificado />}</span>
-                    <span className="block truncate text-[11px] leading-[14px] text-muted-foreground">{c.nomeExibicao}</span>
-                    <span className="block text-[11px] leading-[14px] text-muted-foreground">{c.totalPublicacoes} {c.totalPublicacoes === 1 ? 'post' : 'posts'}</span>
+                    <span className="flex items-center gap-1 text-sm font-bold leading-[var(--cd-l1,20px)] text-foreground"><span className="truncate">{c.username}</span>{c.verificado && <Verificado />}</span>
+                    <span className="block truncate text-[11px] leading-[var(--cd-l2,16.5px)] text-muted-foreground">{c.nomeExibicao}</span>
+                    <span className="block text-[11px] leading-[var(--cd-l2,16.5px)] text-muted-foreground">{c.totalPublicacoes} {c.totalPublicacoes === 1 ? 'post' : 'posts'}</span>
                   </span>
                 </Link>
                 <Button variant="ghost" size="sm" aria-pressed={aSeguir} aria-label={`${aSeguir ? 'A seguir' : 'Seguir'} ${c.username}`}
-                  className="h-8 shrink-0 rounded-lg bg-primary/15 px-4 text-xs font-bold text-primary hover:bg-primary/25 hover:text-primary" onClick={() => alternar(c.id, c.username, !!c.estaASeguir)}>
+                  className="h-[var(--cd-bt,36px)] shrink-0 rounded-lg bg-primary/15 px-4 text-xs font-bold text-primary hover:bg-primary/25 hover:text-primary" onClick={() => alternar(c.id, c.username, !!c.estaASeguir)}>
                   {aSeguir ? 'A seguir' : 'Seguir'}
                 </Button>
               </div>
