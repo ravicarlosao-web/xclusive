@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { irAoTopo } from '@/lib/scrollCentro';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -161,7 +162,7 @@ export default function KYCPage() {
 
   const goTo = (s: Step) => {
     setStep(s);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    irAoTopo('smooth');
   };
 
   // ── Personal Validation ──────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -6,6 +6,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { useSeguir } from './useSeguir';
+
+const ALTURA_DOIS_CARTOES = '(min-height: 895px)';
+const subscreverAltura = (aviso: () => void) => {
+  const mql = window.matchMedia(ALTURA_DOIS_CARTOES);
+  mql.addEventListener('change', aviso);
+  return () => mql.removeEventListener('change', aviso);
+};
 
 interface Sugestao {
   id: number;
@@ -38,7 +45,8 @@ export function SugestoesParaTi({ ativo }: { ativo: boolean }) {
     retry: 1,
   });
   const lista = (data ?? []).slice(0, 8);
-  const POR_PAGINA = 2;
+  // Cartões inteiros que cabem na coluna parada: 2 com altura de ecrã suficiente, senão 1 (nunca meio cartão)
+  const POR_PAGINA = useSyncExternalStore(subscreverAltura, () => (window.matchMedia(ALTURA_DOIS_CARTOES).matches ? 2 : 1), () => 2);
   const paginas = Math.ceil(lista.length / POR_PAGINA);
   const pag = Math.min(i, Math.max(0, paginas - 1));
   const visiveis = lista.slice(pag * POR_PAGINA, pag * POR_PAGINA + POR_PAGINA);
@@ -46,7 +54,7 @@ export function SugestoesParaTi({ ativo }: { ativo: boolean }) {
   const seta = 'flex h-8 w-8 items-center justify-center rounded-full text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
   return (
-    <section aria-labelledby="sugestoes-titulo" className="mb-5" data-testid="sugestoes-para-ti">
+    <section aria-labelledby="sugestoes-titulo" className="cd-sug mb-5 shrink-0" data-testid="sugestoes-para-ti">
       <div className="mb-3 flex items-center justify-between px-0.5">
         <h2 id="sugestoes-titulo" className="text-base font-bold tracking-tight text-foreground">Sugestões para ti</h2>
         <div className="flex items-center gap-1">

@@ -40,7 +40,7 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
   const criadores = (ativo && data ? data : []).slice(0, 5);
 
   return (
-    <section aria-labelledby="top-criadores-titulo" className="mb-6" data-testid="top-criadores">
+    <section aria-labelledby="top-criadores-titulo" className="cd-top mb-6 shrink-0" data-testid="top-criadores">
       <div className="mb-3 flex items-center justify-between px-0.5">
         <h2 id="top-criadores-titulo" className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
           <Flame className="h-5 w-5 fill-orange-400 text-orange-500" aria-hidden="true" /> Top Criadores
@@ -62,7 +62,7 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
           criadores.map((c, i) => {
             const aSeguir = segue(c.id, !!c.estaASeguir);
             return (
-              <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-secondary/70" data-testid="top-linha">
+              <div key={c.id} className="cd-top-linha flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-secondary/70" data-testid="top-linha">
                 <Link href={`/perfil/${c.username}`} className="flex min-w-0 flex-1 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-xs font-black text-foreground" aria-label={`Posição ${i + 1}`}>{i + 1}</span>
                   <Avatar className="h-12 w-12 shrink-0 border border-border">

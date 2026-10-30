@@ -267,9 +267,9 @@ export default function Home() {
   const vazio = VAZIO[filtro];
 
   return (
-    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4">
+    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:h-[100dvh] md:overflow-hidden">
       {/* Coluna central: cabeçalho fixo, stories + lives, compositor, separadores e posts */}
-      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+      <div data-scroll-centro="" tabIndex={-1} className="scroll-centro outline-none w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh] md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain">
         <FeedHeader onAtualizar={() => { void refetchFeed(); }} aAtualizar={isFetchingFeed} />
 
         <input
@@ -348,12 +348,12 @@ export default function Home() {
       </div>
 
       {/* Coluna direita (só em ecrãs grandes): pesquisa, sugestões, top criadores e descobrir */}
-      <aside aria-label="Descobrir" className="hidden lg:block w-[320px] xl:w-[400px] flex-shrink-0 pt-6">
+      <aside aria-label="Descobrir" className="coluna-direita hidden lg:flex flex-col md:h-full md:overflow-clip w-[320px] xl:w-[400px] flex-shrink-0 pt-6">
         <PesquisaFeed desativada={isMockMode} />
-        <BannerSugestoes />
+        <div className="cd-banner shrink-0"><BannerSugestoes /></div>
         <TopCriadores ativo={!isMockMode} />
         <SugestoesParaTi ativo={!isMockMode} />
-        <Link href="/explorar">
+        <Link href="/explorar" className="cd-descubra mt-auto">
           <Button className="mb-8 h-12 w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
         </Link>
       </aside>

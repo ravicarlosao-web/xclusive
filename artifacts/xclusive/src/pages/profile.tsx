@@ -25,6 +25,8 @@ import { Link, useLocation } from 'wouter';
 import { ExclusivoCard } from '@/components/subscricoes/ExclusivoCard';
 import { PostDetailModal } from '@/components/shared/PostDetailModal';
 import { FollowListModal } from '@/components/shared/FollowListModal';
+import { RodapeLegal } from '@/components/shared/RodapeLegal';
+import { useDesktop } from '@/hooks/useDesktop';
 import type { Post } from '@workspace/api-client-react';
 
 export default function Profile() {
@@ -33,6 +35,7 @@ export default function Profile() {
   const { user: me, isMockMode } = useAuth();
   
   const isMe = me?.username === username;
+  const desktop = useDesktop();
 
   const { data: profile, isLoading: isLoadingProfile, isError: isProfileError, error: profileError, refetch: refetchProfile } = useGetUserProfile(username, {
     query: { queryKey: ['/api/users', username], enabled: !!username }
@@ -183,8 +186,8 @@ export default function Profile() {
 
   if (isLoadingProfile) {
     return (
-      <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4" data-testid="perfil-a-carregar">
-        <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+      <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:h-[100dvh] md:overflow-hidden" data-testid="perfil-a-carregar">
+        <div data-scroll-centro="" tabIndex={-1} className="scroll-centro outline-none w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh] md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain">
           <Skeleton className="aspect-[10/3] min-h-[132px] w-full rounded-none" />
           <div className="px-4 pb-4">
             <Skeleton className="-mt-10 h-20 w-20 rounded-full ring-4 ring-background sm:-mt-12 sm:h-24 sm:w-24" />
@@ -246,9 +249,9 @@ export default function Profile() {
   const tabCls = 'h-full flex-1 rounded-none border-b-2 border-transparent text-sm font-bold uppercase tracking-wide text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
   return (
-    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 pb-20 sm:pb-0">
+    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 pb-20 sm:pb-0 md:h-[100dvh] md:overflow-hidden md:pb-0">
       {/* Coluna central: banner, identidade, assinatura, separadores e lista contínua */}
-      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+      <div data-scroll-centro="" tabIndex={-1} className="scroll-centro outline-none w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh] md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain">
         <PerfilCabecalhoFixo visivel={compacto} nome={profile.nomeExibicao} verificado={profile.verificado} onVoltar={voltar}
           onCopiarLigacao={() => { void copiarLigacao(); }} onDenunciar={isMe ? undefined : () => setReportOpen(true)} />
         <div ref={bannerRef}>
@@ -371,10 +374,11 @@ export default function Profile() {
             )}
           </TabsContent>
         </Tabs>
+        {desktop && <RodapeLegal className="max-w-screen-xl mx-auto px-4 mt-8 pb-4" />}
       </div>
 
       {/* Coluna direita (só em ecrãs grandes): pesquisa e RECENTE */}
-      <aside aria-label="Pesquisa e publicações recentes" className="hidden lg:block w-[320px] xl:w-[400px] flex-shrink-0 pt-6" data-testid="perfil-coluna">
+      <aside aria-label="Pesquisa e publicações recentes" className="coluna-direita hidden lg:flex flex-col md:h-full md:overflow-clip w-[320px] xl:w-[400px] flex-shrink-0 pt-6" data-testid="perfil-coluna">
         <PerfilColuna
           pesquisa={pesquisa}
           onPesquisa={setPesquisa}

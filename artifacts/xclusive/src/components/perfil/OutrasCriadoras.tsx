@@ -31,7 +31,7 @@ export function OutrasCriadoras({ ativo, perfilUsername, meuUsername }: { ativo:
   const lista = (data ?? []).filter((u) => u.username !== perfilUsername && u.username !== meuUsername && (u.tipoConta === undefined || u.tipoConta === 'criador')).slice(0, 8);
   if (!ativo || lista.length === 0) return null;
   return (
-    <section aria-labelledby="outras-criadoras-titulo" className="mb-6 rounded-xl border border-border p-4" data-testid="outras-criadoras">
+    <section aria-labelledby="outras-criadoras-titulo" className="cd-outras mb-6 shrink-0 rounded-xl border border-border p-4" data-testid="outras-criadoras">
       <div className="flex items-center justify-between">
         <h2 id="outras-criadoras-titulo" className="text-xs font-extrabold uppercase tracking-wide text-foreground">Outras criadoras</h2>
         <button type="button" onClick={() => setAberto((a) => !a)} aria-expanded={aberto} aria-controls="outras-criadoras-lista" aria-label={aberto ? 'Recolher outras criadoras' : 'Expandir outras criadoras'} data-testid="outras-criadoras-alternar"
