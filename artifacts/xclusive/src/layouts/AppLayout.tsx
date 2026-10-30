@@ -5,6 +5,8 @@ import {
   Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio, Sun, Moon
 } from 'lucide-react';
 import { useTema } from '@/hooks/useTema';
+import { useDesktop } from '@/hooks/useDesktop';
+import { useScrollCentro } from '@/hooks/useScrollCentro';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -52,13 +54,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
   ];
 
   const comRodape = ROTAS_COM_RODAPE.some((r) => (r.endsWith('/') ? location.startsWith(r) : location === r || location.startsWith(r + '/')));
+  // No perfil (duas colunas) em md+, o rodapé legal vai no fim da coluna central, que é quem faz scroll
+  const desktop = useDesktop();
+  const rodapeNoCentro = desktop && location.startsWith('/perfil/');
+  useScrollCentro(location);
   const isLiveWatching = location.startsWith('/live/') && !location.startsWith('/live-publish-test');
 
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground flex">
+    <div className="min-h-[100dvh] md:h-[100dvh] md:overflow-hidden bg-background text-foreground flex">
       {/* Desktop & Tablet Sidebar */}
-      <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-50 w-[80px] lg:w-[245px] border-r border-border bg-card transition-all duration-300">
-        <div className="p-4 lg:p-6 mb-2">
+      <aside className="menu-lateral hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-50 w-[80px] lg:w-[245px] border-r border-border bg-card transition-all duration-300" data-testid="menu-lateral">
+        <div className="shrink-0 px-4 lg:px-6 py-[var(--sb-logo-py)] mb-[var(--sb-logo-mb)]">
           <Link href="/home" className="flex items-center group">
             {/* Dois logos trocados por tema: o escuro (palavra branca, com brilho) só no noturno; o claro (palavra escura) só no diurno */}
             <img
@@ -86,13 +92,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 flex flex-col gap-2 px-3 lg:px-4 [@media(min-height:900px)]:gap-3 [@media(min-height:900px)]:[&_svg]:h-7 [@media(min-height:900px)]:[&_svg]:w-7">
+        <nav className="flex-1 flex flex-col gap-[var(--sb-gap)] px-3 lg:px-4 [@media(min-height:900px)]:[&_svg]:h-7 [@media(min-height:900px)]:[&_svg]:w-7">
           {navItems.map((item) => {
             const isActive = location.startsWith(item.path);
             return (
               <Link key={item.path} href={item.path}>
                 <div className={cn(
-                  "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
+                  "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
                   isActive ? "text-primary font-semibold" : "text-foreground"
                 )}>
                   <div className="relative">
@@ -117,7 +123,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               disabled={!user.verificado}
               title={!user.verificado ? "A tua conta está pendente de aprovação do administrador" : undefined}
               className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 text-left w-full",
+                "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 text-left w-full",
                 !user.verificado 
                   ? "opacity-50 cursor-not-allowed" 
                   : "cursor-pointer group hover:bg-secondary text-foreground"
@@ -132,7 +138,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             user.verificado ? (
               <Link href="/ir-em-direto">
                 <div className={cn(
-                  "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
+                  "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
                   location.startsWith('/ir-em-direto') ? "text-primary font-semibold" : "text-foreground"
                 )}>
                   <Radio className={cn(
@@ -147,7 +153,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ) : (
               <div
                 title="A tua conta está pendente de aprovação do administrador"
-                className="flex items-center gap-4 p-3 rounded-xl opacity-50 cursor-not-allowed text-foreground"
+                className="flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl opacity-50 cursor-not-allowed text-foreground"
               >
                 <Radio className="w-6 h-6 stroke-[1.5px] text-muted-foreground" />
                 <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Ir em Direto</span>
@@ -157,7 +163,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
           <Link href={user ? `/perfil/${user.username}` : '/login'}>
             <div className={cn(
-              "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
+              "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
               location.startsWith('/perfil') ? "text-primary font-semibold" : "text-foreground"
             )}>
               <Avatar className="w-6 h-6 border border-border group-hover:scale-110 transition-transform">
@@ -171,7 +177,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {user?.tipoConta === 'criador' ? (
             <Link href="/definicoes/monetizacao">
               <div className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
+                "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary",
                 location.startsWith('/definicoes/monetizacao') ? "text-primary font-semibold" : "text-foreground"
               )}>
                 <BarChart className={cn("w-6 h-6", location.startsWith('/definicoes/monetizacao') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
@@ -181,7 +187,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           ) : (
             <Link href="/tornar-criador">
               <div className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-primary/10 border border-transparent hover:border-primary/30",
+                "flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-primary/10 border border-transparent hover:border-primary/30",
                 location.startsWith('/tornar-criador') ? "text-primary font-semibold bg-primary/10 border-primary/30" : "text-primary dark:text-primary/70"
               )}>
                 <Sparkles className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
@@ -191,7 +197,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </nav>
 
-        <div className="p-3 lg:p-4 mt-auto flex flex-col gap-2">
+        <div className="shrink-0 px-3 lg:px-4 py-[var(--sb-foot-py)] mt-auto flex flex-col gap-[var(--sb-foot-gap)]">
           {/* Carteira / Saldo */}
           {saldo !== null && (
             <Link href="/carteira">
@@ -218,7 +224,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-pressed={!noturno}
             aria-label={noturno ? 'Mudar para o modo diurno' : 'Mudar para o modo noturno'}
             data-testid="tema-sidebar"
-            className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full"
+            className="flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full"
           >
             {noturno
               ? <Sun className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
@@ -227,7 +233,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <Popover>
             <PopoverTrigger asChild>
-              <button className="flex items-center gap-4 p-3 rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full">
+              <button className="flex items-center gap-4 px-3 py-[var(--sb-py)] rounded-xl transition-all duration-200 cursor-pointer group hover:bg-secondary w-full">
                 <Menu className="w-6 h-6 stroke-[1.5px] group-hover:scale-110 transition-transform" />
                 <span className="hidden lg:block text-[15px] [@media(min-height:900px)]:text-[17px]">Mais</span>
               </button>
@@ -249,13 +255,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Content Area: em md+ a altura é a do ecrã e só o contentor do centro faz scroll (menu e colunas laterais ficam parados) */}
       <main className={cn(
-        "flex-1 md:ml-[80px] lg:ml-[245px] w-full min-h-[100dvh]",
+        "flex-1 md:ml-[80px] lg:ml-[245px] w-full min-h-[100dvh] md:min-h-0 md:h-[100dvh] md:overflow-hidden",
         isLiveWatching ? "pb-0" : "pb-[60px] md:pb-0"
       )}>
-        {children}
-        {comRodape && <RodapeLegal className="max-w-screen-xl mx-auto px-4 mt-8 pb-4" />}
+        <div id="conteudo-scroll" data-scroll-centro="" tabIndex={-1} className="scroll-centro outline-none md:h-full md:overflow-y-auto md:overscroll-contain">
+          {children}
+          {comRodape && !rodapeNoCentro && <RodapeLegal className="max-w-screen-xl mx-auto px-4 mt-8 pb-4" />}
+        </div>
       </main>
 
       <CreatePostModal open={createPostOpen} onClose={() => setCreatePostOpen(false)} />

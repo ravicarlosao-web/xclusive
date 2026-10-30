@@ -193,3 +193,63 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* ── Scroll só no centro (md+): contentor do centro com scrollbar fina e visível, pelos tokens do tema ── */
+.scroll-centro {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+}
+@media (min-width: 768px) {
+  .scroll-centro { scrollbar-gutter: stable; }
+  .scroll-centro::-webkit-scrollbar { width: 10px; }
+  .scroll-centro::-webkit-scrollbar-track { background: transparent; }
+  .scroll-centro::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.45);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scroll-centro::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.7); background-clip: content-box; }
+  /* Com um diálogo aberto (o Radix marca o body) o centro não rola por trás */
+  body[data-scroll-locked] [data-scroll-centro] { overflow-y: hidden !important; }
+}
+
+/* ── Menu lateral: espaçamento por altura de ecrã (CSS px) para caberem todos os itens, incluindo Carteira, Modo noturno e "Mais" ── */
+.menu-lateral {
+  --sb-py: 12px; --sb-gap: 8px; --sb-logo-py: 16px; --sb-logo-mb: 8px; --sb-foot-py: 12px; --sb-foot-gap: 8px;
+}
+@media (min-width: 1024px) {
+  .menu-lateral { --sb-logo-py: 24px; --sb-foot-py: 16px; }
+}
+@media (min-height: 900px) {
+  .menu-lateral { --sb-gap: 12px; }
+}
+@media (max-height: 799px) {
+  .menu-lateral { --sb-py: 10px; --sb-gap: 4px; --sb-logo-py: 12px; --sb-logo-mb: 4px; --sb-foot-py: 12px; --sb-foot-gap: 4px; }
+}
+@media (max-height: 719px) {
+  .menu-lateral { --sb-py: 8px; --sb-gap: 2px; --sb-logo-py: 12px; --sb-logo-mb: 0px; --sb-foot-py: 8px; --sb-foot-gap: 4px; }
+}
+/* Segurança (zoom 200% ou janelas muito baixas): só aqui o menu pode rolar, com a barra escondida */
+@media (max-height: 599px) {
+  .menu-lateral { overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .menu-lateral::-webkit-scrollbar { display: none; }
+}
+
+/* ── Colunas direitas paradas (início e perfil, md+): só blocos inteiros, por altura de ecrã (CSS px) ──
+   Prioridade: pesquisa > Top Criadores > Sugestões para ti > banner (com o título SUGESTÕES e as setas) > "Descubra mais criadores".
+   Alturas medidas (início): topo 24 + pesquisa 64 | Top Criadores 36 + 79 por linha (+6 entre linhas) | Sugestões 44 + 120 por cartão
+   (+12 entre cartões) + 32 de pontos | banner 223 | botão 80 (fixo em baixo). Limiar = altura mínima em que o bloco cabe inteiro:
+     Top 5 linhas 543 · 4 linhas 458 · 3 linhas 373 · 2 linhas 288 | Sugestões 1 cartão 763 · 2 cartões 895 (ver SugestoesParaTi)
+     banner 1118 | botão 1200.  Perfil: pesquisa + Recente 267 · + Outras criadoras 533. */
+@media (min-width: 1024px) {
+  @media (max-height: 1199px) { .coluna-direita .cd-descubra { display: none; } }
+  @media (max-height: 1117px) { .coluna-direita .cd-banner { display: none; } }
+  @media (max-height: 762px) { .coluna-direita .cd-sug { display: none; } }
+  @media (max-height: 542px) { .coluna-direita .cd-top-linha:nth-child(n+5) { display: none; } }
+  @media (max-height: 457px) { .coluna-direita .cd-top-linha:nth-child(n+4) { display: none; } }
+  @media (max-height: 372px) { .coluna-direita .cd-top-linha:nth-child(n+3) { display: none; } }
+  @media (max-height: 287px) { .coluna-direita .cd-top-linha:nth-child(n+2) { display: none; } }
+  @media (max-height: 559px) { .coluna-direita .cd-outras { display: none; } }
+  @media (max-height: 299px) { .coluna-direita .cd-recente { display: none; } }
+}
