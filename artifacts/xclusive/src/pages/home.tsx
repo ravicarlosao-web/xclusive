@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { ChevronRight } from 'lucide-react';
+import { useColunaParada } from '@/hooks/useColunaParada';
 import { MOCK_FEED_POSTS } from '@/data/mockPosts';
 import { MOCK_STORY_GROUPS } from '@/data/mockStories';
 import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToStory, markStoryViewed } from '@/lib/localStories';
@@ -28,6 +29,7 @@ const MAX_STORY_SIZE_MB = 500;
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
+  const colunaRef = useColunaParada<HTMLElement>();
   const queryClient = useQueryClient();
   const deleteStoryMutation = useDeleteStory();
   // Separador ativo do feed: uma só chamada por separador (sem polling).
@@ -267,9 +269,9 @@ export default function Home() {
   const vazio = VAZIO[filtro];
 
   return (
-    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:h-[100dvh] md:overflow-hidden">
+    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:pr-1.5">
       {/* Coluna central: cabeçalho fixo, stories + lives, compositor, separadores e posts */}
-      <div data-scroll-centro="" tabIndex={-1} className="scroll-centro outline-none w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh] md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain">
+      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
         <FeedHeader onAtualizar={() => { void refetchFeed(); }} aAtualizar={isFetchingFeed} />
 
         <input
@@ -348,13 +350,13 @@ export default function Home() {
       </div>
 
       {/* Coluna direita (só em ecrãs grandes): pesquisa, sugestões, top criadores e descobrir */}
-      <aside aria-label="Descobrir" className="coluna-direita hidden lg:flex flex-col md:h-full md:overflow-clip w-[320px] xl:w-[400px] flex-shrink-0 pt-6">
+      <aside ref={colunaRef} aria-label="Descobrir" className="coluna-direita hidden lg:flex flex-col lg:sticky lg:top-0 lg:h-[100dvh] lg:self-start w-[320px] xl:w-[400px] flex-shrink-0">
         <PesquisaFeed desativada={isMockMode} />
-        <div className="cd-banner shrink-0"><BannerSugestoes /></div>
+        <BannerSugestoes />
         <TopCriadores ativo={!isMockMode} />
         <SugestoesParaTi ativo={!isMockMode} />
-        <Link href="/explorar" className="cd-descubra mt-auto">
-          <Button className="mb-8 h-12 w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
+        <Link href="/explorar" className="cd-descubra mt-auto shrink-0">
+          <Button className="h-11 w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
         </Link>
       </aside>
 
