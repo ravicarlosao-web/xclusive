@@ -248,6 +248,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
     apiDeletePost({ id: post.id }, {
       onSuccess: () => {
         invalidateFeed();
+        queryClient.invalidateQueries({ queryKey: ['/api/explore'] });
         toast({ title: 'Publicação eliminada' });
       },
       onError: (err) => {

@@ -5,12 +5,9 @@ import { PostCard } from '@/components/shared/PostCard';
 import { StoryViewer } from '@/components/shared/StoryViewer';
 import { PostSkeleton } from '@/components/shared/SkeletonLoaders';
 import { FeedHeader } from '@/components/feed/FeedHeader';
+import { ColunaDescobrir } from '@/components/feed/ColunaDescobrir';
 import { FeedTabs, type FiltroFeed } from '@/components/feed/FeedTabs';
 import { StoriesLiveRow, type LiveAtiva } from '@/components/feed/StoriesLiveRow';
-import { PesquisaFeed } from '@/components/feed/PesquisaFeed';
-import { BannerSugestoes } from '@/components/feed/BannerSugestoes';
-import { TopCriadores } from '@/components/feed/TopCriadores';
-import { SugestoesParaTi } from '@/components/feed/SugestoesParaTi';
 import { InlineComposer } from '@/components/shared/InlineComposer';
 import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { StoryPreviewModal } from '@/components/shared/StoryPreviewModal';
@@ -18,9 +15,6 @@ import { MobileDataWarningDialog } from '@/components/shared/MobileDataWarningDi
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { ChevronRight } from 'lucide-react';
-import { useColunaParada } from '@/hooks/useColunaParada';
-import { useAjusteColuna } from '@/hooks/useAjusteColuna';
 import { MOCK_FEED_POSTS } from '@/data/mockPosts';
 import { MOCK_STORY_GROUPS } from '@/data/mockStories';
 import { addLocalStory, deleteLocalStory, getLocalStoriesForUser, localStoryToStory, markStoryViewed } from '@/lib/localStories';
@@ -30,8 +24,6 @@ const MAX_STORY_SIZE_MB = 500;
 
 export default function Home() {
   const { user, isMockMode } = useAuth();
-  const colunaRef = useColunaParada<HTMLElement>();
-  const { cartoes } = useAjusteColuna(colunaRef);
   const queryClient = useQueryClient();
   const deleteStoryMutation = useDeleteStory();
   // Separador ativo do feed: uma só chamada por separador (sem polling).
@@ -352,15 +344,7 @@ export default function Home() {
       </div>
 
       {/* Coluna direita (só em ecrãs grandes): pesquisa, sugestões, top criadores e descobrir */}
-      <aside ref={colunaRef} aria-label="Descobrir" className="coluna-direita hidden lg:flex flex-col lg:sticky lg:top-0 lg:h-[100dvh] lg:self-start w-[320px] xl:w-[400px] flex-shrink-0">
-        <PesquisaFeed desativada={isMockMode} />
-        <BannerSugestoes />
-        <TopCriadores ativo={!isMockMode} />
-        <SugestoesParaTi ativo={!isMockMode} porPagina={cartoes} />
-        <Link href="/explorar" className="cd-descubra shrink-0">
-          <Button className="h-[var(--cd-btn,48px)] w-full gap-2 rounded-xl bg-primary text-sm font-bold tracking-wide text-primary-foreground hover:bg-primary/90" data-testid="descubra-mais">DESCUBRA MAIS CRIADORES <ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>
-        </Link>
-      </aside>
+      <ColunaDescobrir semDados={isMockMode} />
 
       {/* Full modal — opens when composer has media files */}
       <CreatePostModal

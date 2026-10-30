@@ -1,97 +1,43 @@
 import { Router } from "express";
-import { db, postsTable, usersTable, hashtagsTable, postMediaTable } from "@workspace/db";
-import { sql, desc, inArray, and, eq } from "drizzle-orm";
+import { db, postsTable, usersTable, hashtagsTable } from "@workspace/db";
+import { sql, desc, and, eq } from "drizzle-orm";
 import { postVisivelPara, lerVisualizador } from "../lib/conteudoMais18";
 import { requireAuth, type AuthRequest } from "../lib/auth";
-import { temAcessoExclusivo } from "../lib/exclusiveAccess";
-import { resolveMediaUrl, urlMedia } from "../lib/storage";
+import { formatarPostsEmLote } from "../lib/feed";
+import { erroSeguro } from "../lib/erroSeguro";
+import { urlMedia } from "../lib/storage";
 
 const router = Router();
 
-// Explorar
+// Explorar: todas as publicações visíveis (sem texto/enquetes), mais recentes primeiro, em páginas de 20.
+// Mesma visibilidade (`postVisivelPara`), a mesma formatação em lote e a mesma paginação do feed: gostos, comentários,
+// "curtido" e "guardado" reais e um nº constante de consultas por página. O parâmetro `category` é aceite e ignorado.
 router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const page = Math.max(1, parseInt(String(req.query.page || "1")));
+  const userId = req.userId!;
+  const page = Math.min(1000, Math.max(1, parseInt(String(req.query.page || "1")) || 1));
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  const visualizador = await lerVisualizador(req.userId);
-  const posts = await db
-    .select()
-    .from(postsTable)
-    // Cast the enum to text so this route also works while older databases
-    // still have a post_tipo enum without the newer "texto" value.
-    .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivelPara(visualizador)))
-    .orderBy(desc(postsTable.criadoEm))
-    .limit(limit)
-    .offset(offset);
+  try {
+    const visualizador = await lerVisualizador(userId);
+    const total = sql<number>`count(*) over()::int`;
+    const rows = await db
+      .select({ p: postsTable, total })
+      .from(postsTable)
+      // Cast the enum to text so this route also works while older databases
+      // still have a post_tipo enum without the newer "texto" value.
+      .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivelPara(visualizador)))
+      .orderBy(desc(postsTable.criadoEm), desc(postsTable.id))
+      .limit(limit)
+      .offset(offset);
 
-  if (posts.length === 0) {
-    res.json({ posts: [], total: 0, page, hasMore: false });
-    return;
+    const posts = await formatarPostsEmLote(rows.map((r) => r.p), userId);
+    const totalReal = rows[0]?.total ?? 0;
+    res.json({ posts, total: totalReal, page, hasMore: offset + rows.length < totalReal });
+  } catch (err) {
+    req.log?.error(erroSeguro(err), "Erro ao carregar Explorar");
+    res.status(500).json({ error: "Erro interno." });
   }
-
-  const postIds = posts.map(p => p.id);
-  const autorIds = [...new Set(posts.map(p => p.autorId))];
-
-  // Fetch users and media in parallel (batch queries, not N+1)
-  const [mediaRows, userRows] = await Promise.all([
-    db.select().from(postMediaTable).where(inArray(postMediaTable.postId, postIds)),
-    db
-      .select({
-        id: usersTable.id,
-        username: usersTable.username,
-        nomeExibicao: usersTable.nomeExibicao,
-        avatarUrl: usersTable.avatarUrl,
-        verificado: usersTable.verificado,
-        tipoConta: usersTable.tipoConta,
-      })
-      .from(usersTable)
-      .where(inArray(usersTable.id, autorIds)),
-  ]);
-
-  const mediaByPost = new Map<number, typeof mediaRows>();
-  for (const m of mediaRows) {
-    if (!mediaByPost.has(m.postId)) mediaByPost.set(m.postId, []);
-    mediaByPost.get(m.postId)!.push(m);
-  }
-
-  const usersById = new Map(userRows.map(u => [u.id, u]));
-
-  const result = await Promise.all(posts.map(async p => {
-    const user = usersById.get(p.autorId);
-    const media = (mediaByPost.get(p.id) ?? [])
-      .sort((a, b) => a.ordem - b.ordem)
-      .map(m => ({ id: m.id, url: m.url, tipo: m.tipo, ordem: m.ordem }));
-    const acesso = p.exclusivo
-      ? await temAcessoExclusivo(req.userId, p.autorId, p.id)
-      : true;
-    const mediaSegura = acesso
-      ? media.map(m => ({ ...m, url: resolveMediaUrl(m.url) }))
-      : media.map(m => ({ ...m, url: null, bloqueado: true }));
-    return {
-      id: p.id,
-      autor: user ? {
-        id: user.id, username: user.username, nomeExibicao: user.nomeExibicao,
-        avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta,
-        estaASeguir: false, segueVoce: false, totalSeguidores: 0,
-      } : null,
-      legenda: p.legenda,
-      localizacao: p.localizacao,
-      tipo: p.tipo,
-      media: mediaSegura,
-      exclusivo: p.exclusivo,
-      mais18: p.mais18,
-      bloqueado: p.exclusivo && !acesso,
-      precoDesbloqueio: p.precoDesbloqueio ? parseFloat(p.precoDesbloqueio) : null,
-      totalCurtidas: 0,
-      totalComentarios: 0,
-      curtido: false,
-      guardado: false,
-      criadoEm: p.criadoEm.toISOString(),
-    };
-  }));
-
-  res.json({ posts: result, total: result.length, page, hasMore: result.length === limit });
 });
 
 // Pesquisa
