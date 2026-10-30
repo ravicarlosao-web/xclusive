@@ -366,45 +366,6 @@ export const GetUserPostsResponse = zod.object({
 
 
 /**
- * @summary Reels de um utilizador
- */
-export const GetUserReelsParams = zod.object({
-  "username": zod.coerce.string()
-})
-
-export const GetUserReelsResponse = zod.object({
-  "reels": zod.array(zod.object({
-  "id": zod.int(),
-  "autor": zod.object({
-  "id": zod.int(),
-  "username": zod.string(),
-  "nomeExibicao": zod.string(),
-  "avatarUrl": zod.string().nullish(),
-  "verificado": zod.boolean(),
-  "tipoConta": zod.string().optional(),
-  "estaASeguir": zod.boolean().optional(),
-  "totalSeguidores": zod.int().optional()
-}),
-  "videoUrl": zod.string(),
-  "capaUrl": zod.string().nullish(),
-  "legenda": zod.string().nullish(),
-  "somTitulo": zod.string().nullish(),
-  "somArtista": zod.string().nullish(),
-  "exclusivo": zod.boolean(),
-  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
-  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
-  "totalCurtidas": zod.int(),
-  "totalComentarios": zod.int(),
-  "curtido": zod.boolean(),
-  "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
-})),
-  "page": zod.int(),
-  "hasMore": zod.boolean()
-})
-
-
-/**
  * @summary Feed principal do utilizador
  */
 export const getFeedQueryPageDefault = 1;

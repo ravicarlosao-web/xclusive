@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-/** Selo "+18" nos cartões de post, reel, story e live. Só aparece quando o conteúdo está marcado. */
+/** Selo "+18" nos cartões de post, story e live. Só aparece quando o conteúdo está marcado. */
 export function SeloMais18({ mais18, className }: { mais18?: boolean | null; className?: string }) {
   if (!mais18) return null;
   return (

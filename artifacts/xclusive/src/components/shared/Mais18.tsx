@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export type PreferenciaMais18 = 'ver' | 'filtrar';
 
-/** Depois de mudar a preferência, o conteúdo já carregado (feed, explorar, reels, stories, lives…) tem de ser lido de novo. */
+/** Depois de mudar a preferência, o conteúdo já carregado (feed, explorar, stories, lives…) tem de ser lido de novo. */
 export function invalidarConteudoMais18(queryClient: QueryClient) {
   queryClient.invalidateQueries({
     predicate: (q) => {
@@ -124,7 +124,7 @@ export function Mais18Card() {
         <DialogHeader>
           <DialogTitle>Conteúdo +18</DialogTitle>
           <DialogDescription>
-            As criadoras marcam o conteúdo +18 (publicações, reels, stories e lives). Escolhe se o queres filtrar ou ver.
+            As criadoras marcam o conteúdo +18 (publicações, stories e lives). Escolhe se o queres filtrar ou ver.
             Podes mudar a qualquer momento em Definições.
           </DialogDescription>
         </DialogHeader>

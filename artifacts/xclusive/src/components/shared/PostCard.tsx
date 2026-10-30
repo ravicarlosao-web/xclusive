@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { TipModal } from './TipModal';
@@ -36,7 +36,6 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
   // Estado real das minhas subscrições (servidor): faz o cartão reagir a subscrever, renovar, cancelar ou expirar.
   useMinhasSubscricoes();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
 
   const queryClient = useQueryClient();
   const { mutate: apiLike } = useLikePost();
@@ -63,10 +62,8 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
     await Promise.allSettled(keys.map(queryKey => queryClient.invalidateQueries({ queryKey })));
   }
 
-  // Ligação do post: os vídeos abrem nos reels (?id=); os restantes não têm página própria, por isso a ligação leva ao perfil do autor.
-  const linkDoPost = () => (post.tipo === 'video' || post.media?.[0]?.tipo === 'video'
-    ? `${window.location.origin}/reels?id=${post.id}`
-    : `${window.location.origin}/perfil/${post.autor.username}`);
+  // Ligação do post: as publicações não têm página própria, por isso a ligação leva ao perfil do autor.
+  const linkDoPost = () => `${window.location.origin}/perfil/${post.autor.username}`;
 
   async function copiarLigacao() {
     try {
@@ -195,12 +192,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
   };
 
   const handleMediaClick = () => {
-    // Video posts → navigate directly to reels at that video
-    if (isVideo) {
-      setLocation(`/reels?id=${post.id}`);
-      return;
-    }
-    // Image posts → double-tap to like
+    // Duplo toque na media → gostar
     const now = Date.now();
     if (now - lastClickTime.current < 300) {
       if (!isLiked) {
