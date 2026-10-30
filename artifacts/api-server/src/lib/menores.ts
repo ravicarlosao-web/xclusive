@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   db, usersTable, menorCasesTable, reportsTable, auditLogTable, activeSessionsTable, withdrawalRequestsTable,
-  subscriptionsTable, subscriptionPlansTable, postsTable, reelsTable, storiesTable, commentsTable, liveStreamsTable,
+  subscriptionsTable, subscriptionPlansTable, postsTable, storiesTable, commentsTable, liveStreamsTable,
 } from "@workspace/db";
 import { suspenderConta } from "./suspensao";
 import { banirContaNaTransacao, BanimentoErro } from "./banimento";
@@ -36,13 +36,12 @@ export const MSG_SUBSCRICAO_CANCELADA = (username: string) => `A conta @${userna
 async function reterConteudo(tx: Tx, userId: number, adminId: number) {
   const marca = { retiradoEm: new Date(), retiradoMotivo: MOTIVO_RETIRADA, retiradoPor: adminId };
   const posts = await tx.update(postsTable).set(marca).where(and(eq(postsTable.autorId, userId), isNull(postsTable.retiradoEm))).returning({ id: postsTable.id });
-  const reels = await tx.update(reelsTable).set(marca).where(and(eq(reelsTable.autorId, userId), isNull(reelsTable.retiradoEm))).returning({ id: reelsTable.id });
   const stories = await tx.update(storiesTable).set(marca).where(and(eq(storiesTable.autorId, userId), isNull(storiesTable.retiradoEm))).returning({ id: storiesTable.id });
   const comentarios = await tx.update(commentsTable).set(marca).where(and(eq(commentsTable.autorId, userId), isNull(commentsTable.retiradoEm))).returning({ id: commentsTable.id });
   await tx.update(liveStreamsTable).set({ status: "terminado", terminadoEm: new Date() })
     .where(and(eq(liveStreamsTable.criadorId, userId), inArray(liveStreamsTable.status, ["agendado", "ao_vivo"])));
   const lives = await tx.update(liveStreamsTable).set(marca).where(and(eq(liveStreamsTable.criadorId, userId), isNull(liveStreamsTable.retiradoEm))).returning({ id: liveStreamsTable.id });
-  return { posts: posts.length, reels: reels.length, stories: stories.length, comentarios: comentarios.length, lives: lives.length };
+  return { posts: posts.length, stories: stories.length, comentarios: comentarios.length, lives: lives.length };
 }
 
 /** Levantamentos pendentes e aprovados → retido, SEM detalhe e SEM notificação. Os ganhos continuam reservados. */

@@ -2,7 +2,7 @@ import { db, purchasesTable, subscriptionsTable } from "@workspace/db";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 
 /**
- * Condição SQL única de "subscrição com acesso" (usada por posts, reels, stories e estatísticas):
+ * Condição SQL única de "subscrição com acesso" (usada por posts, stories e estatísticas):
  *  - 'ativa' sem data (conta gratuita, sem fim) ou com renovacao_em > agora;
  *  - 'cancelada' mas dentro do período pago (renovacao_em > agora).
  * 'expirada' nunca dá acesso. A data é verificada aqui, por isso o acesso acaba na hora certa

@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
-  db, postsTable, storiesTable, commentsTable, reelsTable, liveStreamsTable, postMediaTable, likesTable,
+  db, postsTable, storiesTable, commentsTable, liveStreamsTable, postMediaTable, likesTable,
   reportsTable, auditLogTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
@@ -25,11 +25,11 @@ import { logger } from "./logger";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Q = Tx | typeof db;
 export type Ator = "autor" | "admin";
-export type TipoProtegido = "post" | "reel" | "story" | "comment" | "live" | "user";
+export type TipoProtegido = "post" | "story" | "comment" | "live" | "user";
 export type MotivoBloqueio = "retirado" | "denuncia_aberta" | "denuncia_menor_aberta" | "menor_procedente" | "comentario_protegido";
 
 const ABERTA = ["pendente", "em_analise"] as const;
-const TABELAS = { post: postsTable, reel: reelsTable, story: storiesTable, comment: commentsTable, live: liveStreamsTable } as const;
+const TABELAS = { post: postsTable, story: storiesTable, comment: commentsTable, live: liveStreamsTable } as const;
 
 export const MSG_AUTOR_RETIRADO = "Este conteúdo foi retirado pela equipa e não pode ser eliminado.";
 export const MSG_AUTOR_EM_ANALISE = "Este conteúdo está em análise e não pode ser eliminado de momento. Tenta novamente quando a análise terminar.";

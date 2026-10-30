@@ -18,7 +18,7 @@ export type AlertaNivel = "nova" | "1h" | "24h";
 
 export interface AlertaUrgente {
   reportId: number;
-  /** Rótulo do tipo de alvo (ex.: "publicação", "reel"). */
+  /** Rótulo do tipo de alvo (ex.: "publicação", "story"). */
   alvo: string;
   motivo: string;
   nivel: AlertaNivel;

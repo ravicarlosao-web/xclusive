@@ -24,7 +24,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   menor: 'Menor de idade', sem_consentimento: 'Sem consentimento', direitos_autor: 'Direitos de autor',
   violencia: 'Violência', assedio: 'Assédio', spam: 'Spam', conteudo_mais18_nao_marcado: 'Conteúdo +18 não marcado', outro: 'Outro',
 };
-const TIPO_LABEL: Record<string, string> = { post: 'Publicação', reel: 'Reel', story: 'Story', comment: 'Comentário', user: 'Perfil', live: 'Live' };
+const TIPO_LABEL: Record<string, string> = { post: 'Publicação', story: 'Story', comment: 'Comentário', user: 'Perfil', live: 'Live' };
 
 /** Pedidos autenticados ao admin (o IBAN/IP nunca passam por aqui; os URLs assinados vêm só do detalhe). */
 async function adminCall(method: string, path: string, body?: unknown) {
@@ -157,7 +157,7 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
 
   const final = d && (d.status === 'procedente' || d.status === 'improcedente');
 
-  // Marcar +18 e registar infração: só post/reel/story/live, com a criadora identificada e o conteúdo ainda NÃO marcado
+  // Marcar +18 e registar infração: só post/story/live, com a criadora identificada e o conteúdo ainda NÃO marcado
   const podeMarcarMais18 = !!d && !final && d.alvo?.existe && TIPOS_MAIS18.includes(d.targetType) && d.alvo.mais18 === false && !!d.alvo.dono?.id;
   const resumoInfracao = useResumoInfracao(d?.alvo?.dono?.id, confirmarInfracao);
   const ligarMarcarMais18 = (v: boolean) => {
@@ -212,7 +212,7 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
             <div className="flex flex-wrap items-center gap-2">
               <EstadoBadge estado={d.status} />
               {d.urgente && <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-red-600 text-white px-2 py-1 rounded"><AlertTriangle className="h-3 w-3" /> URGENTE</span>}
-              <span className="text-muted-foreground">{TIPO_LABEL[d.targetType]} #{d.targetId} · {MOTIVO_LABEL[d.reason] ?? d.reason} · {d.totalDenunciasDoAlvo} denúncia(s) a este alvo</span>
+              <span className="text-muted-foreground">{TIPO_LABEL[d.targetType] ?? d.targetType} #{d.targetId} · {MOTIVO_LABEL[d.reason] ?? d.reason} · {d.totalDenunciasDoAlvo} denúncia(s) a este alvo</span>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1">

@@ -52,7 +52,7 @@ import {
 import bcrypt from "bcryptjs";
 import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor } from "../lib/storage.js";
 import {
-  TARGET_TYPES, TARGET_LABEL, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
+  TARGET_TYPES, TARGET_LABEL, alvoSuportado, rotuloAlvo, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
 import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
 import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
@@ -1320,7 +1320,7 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
     const out = await db.transaction(async (tx) => {
       const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
       if (!r) throw new TakedownError("Denúncia não encontrada", 404);
-      const alvo = await lerAlvo(tx, r.targetType, r.targetId);
+      const alvo = alvoSuportado(r.targetType) ? await lerAlvo(tx, r.targetType, r.targetId) : null; // denúncia antiga de reel: sem conteúdo
       const [dono] = r.targetOwnerId
         ? await tx.select({ id: usersTable.id, username: usersTable.username, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, r.targetOwnerId))
         : [];
@@ -1407,6 +1407,10 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
         throw new TakedownError(`Transição inválida: ${r.status} → ${novo}`, 409);
       }
 
+      // Denúncia antiga com alvo "reel" (tipo removido): pode ser fechada, mas não há conteúdo a retirar nem a marcar
+      if (!alvoSuportado(r.targetType) && (acoes.retirar || acoes.marcarMais18)) {
+        throw new TakedownError("O conteúdo desta denúncia era um reel e esse tipo já não existe: não há nada a retirar nem a marcar.", 409);
+      }
       const final = novo === "procedente" || novo === "improcedente";
       let retirou = false, suspendeu = false;
       const ownerId = r.targetOwnerId;
@@ -1415,7 +1419,7 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       let infracaoAudit: { infracaoId: number; numero: number; acao: string } | false = false;
       // Marcar +18 e registar a infração à criadora (lib partilhada, NESTA transação: se algo falhar, a decisão inteira reverte).
       if (acoes.marcarMais18) {
-        if (!isTipoMais18(r.targetType)) throw new TakedownError("Marcar +18 só se aplica a publicações, reels, stories e lives.", 400);
+        if (!isTipoMais18(r.targetType)) throw new TakedownError("Marcar +18 só se aplica a publicações, stories e lives.", 400);
         const m = await marcarMais18PorAdmin(tx, {
           adminId: req.adminId!, ip: req.ip ?? null, tipo: r.targetType, conteudoId: r.targetId,
           mais18: true, infracao: true, motivo: motivo || null, reportId: id, origem: "denuncia",
@@ -1431,7 +1435,7 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       }
 
       if (acoes.retirar) {
-        const res1 = await retirarAlvo(tx, r.targetType, r.targetId, req.adminId!, motivoRetirada);
+        const res1 = await retirarAlvo(tx, r.targetType as TargetType, r.targetId, req.adminId!, motivoRetirada);
         retirou = true;
         if (res1.mudou) {
           await tx.insert(auditLogTable).values({
@@ -1455,7 +1459,7 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       // Notificações (sem dados de quem denunciou)
       // Com marcarMais18 o aviso da infração (já enviado pela lib) substitui a notificação genérica ao autor
       if (ownerId && (acoes.avisarAutor || retirou || suspendeu) && final && !acoes.marcarMais18) {
-        const label = TARGET_LABEL[r.targetType];
+        const label = rotuloAlvo(r.targetType);
         const partes: string[] = [];
         if (retirou && r.targetType !== "user") partes.push(`O teu ${label} foi retirado por violar as regras da plataforma.`);
         if (suspendeu) partes.push("A tua conta foi suspensa por violação das regras da plataforma.");
@@ -1558,14 +1562,14 @@ router.post("/admin/content/:type/:id/repor", requireAdmin, async (req: AdminReq
   }
 });
 
-// Marcar / desmarcar conteúdo como +18 (post, reel, story, live). Corpo: { mais18: boolean, infracao?: boolean, motivo? }.
+// Marcar / desmarcar conteúdo como +18 (post, story, live). Corpo: { mais18: boolean, infracao?: boolean, motivo? }.
 //   mais18:true + infracao:true  → "a criadora não marcou": regista infração (1.ª/2.ª aviso, n>=3 suspensão), tudo numa transação.
 //   mais18:true + infracao:false → correção do admin: só marca (audit); sem infração nem notificação.
 //   mais18:false                 → desmarca (a infração ativa, se existir, anula-se em separado).
 // `infracao` é obrigatório ao marcar (sem valor por omissão: o admin tem de escolher).
 router.post("/admin/content/:type/:id/mais18", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   const p = parseAlvoParams(req);
-  if (!p || !isTipoMais18(p.type)) return void res.status(400).json({ error: "Tipo ou ID inválido (post, reel, story ou live)" });
+  if (!p || !isTipoMais18(p.type)) return void res.status(400).json({ error: "Tipo ou ID inválido (post, story ou live)" });
   const { mais18, infracao, motivo } = (req.body ?? {}) as { mais18?: unknown; infracao?: unknown; motivo?: unknown };
   if (typeof mais18 !== "boolean") return void res.status(400).json({ error: "mais18 é obrigatório (verdadeiro ou falso)." });
   if (mais18 && typeof infracao !== "boolean") return void res.status(400).json({ error: "infracao é obrigatório ao marcar (true = a criadora não marcou; false = correção)." });

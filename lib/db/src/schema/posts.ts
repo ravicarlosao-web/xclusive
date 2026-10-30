@@ -32,7 +32,7 @@ export const postMediaTable = pgTable("post_media", {
 export const likesTable = pgTable("likes", {
   id: serial("id").primaryKey(),
   utilizadorId: integer("utilizador_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  alvoTipo: text("alvo_tipo").notNull(), // post, reel, comentario
+  alvoTipo: text("alvo_tipo").notNull(), // post, comentario
   alvoId: integer("alvo_id").notNull(),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 }, (t) => [unique("likes_unique").on(t.utilizadorId, t.alvoTipo, t.alvoId)]);

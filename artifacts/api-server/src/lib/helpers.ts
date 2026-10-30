@@ -59,11 +59,3 @@ export async function isPostSaved(postId: number, userId?: number): Promise<bool
   return !!saved;
 }
 
-export async function isReelLiked(reelId: number, userId?: number): Promise<boolean> {
-  if (!userId) return false;
-  const [like] = await db
-    .select()
-    .from(likesTable)
-    .where(and(eq(likesTable.utilizadorId, userId), eq(likesTable.alvoTipo, "reel"), eq(likesTable.alvoId, reelId)));
-  return !!like;
-}

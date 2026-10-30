@@ -8,9 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 /** Regra: a N-ésima infração ativa a partir da 3.ª suspende a conta (igual ao servidor). */
 export const LIMITE_SUSPENSAO = 3;
 
-export type TipoMais18 = 'post' | 'reel' | 'story' | 'live';
-export const TIPOS_MAIS18: string[] = ['post', 'reel', 'story', 'live'];
-const ROTULO: Record<TipoMais18, string> = { post: 'publicação', reel: 'reel', story: 'story', live: 'live' };
+export type TipoMais18 = 'post' | 'story' | 'live';
+export const TIPOS_MAIS18: string[] = ['post', 'story', 'live'];
+const ROTULO: Record<TipoMais18, string> = { post: 'publicação', story: 'story', live: 'live' };
 
 export function SeloMais18({ className = '' }: { className?: string }) {
   return (
@@ -62,7 +62,7 @@ export function ResumoInfracaoMais18({ donoId, resumo }: { donoId: number | null
 }
 
 /**
- * Ações do admin sobre a marcação +18 de um conteúdo (post, reel, story, live):
+ * Ações do admin sobre a marcação +18 de um conteúdo (post, story, live):
  *  - "Marcar +18 (criadora não marcou, regista infração)": confirma mostrando as infrações ativas da criadora;
  *  - "Marcar +18 (correção minha, sem infração)": só marca, sem infração nem aviso;
  *  - "Desmarcar": se existir infração ativa neste conteúdo, oferece anulá-la.

@@ -601,23 +601,6 @@ export const UpdatePostMais18Response = zod.object({
 
 
 /**
- * @summary Alterar a marcação +18 de um reel próprio (só muda mais18)
- */
-export const UpdateReelMais18Params = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const UpdateReelMais18Body = zod.object({
-  "mais18": zod.boolean()
-})
-
-export const UpdateReelMais18Response = zod.object({
-  "id": zod.int(),
-  "mais18": zod.boolean()
-})
-
-
-/**
  * @summary Votar numa enquete (um voto por conta, sem alterar; anónimo para os outros)
  */
 export const VotarEnqueteParams = zod.object({
@@ -884,145 +867,6 @@ export const GetStoryViewsResponseItem = zod.object({
   "vistoEm": zod.coerce.date()
 })
 export const GetStoryViewsResponse = zod.array(GetStoryViewsResponseItem)
-
-
-/**
- * @summary Feed de reels
- */
-export const getReelsQueryPageDefault = 1;
-export const getReelsQueryLimitDefault = 10;
-
-export const GetReelsQueryParams = zod.object({
-  "page": zod.coerce.number().int().default(getReelsQueryPageDefault),
-  "limit": zod.coerce.number().int().default(getReelsQueryLimitDefault)
-})
-
-export const GetReelsResponse = zod.object({
-  "reels": zod.array(zod.object({
-  "id": zod.int(),
-  "autor": zod.object({
-  "id": zod.int(),
-  "username": zod.string(),
-  "nomeExibicao": zod.string(),
-  "avatarUrl": zod.string().nullish(),
-  "verificado": zod.boolean(),
-  "tipoConta": zod.string().optional(),
-  "estaASeguir": zod.boolean().optional(),
-  "totalSeguidores": zod.int().optional()
-}),
-  "videoUrl": zod.string(),
-  "capaUrl": zod.string().nullish(),
-  "legenda": zod.string().nullish(),
-  "somTitulo": zod.string().nullish(),
-  "somArtista": zod.string().nullish(),
-  "exclusivo": zod.boolean(),
-  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
-  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
-  "totalCurtidas": zod.int(),
-  "totalComentarios": zod.int(),
-  "curtido": zod.boolean(),
-  "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
-})),
-  "page": zod.int(),
-  "hasMore": zod.boolean()
-})
-
-
-/**
- * @summary Publicar reel
- */
-export const createReelBodyExclusivoDefault = false;
-
-export const CreateReelBody = zod.object({
-  "videoUrl": zod.string(),
-  "capaUrl": zod.string().optional(),
-  "legenda": zod.string().optional(),
-  "exclusivo": zod.boolean().default(createReelBodyExclusivoDefault),
-  "mais18": zod.boolean().describe('Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.')
-})
-
-export const CreateReelResponse = zod.object({
-  "id": zod.int(),
-  "autor": zod.object({
-  "id": zod.int(),
-  "username": zod.string(),
-  "nomeExibicao": zod.string(),
-  "avatarUrl": zod.string().nullish(),
-  "verificado": zod.boolean(),
-  "tipoConta": zod.string().optional(),
-  "estaASeguir": zod.boolean().optional(),
-  "totalSeguidores": zod.int().optional()
-}),
-  "videoUrl": zod.string(),
-  "capaUrl": zod.string().nullish(),
-  "legenda": zod.string().nullish(),
-  "somTitulo": zod.string().nullish(),
-  "somArtista": zod.string().nullish(),
-  "exclusivo": zod.boolean(),
-  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
-  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
-  "totalCurtidas": zod.int(),
-  "totalComentarios": zod.int(),
-  "curtido": zod.boolean(),
-  "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
-})
-
-
-/**
- * @summary Obter reel
- */
-export const GetReelParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const GetReelResponse = zod.object({
-  "id": zod.int(),
-  "autor": zod.object({
-  "id": zod.int(),
-  "username": zod.string(),
-  "nomeExibicao": zod.string(),
-  "avatarUrl": zod.string().nullish(),
-  "verificado": zod.boolean(),
-  "tipoConta": zod.string().optional(),
-  "estaASeguir": zod.boolean().optional(),
-  "totalSeguidores": zod.int().optional()
-}),
-  "videoUrl": zod.string(),
-  "capaUrl": zod.string().nullish(),
-  "legenda": zod.string().nullish(),
-  "somTitulo": zod.string().nullish(),
-  "somArtista": zod.string().nullish(),
-  "exclusivo": zod.boolean(),
-  "mais18": zod.boolean().optional().describe('Conteúdo +18 (marcado pela criadora). Só quem escolheu \"ver\" nas definições o vê; a autora vê sempre o seu.'),
-  "mais18Bloqueado": zod.boolean().optional().describe('Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.'),
-  "totalCurtidas": zod.int(),
-  "totalComentarios": zod.int(),
-  "curtido": zod.boolean(),
-  "guardado": zod.boolean(),
-  "criadoEm": zod.coerce.date()
-})
-
-
-/**
- * @summary Curtir reel
- */
-export const LikeReelParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const LikeReelResponse = zod.unknown()
-
-
-/**
- * @summary Remover curtida de reel
- */
-export const UnlikeReelParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const UnlikeReelResponse = zod.unknown()
 
 
 /**
@@ -1301,7 +1145,7 @@ export const GetNotificationsQueryParams = zod.object({
 export const GetNotificationsResponse = zod.object({
   "notifications": zod.array(zod.object({
   "id": zod.int(),
-  "tipo": zod.enum(['novo_seguidor', 'like_post', 'like_reel', 'comentario', 'mencao', 'nova_subscricao', 'pagamento_recebido']),
+  "tipo": zod.enum(['novo_seguidor', 'like_post', 'comentario', 'mencao', 'nova_subscricao', 'pagamento_recebido']),
   "ator": zod.object({
   "id": zod.int(),
   "username": zod.string(),

@@ -23,7 +23,7 @@ function linhasAcoes(a: any): string[] {
   if (!a) return [];
   const out: string[] = [];
   const c = a.conteudoRetido;
-  if (c) out.push(`Conteúdo retido ao abrir: ${c.posts} publicações, ${c.reels} reels, ${c.stories} stories, ${c.comentarios} comentários, ${c.lives} lives.`);
+  if (c) out.push(`Conteúdo retido ao abrir: ${c.posts} publicações, ${c.reels > 0 ? `${c.reels} reels, ` : ''}${c.stories} stories, ${c.comentarios} comentários, ${c.lives} lives.`);
   if (typeof a.sessoesCopiadas === 'number') out.push(`Sessões copiadas antes de serem terminadas: ${a.sessoesCopiadas}.`);
   if (typeof a.levantamentosRetidos === 'number') out.push(`Levantamentos retidos ao abrir: ${a.levantamentosRetidos}.`);
   if (a.jaInativaAoAbrir) out.push('A conta já estava inativa antes de o caso ser aberto.');
