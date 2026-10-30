@@ -15,7 +15,7 @@ import {
 
 /**
  * Denúncias (utilizadores com conta e canal público sem conta).
- *  - POST /reports          (sessão)      — qualquer utilizador denuncia post, reel, story, comentário, perfil ou live
+ *  - POST /reports          (sessão)      — qualquer utilizador denuncia post, story, comentário, perfil ou live
  *  - POST /reports/public   (sem sessão)  — direitos de autor / conteúdo não consentido / menor; contacto obrigatório
  *  - GET  /reports/contact                — e-mail de contacto (REPORTS_CONTACT_EMAIL)
  * Um só denunciante por alvo (índice único), auto-denúncia recusada, alvo validado, limite de taxa.
@@ -112,9 +112,9 @@ async function criarDenuncia(opts: {
     const alvo = await lerAlvo(tx, opts.targetType, opts.targetId);
     // Conteúdo inexistente ou já retirado: mesma resposta (não revela o estado interno).
     if (!alvo || alvo.removido) throw new TakedownError("Conteúdo indisponível.", 404);
-    // "Conteúdo +18 não marcado": só faz sentido em post, reel, story ou live que ainda NÃO está marcado.
+    // "Conteúdo +18 não marcado": só faz sentido em post, story ou live que ainda NÃO está marcado.
     if (opts.reason === "conteudo_mais18_nao_marcado") {
-      if (!["post", "reel", "story", "live"].includes(opts.targetType)) throw new TakedownError("Este motivo só se aplica a publicações, reels, stories e lives.", 400);
+      if (!["post", "story", "live"].includes(opts.targetType)) throw new TakedownError("Este motivo só se aplica a publicações, stories e lives.", 400);
       if (alvo.mais18) throw new TakedownError("Este conteúdo já está marcado como +18.", 409);
     }
     if (opts.reporterId !== null && alvo.ownerId === opts.reporterId) {

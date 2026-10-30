@@ -1,6 +1,6 @@
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import {
-  db, usersTable, postsTable, reelsTable, storiesTable, liveStreamsTable, auditLogTable, infracoesMais18Table,
+  db, usersTable, postsTable, storiesTable, liveStreamsTable, auditLogTable, infracoesMais18Table,
 } from "@workspace/db";
 import { lerAlvo, notificarSistema, TakedownError } from "./takedown";
 import { suspenderConta, desligarSockets } from "./suspensao";
@@ -18,7 +18,7 @@ import { desligarSocketsDaLiveMais18 } from "./socket";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export const TIPOS_MAIS18 = ["post", "reel", "story", "live"] as const;
+export const TIPOS_MAIS18 = ["post", "story", "live"] as const;
 export type TipoMais18 = typeof TIPOS_MAIS18[number];
 export const isTipoMais18 = (t: string): t is TipoMais18 => (TIPOS_MAIS18 as readonly string[]).includes(t);
 
@@ -43,7 +43,6 @@ export interface ResultadoMarcacao {
 /** Mensagens de aviso à criadora. Sem dados sensíveis: não dizem quem agiu nem quem denunciou. */
 const ARTIGO: Record<TipoMais18, { det: string; marcado: string }> = {
   post: { det: "a tua publicação", marcado: "marcada" },
-  reel: { det: "o teu reel", marcado: "marcado" },
   story: { det: "o teu story", marcado: "marcado" },
   live: { det: "a tua live", marcado: "marcada" },
 };
@@ -60,7 +59,6 @@ export function textoAvisoInfracao(tipo: TipoMais18, numero: number): string {
 async function trocarMarca(tx: Tx, tipo: TipoMais18, id: number, de: boolean, para: boolean): Promise<boolean> {
   switch (tipo) {
     case "post": return (await tx.update(postsTable).set({ mais18: para }).where(and(eq(postsTable.id, id), eq(postsTable.mais18, de))).returning({ id: postsTable.id })).length > 0;
-    case "reel": return (await tx.update(reelsTable).set({ mais18: para }).where(and(eq(reelsTable.id, id), eq(reelsTable.mais18, de))).returning({ id: reelsTable.id })).length > 0;
     case "story": return (await tx.update(storiesTable).set({ mais18: para }).where(and(eq(storiesTable.id, id), eq(storiesTable.mais18, de))).returning({ id: storiesTable.id })).length > 0;
     case "live": return (await tx.update(liveStreamsTable).set({ mais18: para }).where(and(eq(liveStreamsTable.id, id), eq(liveStreamsTable.mais18, de))).returning({ id: liveStreamsTable.id })).length > 0;
   }

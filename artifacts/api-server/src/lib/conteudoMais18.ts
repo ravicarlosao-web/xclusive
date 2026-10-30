@@ -1,5 +1,5 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
-import { db, usersTable, postsTable, reelsTable, storiesTable, liveStreamsTable } from "@workspace/db";
+import { db, usersTable, postsTable, storiesTable, liveStreamsTable } from "@workspace/db";
 import { postVisivel } from "./takedown";
 
 /**
@@ -42,7 +42,6 @@ function permitido(colMais18: unknown, colAutor: unknown, v: Visualizador): SQL 
 
 // ── Uma condição por tipo (juntar com postVisivel() & companhia) ─────────────
 export const postPermitido = (v: Visualizador): SQL => permitido(postsTable.mais18, postsTable.autorId, v);
-export const reelPermitido = (v: Visualizador): SQL => permitido(reelsTable.mais18, reelsTable.autorId, v);
 export const storyPermitida = (v: Visualizador): SQL => permitido(storiesTable.mais18, storiesTable.autorId, v);
 export const livePermitida = (v: Visualizador): SQL => permitido(liveStreamsTable.mais18, liveStreamsTable.criadorId, v);
 
@@ -58,11 +57,6 @@ export function bloqueadoMais18(v: Visualizador, linha: { mais18: boolean; autor
 export async function postBloqueado(id: number, v: Visualizador): Promise<boolean> {
   if (v.veTudo) return false;
   const [r] = await db.select({ mais18: postsTable.mais18, autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id)).limit(1);
-  return !!r && bloqueadoMais18(v, r);
-}
-export async function reelBloqueado(id: number, v: Visualizador): Promise<boolean> {
-  if (v.veTudo) return false;
-  const [r] = await db.select({ mais18: reelsTable.mais18, autorId: reelsTable.autorId }).from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
   return !!r && bloqueadoMais18(v, r);
 }
 export async function storyBloqueada(id: number, v: Visualizador): Promise<boolean> {

@@ -9,7 +9,7 @@ import { pt } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetNotificationsQueryKey } from '@workspace/api-client-react';
 
-type NotifTipo = 'novo_seguidor' | 'like_post' | 'like_reel' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema';
+type NotifTipo = 'novo_seguidor' | 'like_post' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema';
 
 type FilterType = 'tudo' | 'mencoes';
 
@@ -18,8 +18,7 @@ const MENCAO_TYPES: NotifTipo[] = ['mencao', 'comentario'];
 function renderIcon(tipo: NotifTipo) {
   switch (tipo) {
     case 'novo_seguidor':      return <UserPlus className="w-4 h-4 text-blue-500" />;
-    case 'like_post':
-    case 'like_reel':          return <Heart className="w-4 h-4 text-primary fill-primary" />;
+    case 'like_post':          return <Heart className="w-4 h-4 text-primary fill-primary" />;
     case 'comentario':         return <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-500 fill-green-600 dark:fill-green-500" />;
     case 'mencao':             return <AtSign className="w-4 h-4 text-sky-600 dark:text-sky-400" />;
     case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500 fill-yellow-600 dark:fill-yellow-500" />;
@@ -33,13 +32,13 @@ function renderText(tipo: NotifTipo) {
   switch (tipo) {
     case 'novo_seguidor':      return 'começou a seguir-te.';
     case 'like_post':          return 'gostou da tua publicação.';
-    case 'like_reel':          return 'gostou do teu vídeo.'; // notificações antigas (o tipo continua a existir nos dados)
     case 'comentario':         return 'comentou na tua publicação.';
     case 'mencao':             return 'mencionou-te numa publicação.';
     case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo!';
     case 'pagamento_recebido': return 'pagou por conteúdo PPV.';
     case 'sistema':            return 'Notificação de Sistema';
-    default:                   return '';
+    // Tipo desconhecido ou removido (p. ex. linhas antigas): texto genérico, nunca parte a página
+    default:                   return 'Tens uma nova notificação.';
   }
 }
 
@@ -205,7 +204,7 @@ export default function Notifications() {
                     </Button>
                   )}
 
-                  {notif.postThumbnail && ['like_post', 'like_reel', 'comentario', 'mencao'].includes(tipo) && (
+                  {notif.postThumbnail && ['like_post', 'comentario', 'mencao'].includes(tipo) && (
                     <div className="shrink-0 w-12 h-12 bg-secondary rounded-md overflow-hidden border border-border">
                       <img src={notif.postThumbnail} className="w-full h-full object-cover" alt="" />
                     </div>

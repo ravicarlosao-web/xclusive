@@ -343,15 +343,6 @@ export interface PostMais18 {
   mais18: boolean;
 }
 
-export interface ReelMais18Input {
-  mais18: boolean;
-}
-
-export interface ReelMais18 {
-  id: number;
-  mais18: boolean;
-}
-
 export interface PaginatedPosts {
   posts: Post[];
   total: number;
@@ -453,45 +444,6 @@ export interface StoryView {
   vistoEm: string;
 }
 
-export interface Reel {
-  id: number;
-  autor: UserSummary;
-  videoUrl: string;
-  /** @nullable */
-  capaUrl?: string | null;
-  /** @nullable */
-  legenda?: string | null;
-  /** @nullable */
-  somTitulo?: string | null;
-  /** @nullable */
-  somArtista?: string | null;
-  exclusivo: boolean;
-  /** Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu. */
-  mais18?: boolean;
-  /** Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar. */
-  mais18Bloqueado?: boolean;
-  totalCurtidas: number;
-  totalComentarios: number;
-  curtido: boolean;
-  guardado: boolean;
-  criadoEm: string;
-}
-
-export interface ReelInput {
-  videoUrl: string;
-  capaUrl?: string;
-  legenda?: string;
-  exclusivo?: boolean;
-  /** Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400. */
-  mais18: boolean;
-}
-
-export interface PaginatedReels {
-  reels: Reel[];
-  page: number;
-  hasMore: boolean;
-}
-
 export interface HashtagResult {
   nome: string;
   totalPosts: number;
@@ -572,7 +524,6 @@ export type NotificationTipo = typeof NotificationTipo[keyof typeof Notification
 export const NotificationTipo = {
   novo_seguidor: 'novo_seguidor',
   like_post: 'like_post',
-  like_reel: 'like_reel',
   comentario: 'comentario',
   mencao: 'mencao',
   nova_subscricao: 'nova_subscricao',
@@ -735,11 +686,6 @@ export const GetFeedFiltro = {
   'para-ti': 'para-ti',
   'em-alta': 'em-alta',
 } as const;
-
-export type GetReelsParams = {
-page?: number;
-limit?: number;
-};
 
 export type GetExploreParams = {
 category?: string;

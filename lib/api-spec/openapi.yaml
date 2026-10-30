@@ -12,7 +12,6 @@ tags:
   - name: users
   - name: posts
   - name: stories
-  - name: reels
   - name: explore
   - name: messages
   - name: notifications
@@ -390,37 +389,6 @@ paths:
         "404":
           description: Post não encontrado
 
-  /reels/{id}/mais18:
-    patch:
-      operationId: updateReelMais18
-      tags: [reels]
-      summary: Alterar a marcação +18 de um reel próprio (só muda mais18)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReelMais18Input"
-      responses:
-        "200":
-          description: Marcação atualizada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReelMais18"
-        "400":
-          description: mais18 em falta ou não boolean
-        "403":
-          description: O reel é de outra pessoa, ou tem uma infração +18 ativa e não pode ser desmarcado (codigo mais18_bloqueado)
-        "404":
-          description: Reel não encontrado
-
   /posts/{id}/enquete/voto:
     post:
       operationId: votarEnquete
@@ -657,97 +625,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/StoryView"
-
-  # REELS
-  /reels:
-    get:
-      operationId: getReels
-      tags: [reels]
-      summary: Feed de reels
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-      responses:
-        "200":
-          description: Lista de reels
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedReels"
-
-    post:
-      operationId: createReel
-      tags: [reels]
-      summary: Publicar reel
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReelInput"
-      responses:
-        "201":
-          description: Reel criado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Reel"
-
-  /reels/{id}:
-    get:
-      operationId: getReel
-      tags: [reels]
-      summary: Obter reel
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Reel
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Reel"
-
-  /reels/{id}/like:
-    post:
-      operationId: likeReel
-      tags: [reels]
-      summary: Curtir reel
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Curtido
-
-    delete:
-      operationId: unlikeReel
-      tags: [reels]
-      summary: Remover curtida de reel
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Curtida removida
 
   # EXPLORE
   /explore:
@@ -1550,22 +1427,6 @@ components:
         mais18:
           type: boolean
 
-    ReelMais18Input:
-      type: object
-      required: [mais18]
-      properties:
-        mais18:
-          type: boolean
-
-    ReelMais18:
-      type: object
-      required: [id, mais18]
-      properties:
-        id:
-          type: integer
-        mais18:
-          type: boolean
-
     PaginatedPosts:
       type: object
       required: [posts, total, page, hasMore]
@@ -1708,75 +1569,6 @@ components:
           type: string
           format: date-time
 
-    # REELS
-    Reel:
-      type: object
-      required: [id, autor, videoUrl, exclusivo, totalCurtidas, totalComentarios, curtido, guardado, criadoEm]
-      properties:
-        id:
-          type: integer
-        autor:
-          $ref: "#/components/schemas/UserSummary"
-        videoUrl:
-          type: string
-        capaUrl:
-          type: ["string", "null"]
-        legenda:
-          type: ["string", "null"]
-        somTitulo:
-          type: ["string", "null"]
-        somArtista:
-          type: ["string", "null"]
-        exclusivo:
-          type: boolean
-        mais18:
-          type: boolean
-          description: Conteúdo +18 (marcado pela criadora). Só quem escolheu "ver" nas definições o vê; a autora vê sempre o seu.
-        mais18Bloqueado:
-          type: boolean
-          description: Só para a autora - a equipa marcou o reel como +18 (infração ativa) e ela não o pode desmarcar.
-        totalCurtidas:
-          type: integer
-        totalComentarios:
-          type: integer
-        curtido:
-          type: boolean
-        guardado:
-          type: boolean
-        criadoEm:
-          type: string
-          format: date-time
-
-    ReelInput:
-      type: object
-      required: [videoUrl, mais18]
-      properties:
-        videoUrl:
-          type: string
-        capaUrl:
-          type: string
-        legenda:
-          type: string
-        exclusivo:
-          type: boolean
-          default: false
-        mais18:
-          type: boolean
-          description: Obrigatório. Marcação +18 feita pela criadora (Sim = true, Não = false). Se faltar ou não for boolean, o servidor responde 400.
-
-    PaginatedReels:
-      type: object
-      required: [reels, page, hasMore]
-      properties:
-        reels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Reel"
-        page:
-          type: integer
-        hasMore:
-          type: boolean
-
     # SEARCH
     SearchResults:
       type: object
@@ -1884,7 +1676,7 @@ components:
           type: integer
         tipo:
           type: string
-          enum: [novo_seguidor, like_post, like_reel, comentario, mencao, nova_subscricao, pagamento_recebido]
+          enum: [novo_seguidor, like_post, comentario, mencao, nova_subscricao, pagamento_recebido]
         ator:
           $ref: "#/components/schemas/UserSummary"
         lida:

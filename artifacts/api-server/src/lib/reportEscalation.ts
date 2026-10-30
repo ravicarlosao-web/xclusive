@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { db, reportsTable } from "@workspace/db";
 import { logger } from "./logger";
-import { notificarAdmins, TARGET_LABEL } from "./takedown";
+import { notificarAdmins, rotuloAlvo } from "./takedown";
 import { alertaExternoAtivo, enviarEMarcarAlerta, textoAlerta, type AlertaUrgente } from "./alertaExterno";
 
 /**
@@ -55,7 +55,7 @@ export async function runReportEscalation(now: Date = new Date()): Promise<{ esc
     const envios: AlertaUrgente[] = [];
     for (const d of due) {
       const nivel = d.criadoEm <= h24 ? "24h" : "1h";
-      const alerta: AlertaUrgente = { reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, nivel, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user" };
+      const alerta: AlertaUrgente = { reportId: d.id, alvo: rotuloAlvo(d.targetType), motivo: d.reason, nivel, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user" };
       await notificarAdmins(tx, textoAlerta(alerta), d.id);
       await tx.update(reportsTable).set(
         nivel === "24h" ? { escalada1hEm: now, escalada24hEm: now } : { escalada1hEm: now },
@@ -86,7 +86,7 @@ export async function runReportEscalation(now: Date = new Date()): Promise<{ esc
       for (const d of pend) {
         if (jaNaLista.has(d.id)) continue;
         envios.push({
-          reportId: d.id, alvo: TARGET_LABEL[d.targetType], motivo: d.reason, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user",
+          reportId: d.id, alvo: rotuloAlvo(d.targetType), motivo: d.reason, idadeMin: idade(d.criadoEm), perfil: d.targetType === "user",
           nivel: d.e24 ? "24h" : d.e1 ? "1h" : "nova",
         });
       }

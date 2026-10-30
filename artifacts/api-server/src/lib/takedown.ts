@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
-  db, postsTable, postMediaTable, reelsTable, storiesTable, commentsTable, liveStreamsTable,
+  db, postsTable, postMediaTable, storiesTable, commentsTable, liveStreamsTable,
   usersTable, notificationsTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
@@ -17,7 +17,7 @@ import { enquetePara, type AlvoEnquete } from "./enquetes";
  * Perfil: "retirar" = suspender a conta (users.ativo = false), que já é reversível.
  */
 
-export const TARGET_TYPES = ["post", "reel", "story", "comment", "user", "live"] as const;
+export const TARGET_TYPES = ["post", "story", "comment", "user", "live"] as const;
 export type TargetType = typeof TARGET_TYPES[number];
 
 export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "violencia", "assedio", "spam", "conteudo_mais18_nao_marcado", "outro"] as const;
@@ -27,8 +27,15 @@ export type ReportReason = typeof REPORT_REASONS[number];
 export const REPORTS_CONTACT_EMAIL = process.env.REPORTS_CONTACT_EMAIL || "legal@xclusive.ao";
 
 export const TARGET_LABEL: Record<TargetType, string> = {
-  post: "publicação", reel: "reel", story: "story", comment: "comentário", user: "perfil", live: "live",
+  post: "publicação", story: "story", comment: "comentário", user: "perfil", live: "live",
 };
+
+/**
+ * Denúncias antigas com alvo "reel" (tipo removido; o valor do enum na BD mantém-se): já não há conteúdo a ler, retirar nem
+ * marcar. Estes auxiliares deixam o admin listá-las e fechá-las sem rebentar.
+ */
+export const alvoSuportado = (t: string): t is TargetType => (TARGET_TYPES as readonly string[]).includes(t);
+export const rotuloAlvo = (t: string): string => (TARGET_LABEL as Record<string, string>)[t] ?? t;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type Q = Tx | typeof db;
@@ -36,7 +43,6 @@ export type Q = Tx | typeof db;
 // ── Condições de leitura: TODAS as queries que servem conteúdo usam estas (excluem retirados e autores suspensos) ──
 const autorAtivo = (col: unknown): SQL => sql`${col} IN (SELECT id FROM users WHERE ativo)`;
 export const postVisivel = (): SQL => and(isNull(postsTable.retiradoEm), autorAtivo(postsTable.autorId))!;
-export const reelVisivel = (): SQL => and(isNull(reelsTable.retiradoEm), autorAtivo(reelsTable.autorId))!;
 export const storyVisivel = (): SQL => and(isNull(storiesTable.retiradoEm), autorAtivo(storiesTable.autorId))!;
 export const commentVisivel = (): SQL => and(isNull(commentsTable.retiradoEm), autorAtivo(commentsTable.autorId))!;
 export const liveVisivel = (): SQL => and(isNull(liveStreamsTable.retiradoEm), autorAtivo(liveStreamsTable.criadorId))!;
@@ -49,7 +55,7 @@ export interface TargetInfo {
   /** URLs guardados do média (chave "paid/..." ou URL público). */
   media: { tipo: string; url: string }[];
   ownerRole?: string;
-  /** Marcação +18 (post, reel, story e live). */
+  /** Marcação +18 (post, story e live). */
   mais18?: boolean;
   /** Story cuja validade já passou. */
   expirada?: boolean;
@@ -68,11 +74,6 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
       const media = await q.select().from(postMediaTable).where(eq(postMediaTable.postId, id)).orderBy(postMediaTable.ordem);
       const enquete = p.tipo === "texto" ? await enquetePara(q, id) : null;
       return { ownerId: p.autorId, removido: !!p.retiradoEm, resumo: p.legenda, media: media.map((m) => ({ tipo: m.tipo, url: m.url })), mais18: p.mais18, criadoEm: p.criadoEm, ...(enquete ? { enquete } : {}) };
-    }
-    case "reel": {
-      const [r] = await q.select().from(reelsTable).where(eq(reelsTable.id, id)).limit(1);
-      if (!r) return null;
-      return { ownerId: r.autorId, removido: !!r.retiradoEm, resumo: r.legenda, media: [{ tipo: "video", url: r.videoUrl }], mais18: r.mais18, criadoEm: r.criadoEm };
     }
     case "story": {
       const [s] = await q.select().from(storiesTable).where(eq(storiesTable.id, id)).limit(1);
@@ -106,7 +107,6 @@ export async function retirarAlvo(tx: Tx, type: TargetType, id: number, porAdmin
   const marca = { retiradoEm: new Date(), retiradoMotivo: motivo.slice(0, 500), retiradoPor: porAdminId };
   switch (type) {
     case "post": return { mudou: (await tx.update(postsTable).set(marca).where(and(eq(postsTable.id, id), isNull(postsTable.retiradoEm))).returning({ id: postsTable.id })).length > 0 };
-    case "reel": return { mudou: (await tx.update(reelsTable).set(marca).where(and(eq(reelsTable.id, id), isNull(reelsTable.retiradoEm))).returning({ id: reelsTable.id })).length > 0 };
     case "story": return { mudou: (await tx.update(storiesTable).set(marca).where(and(eq(storiesTable.id, id), isNull(storiesTable.retiradoEm))).returning({ id: storiesTable.id })).length > 0 };
     case "comment": return { mudou: (await tx.update(commentsTable).set(marca).where(and(eq(commentsTable.id, id), isNull(commentsTable.retiradoEm))).returning({ id: commentsTable.id })).length > 0 };
     case "live": return { mudou: (await tx.update(liveStreamsTable).set({ ...marca, status: "terminado", terminadoEm: new Date() }).where(and(eq(liveStreamsTable.id, id), isNull(liveStreamsTable.retiradoEm))).returning({ id: liveStreamsTable.id })).length > 0 };
@@ -131,7 +131,6 @@ export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promi
   const limpa = { retiradoEm: null, retiradoMotivo: null, retiradoPor: null };
   switch (type) {
     case "post": return { mudou: (await tx.update(postsTable).set(limpa).where(eq(postsTable.id, id)).returning({ id: postsTable.id })).length > 0 };
-    case "reel": return { mudou: (await tx.update(reelsTable).set(limpa).where(eq(reelsTable.id, id)).returning({ id: reelsTable.id })).length > 0 };
     case "story": return { mudou: (await tx.update(storiesTable).set(limpa).where(eq(storiesTable.id, id)).returning({ id: storiesTable.id })).length > 0 };
     case "comment": return { mudou: (await tx.update(commentsTable).set(limpa).where(eq(commentsTable.id, id)).returning({ id: commentsTable.id })).length > 0 };
     case "live": return { mudou: (await tx.update(liveStreamsTable).set(limpa).where(eq(liveStreamsTable.id, id)).returning({ id: liveStreamsTable.id })).length > 0 };

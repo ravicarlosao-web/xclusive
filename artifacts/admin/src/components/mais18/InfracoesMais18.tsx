@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import { ShieldAlert } from 'lucide-react';
 import { LIMITE_SUSPENSAO } from './AcoesMais18';
 
-const TIPO_LABEL: Record<string, string> = { post: 'Publicação', reel: 'Reel', story: 'Story', live: 'Live' };
+const TIPO_LABEL: Record<string, string> = { post: 'Publicação', story: 'Story', live: 'Live' };
 
 /** Separador "Moderação" do utilizador: infrações da regra do +18 (ativas e anuladas), contagem e anulação. */
 export function InfracoesMais18({ userId }: { userId: number }) {

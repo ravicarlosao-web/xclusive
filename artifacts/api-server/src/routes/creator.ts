@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, reelsTable, followsTable } from "@workspace/db";
+import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, followsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
@@ -66,9 +66,8 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
     .from(subscriptionsTable)
     .where(and(eq(subscriptionsTable.criadorId, userId), sql`${subscriptionsTable.criadoEm} >= ${startOfMonth}`));
 
-  // Visualizações totais (posts + reels)
+  // Visualizações totais (posts)
   const [{ posts }] = await db.select({ posts: sql<number>`count(*)::int` }).from(postsTable).where(eq(postsTable.autorId, userId));
-  const [{ reels }] = await db.select({ reels: sql<number>`count(*)::int` }).from(reelsTable).where(eq(reelsTable.autorId, userId));
 
   // Taxa de retenção real: subscritores ativos / total histórico de subscritores
   const [{ totalHistorico }] = await db.select({ totalHistorico: sql<number>`count(*)::int` })
@@ -84,7 +83,7 @@ router.get("/creator/stats", requireAuth, requireCreator, async (req: AuthReques
     ganhosMes: parseFloat(String(ganhosMes)) || 0,
     totalSubscritores: totalSubscritores || 0,
     taxaRetencao,
-    visualizacoesTotais: (posts || 0) + (reels || 0),
+    visualizacoesTotais: posts || 0,
     ganhosTotal: parseFloat(String(ganhosTotal)) || 0,
     novosSubscritores: novosSubscritores || 0,
   });

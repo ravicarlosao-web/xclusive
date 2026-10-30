@@ -12,7 +12,6 @@ export type NotificationTipo = typeof NotificationTipo[keyof typeof Notification
 export const NotificationTipo = {
   novo_seguidor: 'novo_seguidor',
   like_post: 'like_post',
-  like_reel: 'like_reel',
   comentario: 'comentario',
   mencao: 'mencao',
   nova_subscricao: 'nova_subscricao',
