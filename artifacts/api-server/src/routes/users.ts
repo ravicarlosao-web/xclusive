@@ -742,17 +742,4 @@ router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res):
   }
 });
 
-// Reels do utilizador
-router.get("/users/:username/reels", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
-
-  if (!await canViewPrivateContent(user, req.userId)) {
-    res.status(403).json({ error: "Esta conta é privada." }); return;
-  }
-
-  res.json({ reels: [], page: 1, hasMore: false });
-});
-
 export default router;

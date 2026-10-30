@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  Home, Compass, Play, Mail, Heart, PlusSquare, BarChart, 
+  Home, Compass, Mail, Heart, PlusSquare, BarChart, 
   Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio, Sun, Moon
 } from 'lucide-react';
 import { useTema } from '@/hooks/useTema';
@@ -48,7 +48,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navItems = [
     { name: 'Início', path: '/home', icon: Home },
     { name: 'Explorar', path: '/explorar', icon: Compass },
-    { name: 'Reels', path: '/reels', icon: Play },
     { name: 'Mensagens', path: '/mensagens', icon: Mail, badge: msgBadge },
     { name: 'Notificações', path: '/notificacoes', icon: Heart, badge: notifBadge },
   ];
@@ -277,7 +276,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {navItems.map((item) => {
             const isActive = location.startsWith(item.path);
             return (
-              <Link key={item.path} href={item.path} className="flex-1 flex items-center justify-center py-2 relative">
+              <Link key={item.path} href={item.path} className="flex-1 min-h-[44px] flex items-center justify-center py-2 relative">
                 <item.icon className={cn("w-5 h-5 transition-transform", isActive ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground")} />
                 {item.badge && (
                   <span className="absolute top-1 right-2 bg-primary text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center border border-card">
@@ -287,7 +286,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <Link href={user ? `/perfil/${user.username}` : '/login'} className="flex-1 flex items-center justify-center py-2">
+          <Link href={user ? `/perfil/${user.username}` : '/login'} className="flex-1 min-h-[44px] flex items-center justify-center py-2">
             <Avatar className={cn("w-5 h-5 transition-transform", location.startsWith('/perfil') ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : "")}>
               <AvatarImage src={user?.avatarUrl || ''} />
               <AvatarFallback className="bg-secondary"><UserIcon className="w-3 h-3" /></AvatarFallback>
@@ -295,7 +294,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </Link>
 
           {user?.tipoConta === 'criador' && (
-            <Link href="/definicoes/monetizacao" className="flex-1 flex items-center justify-center py-2">
+            <Link href="/definicoes/monetizacao" className="flex-1 min-h-[44px] flex items-center justify-center py-2">
               <BarChart className={cn(
                 "w-5 h-5 transition-transform",
                 location.startsWith('/definicoes/monetizacao') ? "stroke-[2.5px] text-primary" : "stroke-[1.5px] text-foreground"

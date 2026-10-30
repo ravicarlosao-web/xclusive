@@ -33,7 +33,7 @@ function renderText(tipo: NotifTipo) {
   switch (tipo) {
     case 'novo_seguidor':      return 'começou a seguir-te.';
     case 'like_post':          return 'gostou da tua publicação.';
-    case 'like_reel':          return 'gostou do teu reel.';
+    case 'like_reel':          return 'gostou do teu vídeo.'; // notificações antigas (o tipo continua a existir nos dados)
     case 'comentario':         return 'comentou na tua publicação.';
     case 'mencao':             return 'mencionou-te numa publicação.';
     case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo!';

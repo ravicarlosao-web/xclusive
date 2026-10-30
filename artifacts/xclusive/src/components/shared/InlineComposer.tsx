@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreatePost } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Image, Film, Type, Send, X, Smile, Hash, AtSign, Radio, BarChart2 } from 'lucide-react';
+import { Image, Type, Send, X, Smile, Hash, AtSign, Radio, BarChart2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -36,7 +36,7 @@ export function InlineComposer({ user, onOpenWithFiles, onAbrirEnquete }: Inline
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const remaining = MAX_TEXTO - texto.length;
-  // Post só de texto: sem pergunta +18 (a marcação só é pedida quando há media, no fluxo de Foto/Vídeo/Reel).
+  // Post só de texto: sem pergunta +18 (a marcação só é pedida quando há media, no fluxo de Foto/Vídeo).
   const canSubmit = texto.trim().length > 0 && !isPending;
 
   function handleFocus() {
@@ -205,15 +205,6 @@ export function InlineComposer({ user, onOpenWithFiles, onAbrirEnquete }: Inline
         >
           <Image className="w-5 h-5 text-green-600 dark:text-green-500" />
           <span className="hidden sm:inline text-xs">Foto/Vídeo</span>
-        </button>
-
-        <button
-          onClick={() => { fileInputRef.current?.click(); }}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-all text-sm font-medium"
-          title="Vídeo"
-        >
-          <Film className="w-5 h-5 text-red-600 dark:text-red-500" />
-          <span className="hidden sm:inline text-xs">Reel</span>
         </button>
 
         <button

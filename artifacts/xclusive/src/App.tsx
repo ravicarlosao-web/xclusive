@@ -17,7 +17,6 @@ import Profile from '@/pages/profile';
 import NotFound from '@/pages/not-found';
 
 import Explore from '@/pages/explore';
-import Reels from '@/pages/reels';
 import MessagesList from '@/pages/messages';
 import MessageThread from '@/pages/message-thread';
 import Notifications from '@/pages/notifications';
@@ -146,7 +145,8 @@ function Router() {
       <Route path="/tornar-criador">{() => <FullscreenProtectedRoute component={KYCPage} path="/tornar-criador" />}</Route>
       <Route path="/home">{(params) => <ProtectedRoute component={Home} path="/home" />}</Route>
       <Route path="/explorar">{(params) => <ProtectedRoute component={Explore} path="/explorar" />}</Route>
-      <Route path="/reels">{(params) => <ProtectedRoute component={Reels} path="/reels" />}</Route>
+      {/* Reels foi removido: links e favoritos antigos seguem para o Início */}
+      <Route path="/reels">{() => <RedirectTo to="/home" />}</Route>
       <Route path="/mensagens">{(params) => <ProtectedRoute component={MessagesList} path="/mensagens" />}</Route>
       <Route path="/mensagens/:id">{(params) => <ProtectedRoute component={MessageThread} path="/mensagens/:id" />}</Route>
       <Route path="/notificacoes">{(params) => <ProtectedRoute component={Notifications} path="/notificacoes" />}</Route>

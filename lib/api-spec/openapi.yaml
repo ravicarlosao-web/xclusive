@@ -272,25 +272,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaginatedPosts"
 
-  /users/{username}/reels:
-    get:
-      operationId: getUserReels
-      tags: [users]
-      summary: Reels de um utilizador
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista de reels
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedReels"
-
   # FEED
   /feed:
     get:

@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getFreshAuthToken } from '@workspace/api-client-react';
 
-export type ReportTargetType = 'post' | 'reel' | 'story' | 'comment' | 'user' | 'live';
+export type ReportTargetType = 'post' | 'story' | 'comment' | 'user' | 'live';
 
 const LABEL: Record<ReportTargetType, string> = {
-  post: 'publicação', reel: 'reel', story: 'story', comment: 'comentário', user: 'perfil', live: 'live',
+  post: 'publicação', story: 'story', comment: 'comentário', user: 'perfil', live: 'live',
 };
 
 const MOTIVOS: { value: string; label: string }[] = [
@@ -84,7 +84,7 @@ export function ReportDialog({ open, onClose, targetType, targetId }: ReportDial
 
         <div className="space-y-3">
           <div className="space-y-1.5" role="radiogroup" aria-label="Motivo da denúncia">
-            {MOTIVOS.filter((m) => m.value !== 'conteudo_mais18_nao_marcado' || ['post', 'reel', 'story', 'live'].includes(targetType)).map((m) => (
+            {MOTIVOS.filter((m) => m.value !== 'conteudo_mais18_nao_marcado' || ['post', 'story', 'live'].includes(targetType)).map((m) => (
               <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer rounded-lg px-2 py-1.5 hover:bg-secondary/60">
                 <input type="radio" name="motivo" value={m.value} checked={reason === m.value} onChange={() => setReason(m.value)} />
                 {m.label}

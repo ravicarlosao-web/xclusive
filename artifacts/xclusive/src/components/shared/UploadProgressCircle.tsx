@@ -7,7 +7,7 @@ interface UploadProgressCircleProps {
   className?: string;
 }
 
-/** Círculo de progresso dos carregamentos (imagem, vídeo, reel, story): só o círculo e a percentagem ao centro, sem texto. */
+/** Círculo de progresso dos carregamentos (imagem, vídeo, story): só o círculo e a percentagem ao centro, sem texto. */
 export function UploadProgressCircle({ percent, size = 112, className }: UploadProgressCircleProps) {
   const determinado = typeof percent === 'number' && Number.isFinite(percent);
   const valor = determinado ? Math.min(100, Math.max(0, Math.round(percent as number))) : 0;
