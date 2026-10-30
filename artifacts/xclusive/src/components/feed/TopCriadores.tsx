@@ -40,15 +40,15 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
   const criadores = (ativo && data ? data : []).slice(0, 5);
 
   return (
-    <section aria-labelledby="top-criadores-titulo" className="cd-top mb-6 shrink-0" data-testid="top-criadores">
-      <div className="mb-3 flex items-center justify-between px-0.5">
+    <section aria-labelledby="top-criadores-titulo" className="cd-top mb-[var(--cd-gap,24px)] shrink-0" data-testid="top-criadores">
+      <div className="mb-2 flex items-center justify-between px-0.5">
         <h2 id="top-criadores-titulo" className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
           <Flame className="h-5 w-5 fill-orange-400 text-orange-500" aria-hidden="true" /> Top Criadores
         </h2>
         <Link href="/explorar" className="text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="top-ver-todos">Ver todos</Link>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-[var(--cd-row-gap,6px)]">
         {!ativo ? (
           <p className="px-2 py-3 text-center text-xs text-muted-foreground">Sem ligação à base de dados.</p>
         ) : isLoading ? (
@@ -62,21 +62,21 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
           criadores.map((c, i) => {
             const aSeguir = segue(c.id, !!c.estaASeguir);
             return (
-              <div key={c.id} className="cd-top-linha flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-secondary/70" data-testid="top-linha">
+              <div key={c.id} className="cd-top-linha flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-[var(--cd-row-py,12px)] transition-colors hover:bg-secondary/70" data-testid="top-linha">
                 <Link href={`/perfil/${c.username}`} className="flex min-w-0 flex-1 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-xs font-black text-foreground" aria-label={`Posição ${i + 1}`}>{i + 1}</span>
-                  <Avatar className="h-12 w-12 shrink-0 border border-border">
+                  <Avatar className="h-[var(--cd-av,48px)] w-[var(--cd-av,48px)] shrink-0 border border-border">
                     <AvatarImage src={c.avatarUrl || ''} alt="" />
                     <AvatarFallback className="text-xs font-bold">{c.nomeExibicao?.[0] || c.username[0]}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1 text-sm font-bold text-foreground"><span className="truncate">{c.username}</span>{c.verificado && <Verificado />}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">{c.nomeExibicao}</span>
-                    <span className="block text-[11px] text-muted-foreground">{c.totalPublicacoes} {c.totalPublicacoes === 1 ? 'post' : 'posts'}</span>
+                    <span className="flex items-center gap-1 text-sm font-bold leading-4 text-foreground"><span className="truncate">{c.username}</span>{c.verificado && <Verificado />}</span>
+                    <span className="block truncate text-[11px] leading-[14px] text-muted-foreground">{c.nomeExibicao}</span>
+                    <span className="block text-[11px] leading-[14px] text-muted-foreground">{c.totalPublicacoes} {c.totalPublicacoes === 1 ? 'post' : 'posts'}</span>
                   </span>
                 </Link>
                 <Button variant="ghost" size="sm" aria-pressed={aSeguir} aria-label={`${aSeguir ? 'A seguir' : 'Seguir'} ${c.username}`}
-                  className="h-9 shrink-0 rounded-lg bg-primary/15 px-4 text-xs font-bold text-primary hover:bg-primary/25 hover:text-primary" onClick={() => alternar(c.id, c.username, !!c.estaASeguir)}>
+                  className="h-8 shrink-0 rounded-lg bg-primary/15 px-4 text-xs font-bold text-primary hover:bg-primary/25 hover:text-primary" onClick={() => alternar(c.id, c.username, !!c.estaASeguir)}>
                   {aSeguir ? 'A seguir' : 'Seguir'}
                 </Button>
               </div>

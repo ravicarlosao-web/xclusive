@@ -236,20 +236,33 @@
   .menu-lateral::-webkit-scrollbar { display: none; }
 }
 
-/* ── Colunas direitas paradas (início e perfil, md+): só blocos inteiros, por altura de ecrã (CSS px) ──
-   Prioridade: pesquisa > Top Criadores > Sugestões para ti > banner (com o título SUGESTÕES e as setas) > "Descubra mais criadores".
-   Alturas medidas (início): topo 24 + pesquisa 64 | Top Criadores 36 + 79 por linha (+6 entre linhas) | Sugestões 44 + 120 por cartão
-   (+12 entre cartões) + 32 de pontos | banner 223 | botão 80 (fixo em baixo). Limiar = altura mínima em que o bloco cabe inteiro:
-     Top 5 linhas 543 · 4 linhas 458 · 3 linhas 373 · 2 linhas 288 | Sugestões 1 cartão 763 · 2 cartões 895 (ver SugestoesParaTi)
-     banner 1118 | botão 1200.  Perfil: pesquisa + Recente 267 · + Outras criadoras 533. */
+/* ── Colunas direitas paradas (início e perfil, md+) ──
+   A coluna é sticky dentro do contentor de scroll do centro e tem a altura do ecrã. NUNCA se esconde um bloco: compacta-se por
+   degraus de altura (variáveis --cd-*, como no menu lateral) e só depois se reduz o número de linhas do Top Criadores (mínimo 3)
+   e de cartões de Sugestões (mínimo 1; ver SugestoesParaTi). Abaixo de ~700px a própria coluna rola, com a barra escondida, sem
+   encadear no centro (overscroll-behavior: contain; o listener da roda em useColunaParada não a bloqueia nesse caso). */
+.coluna-direita {
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none;
+  padding-top: var(--cd-pad); padding-bottom: var(--cd-pad);
+  --cd-pad: 16px; --cd-gap: 12px; --cd-pesq: 40px; --cd-seta: 32px;
+  --cd-ban-py: 12px; --cd-ban-logo: 24px; --cd-ban-mb: 6px; --cd-ban-txt: 13px; --cd-ban-sub: 12px;
+  --cd-row-py: 6px; --cd-av: 36px; --cd-row-gap: 4px;
+  --cd-card: 88px; --cd-card-av: 40px; --cd-cards-gap: 8px; --cd-thumb: 84px; --cd-capa: 48px;
+}
+.coluna-direita::-webkit-scrollbar { display: none; }
+.coluna-direita > :last-child { margin-bottom: 0; }
 @media (min-width: 1024px) {
-  @media (max-height: 1199px) { .coluna-direita .cd-descubra { display: none; } }
-  @media (max-height: 1117px) { .coluna-direita .cd-banner { display: none; } }
-  @media (max-height: 762px) { .coluna-direita .cd-sug { display: none; } }
-  @media (max-height: 542px) { .coluna-direita .cd-top-linha:nth-child(n+5) { display: none; } }
-  @media (max-height: 457px) { .coluna-direita .cd-top-linha:nth-child(n+4) { display: none; } }
-  @media (max-height: 372px) { .coluna-direita .cd-top-linha:nth-child(n+3) { display: none; } }
-  @media (max-height: 287px) { .coluna-direita .cd-top-linha:nth-child(n+2) { display: none; } }
-  @media (max-height: 559px) { .coluna-direita .cd-outras { display: none; } }
-  @media (max-height: 299px) { .coluna-direita .cd-recente { display: none; } }
+  @media (max-height: 892px) {
+    .coluna-direita { --cd-pad: 12px; --cd-gap: 10px; --cd-pesq: 38px; --cd-ban-py: 10px; --cd-ban-logo: 20px; --cd-ban-mb: 4px; --cd-ban-txt: 12px; --cd-ban-sub: 11px;
+      --cd-row-py: 4px; --cd-av: 32px; --cd-row-gap: 4px; --cd-card: 80px; --cd-card-av: 36px; --cd-cards-gap: 6px; --cd-thumb: 72px; --cd-capa: 44px; }
+  }
+  @media (max-height: 823px) {
+    .coluna-direita { --cd-pad: 8px; --cd-gap: 8px; --cd-pesq: 36px; --cd-seta: 28px; --cd-ban-py: 8px; --cd-ban-logo: 18px; --cd-ban-mb: 3px; --cd-ban-txt: 12px; --cd-ban-sub: 11px;
+      --cd-row-py: 3px; --cd-av: 30px; --cd-row-gap: 3px; --cd-card: 72px; --cd-card-av: 32px; --cd-cards-gap: 6px; --cd-thumb: 64px; --cd-capa: 40px; }
+  }
+  /* Menos linhas do Top Criadores só depois de compactar (mínimo 3). Alturas mínimas para caberem inteiros (conteúdo medido):
+     T1 (≥893): 5 linhas + 2 cartões = 892 · T2 (824–892): 822 · T3 (≤823): 5 linhas + 2 cartões 759 · 5 linhas + 1 cartão 681
+     · 4 linhas + 1 cartão 625 · 3 linhas + 1 cartão 571 (abaixo disto a coluna rola por dentro). Cartões: ver SugestoesParaTi (761). */
+  @media (max-height: 682px) { .coluna-direita .cd-top-linha:nth-child(n+5) { display: none; } }
+  @media (max-height: 626px) { .coluna-direita .cd-top-linha:nth-child(n+4) { display: none; } }
 }
