@@ -8,6 +8,7 @@ import { lerVisualizador, bloqueadoMais18 } from "../lib/conteudoMais18";
 import { postVisivel } from "../lib/takedown";
 import { getCommissionRate, CommissionNotConfiguredError } from "../lib/commission";
 import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
+import { ChaveReutilizadaError, chaveOpcional, compraParaResposta, foiViolacaoDaChave, hashPedidoGorjeta, lerCompraPorChave } from "../lib/idempotenciaGorjeta";
 
 const router = Router();
 
@@ -25,6 +26,8 @@ const gorjetaSchema = z.object({
     .positive("Valor deve ser positivo")
     .finite()
     .max(10_000_000, "Valor demasiado elevado"),
+  /** Chave de idempotência (opcional): a mesma chave devolve a gorjeta original sem nova cobrança. */
+  chave: chaveOpcional,
 });
 
 /**
@@ -37,10 +40,17 @@ const gorjetaSchema = z.object({
  */
 router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), async (req: AuthRequest, res): Promise<void> => {
   const postId = parseInt(req.params['postId'] as string, 10);
-  const { valor } = req.body as { valor: number };
+  const { valor, chave } = req.body as { valor: number; chave?: string };
   const senderId = req.userId!;
+  const pedidoHash = chave ? hashPedidoGorjeta("post", postId, valor, null) : null;
 
   try {
+    // Repetição com a mesma chave (a gorjeta já foi feita): devolve a original ANTES das validações de estado, sem cobrar.
+    if (chave && pedidoHash) {
+      const anterior = await lerCompraPorChave(db, senderId, chave, pedidoHash);
+      if (anterior) { res.status(201).json({ purchase: compraParaResposta(anterior) }); return; }
+    }
+
     // Leitura do post fora da transação — não precisa de lock (só leitura).
     const [post] = await db
       .select({ autorId: postsTable.autorId, mais18: postsTable.mais18 })
@@ -60,6 +70,12 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
       const sender = (await bloquearUtilizadores(tx, [senderId, post.autorId])).get(senderId);
 
       if (!sender) throw new PaymentError("Utilizador não encontrado.", 404);
+
+      // 1b. Idempotência (sob o lock do remetente e antes de qualquer débito): a mesma (remetente, chave) devolve a compra original.
+      if (chave && pedidoHash) {
+        const anterior = await lerCompraPorChave(tx, senderId, chave, pedidoHash);
+        if (anterior) return anterior;
+      }
 
       // 2. Verificar saldo suficiente.
       if (Number(sender.saldo) < valor) {
@@ -94,14 +110,26 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
           taxaComissao: String(commissionRate),
           conteudoId: postId,
           descricao: `Gorjeta ao post #${postId}`,
+          ...(chave ? { chaveIdempotencia: chave, pedidoHash } : {}),
         })
         .returning();
 
       return p;
     });
 
-    res.status(201).json({ purchase });
+    res.status(201).json({ purchase: compraParaResposta(purchase) });
   } catch (err) {
+    // Corrida que escapou à leitura: o índice único recusou o segundo insert; repete-se a leitura e devolve-se a original.
+    if (chave && pedidoHash && foiViolacaoDaChave(err)) {
+      try {
+        const anterior = await lerCompraPorChave(db, senderId, chave, pedidoHash);
+        if (anterior) { res.status(201).json({ purchase: compraParaResposta(anterior) }); return; }
+      } catch (e2) { err = e2; }
+    }
+    if (err instanceof ChaveReutilizadaError) {
+      res.status(409).json({ error: err.message, codigo: err.codigo });
+      return;
+    }
     if (err instanceof CommissionNotConfiguredError) {
       req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
       res.status(503).json({ error: err.message });
