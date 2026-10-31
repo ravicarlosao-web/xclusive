@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
-import { db, messagesTable, messageTipsTable } from "@workspace/db";
+import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
+import { auditLogTable, db, menorCasesTable, messagesTable, messageTipsTable, reportsTable, usersTable } from "@workspace/db";
+import { restaurarAlvo, TakedownError } from "./takedown";
 import { copiarImagemParaProvas, deletePrivate, getStorageKeyFromPublicUrl, isStorageConfigured } from "./storage";
 
 /**
@@ -92,4 +93,83 @@ export function excertoParaAdmin(snapshot: unknown, assinar: (chave: string) => 
       ...(m.imagem ? { imagem: { ...m.imagem, provaUrl: m.imagem.chaveCopia ? assinar(m.imagem.chaveCopia) : null } } : {}),
     })),
   };
+}
+
+
+// ── Reposição de uma mensagem retirada ───────────────────────────────────────────────────────────────────────
+// A reposição só limpa a marca de retirada da mensagem (retirado_*): as cópias de prova e o snapshot da denúncia NÃO se tocam.
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Q = Tx | typeof db;
+
+export type ImpedimentoRepor = "nao_retirada" | "por_decidir" | "caso_menor" | "outra_denuncia";
+const TEXTO_IMPEDIMENTO: Record<ImpedimentoRepor, string> = {
+  nao_retirada: "A mensagem não está retirada (já foi reposta ou nunca foi retirada).",
+  por_decidir: "Decide primeiro a denúncia: só se repõe uma mensagem depois de a denúncia estar decidida.",
+  caso_menor: "Há um caso de menor aberto ou confirmado associado a esta mensagem: não pode ser reposta.",
+  outra_denuncia: "Há outra denúncia aberta ou procedente sobre esta mesma mensagem: não pode ser reposta.",
+};
+
+export interface RetiradaMensagem {
+  retirada: boolean;
+  retiradaEm: string | null;
+  retiradoPor: string | null;
+  retiradoMotivo: string | null;
+  /** Retirada automática por denúncia de menor (audit conteudo_retirado_auto sobre esta mensagem). */
+  retiradaAuto: boolean;
+  podeRepor: boolean;
+  impedimento: string | null;
+  codigoImpedimento: ImpedimentoRepor | null;
+}
+
+/** Estado da retirada da mensagem denunciada e se pode ser reposta (só leitura). `rep`: a denúncia a partir da qual se repõe. */
+export async function estadoRetiradaMensagem(q: Q, rep: { id: number; targetId: number; status: string }): Promise<RetiradaMensagem> {
+  const [m] = await q.select({ retiradoEm: messagesTable.retiradoEm, retiradoMotivo: messagesTable.retiradoMotivo, retiradoPor: messagesTable.retiradoPor, username: usersTable.username })
+    .from(messagesTable).leftJoin(usersTable, eq(usersTable.id, messagesTable.retiradoPor)).where(eq(messagesTable.id, rep.targetId)).limit(1);
+  const auto = (await q.select({ id: auditLogTable.id }).from(auditLogTable)
+    .where(and(eq(auditLogTable.action, "conteudo_retirado_auto"), eq(auditLogTable.targetType, "mensagem"), eq(auditLogTable.targetId, rep.targetId))).limit(1)).length > 0;
+  const base = {
+    retirada: !!m?.retiradoEm, retiradaEm: m?.retiradoEm ? m.retiradoEm.toISOString() : null,
+    retiradoPor: m?.username ? `@${m.username}` : null, retiradoMotivo: m?.retiradoMotivo ?? null, retiradaAuto: !!m?.retiradoEm && auto && !m.retiradoPor,
+  };
+  const impedido = (c: ImpedimentoRepor): RetiradaMensagem => ({ ...base, podeRepor: false, impedimento: TEXTO_IMPEDIMENTO[c], codigoImpedimento: c });
+
+  if (!m?.retiradoEm) return impedido("nao_retirada");
+  if (rep.status === "pendente" || rep.status === "em_analise") return impedido("por_decidir");
+  const doAlvo = q.select({ id: reportsTable.id }).from(reportsTable).where(and(eq(reportsTable.targetType, "mensagem"), eq(reportsTable.targetId, rep.targetId)));
+  const casos = await q.select({ id: menorCasesTable.id }).from(menorCasesTable)
+    .where(and(inArray(menorCasesTable.estado, ["aberto", "confirmado"]), inArray(menorCasesTable.reportId, doAlvo))).limit(1);
+  if (casos.length > 0) return impedido("caso_menor");
+  const outras = await q.select({ id: reportsTable.id }).from(reportsTable)
+    .where(and(eq(reportsTable.targetType, "mensagem"), eq(reportsTable.targetId, rep.targetId), ne(reportsTable.id, rep.id), inArray(reportsTable.status, ["pendente", "em_analise", "procedente"]))).limit(1);
+  if (outras.length > 0) return impedido("outra_denuncia");
+  return { ...base, podeRepor: true, impedimento: null, codigoImpedimento: null };
+}
+
+/**
+ * Repõe a mensagem denunciada (dentro da transação do chamador). Recusa (409, pt-PT) se `estadoRetiradaMensagem` o impedir.
+ * Regista `mensagem_reposta` no audit com o estado anterior (quem retirou, quando, porquê) e o motivo da reposição.
+ * A denúncia mantém o estado decidido; nunca mexe em saldos, cópias de prova nem no snapshot.
+ */
+export async function reporMensagem(tx: Tx, p: { reportId: number; mensagemId: number; reportStatus: string; adminId: number; ip: string | null; motivo: string; automatica: boolean }): Promise<RetiradaMensagem> {
+  await tx.select({ id: messagesTable.id }).from(messagesTable).where(eq(messagesTable.id, p.mensagemId)).for("update");
+  const antes = await estadoRetiradaMensagem(tx, { id: p.reportId, targetId: p.mensagemId, status: p.reportStatus });
+  if (!antes.podeRepor) throw new TakedownError(antes.impedimento ?? "Não é possível repor esta mensagem.", 409);
+  await restaurarAlvo(tx, "mensagem", p.mensagemId);
+  await tx.insert(auditLogTable).values({
+    adminId: p.adminId, action: "mensagem_reposta", targetType: "mensagem", targetId: p.mensagemId,
+    details: {
+      reportId: p.reportId, motivo: p.motivo, automatica: p.automatica,
+      anterior: { retiradoEm: antes.retiradaEm, retiradoPor: antes.retiradoPor, retiradoMotivo: antes.retiradoMotivo, retiradaAuto: antes.retiradaAuto },
+    },
+    ipAddress: p.ip,
+  });
+  return antes;
+}
+
+/** Quantas vezes esta mensagem foi retirada automaticamente por ESTA denúncia (para a reposição automática em improcedente). */
+export async function retiradaAutoDestaDenuncia(q: Q, reportId: number, mensagemId: number): Promise<boolean> {
+  const r = await q.select({ id: auditLogTable.id }).from(auditLogTable).where(and(
+    eq(auditLogTable.action, "conteudo_retirado_auto"), eq(auditLogTable.targetType, "mensagem"), eq(auditLogTable.targetId, mensagemId),
+    sql`${auditLogTable.details}->>'reportId' = ${String(reportId)}`)).limit(1);
+  return r.length > 0;
 }

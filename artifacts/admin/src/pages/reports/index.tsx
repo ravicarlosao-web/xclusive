@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import { AlertTriangle, Eye } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Textarea } from '@/components/ui/textarea';
-import { ExcertoMensagem } from '@/components/reports/ExcertoMensagem';
+import { EstadoMensagem, ExcertoMensagem } from '@/components/reports/ExcertoMensagem';
 import { AcoesMais18, ResumoInfracaoMais18, TIPOS_MAIS18, useResumoInfracao, type TipoMais18 } from '@/components/mais18/AcoesMais18';
 
 type Estado = 'pendente' | 'em_analise' | 'procedente' | 'improcedente';
@@ -158,6 +158,18 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
 
   const final = d && (d.status === 'procedente' || d.status === 'improcedente');
 
+  // Repor a mensagem denunciada (só tipo mensagem): motivo obrigatório; a denúncia mantém o estado; o detalhe recarrega
+  const [erroRepor, setErroRepor] = useState<string | null>(null);
+  const repor = useMutation({
+    mutationFn: (motivo: string) => adminCall('POST', `/admin/reports/${id}/repor`, { motivo }),
+    onSuccess: async () => {
+      toast({ title: 'Mensagem reposta', description: 'A mensagem voltou a ficar visível para os dois participantes.' });
+      setErroRepor(null);
+      await queryClient.invalidateQueries({ queryKey: ['report-detail', id] });
+    },
+    onError: (e: Error) => setErroRepor(e.message || 'Não foi possível repor a mensagem.'),
+  });
+
   // Marcar +18 e registar infração: só post/story/live, com a criadora identificada e o conteúdo ainda NÃO marcado
   const podeMarcarMais18 = !!d && !final && d.alvo?.existe && TIPOS_MAIS18.includes(d.targetType) && d.alvo.mais18 === false && !!d.alvo.dono?.id;
   const resumoInfracao = useResumoInfracao(d?.alvo?.dono?.id, confirmarInfracao);
@@ -179,7 +191,11 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
         ? { retirar, suspender, avisarAutor, avisarDenunciante, ...(podeMarcarMais18 && marcarMais18 ? { marcarMais18: true } : {}) }
         : { avisarDenunciante: decisao === 'em_analise' ? false : avisarDenunciante },
     }),
-    onSuccess: () => { toast({ title: 'Decisão registada' }); queryClient.invalidateQueries({ queryKey: ['reports'] }); onClose(); },
+    onSuccess: (r: any) => {
+      // Denúncia de mensagem improcedente depois de retirada automática: o servidor repõe a mensagem sozinho (ou diz porque não pôde)
+      toast({ title: 'Decisão registada', description: r?.mensagemReposta ? 'A mensagem foi reposta automaticamente.' : r?.reposicaoImpedida ? `A mensagem continua retirada: ${r.reposicaoImpedida}` : undefined });
+      queryClient.invalidateQueries({ queryKey: ['reports'] }); onClose();
+    },
     onError: (e: any) => {
       setConfirmarInfracao(false);
       // adminFetch devolve o corpo em bruto ({"error":"..."}): mostra só a mensagem do servidor (ex.: 409 com texto claro)
@@ -234,6 +250,10 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 <>
                   <p>Autor: {d.alvo.dono ? `@${d.alvo.dono.username}${d.alvo.dono.ativo ? '' : ' (suspenso)'}` : '—'} · {d.alvo.removido ? <strong className="text-red-400">RETIRADO</strong> : 'visível'}</p>
                   {d.alvo.resumo && <p className="whitespace-pre-wrap">{d.alvo.resumo}</p>}
+                  {d.targetType === 'mensagem' && (
+                    <EstadoMensagem retirada={d.alvo.retiradaMensagem} aRepor={repor.isPending} erro={erroRepor} onLimparErro={() => setErroRepor(null)}
+                      onRepor={async (motivo) => { try { await repor.mutateAsync(motivo); return true; } catch { return false; } }} />
+                  )}
                   {d.targetType === 'mensagem' && (
                     <ExcertoMensagem excerto={d.alvo.mensagem ?? null} denunciante={d.reporterUsername ?? String(d.reporterId ?? '—')} denunciado={d.alvo.dono?.username ?? String(d.targetOwnerId ?? '—')}
                       sha256={d.alvoSnapshotSha256} capturadoEm={d.alvoSnapshot?.capturadoEm ?? d.criadoEm} carregadoEm={dataUpdatedAt} aRecarregar={isFetching} onRecarregar={() => { void refetch(); }} />

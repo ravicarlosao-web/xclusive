@@ -51,7 +51,7 @@ import {
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor, PROVA_URL_TTL_SECONDS } from "../lib/storage.js";
-import { excertoParaAdmin } from "../lib/denunciaMensagem.js";
+import { estadoRetiradaMensagem, excertoParaAdmin, reporMensagem, retiradaAutoDestaDenuncia } from "../lib/denunciaMensagem.js";
 import {
   TARGET_TYPES, TARGET_LABEL, alvoSuportado, rotuloAlvo, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
@@ -454,6 +454,7 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
     case "menor_caso_visto": return `${admin} consultou um caso${target}`;
     case "conteudo_retirado_auto": return `Retirada automática (denúncia de menor)${target}`;
     case "conteudo_restaurado": return `${admin} repôs conteúdo${target}`;
+    case "mensagem_reposta": return `${admin} repôs uma mensagem${target}`;
     case "conteudo_ficheiros_apagar_pedido": return `${admin} pediu a eliminação dos ficheiros do conteúdo${target}`;
     case "conteudo_ficheiros_apagados": return `${admin} eliminou os ficheiros do conteúdo${target}`;
     case "eliminacao_recusada": return `Tentativa de eliminar conteúdo protegido recusada${target}`;
@@ -1327,6 +1328,8 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         : [];
       const [{ outras }] = await tx.select({ outras: count() }).from(reportsTable)
         .where(and(eq(reportsTable.targetType, r.targetType), eq(reportsTable.targetId, r.targetId)));
+      // Mensagem: estado da retirada (quem, quando, porquê) e se pode ser reposta
+      const retiradaMsg = r.targetType === "mensagem" ? await estadoRetiradaMensagem(tx, { id: r.id, targetId: r.targetId, status: r.status }) : null;
 
       await tx.insert(auditLogTable).values({
         adminId: req.adminId!, action: "report_conteudo_visto", targetType: "report", targetId: id,
@@ -1360,10 +1363,10 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
           // Mensagem: o excerto CONGELADO (janela de contexto + cópias das imagens por URL assinado de curta duração), nunca a conversa viva
           ...(r.targetType === "mensagem" ? { mensagem: (() => {
             const ex = excertoParaAdmin(r.alvoSnapshot, (k) => (isPrivateStorageConfigured() ? getPrivateSignedUrl(k, PROVA_URL_TTL_SECONDS).url : null));
-            // O excerto é congelado; só o estado "retirada" da mensagem denunciada acompanha o estado vivo (retirada automática/manual).
-            if (ex && alvo.removido && Array.isArray(ex.mensagens)) ex.mensagens = (ex.mensagens as any[]).map((m) => (m.id === ex.mensagemId ? { ...m, retirada: true } : m));
+            // O excerto é congelado; só o estado "retirada" da mensagem denunciada acompanha o estado vivo (retirada/reposição).
+            if (ex && Array.isArray(ex.mensagens)) ex.mensagens = (ex.mensagens as any[]).map((m) => (m.id === ex.mensagemId ? { ...m, retirada: alvo.removido } : m));
             return ex;
-          })() } : {}),
+          })(), retiradaMensagem: retiradaMsg } : {}),
         } : { existe: false },
       };
     });
@@ -1408,6 +1411,8 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
 
     // Resultado da marcação +18 (infração), para os efeitos fora da base de dados DEPOIS do commit
     let marcacaoMais18: Awaited<ReturnType<typeof marcarMais18PorAdmin>> | null = null;
+    // Reposição automática da mensagem (improcedente depois de retirada automática)
+    let reposicao: { feita: boolean; impedimento: string | null } | null = null;
 
     const updated = await db.transaction(async (tx) => {
       const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).for("update");
@@ -1489,6 +1494,18 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
         ...(final ? { resolvedBy: req.adminId!, resolvedAt: new Date(), acaoRetirou: retirou, acaoSuspendeu: suspendeu } : {}),
       }).where(eq(reportsTable.id, id)).returning();
 
+      // Mensagem retirada AUTOMATICAMENTE por esta denúncia (menor) e agora improcedente: repõe-se sozinha, com auditoria, salvo se algo o impedir
+      // (outra denúncia aberta/procedente sobre a mesma mensagem, caso de menor). Os outros tipos não têm esta reposição automática.
+      if (novo === "improcedente" && r.targetType === "mensagem" && await retiradaAutoDestaDenuncia(tx, id, r.targetId)) {
+        const est = await estadoRetiradaMensagem(tx, { id, targetId: r.targetId, status: novo });
+        if (est.podeRepor) {
+          await reporMensagem(tx, { reportId: id, mensagemId: r.targetId, reportStatus: novo, adminId: req.adminId!, ip: req.ip ?? null, motivo: "Denúncia improcedente.", automatica: true });
+          reposicao = { feita: true, impedimento: null };
+        } else if (est.retirada) {
+          reposicao = { feita: false, impedimento: est.impedimento };
+        }
+      }
+
       // Auditoria dentro da transação: se falhar, reverte decisão, retirada, suspensão e notificações
       await tx.insert(auditLogTable).values({
         adminId: req.adminId!,
@@ -1503,10 +1520,35 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
 
     if (marcacaoMais18) efeitosAposCommit(marcacaoMais18, true); // sockets: criadora suspensa / espectadores de uma live +18
     const { reporterIp: _ip, reporterContact: _c, ...seguro } = updated;
-    res.json(seguro);
+    const rp = reposicao as { feita: boolean; impedimento: string | null } | null; // atribuído dentro da transação
+    res.json(rp ? { ...seguro, mensagemReposta: rp.feita, reposicaoImpedida: rp.impedimento } : seguro);
   } catch (err) {
     if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error({ err }, "Erro ao resolver denúncia");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Repor a mensagem denunciada (só tipo mensagem, só com a denúncia já decidida). Não é um PATCH porque a denúncia mantém o estado decidido
+// (procedente/improcedente são finais). Exige motivo. A retirada/reposição de mensagens nunca é direta: passa sempre por uma denúncia.
+router.post("/admin/reports/:id/repor", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+    const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+    if (motivo.length < 5) return void res.status(400).json({ error: "Indica o motivo da reposição (mínimo 5 caracteres)." });
+    if (motivo.length > 300) return void res.status(400).json({ error: "O motivo da reposição tem no máximo 300 caracteres." });
+
+    const out = await db.transaction(async (tx) => {
+      const [r] = await tx.select().from(reportsTable).where(eq(reportsTable.id, id)).for("update");
+      if (!r) throw new TakedownError("Denúncia não encontrada", 404);
+      if (r.targetType !== "mensagem") throw new TakedownError("Só se repõe por aqui uma denúncia de mensagem.", 400);
+      return reporMensagem(tx, { reportId: id, mensagemId: r.targetId, reportStatus: r.status, adminId: req.adminId!, ip: req.ip ?? null, motivo, automatica: false });
+    });
+    res.json({ ok: true, reposta: true, anterior: { retiradaEm: out.retiradaEm, retiradoPor: out.retiradoPor, retiradoMotivo: out.retiradoMotivo, retiradaAuto: out.retiradaAuto } });
+  } catch (err) {
+    if (err instanceof TakedownError) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error({ err }, "Erro ao repor mensagem");
     res.status(500).json({ error: "Erro interno." });
   }
 });
