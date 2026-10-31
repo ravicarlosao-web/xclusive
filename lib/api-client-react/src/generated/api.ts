@@ -42,6 +42,8 @@ import type {
   Highlight,
   HighlightInput,
   LegalConfig,
+  LiveTipInput,
+  LiveTipResponse,
   LoginInput,
   MarkConversationRead200,
   Message,
@@ -56,6 +58,8 @@ import type {
   PostInput,
   PostMais18,
   PostMais18Input,
+  PostTipInput,
+  PostTipResponse,
   ProfileUpdate,
   RegisterInput,
   SearchParams,
@@ -69,6 +73,7 @@ import type {
   SubscriptionPlan,
   SubscriptionPlanInput,
   SubscriptionPlanUpdate,
+  TipKeyConflict,
   UnreadCount,
   UserProfile,
   UserSummary,
@@ -1828,6 +1833,152 @@ export const useVotarEnquete = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getVotarEnqueteMutationOptions(options));
+    }
+
+export const getSendPostTipUrl = (id: number,) => {
+
+
+
+
+  return `/api/posts/${id}/gorjeta`
+}
+
+/**
+ * Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança.
+ * @summary Enviar gorjeta a um post (idempotente com chave)
+ */
+export const sendPostTip = async (id: number,
+    postTipInput: PostTipInput, options?: Parameters<typeof customFetch>[1]): Promise<PostTipResponse> => {
+
+  return customFetch<PostTipResponse>(getSendPostTipUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(postTipInput)
+  }
+);}
+
+
+
+
+
+export const getSendPostTipMutationOptions = <TError = ErrorType<void | TipKeyConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendPostTip>>, TError,{id: number;data: BodyType<PostTipInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendPostTip>>, TError,{id: number;data: BodyType<PostTipInput>}, TContext> => {
+
+const mutationKey = ['sendPostTip'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendPostTip>>, {id: number;data: BodyType<PostTipInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendPostTip(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendPostTipMutationResult = NonNullable<Awaited<ReturnType<typeof sendPostTip>>>
+    export type SendPostTipMutationBody = BodyType<PostTipInput>
+    export type SendPostTipMutationError = ErrorType<void | TipKeyConflict>
+
+    /**
+ * @summary Enviar gorjeta a um post (idempotente com chave)
+ */
+export const useSendPostTip = <TError = ErrorType<void | TipKeyConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendPostTip>>, TError,{id: number;data: BodyType<PostTipInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendPostTip>>,
+        TError,
+        {id: number;data: BodyType<PostTipInput>},
+        TContext
+      > => {
+      return useMutation(getSendPostTipMutationOptions(options));
+    }
+
+export const getSendLiveTipUrl = (id: number,) => {
+
+
+
+
+  return `/api/live/${id}/tip`
+}
+
+/**
+ * Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança, sem nova linha de gorjeta e sem novo evento na sala.
+ * @summary Enviar gorjeta a uma live ativa (idempotente com chave)
+ */
+export const sendLiveTip = async (id: number,
+    liveTipInput: LiveTipInput, options?: Parameters<typeof customFetch>[1]): Promise<LiveTipResponse> => {
+
+  return customFetch<LiveTipResponse>(getSendLiveTipUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(liveTipInput)
+  }
+);}
+
+
+
+
+
+export const getSendLiveTipMutationOptions = <TError = ErrorType<void | TipKeyConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLiveTip>>, TError,{id: number;data: BodyType<LiveTipInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendLiveTip>>, TError,{id: number;data: BodyType<LiveTipInput>}, TContext> => {
+
+const mutationKey = ['sendLiveTip'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendLiveTip>>, {id: number;data: BodyType<LiveTipInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendLiveTip(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendLiveTipMutationResult = NonNullable<Awaited<ReturnType<typeof sendLiveTip>>>
+    export type SendLiveTipMutationBody = BodyType<LiveTipInput>
+    export type SendLiveTipMutationError = ErrorType<void | TipKeyConflict>
+
+    /**
+ * @summary Enviar gorjeta a uma live ativa (idempotente com chave)
+ */
+export const useSendLiveTip = <TError = ErrorType<void | TipKeyConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLiveTip>>, TError,{id: number;data: BodyType<LiveTipInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendLiveTip>>,
+        TError,
+        {id: number;data: BodyType<LiveTipInput>},
+        TContext
+      > => {
+      return useMutation(getSendLiveTipMutationOptions(options));
     }
 
 export const getLikePostUrl = (id: number,) => {

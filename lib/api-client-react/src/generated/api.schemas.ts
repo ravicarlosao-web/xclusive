@@ -565,6 +565,78 @@ export interface DenunciaMensagemResultado {
   retiradoTemporariamente: boolean;
 }
 
+export interface PostTipInput {
+  /** Valor em Kz (positivo; o front envia inteiros). */
+  valor: number;
+  /**
+     * Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.
+     * @minLength 16
+     * @maxLength 64
+     * @pattern ^[A-Za-z0-9_-]{16,64}$
+     */
+  chave?: string;
+}
+
+export interface LiveTipInput {
+  /** Kz inteiros, positivos. */
+  valor: number;
+  /** @maxLength 255 */
+  mensagem?: string;
+  /**
+     * Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.
+     * @minLength 16
+     * @maxLength 64
+     * @pattern ^[A-Za-z0-9_-]{16,64}$
+     */
+  chave?: string;
+}
+
+export interface PostTipPurchase {
+  id: number;
+  compradorId: number;
+  vendedorId: number;
+  tipo: string;
+  valor: string;
+  comissao: string;
+  /** @nullable */
+  taxaComissao?: string | null;
+  /** @nullable */
+  conteudoId?: number | null;
+  /** @nullable */
+  descricao?: string | null;
+  criadoEm: string;
+}
+
+export interface PostTipResponse {
+  purchase: PostTipPurchase;
+}
+
+export interface LiveTip {
+  id: number;
+  streamId: number;
+  remetenteId: number;
+  valor: number;
+  /** @nullable */
+  mensagem?: string | null;
+  criadoEm: string;
+}
+
+export interface LiveTipResponse {
+  tip: LiveTip;
+}
+
+export type TipKeyConflictCodigo = typeof TipKeyConflictCodigo[keyof typeof TipKeyConflictCodigo];
+
+
+export const TipKeyConflictCodigo = {
+  chave_reutilizada: 'chave_reutilizada',
+} as const;
+
+export interface TipKeyConflict {
+  error: string;
+  codigo: TipKeyConflictCodigo;
+}
+
 export interface GorjetaMensagemInput {
   /** Kz inteiros, de 50 a 100 000 por gorjeta (limite diário de 300 000 Kz por remetente). */
   valor: number;
