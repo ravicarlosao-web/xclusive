@@ -3,11 +3,13 @@ import { db, conversationsTable, conversationParticipantsTable, messagesTable, u
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
-import { urlMedia } from "../lib/storage";
+import { urlMedia, urlImagemMensagem, verificarImagemMensagem } from "../lib/storage";
 
 const sendMessageSchema = z.object({
   tipo: z.enum(["texto", "imagem", "audio", "post_partilhado"]).default("texto"),
   conteudo: z.string().max(4000).optional(),
+  // Só para tipo "imagem": URL do nosso CDN de um ficheiro do próprio remetente (validado abaixo).
+  mediaUrl: z.string().max(1000).optional(),
 });
 
 const router = Router();
@@ -246,13 +248,29 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     res.status(400).json({ error: "Input inválido", detalhes: parsed.error.flatten().fieldErrors });
     return;
   }
-  const { tipo, conteudo } = parsed.data;
+  const { tipo, conteudo, mediaUrl } = parsed.data;
+
+  // Imagem: exige mediaUrl; qualquer outro tipo não aceita mediaUrl.
+  let mediaGuardada: string | null = null;
+  if (tipo === "imagem") {
+    if (!mediaUrl) { res.status(400).json({ error: "A imagem é obrigatória." }); return; }
+    const canonico = urlImagemMensagem(mediaUrl, req.userId!);
+    if (!canonico) { res.status(400).json({ error: "Imagem inválida." }); return; }
+    const estado = await verificarImagemMensagem(canonico);
+    if (estado === "grande") { res.status(400).json({ error: "A imagem excede o limite de 10 MB." }); return; }
+    if (estado !== "ok") { res.status(400).json({ error: "Imagem inválida ou indisponível." }); return; }
+    mediaGuardada = canonico;
+  } else if (mediaUrl !== undefined) {
+    res.status(400).json({ error: "Este tipo de mensagem não aceita imagem." });
+    return;
+  }
 
   const [msg] = await db.insert(messagesTable).values({
     conversationId: id,
     autorId: req.userId!,
     tipo,
     conteudo: conteudo ?? null,
+    mediaUrl: mediaGuardada,
   }).returning();
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));

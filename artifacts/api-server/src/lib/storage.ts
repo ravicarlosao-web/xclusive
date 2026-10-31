@@ -408,6 +408,38 @@ export function urlAvatarOuCapa(url: string, userId: number, opcoes: { gif?: boo
   return urlCanonico(url);
 }
 
+/** Tamanho máximo de uma imagem anexada a uma mensagem. */
+export const MENSAGEM_IMAGEM_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Imagem de mensagem: URL do NOSSO CDN, chave "users/<id do remetente>/…", extensão jpg/jpeg/png/webp (sem gif nem vídeo),
+ * sem segmentos perigosos nem query/fragmento. Devolve o URL canónico, ou null. Ao contrário do avatar/capa, sem
+ * BUNNY_CDN_HOSTNAME configurado recusa (não há como distinguir o que é nosso).
+ */
+export function urlImagemMensagem(url: string, userId: number): string | null {
+  if (!publicHost() || url.length > 1000 || url === "") return null;
+  // O texto recebido (antes de o URL ser normalizado) não pode ter query, fragmento, "%" (as nossas chaves são UUID) nem "..".
+  if (/[?#%]/.test(url) || url.includes("..")) return null;
+  return urlAvatarOuCapa(url, userId) || null;
+}
+
+/**
+ * Confirma no CDN (HEAD, sem descarregar o ficheiro) que a imagem existe, é image/* e tem no máximo
+ * MENSAGEM_IMAGEM_MAX_BYTES. Recusa se não conseguir confirmar. Não toca no fluxo de upload.
+ */
+export async function verificarImagemMensagem(urlCanonicoImagem: string): Promise<"ok" | "inexistente" | "grande" | "tipo"> {
+  try {
+    const r = await fetch(urlParaServidor(urlCanonicoImagem), { method: "HEAD", redirect: "error", signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return "inexistente";
+    if (!/^image\/(jpeg|png|webp)\b/i.test(r.headers.get("content-type") ?? "")) return "tipo";
+    const tam = Number(r.headers.get("content-length"));
+    if (!Number.isFinite(tam) || tam <= 0) return "inexistente";
+    return tam > MENSAGEM_IMAGEM_MAX_BYTES ? "grande" : "ok";
+  } catch {
+    return "inexistente";
+  }
+}
+
 export async function uploadPrivateStream(
   stream: Readable,
   key: string,

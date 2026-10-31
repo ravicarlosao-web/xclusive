@@ -1646,13 +1646,17 @@ components:
 
     MessageInput:
       type: object
-      required: [tipo, conteudo]
+      required: [tipo]
       properties:
         tipo:
           type: string
           enum: [texto, imagem, audio]
         conteudo:
           type: string
+          description: Texto, ou legenda (opcional) quando tipo é imagem.
+        mediaUrl:
+          type: string
+          description: "Só com tipo imagem (obrigatório). URL do CDN de uma imagem (jpg, jpeg, png, webp, até 10 MB) enviada pelo próprio remetente."
 
     PaginatedMessages:
       type: object
