@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { Heart, MessageCircle, Star, DollarSign, UserPlus, AtSign, Bell, CheckCheck } from 'lucide-react';
+import { Heart, MessageCircle, Star, DollarSign, UserPlus, AtSign, Bell, CheckCheck, Coins } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { ColunaDescobrir } from '@/components/feed/ColunaDescobrir';
@@ -14,7 +14,7 @@ import { pt } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetNotificationsQueryKey } from '@workspace/api-client-react';
 
-type NotifTipo = 'novo_seguidor' | 'like_post' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema';
+type NotifTipo = 'novo_seguidor' | 'like_post' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema' | 'gorjeta_recebida';
 
 type FilterType = 'tudo' | 'mencoes';
 
@@ -30,6 +30,7 @@ function renderIcon(tipo: NotifTipo) {
     case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500 fill-yellow-600 dark:fill-yellow-500" />;
     case 'pagamento_recebido': return <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />;
     case 'sistema':            return <Bell className="w-4 h-4 text-purple-500 fill-purple-500" />;
+    case 'gorjeta_recebida':   return <Coins className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />;
     default:                   return null;
   }
 }
@@ -43,6 +44,7 @@ function renderText(tipo: NotifTipo) {
     case 'nova_subscricao':    return 'subscreveu o teu conteúdo exclusivo!';
     case 'pagamento_recebido': return 'pagou por conteúdo PPV.';
     case 'sistema':            return 'Notificação de Sistema';
+    case 'gorjeta_recebida':   return 'enviou-te uma gorjeta.';
     // Tipo desconhecido ou removido (p. ex. linhas antigas): texto genérico, nunca parte a página
     default:                   return 'Tens uma nova notificação.';
   }
@@ -170,7 +172,10 @@ export default function Notifications() {
                           <Link href={`/perfil/${username}`} className="font-bold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                             {username}
                           </Link>{' '}
-                          {renderText(tipo)}
+                          {tipo === 'gorjeta_recebida' ? (
+                            // Texto do servidor ("enviou-te uma gorjeta de X Kz") e ligação à conversa (o id vem em postId)
+                            notif.postId ? <Link href={`/mensagens/${notif.postId}`} data-testid="notif-gorjeta" className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{mensagem || renderText(tipo)}</Link> : <span data-testid="notif-gorjeta">{mensagem || renderText(tipo)}</span>
+                          ) : renderText(tipo)}
                         </p>
                       )}
                       <span className={`text-xs ${!notif.lida ? 'text-primary font-medium' : 'text-muted-foreground'}`}>

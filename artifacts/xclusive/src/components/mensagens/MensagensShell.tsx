@@ -18,6 +18,12 @@ function formatTime(dateStr: string) {
   }
 }
 
+/** Texto da última mensagem na lista (a gorjeta mostra quem enviou e o valor; nunca o texto opcional). */
+function previsualizacao(m: { tipo: string; conteudo?: string | null; autorId: number; gorjeta?: { valor: number } }, meuId?: number): string {
+  if (m.tipo === 'gorjeta') return `${m.autorId === meuId ? 'Enviaste' : 'Recebeste'} uma gorjeta${m.gorjeta ? ` de ${m.gorjeta.valor.toLocaleString('pt-PT')} Kz` : ''}`;
+  return m.conteudo ?? (m.tipo === 'imagem' ? 'Imagem' : 'Áudio');
+}
+
 // Scroll da lista guardado ao sair de /mensagens para /mensagens/:id (cada rota monta de novo), reposto ao voltar.
 let scrollListaGuardado = 0;
 
@@ -94,7 +100,7 @@ export function MensagensShell({ convId }: { convId: number }) {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <p className={`truncate text-sm ${unread > 0 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                      {lastMsg ? (lastMsg.conteudo ?? (lastMsg.tipo === 'imagem' ? 'Imagem' : 'Áudio')) : 'Sem mensagens'}
+                      {lastMsg ? previsualizacao(lastMsg, user?.id) : 'Sem mensagens'}
                     </p>
                     {unread > 0 && <span aria-hidden="true" className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">{unread}</span>}
                   </div>

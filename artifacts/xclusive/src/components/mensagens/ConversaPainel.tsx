@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Ban, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
+import { ArrowLeft, Ban, Coins, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BloqueioDialog, textoErroServidor } from './bloqueio';
+import { GorjetaCartao } from './GorjetaCartao';
+import { GorjetaDialog } from './GorjetaDialog';
 import { ACCEPT_IMAGEM, enviarImagemMensagem, textoErro, validarImagem } from './imagemMensagem';
 import { ImagemBolha } from './ImagemBolha';
 import { VisualizadorImagens, type ImagemVista } from './VisualizadorImagens';
@@ -58,6 +60,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
   // Menu → diálogo: o menu não pode devolver o foco ao seu botão depois de o diálogo abrir (senão o foco escapa do diálogo)
   const abriuDialogoDoMenu = useRef(false);
   const [avisoEnvio, setAvisoEnvio] = useState<string | null>(null);
+  const [gorjetaAberta, setGorjetaAberta] = useState(false);
   // Texto que não chegou a ser enviado (o composer pode passar a restrito depois do erro: o texto continua visível)
   const [naoEnviado, setNaoEnviado] = useState<string | null>(null);
 
@@ -90,6 +93,8 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const podeEnviar = msgData?.podeEnviar ?? true;
   const restricao = msgData?.restricao ?? null;
   const restrito = carregado && !podeEnviar;
+  // Gorjeta: só a criadores e com a conversa a permitir envio (nunca com bloqueio nem regra restritiva)
+  const mostraGorjeta = carregado && podeEnviar && partner?.tipoConta === 'criador';
   // Se já segues o criador, só a subscrição desbloqueia (regra "só assinantes"): o texto acompanha
   const { data: perfilParceiro } = useGetUserProfile(partner?.username ?? '', {
     query: { queryKey: getGetUserProfileQueryKey(partner?.username ?? ''), enabled: restricao === 'regra' && !!partner },
@@ -334,7 +339,9 @@ export function ConversaPainel({ convId }: { convId: number }) {
                   </Avatar>
                 )}
                 <div className={`group relative flex min-w-0 flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                  {msg.tipo === 'imagem' && msg.mediaUrl ? (
+                  {msg.tipo === 'gorjeta' && msg.gorjeta ? (
+                    <GorjetaCartao valor={msg.gorjeta.valor} mensagem={msg.conteudo} enviada={isMe} />
+                  ) : msg.tipo === 'imagem' && msg.mediaUrl ? (
                     <div className={`flex min-w-0 max-w-full flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
                       <ImagemBolha src={msg.mediaUrl} legenda={msg.conteudo} autor={isMe ? 'ti' : (msg.autor?.nomeExibicao ?? msg.autor?.username ?? 'utilizador')} onAbrir={(el) => abrirImagem(msg.id, el)} onCarregada={aoCarregarImagem} />
                       {msg.conteudo && (
@@ -412,6 +419,12 @@ export function ConversaPainel({ convId }: { convId: number }) {
         ) : (
         <div className="flex items-center gap-2 bg-secondary rounded-full px-4 py-1 border border-transparent focus-within:border-border">
           <input ref={imageInputRef} type="file" accept={ACCEPT_IMAGEM} onChange={escolherImagem} data-testid="conversa-ficheiro" className="hidden" tabIndex={-1} aria-hidden="true" />
+          {mostraGorjeta && (
+            <button type="button" aria-label="Enviar gorjeta" data-testid="conversa-gorjeta" onClick={() => setGorjetaAberta(true)} disabled={isSending}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Coins className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
           <button
             aria-label="Anexar imagem" className="flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-primary transition-colors bg-primary/10 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => imageInputRef.current?.click()} disabled={isSending}
@@ -445,6 +458,10 @@ export function ConversaPainel({ convId }: { convId: number }) {
       </div>
       </>)}
 
+      {/* Fica montado enquanto aberto: um erro 403/404 (que recarrega o estado e esconde o botão) continua visível no diálogo */}
+      {partner && (mostraGorjeta || gorjetaAberta) && (
+        <GorjetaDialog aberto={gorjetaAberta} onFechar={() => setGorjetaAberta(false)} convId={convId} criador={{ username: partner.username, nomeExibicao: partner.nomeExibicao }} />
+      )}
       {partner && dialogoBloqueio && (
         <BloqueioDialog aberto modo={dialogoBloqueio} username={partner.username} onFechar={() => setDialogoBloqueio(null)}
           onConcluido={() => { if (dialogoBloqueio === 'bloquear') setLocation('/mensagens'); else void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) }); }} />
