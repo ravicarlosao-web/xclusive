@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
-  db, postsTable, storiesTable, commentsTable, liveStreamsTable, postMediaTable, likesTable,
+  db, postsTable, storiesTable, commentsTable, liveStreamsTable, postMediaTable, likesTable, messagesTable,
   reportsTable, auditLogTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
@@ -25,7 +25,7 @@ import { logger } from "./logger";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Q = Tx | typeof db;
 export type Ator = "autor" | "admin";
-export type TipoProtegido = "post" | "story" | "comment" | "live" | "user";
+export type TipoProtegido = "post" | "story" | "comment" | "live" | "user" | "mensagem";
 export type MotivoBloqueio = "retirado" | "denuncia_aberta" | "denuncia_menor_aberta" | "menor_procedente" | "comentario_protegido";
 
 const ABERTA = ["pendente", "em_analise"] as const;
@@ -62,7 +62,7 @@ export function mensagemDeBloqueio(motivo: MotivoBloqueio, ator: Ator): string {
 /** Bloqueia a linha do alvo (FOR UPDATE na eliminação, FOR SHARE ao denunciar). false se não existe. */
 export async function bloquearAlvo(tx: Tx, tipo: TipoProtegido, id: number, modo: "update" | "share"): Promise<boolean> {
   if (tipo === "user") return true;
-  const t = TABELAS[tipo] as typeof postsTable;
+  const t = (tipo === "mensagem" ? messagesTable : TABELAS[tipo]) as typeof postsTable;
   const q = tx.select({ id: t.id }).from(t).where(eq(t.id, id));
   const rows = await (modo === "update" ? q.for("update") : q.for("share"));
   return rows.length > 0;
@@ -85,7 +85,7 @@ function avaliar(retirado: boolean, reports: { reason: string; status: string }[
 }
 
 /** Motivo pelo qual o alvo (ou, num post, algum dos seus comentários) NÃO pode ser eliminado; null se pode. */
-export async function motivoDeBloqueio(q: Q, tipo: Exclude<TipoProtegido, "user">, id: number, ator: Ator): Promise<MotivoBloqueio | null> {
+export async function motivoDeBloqueio(q: Q, tipo: Exclude<TipoProtegido, "user" | "mensagem">, id: number, ator: Ator): Promise<MotivoBloqueio | null> {
   const t = TABELAS[tipo] as typeof postsTable;
   const [linha] = await q.select({ retiradoEm: t.retiradoEm }).from(t).where(eq(t.id, id)).limit(1);
   if (!linha) return null;

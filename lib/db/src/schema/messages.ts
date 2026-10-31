@@ -31,6 +31,10 @@ export const messagesTable = pgTable("messages", {
   mediaUrl: text("media_url"),
   lido: boolean("lido").notNull().default(false),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Retirada pela moderação: esconde (nunca apaga). O conteúdo deixa de ser servido; a prova fica retida. */
+  retiradoEm: timestamp("retirado_em"),
+  retiradoMotivo: text("retirado_motivo"),
+  retiradoPor: integer("retirado_por").references(() => usersTable.id, { onDelete: "set null" }),
 }, (t) => [
   index("messages_conversa_id_idx").on(t.conversationId, t.id),
   index("messages_conversa_autor_idx").on(t.conversationId, t.autorId),

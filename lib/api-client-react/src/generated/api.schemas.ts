@@ -519,6 +519,8 @@ export interface Message {
   criadoEm: string;
   /** Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão. */
   gorjeta?: MessageGorjeta;
+  /** Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra "Mensagem removida pela moderação"). */
+  retirada?: boolean;
 }
 
 export interface Conversation {
@@ -532,6 +534,35 @@ export interface Conversation {
 
 export interface ConversationInput {
   participanteId: number;
+}
+
+export type DenunciaMensagemInputMotivo = typeof DenunciaMensagemInputMotivo[keyof typeof DenunciaMensagemInputMotivo];
+
+
+export const DenunciaMensagemInputMotivo = {
+  menor: 'menor',
+  sem_consentimento: 'sem_consentimento',
+  direitos_autor: 'direitos_autor',
+  violencia: 'violencia',
+  assedio: 'assedio',
+  spam: 'spam',
+  outro: 'outro',
+} as const;
+
+export interface DenunciaMensagemInput {
+  mensagemId: number;
+  motivo: DenunciaMensagemInputMotivo;
+  /**
+     * Obrigatória (mín. 5 caracteres) quando o motivo é outro.
+     * @maxLength 1000
+     */
+  descricao?: string;
+}
+
+export interface DenunciaMensagemResultado {
+  id: number;
+  /** Motivo menor: a mensagem foi retirada (escondida) enquanto aguarda análise. */
+  retiradoTemporariamente: boolean;
 }
 
 export interface GorjetaMensagemInput {

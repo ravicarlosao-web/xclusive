@@ -1050,7 +1050,8 @@ export const GetConversationsResponseItem = zod.object({
   "criadoEm": zod.coerce.date(),
   "gorjeta": zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
-}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 }).optional(),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
@@ -1098,7 +1099,8 @@ export const CreateConversationResponse = zod.object({
   "criadoEm": zod.coerce.date(),
   "gorjeta": zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
-}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 }).optional(),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
@@ -1110,6 +1112,29 @@ export const CreateConversationResponse = zod.object({
  */
 export const GetUnreadConversationsCountResponse = zod.object({
   "count": zod.int()
+})
+
+
+/**
+ * @summary Denunciar uma mensagem do outro participante (congela a prova, com contexto e cópia das imagens)
+ */
+export const ReportMessageParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const reportMessageBodyDescricaoMax = 1000;
+
+
+
+export const ReportMessageBody = zod.object({
+  "mensagemId": zod.int(),
+  "motivo": zod.enum(['menor', 'sem_consentimento', 'direitos_autor', 'violencia', 'assedio', 'spam', 'outro']),
+  "descricao": zod.string().max(reportMessageBodyDescricaoMax).optional().describe('Obrigatória (mín. 5 caracteres) quando o motivo é outro.')
+})
+
+export const ReportMessageResponse = zod.object({
+  "id": zod.int(),
+  "retiradoTemporariamente": zod.boolean().describe('Motivo menor: a mensagem foi retirada (escondida) enquanto aguarda análise.')
 })
 
 
@@ -1153,7 +1178,8 @@ export const SendMessageTipResponse = zod.object({
   "criadoEm": zod.coerce.date(),
   "gorjeta": zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
-}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 })
 
 
@@ -1187,7 +1213,8 @@ export const GetMessagesResponse = zod.object({
   "criadoEm": zod.coerce.date(),
   "gorjeta": zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
-}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 })),
   "page": zod.int(),
   "hasMore": zod.boolean()
@@ -1227,7 +1254,8 @@ export const SendMessageResponse = zod.object({
   "criadoEm": zod.coerce.date(),
   "gorjeta": zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
-}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 })
 
 
