@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { Heart, MessageCircle, Star, DollarSign, UserPlus, AtSign, Loader2, Bell } from 'lucide-react';
+import { Heart, MessageCircle, Star, DollarSign, UserPlus, AtSign, Bell, CheckCheck } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { FeedHeader } from '@/components/feed/FeedHeader';
+import { ColunaDescobrir } from '@/components/feed/ColunaDescobrir';
+import { Pilulas } from '@/components/shared/Pilulas';
+import { useAuth } from '@/contexts/AuthContext';
 import { useGetNotifications, useMarkAllNotificationsRead } from '@workspace/api-client-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -14,6 +19,7 @@ type NotifTipo = 'novo_seguidor' | 'like_post' | 'comentario' | 'nova_subscricao
 type FilterType = 'tudo' | 'mencoes';
 
 const MENCAO_TYPES: NotifTipo[] = ['mencao', 'comentario'];
+const FILTROS: { id: FilterType; rotulo: string }[] = [{ id: 'tudo', rotulo: 'Tudo' }, { id: 'mencoes', rotulo: 'Menções' }];
 
 function renderIcon(tipo: NotifTipo) {
   switch (tipo) {
@@ -53,8 +59,9 @@ function formatTime(dateStr: string) {
 export default function Notifications() {
   const [filter, setFilter] = useState<FilterType>('tudo');
   const queryClient = useQueryClient();
+  const { isMockMode } = useAuth();
 
-  const { data, isLoading, isError } = useGetNotifications({ page: 1 });
+  const { data, isLoading, isError, refetch } = useGetNotifications({ page: 1 });
   const { mutate: markAllRead, isPending: isMarking } = useMarkAllNotificationsRead({
     mutation: {
       onSuccess: () => {
@@ -78,149 +85,132 @@ export default function Notifications() {
     ? notifications.filter(n => MENCAO_TYPES.includes(n.tipo as NotifTipo))
     : notifications;
 
+  // Mesmo desenho de Início e Explorar: centro de 640 px com bordas laterais e a coluna direita de descoberta
   return (
-    <div className="w-full max-w-2xl mx-auto h-[calc(100dvh-60px)] md:h-screen overflow-hidden flex flex-col border-x border-border bg-card">
-      {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-border bg-background/95 backdrop-blur z-10">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Notificações</h1>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              className="text-primary text-sm font-semibold hover:bg-primary/10"
-              onClick={() => markAllRead()}
-              disabled={isMarking}
-            >
-              {isMarking ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-              Marcar todas como lidas
-            </Button>
+    <div className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:pr-1.5">
+      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+        <FeedHeader titulo="Notificações" rotuloMenu="Mais opções de Notificações" textoAtualizar="Marcar todas como lidas" Icone={CheckCheck}
+          onAtualizar={() => markAllRead()} aAtualizar={isMarking || unreadCount === 0} />
+
+        <Pilulas<FilterType> itens={FILTROS} ativo={filter} onMudar={setFilter} rotulo="Filtrar as notificações" painelId="notif-painel" idPrefixo="notif-tab" testid="notif-filtros" />
+
+        <div id="notif-painel" role="tabpanel" aria-labelledby={`notif-tab-${filter}`} data-testid="notif-painel">
+          {/* Loading */}
+          {isLoading && (
+            <div aria-busy="true" aria-label="A carregar notificações" data-testid="notif-esqueleto">
+              {Array(6).fill(0).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 border-b border-border px-4 py-3">
+                  <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/4" /></div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error */}
+          {isError && (
+            <div role="alert" className="px-6 py-14 text-center text-sm text-muted-foreground" data-testid="notif-erro">
+              <Bell className="mx-auto mb-3 h-10 w-10 opacity-30" aria-hidden="true" />
+              <p className="mb-4">Não foi possível carregar as notificações.</p>
+              <Button variant="outline" className="min-h-[44px]" onClick={() => { void refetch(); }}>Tentar novamente</Button>
+            </div>
+          )}
+
+          {/* Empty */}
+          {!isLoading && !isError && filtered.length === 0 && (
+            <div className="px-6 py-14 text-center text-sm text-muted-foreground border-b border-border" data-testid="notif-vazio">
+              {filter === 'mencoes'
+                ? <><AtSign className="mx-auto mb-3 h-10 w-10 opacity-30" aria-hidden="true" /><p>Ainda não tens menções.</p></>
+                : <><Bell className="mx-auto mb-3 h-10 w-10 opacity-30" aria-hidden="true" /><p>Ainda não tens notificações.</p></>
+              }
+            </div>
+          )}
+
+          {/* List */}
+          {!isLoading && !isError && filtered.length > 0 && (
+            <div data-testid="notif-lista">
+              {filtered.map((notif) => {
+                const tipo = notif.tipo as NotifTipo;
+                const username = notif.ator?.username ?? 'utilizador';
+                const avatarUrl = notif.ator?.avatarUrl ?? '';
+                // Notificações de sistema trazem a mensagem do servidor (ex.: subscrição expirada, levantamento rejeitado).
+                const mensagem = (notif as { mensagem?: string | null }).mensagem ?? null;
+                const sistema = tipo === 'sistema';
+                const temAtor = !!notif.ator;
+
+                return (
+                  <div
+                    key={notif.id}
+                    data-testid="notif-linha"
+                    className={`flex items-center gap-3 border-b border-border px-4 py-3 transition-colors
+                      ${!notif.lida ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-secondary/60'}
+                    `}
+                  >
+                    {temAtor ? (
+                      <Link href={`/perfil/${username}`} className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Ver o perfil de ${username}`}>
+                        <Avatar className="w-12 h-12 border border-border">
+                          <AvatarImage src={avatarUrl} />
+                          <AvatarFallback>{username[0]?.toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border shadow-sm">
+                          {renderIcon(tipo)}
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="relative shrink-0 w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center">
+                        {renderIcon(tipo) ?? <Bell className="w-4 h-4" />}
+                      </div>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      {sistema ? (
+                        <p className="text-sm" data-testid="notif-mensagem">{mensagem || renderText(tipo)}</p>
+                      ) : (
+                        <p className="text-sm">
+                          <Link href={`/perfil/${username}`} className="font-bold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {username}
+                          </Link>{' '}
+                          {renderText(tipo)}
+                        </p>
+                      )}
+                      <span className={`text-xs ${!notif.lida ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                        {formatTime(notif.criadoEm)}
+                      </span>
+                    </div>
+
+                    {sistema && temAtor && (
+                      <Link href={`/perfil/${username}`} className="shrink-0">
+                        <Button size="sm" className="min-h-[44px] bg-primary text-white" data-testid="notif-renovar">Renovar</Button>
+                      </Link>
+                    )}
+
+                    {tipo === 'novo_seguidor' && (
+                      <Button size="sm" className={`min-h-[44px] shrink-0 ${!notif.lida ? 'bg-primary text-white' : 'bg-secondary text-foreground'}`}>
+                        Seguir
+                      </Button>
+                    )}
+
+                    {notif.postThumbnail && ['like_post', 'comentario', 'mencao'].includes(tipo) && (
+                      <div className="shrink-0 w-12 h-12 bg-secondary rounded-md overflow-hidden border border-border">
+                        <img src={notif.postThumbnail} className="w-full h-full object-cover" alt="" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {data?.hasMore && (
+                <p className="text-center py-6 text-xs text-muted-foreground">
+                  A mostrar as últimas 20 notificações.
+                </p>
+              )}
+            </div>
           )}
         </div>
-
-        {/* Filter tabs */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilter('tudo')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'tudo' ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
-          >
-            Tudo
-          </button>
-          <button
-            onClick={() => setFilter('mencoes')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${filter === 'mencoes' ? 'bg-primary text-white shadow-none dark:shadow-[0_0_15px_rgba(255,62,114,0.4)]' : 'bg-secondary text-foreground hover:bg-secondary/80'}`}
-          >
-            Menções
-          </button>
-        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span className="text-sm">A carregar notificações…</span>
-          </div>
-        )}
-
-        {/* Error */}
-        {isError && (
-          <div className="text-center py-16 text-muted-foreground text-sm">
-            <Bell className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>Não foi possível carregar as notificações.</p>
-          </div>
-        )}
-
-        {/* Empty */}
-        {!isLoading && !isError && filtered.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground text-sm">
-            {filter === 'mencoes'
-              ? <><AtSign className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Ainda não tens menções.</p></>
-              : <><Bell className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Ainda não tens notificações.</p></>
-            }
-          </div>
-        )}
-
-        {/* List */}
-        {!isLoading && !isError && filtered.length > 0 && (
-          <div className="p-2 sm:p-4 space-y-1">
-            {filtered.map((notif) => {
-              const tipo = notif.tipo as NotifTipo;
-              const username = notif.ator?.username ?? 'utilizador';
-              const avatarUrl = notif.ator?.avatarUrl ?? '';
-              // Notificações de sistema trazem a mensagem do servidor (ex.: subscrição expirada, levantamento rejeitado).
-              const mensagem = (notif as { mensagem?: string | null }).mensagem ?? null;
-              const sistema = tipo === 'sistema';
-              const temAtor = !!notif.ator;
-
-              return (
-                <div
-                  key={notif.id}
-                  className={`flex items-center gap-4 p-3 sm:p-4 rounded-xl transition-colors cursor-pointer
-                    ${!notif.lida ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-secondary'}
-                  `}
-                >
-                  {temAtor ? (
-                    <Link href={`/perfil/${username}`} className="relative shrink-0">
-                      <Avatar className="w-12 h-12 border border-border">
-                        <AvatarImage src={avatarUrl} />
-                        <AvatarFallback>{username[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border shadow-sm">
-                        {renderIcon(tipo)}
-                      </div>
-                    </Link>
-                  ) : (
-                    <div className="relative shrink-0 w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center">
-                      {renderIcon(tipo) ?? <Bell className="w-4 h-4" />}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    {sistema ? (
-                      <p className="text-sm" data-testid="notif-mensagem">{mensagem || renderText(tipo)}</p>
-                    ) : (
-                      <p className="text-sm">
-                        <Link href={`/perfil/${username}`} className="font-bold hover:underline">
-                          {username}
-                        </Link>{' '}
-                        {renderText(tipo)}
-                      </p>
-                    )}
-                    <span className={`text-xs ${!notif.lida ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                      {formatTime(notif.criadoEm)}
-                    </span>
-                  </div>
-
-                  {sistema && temAtor && (
-                    <Link href={`/perfil/${username}`}>
-                      <Button size="sm" className="bg-primary text-white" data-testid="notif-renovar">Renovar</Button>
-                    </Link>
-                  )}
-
-                  {tipo === 'novo_seguidor' && (
-                    <Button size="sm" className={!notif.lida ? 'bg-primary text-white' : 'bg-secondary text-foreground'}>
-                      Seguir
-                    </Button>
-                  )}
-
-                  {notif.postThumbnail && ['like_post', 'comentario', 'mencao'].includes(tipo) && (
-                    <div className="shrink-0 w-12 h-12 bg-secondary rounded-md overflow-hidden border border-border">
-                      <img src={notif.postThumbnail} className="w-full h-full object-cover" alt="" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {data?.hasMore && (
-              <p className="text-center py-6 text-xs text-muted-foreground">
-                A mostrar as últimas 20 notificações.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Coluna direita: a mesma do Início e de Explorar */}
+      <ColunaDescobrir semDados={isMockMode} />
     </div>
   );
 }
