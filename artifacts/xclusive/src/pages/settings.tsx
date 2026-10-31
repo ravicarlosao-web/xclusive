@@ -8,6 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FeedHeader } from '@/components/feed/FeedHeader';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useColunaParada } from '@/hooks/useColunaParada';
 import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star, Sun, Moon, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
@@ -17,12 +20,25 @@ import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
 import { enviarImagem } from '@/lib/uploadImagem';
 
+const SECCOES = [
+  { id: 'profile', rotulo: 'Editar Perfil', Icone: User, testid: undefined },
+  { id: 'privacy', rotulo: 'Privacidade', Icone: Lock, testid: undefined },
+  { id: 'notifications', rotulo: 'Notificações', Icone: Bell, testid: undefined },
+  { id: 'aparencia', rotulo: 'Aparência', Icone: Sun, testid: 'tab-aparencia' },
+  { id: 'subscricoes', rotulo: 'Subscrições', Icone: Star, testid: 'tab-subscricoes' },
+  { id: 'security', rotulo: 'Segurança', Icone: Shield, testid: undefined },
+] as const;
+
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
   const [encerrarAberto, setEncerrarAberto] = useState(false);
   const updateProfile = useUpdateProfile();
   const { toast } = useToast();
   const { tema, definir: definirTema } = useTema();
+  const [seccao, setSeccao] = useState<string>('profile');
+  // lg para cima: o menu das secções vai para a coluna direita; abaixo: fila de pílulas por baixo do cabeçalho
+  const largo = useMediaQuery('(min-width: 1024px)');
+  const colunaRef = useColunaParada<HTMLElement>(largo);
 
   const [nomeExibicao, setNomeExibicao] = useState(user?.nomeExibicao || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -82,33 +98,28 @@ export default function Settings() {
     }
   };
 
+  const gatilhoPilula = 'min-h-[44px] shrink-0 gap-2 rounded-full bg-secondary px-5 text-sm font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:font-bold data-[state=active]:text-primary data-[state=active]:shadow-none';
+  const gatilhoMenu = 'min-h-[48px] w-full justify-start gap-3 rounded-xl px-4 text-[15px] font-medium text-muted-foreground shadow-none transition-colors hover:bg-secondary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-secondary data-[state=active]:font-bold data-[state=active]:text-foreground data-[state=active]:shadow-none';
+
+  // Mesmo desenho de Início, Explorar e Notificações: centro de 640 px com bordas laterais; o menu das secções vai para a coluna direita
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-8 pb-24">
-      <h1 className="text-3xl font-bold mb-8">Definições</h1>
+    <Tabs value={seccao} onValueChange={setSeccao} orientation={largo ? 'vertical' : 'horizontal'}
+      className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:pr-1.5">
+      <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
+        <FeedHeader titulo="Definições" semMenu />
 
-      <Tabs defaultValue="profile" className="flex flex-col md:flex-row gap-8">
-        <TabsList className="flex md:flex-col justify-start items-start w-full md:w-64 h-auto bg-transparent p-0 overflow-x-auto border-b md:border-b-0 border-border">
-          <TabsTrigger value="profile" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <User className="w-5 h-5 mr-3" /> Editar Perfil
-          </TabsTrigger>
-          <TabsTrigger value="privacy" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <Lock className="w-5 h-5 mr-3" /> Privacidade
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <Bell className="w-5 h-5 mr-3" /> Notificações
-          </TabsTrigger>
-          <TabsTrigger value="aparencia" data-testid="tab-aparencia" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <Sun className="w-5 h-5 mr-3" /> Aparência
-          </TabsTrigger>
-          <TabsTrigger value="subscricoes" data-testid="tab-subscricoes" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <Star className="w-5 h-5 mr-3" /> Subscrições
-          </TabsTrigger>
-          <TabsTrigger value="security" className="w-full justify-start py-3 px-4 rounded-xl data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-bold text-muted-foreground border-none">
-            <Shield className="w-5 h-5 mr-3" /> Segurança
-          </TabsTrigger>
-        </TabsList>
+        {!largo && (
+          <TabsList aria-label="Secções das Definições" data-testid="definicoes-pilulas"
+            className="flex h-auto w-full justify-start gap-2 overflow-x-auto rounded-none border-b border-border bg-transparent px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {SECCOES.map(({ id, rotulo, Icone, testid }) => (
+              <TabsTrigger key={id} value={id} data-testid={testid ?? `tab-${id}`} className={gatilhoPilula}>
+                <Icone className="h-4 w-4" aria-hidden="true" /> {rotulo}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
 
-        <div className="flex-1 bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
+        <div className="px-4 py-6 sm:px-6">
           <TabsContent value="profile" className="mt-0 space-y-8 focus-visible:outline-none">
             <div>
               <h2 className="text-xl font-bold mb-6">Informação Pública</h2>
@@ -147,28 +158,31 @@ export default function Settings() {
 
               <div className="space-y-5">
                 <div>
-                  <Label className="text-muted-foreground mb-2 block">Nome de exibição</Label>
+                  <Label htmlFor="campo-nome-exibicao" className="text-muted-foreground mb-2 block">Nome de exibição</Label>
                   <Input 
+                    id="campo-nome-exibicao"
                     value={nomeExibicao} 
                     onChange={(e) => setNomeExibicao(e.target.value)} 
-                    className="bg-secondary/50 max-w-md"
+                    className="bg-secondary/50"
                   />
                 </div>
                 <div>
-                  <Label className="text-muted-foreground mb-2 block">Biografia</Label>
+                  <Label htmlFor="campo-biografia" className="text-muted-foreground mb-2 block">Biografia</Label>
                   <Textarea 
+                    id="campo-biografia"
                     value={bio} 
                     onChange={(e) => setBio(e.target.value)} 
-                    className="bg-secondary/50 max-w-md resize-none h-24"
+                    className="bg-secondary/50 resize-none h-24"
                   />
                   <p className="text-xs text-muted-foreground mt-1">Conta um pouco sobre ti na tua bio.</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground mb-2 block">Website</Label>
+                  <Label htmlFor="campo-website" className="text-muted-foreground mb-2 block">Website</Label>
                   <Input 
+                    id="campo-website"
                     value={link} 
                     onChange={(e) => setLink(e.target.value)} 
-                    className="bg-secondary/50 max-w-md"
+                    className="bg-secondary/50"
                   />
                 </div>
               </div>
@@ -283,7 +297,7 @@ export default function Settings() {
           <TabsContent value="security" className="mt-0 space-y-8">
             <h2 className="text-xl font-bold mb-6">Segurança</h2>
             
-            <div className="space-y-4 max-w-md">
+            <div className="space-y-4">
               <Button variant="outline" className="w-full justify-start text-left h-12">
                 Alterar Password
               </Button>
@@ -306,7 +320,7 @@ export default function Settings() {
             {!isMockMode && (
               <div className="pt-8 mt-8 border-t border-destructive/40 space-y-3" data-testid="zona-perigo">
                 <h3 className="text-lg font-bold text-destructive">Zona de perigo</h3>
-                <p className="text-sm text-muted-foreground max-w-md">Encerrar a conta torna-a inacessível e invisível. Podes pedir a reabertura nos primeiros 30 dias.</p>
+                <p className="text-sm text-muted-foreground">Encerrar a conta torna-a inacessível e invisível. Podes pedir a reabertura nos primeiros 30 dias.</p>
                 <Button variant="outline" onClick={() => setEncerrarAberto(true)} data-testid="encerrar-conta-abrir" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive min-h-[44px]">
                   Encerrar a minha conta
                 </Button>
@@ -315,7 +329,21 @@ export default function Settings() {
             )}
           </TabsContent>
         </div>
-      </Tabs>
-    </div>
+      </div>
+
+      {/* Coluna direita (lg+): o menu das secções, parado e sempre à vista */}
+      {largo && (
+        <aside ref={colunaRef} aria-label="Menu das Definições" data-testid="definicoes-menu"
+          className="coluna-direita hidden lg:flex flex-col lg:sticky lg:top-0 lg:h-[100dvh] lg:self-start w-[320px] xl:w-[400px] flex-shrink-0">
+          <TabsList aria-label="Secções das Definições" className="flex h-auto w-full flex-col items-stretch gap-1 bg-transparent p-0">
+            {SECCOES.map(({ id, rotulo, Icone, testid }) => (
+              <TabsTrigger key={id} value={id} data-testid={testid ?? `tab-${id}`} className={gatilhoMenu}>
+                <Icone className="h-5 w-5" aria-hidden="true" /> {rotulo}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </aside>
+      )}
+    </Tabs>
   );
 }
