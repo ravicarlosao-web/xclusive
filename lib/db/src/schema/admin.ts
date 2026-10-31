@@ -19,7 +19,7 @@ import { usersTable } from "./users";
 // ─── reports ────────────────────────────────────────────────────────────────
 
 export const reportStatusEnum = pgEnum("report_status", ["pendente", "em_analise", "procedente", "improcedente"]);
-export const reportTargetEnum = pgEnum("report_target_type", ["post", "reel", "story", "comment", "user", "live"]);
+export const reportTargetEnum = pgEnum("report_target_type", ["post", "reel", "story", "comment", "user", "live", "mensagem"]);
 
 /**
  * Denúncias de conteúdo. Máquina de estados rígida (routes/admin.ts, sob FOR UPDATE):

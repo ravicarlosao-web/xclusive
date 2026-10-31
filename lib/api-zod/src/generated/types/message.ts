@@ -22,4 +22,6 @@ export interface Message {
   criadoEm: Date;
   /** Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão. */
   gorjeta?: MessageGorjeta;
+  /** Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra "Mensagem removida pela moderação"). */
+  retirada?: boolean;
 }

@@ -9,7 +9,7 @@ import { enviarEMarcarAlerta, textoAlerta } from "../lib/alertaExterno";
 import { bloquearAlvo } from "../lib/provaProtegida";
 import { jsonCanonico, sha256Hex } from "../lib/hashCanonico";
 import {
-  TARGET_TYPES, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
+  TARGET_TYPES_GENERICOS, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
   lerAlvo, retirarAlvo, notificarSistema, notificarAdmins, TakedownError, type TargetType,
 } from "../lib/takedown";
 
@@ -26,7 +26,7 @@ import {
  */
 const router = Router();
 
-const limiteUtilizador = rateLimit({
+export const limiteUtilizador = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,
   message: { error: "Demasiadas denúncias num curto espaço de tempo. Tenta novamente mais tarde." },
@@ -45,7 +45,7 @@ const limitePublico = rateLimit({
 });
 
 const base = {
-  targetType: z.enum(TARGET_TYPES),
+  targetType: z.enum(TARGET_TYPES_GENERICOS),
   targetId: z.number().int().positive(),
 };
 
@@ -64,6 +64,16 @@ const publicSchema = z.object({
   description: z.string().trim().min(20, "Descreve o problema (mínimo 20 caracteres).").max(1000),
   contactoEmail: z.email("E-mail inválido").max(255),
   declaracao: z.literal(true, { error: "É necessário confirmar a declaração." }),
+});
+
+/** POST /conversations/:id/denunciar (a rota está em messages.ts, que valida a conversa e prepara a prova). */
+export const denunciaMensagemSchema = z.object({
+  mensagemId: z.number().int().positive(),
+  motivo: z.enum(REPORT_REASONS.filter((r) => r !== "conteudo_mais18_nao_marcado") as unknown as [typeof REPORT_REASONS[number], ...typeof REPORT_REASONS[number][]]),
+  descricao: z.string().trim().max(1000).optional(),
+}).refine((d) => d.motivo !== "outro" || (d.descricao && d.descricao.length >= 5), {
+  message: "Descreve o problema (mínimo 5 caracteres).",
+  path: ["descricao"],
 });
 
 const LIMITE_RETIRADAS_PUBLICAS = 3;
@@ -90,7 +100,7 @@ async function dentroDoLimitePublico(tx: Parameters<Parameters<typeof db.transac
 }
 
 /** Cria a denúncia na transação do chamador, validando o alvo; devolve os dados para a resposta. */
-async function criarDenuncia(opts: {
+export async function criarDenuncia(opts: {
   reporterId: number | null;
   targetType: TargetType;
   targetId: number;
@@ -101,6 +111,9 @@ async function criarDenuncia(opts: {
   autoRetirar: boolean;
   /** Denúncia pública (sem sessão): retirada automática sujeita aos limites por IP e por contacto. */
   autoRetirarPublico?: boolean;
+  /** Só 'mensagem': id reservado e snapshot já preparado (janela de contexto + cópias das imagens). Os outros tipos usam o snapshot de sempre. */
+  reportId?: number;
+  snapshotPronto?: Record<string, unknown>;
 }): Promise<{ id: number; retiradoAuto: boolean }> {
   const urgente = opts.reason === "menor";
   // Perfil denunciado por menor: nunca se suspende sozinho; o alerta sai reforçado (a equipa avalia abrir um caso).
@@ -122,7 +135,7 @@ async function criarDenuncia(opts: {
     }
 
     // Cópia leve do alvo: sobrevive a um apagamento posterior. Só o admin a lê; nunca em logs nem em rotas públicas.
-    const snapshot = {
+    const snapshot = opts.snapshotPronto ?? {
       tipo: opts.targetType, id: opts.targetId, donoId: alvo.ownerId,
       resumo: alvo.resumo ? alvo.resumo.slice(0, 2000) : null,
       ficheiros: alvo.media.map((m) => ({ tipo: m.tipo, chave: m.url })),
@@ -133,6 +146,7 @@ async function criarDenuncia(opts: {
       enquete: alvo.enquete,
     };
     const [rep] = await tx.insert(reportsTable).values({
+      ...(opts.reportId !== undefined ? { id: opts.reportId } : {}),
       reporterId: opts.reporterId,
       targetType: opts.targetType,
       targetId: opts.targetId,
@@ -185,7 +199,7 @@ async function criarDenuncia(opts: {
   return resultado;
 }
 
-function tratarErro(err: unknown, res: import("express").Response, log: { error: (...a: any[]) => void } | undefined): void {
+export function tratarErro(err: unknown, res: import("express").Response, log: { error: (...a: any[]) => void } | undefined): void {
   if (err instanceof TakedownError) { res.status(err.httpStatus).json({ error: err.message }); return; }
   const code = (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
   if (code === "23505") { res.status(409).json({ error: "Já denunciaste este conteúdo." }); return; }

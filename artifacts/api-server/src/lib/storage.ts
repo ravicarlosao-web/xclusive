@@ -200,10 +200,18 @@ function getPrivateConfig() {
   };
 }
 
-/** Chaves da zona privada começam por "kyc/"; as antigas (zona pública) por "users/". */
+/** Chaves da zona privada começam por "kyc/" (documentos) ou "provas/" (cópias de prova de denúncias); as antigas (zona pública) por "users/". */
 export function isPrivateStorageKey(key: string): boolean {
-  return key.startsWith("kyc/");
+  return key.startsWith("kyc/") || key.startsWith("provas/");
 }
+
+/** Cópias de prova de denúncias (provas/<denúncia>/<uuid>.<ext>): zona privada, só o admin as vê (URL assinado curto). */
+export function isProvaKey(value: string): boolean {
+  return value.startsWith("provas/");
+}
+
+/** Validade do URL assinado de uma prova mostrada ao admin. */
+export const PROVA_URL_TTL_SECONDS = 300;
 
 function privateStorageUrl(key: string): string {
   const { host, zone } = getPrivateConfig();
@@ -278,6 +286,8 @@ export function isPaidKey(value: string): boolean {
  * Nunca recorre à zona pública para chaves "paid/".
  */
 export function resolveMediaUrl(stored: string): string {
+  // Cópias de prova: nunca se servem a clientes; se por engano chegarem aqui, só com URL assinado de curta duração
+  if (isProvaKey(stored)) return isPrivateStorageConfigured() ? getPrivateSignedUrl(stored, PROVA_URL_TTL_SECONDS).url : "";
   if (!isPaidKey(stored)) return assinarPublico(stored);
   if (!isPrivateStorageConfigured()) return "";
   return getPrivateSignedUrl(stored, PAID_MEDIA_TTL_SECONDS).url;
@@ -437,6 +447,36 @@ export async function verificarImagemMensagem(urlCanonicoImagem: string): Promis
     return tam > MENSAGEM_IMAGEM_MAX_BYTES ? "grande" : "ok";
   } catch {
     return "inexistente";
+  }
+}
+
+export type ResultadoCopiaProva =
+  | { ok: true; chaveCopia: string; sha256: string; bytes: number }
+  | { ok: false; motivo: "storage_nao_configurado" | "origem_indisponivel" | "demasiado_grande" | "tipo_invalido" | "falha_no_envio" };
+
+const EXT_PROVA: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/**
+ * Copia uma imagem de mensagem (chave "users/<id>/…") para a zona PRIVADA, em "provas/<denúncia>/<uuid>.<ext>", e devolve o SHA-256 e o
+ * tamanho do que foi copiado. Protege a prova de ser apagada na origem (p. ex. por um post que partilhe a mesma chave). Nunca lança:
+ * falhar não pode impedir a denúncia (o chamador regista o estado "falhou").
+ */
+export async function copiarImagemParaProvas(denunciaId: number, chaveOriginal: string): Promise<ResultadoCopiaProva> {
+  try {
+    if (!isStorageConfigured() || !isPrivateStorageConfigured()) return { ok: false, motivo: "storage_nao_configurado" };
+    const r = await fetch(urlParaServidor(getPublicUrl(chaveOriginal)), { redirect: "error", signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) return { ok: false, motivo: "origem_indisponivel" };
+    const tipo = (r.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const ext = EXT_PROVA[tipo];
+    if (!ext) return { ok: false, motivo: "tipo_invalido" };
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.byteLength === 0) return { ok: false, motivo: "origem_indisponivel" };
+    if (buf.byteLength > MENSAGEM_IMAGEM_MAX_BYTES) return { ok: false, motivo: "demasiado_grande" };
+    const chaveCopia = createStorageKey(`provas/${denunciaId}`, ext);
+    try { await uploadPrivate(buf, chaveCopia, tipo); } catch { return { ok: false, motivo: "falha_no_envio" }; }
+    return { ok: true, chaveCopia, sha256: crypto.createHash("sha256").update(buf).digest("hex"), bytes: buf.byteLength };
+  } catch {
+    return { ok: false, motivo: "origem_indisponivel" };
   }
 }
 

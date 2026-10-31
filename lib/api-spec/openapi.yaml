@@ -783,6 +783,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnreadCount"
 
+  /conversations/{id}/denunciar:
+    post:
+      operationId: reportMessage
+      tags: [messages]
+      summary: Denunciar uma mensagem do outro participante (congela a prova, com contexto e cópia das imagens)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DenunciaMensagemInput"
+      responses:
+        "201":
+          description: Denúncia criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DenunciaMensagemResultado"
+        "400":
+          description: Dados inválidos ou mensagem própria
+        "403":
+          description: Não és participante da conversa
+        "404":
+          description: Mensagem não encontrada (ou já retirada)
+        "409":
+          description: Já denunciaste esta mensagem
+        "429":
+          description: Demasiadas denúncias (10 por hora)
+
   /conversations/{id}/gorjeta:
     post:
       operationId: sendMessageTip
@@ -1760,6 +1795,9 @@ components:
         gorjeta:
           description: Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.
           $ref: "#/components/schemas/MessageGorjeta"
+        retirada:
+          description: 'Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra "Mensagem removida pela moderação").'
+          type: boolean
 
     MessageGorjeta:
       type: object
@@ -1768,6 +1806,30 @@ components:
         valor:
           description: Valor da gorjeta em Kz (inteiro).
           type: integer
+
+    DenunciaMensagemInput:
+      type: object
+      required: [mensagemId, motivo]
+      properties:
+        mensagemId:
+          type: integer
+        motivo:
+          type: string
+          enum: [menor, sem_consentimento, direitos_autor, violencia, assedio, spam, outro]
+        descricao:
+          description: Obrigatória (mín. 5 caracteres) quando o motivo é outro.
+          type: string
+          maxLength: 1000
+
+    DenunciaMensagemResultado:
+      type: object
+      required: [id, retiradoTemporariamente]
+      properties:
+        id:
+          type: integer
+        retiradoTemporariamente:
+          description: "Motivo menor: a mensagem foi retirada (escondida) enquanto aguarda análise."
+          type: boolean
 
     GorjetaMensagemInput:
       type: object

@@ -50,7 +50,8 @@ import {
   notInArray,
 } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor } from "../lib/storage.js";
+import { getPrivateSignedUrl, getPublicUrl, isPrivateStorageKey, isPaidKey, isPrivateStorageConfigured, resolveMediaUrl, urlMedia, urlParaServidor, PROVA_URL_TTL_SECONDS } from "../lib/storage.js";
+import { excertoParaAdmin } from "../lib/denunciaMensagem.js";
 import {
   TARGET_TYPES, TARGET_LABEL, alvoSuportado, rotuloAlvo, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
@@ -1354,7 +1355,16 @@ router.get("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res): P
         reporterUsername: r.reporterId ? (await tx.select({ u: usersTable.username }).from(usersTable).where(eq(usersTable.id, r.reporterId)))[0]?.u ?? null : null,
         totalDenunciasDoAlvo: Number(outras),
         casoMenor,
-        alvo: alvo ? { existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null, enquete: alvo.enquete ?? null } : { existe: false },
+        alvo: alvo ? {
+          existe: true, removido: alvo.removido, mais18: alvo.mais18 ?? null, resumo: alvo.resumo, media, dono: dono ?? null, enquete: alvo.enquete ?? null,
+          // Mensagem: o excerto CONGELADO (janela de contexto + cópias das imagens por URL assinado de curta duração), nunca a conversa viva
+          ...(r.targetType === "mensagem" ? { mensagem: (() => {
+            const ex = excertoParaAdmin(r.alvoSnapshot, (k) => (isPrivateStorageConfigured() ? getPrivateSignedUrl(k, PROVA_URL_TTL_SECONDS).url : null));
+            // O excerto é congelado; só o estado "retirada" da mensagem denunciada acompanha o estado vivo (retirada automática/manual).
+            if (ex && alvo.removido && Array.isArray(ex.mensagens)) ex.mensagens = (ex.mensagens as any[]).map((m) => (m.id === ex.mensagemId ? { ...m, retirada: true } : m));
+            return ex;
+          })() } : {}),
+        } : { existe: false },
       };
     });
 
@@ -1505,7 +1515,8 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
 function parseAlvoParams(req: AdminRequest): { type: TargetType; id: number } | null {
   const type = req.params.type as TargetType;
   const id = Number(req.params.id);
-  if (!TARGET_TYPES.includes(type) || !Number.isInteger(id) || id <= 0) return null;
+  // A mensagem só se retira/repõe por uma denúncia (PATCH /admin/reports/:id): nunca diretamente, para o admin não aceder a conversas sem denúncia
+  if (!TARGET_TYPES.includes(type) || type === "mensagem" || !Number.isInteger(id) || id <= 0) return null;
   return { type, id };
 }
 

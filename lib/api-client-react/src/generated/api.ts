@@ -26,6 +26,8 @@ import type {
   Conversation,
   ConversationInput,
   CreatorStats,
+  DenunciaMensagemInput,
+  DenunciaMensagemResultado,
   EarningPoint,
   Enquete,
   GetBlockedUsersParams,
@@ -3091,6 +3093,78 @@ export function useGetUnreadConversationsCount<TData = Awaited<ReturnType<typeof
 
 
 
+
+export const getReportMessageUrl = (id: number,) => {
+
+
+
+
+  return `/api/conversations/${id}/denunciar`
+}
+
+/**
+ * @summary Denunciar uma mensagem do outro participante (congela a prova, com contexto e cópia das imagens)
+ */
+export const reportMessage = async (id: number,
+    denunciaMensagemInput: DenunciaMensagemInput, options?: Parameters<typeof customFetch>[1]): Promise<DenunciaMensagemResultado> => {
+
+  return customFetch<DenunciaMensagemResultado>(getReportMessageUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(denunciaMensagemInput)
+  }
+);}
+
+
+
+
+
+export const getReportMessageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportMessage>>, TError,{id: number;data: BodyType<DenunciaMensagemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportMessage>>, TError,{id: number;data: BodyType<DenunciaMensagemInput>}, TContext> => {
+
+const mutationKey = ['reportMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportMessage>>, {id: number;data: BodyType<DenunciaMensagemInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reportMessage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportMessageMutationResult = NonNullable<Awaited<ReturnType<typeof reportMessage>>>
+    export type ReportMessageMutationBody = BodyType<DenunciaMensagemInput>
+    export type ReportMessageMutationError = ErrorType<void>
+
+    /**
+ * @summary Denunciar uma mensagem do outro participante (congela a prova, com contexto e cópia das imagens)
+ */
+export const useReportMessage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportMessage>>, TError,{id: number;data: BodyType<DenunciaMensagemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportMessage>>,
+        TError,
+        {id: number;data: BodyType<DenunciaMensagemInput>},
+        TContext
+      > => {
+      return useMutation(getReportMessageMutationOptions(options));
+    }
 
 export const getSendMessageTipUrl = (id: number,) => {
 

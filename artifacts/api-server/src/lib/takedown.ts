@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
-  db, postsTable, postMediaTable, storiesTable, commentsTable, liveStreamsTable,
+  db, postsTable, postMediaTable, storiesTable, commentsTable, liveStreamsTable, messagesTable,
   usersTable, notificationsTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
@@ -17,7 +17,9 @@ import { enquetePara, type AlvoEnquete } from "./enquetes";
  * Perfil: "retirar" = suspender a conta (users.ativo = false), que já é reversível.
  */
 
-export const TARGET_TYPES = ["post", "story", "comment", "user", "live"] as const;
+export const TARGET_TYPES = ["post", "story", "comment", "user", "live", "mensagem"] as const;
+/** Tipos que se denunciam pelas rotas genéricas POST /reports e /reports/public (a mensagem só por POST /conversations/:id/denunciar, que valida a conversa). */
+export const TARGET_TYPES_GENERICOS = TARGET_TYPES.filter((t) => t !== "mensagem") as unknown as readonly ["post", "story", "comment", "user", "live"];
 export type TargetType = typeof TARGET_TYPES[number];
 
 export const REPORT_REASONS = ["menor", "sem_consentimento", "direitos_autor", "violencia", "assedio", "spam", "conteudo_mais18_nao_marcado", "outro"] as const;
@@ -27,7 +29,7 @@ export type ReportReason = typeof REPORT_REASONS[number];
 export const REPORTS_CONTACT_EMAIL = process.env.REPORTS_CONTACT_EMAIL || "legal@xclusive.ao";
 
 export const TARGET_LABEL: Record<TargetType, string> = {
-  post: "publicação", story: "story", comment: "comentário", user: "perfil", live: "live",
+  post: "publicação", story: "story", comment: "comentário", user: "perfil", live: "live", mensagem: "mensagem",
 };
 
 /**
@@ -90,6 +92,12 @@ export async function lerAlvo(q: Q, type: TargetType, id: number): Promise<Targe
       if (!l) return null;
       return { ownerId: l.criadorId, removido: !!l.retiradoEm, resumo: null, media: [], mais18: l.mais18, criadoEm: l.criadoEm };
     }
+    case "mensagem": {
+      const [m] = await q.select().from(messagesTable).where(eq(messagesTable.id, id)).limit(1);
+      if (!m) return null;
+      // Sem ficheiros nem texto servidos: o admin vê o excerto congelado em alvo_snapshot, nunca a conversa viva
+      return { ownerId: m.autorId, removido: !!m.retiradoEm, resumo: null, media: [], criadoEm: m.criadoEm };
+    }
     case "user": {
       const [u] = await q.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
       if (!u) return null;
@@ -109,6 +117,7 @@ export async function retirarAlvo(tx: Tx, type: TargetType, id: number, porAdmin
     case "post": return { mudou: (await tx.update(postsTable).set(marca).where(and(eq(postsTable.id, id), isNull(postsTable.retiradoEm))).returning({ id: postsTable.id })).length > 0 };
     case "story": return { mudou: (await tx.update(storiesTable).set(marca).where(and(eq(storiesTable.id, id), isNull(storiesTable.retiradoEm))).returning({ id: storiesTable.id })).length > 0 };
     case "comment": return { mudou: (await tx.update(commentsTable).set(marca).where(and(eq(commentsTable.id, id), isNull(commentsTable.retiradoEm))).returning({ id: commentsTable.id })).length > 0 };
+    case "mensagem": return { mudou: (await tx.update(messagesTable).set(marca).where(and(eq(messagesTable.id, id), isNull(messagesTable.retiradoEm))).returning({ id: messagesTable.id })).length > 0 };
     case "live": return { mudou: (await tx.update(liveStreamsTable).set({ ...marca, status: "terminado", terminadoEm: new Date() }).where(and(eq(liveStreamsTable.id, id), isNull(liveStreamsTable.retiradoEm))).returning({ id: liveStreamsTable.id })).length > 0 };
     case "user": {
       const [u] = await tx.select({ role: usersTable.role, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
@@ -133,6 +142,7 @@ export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promi
     case "post": return { mudou: (await tx.update(postsTable).set(limpa).where(eq(postsTable.id, id)).returning({ id: postsTable.id })).length > 0 };
     case "story": return { mudou: (await tx.update(storiesTable).set(limpa).where(eq(storiesTable.id, id)).returning({ id: storiesTable.id })).length > 0 };
     case "comment": return { mudou: (await tx.update(commentsTable).set(limpa).where(eq(commentsTable.id, id)).returning({ id: commentsTable.id })).length > 0 };
+    case "mensagem": return { mudou: (await tx.update(messagesTable).set(limpa).where(eq(messagesTable.id, id)).returning({ id: messagesTable.id })).length > 0 };
     case "live": return { mudou: (await tx.update(liveStreamsTable).set(limpa).where(eq(liveStreamsTable.id, id)).returning({ id: liveStreamsTable.id })).length > 0 };
     case "user": {
       // Conta encerrada pelo próprio: não se repõe por aqui (só "Reabrir conta" no admin).

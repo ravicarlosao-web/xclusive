@@ -1,10 +1,13 @@
 import { Router } from "express";
-import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable } from "@workspace/db";
+import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable, reportsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { permissaoMensagem, textoRegra, TEXTO_BLOQUEASTE } from "../lib/permissaoMensagem";
 import { GORJETA_MENSAGEM, GorjetaErro, enviarGorjetaMensagem, erroDePermissaoGorjeta, formatarKz } from "../lib/gorjetaMensagem";
 import { CommissionNotConfiguredError } from "../lib/commission";
+import { validate } from "../lib/validate";
+import { criarDenuncia, denunciaMensagemSchema, limiteUtilizador, tratarErro } from "./reports";
+import { prepararProvaMensagem, apagarCopiasDeProva } from "../lib/denunciaMensagem";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
 import { urlMedia, urlImagemMensagem, verificarImagemMensagem } from "../lib/storage";
@@ -70,12 +73,13 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
         id: lastMsg.id,
         autorId: lastMsg.autorId,
         tipo: lastMsg.tipo,
-        conteudo: lastMsg.conteudo,
-        mediaUrl: urlMedia(lastMsg.mediaUrl),
+        conteudo: lastMsg.retiradoEm ? null : lastMsg.conteudo,
+        mediaUrl: lastMsg.retiradoEm ? null : urlMedia(lastMsg.mediaUrl),
         lido: lastMsg.lido,
         criadoEm: lastMsg.criadoEm.toISOString(),
         // Gorjeta: só o valor (o front compõe a pré-visualização "Gorjeta de X Kz")
-        ...(lastMsg.tipo === "gorjeta" && ultima?.valorGorjeta != null ? { gorjeta: { valor: Number(ultima.valorGorjeta) } } : {}),
+        ...(!lastMsg.retiradoEm && lastMsg.tipo === "gorjeta" && ultima?.valorGorjeta != null ? { gorjeta: { valor: Number(ultima.valorGorjeta) } } : {}),
+        ...(lastMsg.retiradoEm ? { retirada: true } : {}),
       } : null,
       totalNaoLidas: unread || 0,
       criadoEm: conv?.criadoEm?.toISOString() || new Date().toISOString(),
@@ -223,12 +227,14 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
       autorId: m.autorId,
       autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
       tipo: m.tipo,
-      conteudo: m.conteudo,
-      mediaUrl: urlMedia(m.mediaUrl),
+      // Mensagem retirada pela moderação: texto, imagem e gorjeta ficam ocultos (a conversa mantém-se)
+      conteudo: m.retiradoEm ? null : m.conteudo,
+      mediaUrl: m.retiradoEm ? null : urlMedia(m.mediaUrl),
       lido: m.lido,
       criadoEm: m.criadoEm.toISOString(),
       // Gorjeta: só o valor (nunca saldo nem comissão)
-      ...(m.tipo === "gorjeta" && valorGorjeta != null ? { gorjeta: { valor: Number(valorGorjeta) } } : {}),
+      ...(!m.retiradoEm && m.tipo === "gorjeta" && valorGorjeta != null ? { gorjeta: { valor: Number(valorGorjeta) } } : {}),
+      ...(m.retiradoEm ? { retirada: true } : {}),
     })),
     page: 1,
     hasMore: false,
@@ -372,6 +378,45 @@ router.post("/conversations/:id/gorjeta", requireAuth, async (req: AuthRequest, 
     }
     req.log?.error({ err }, "Gorjeta em mensagem: erro");
     res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * POST /api/conversations/:id/denunciar  { mensagemId, motivo, descricao? }
+ * Denuncia uma mensagem do OUTRO participante. Só participantes; a mensagem tem de ser da conversa; nunca as tuas. Mesmo limitador (10/h) e
+ * mesma unicidade por denunciante que as outras denúncias. Congela a prova: a mensagem, até 20 antes e 20 depois (dos dois lados) e cópias
+ * privadas das imagens (provas/<denúncia>/…). Se a cópia falhar a denúncia cria-se na mesma (copiaEstado 'falhou' no snapshot).
+ * Motivo 'menor': urgente, alerta os admins e a mensagem é retirada (escondida, nunca apagada) até haver decisão.
+ */
+router.post("/conversations/:id/denunciar", requireAuth, limiteUtilizador, validate(denunciaMensagemSchema), async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+  const reporterId = req.userId!;
+  const { mensagemId, motivo, descricao } = req.body as { mensagemId: number; motivo: string; descricao?: string };
+
+  if (!(await verificarParticipante(id, reporterId))) { res.status(403).json({ error: "Sem acesso a esta conversa" }); return; }
+
+  const [m] = await db.select({ id: messagesTable.id, autorId: messagesTable.autorId, retiradoEm: messagesTable.retiradoEm }).from(messagesTable)
+    .where(and(eq(messagesTable.id, mensagemId), eq(messagesTable.conversationId, id))).limit(1);
+  if (!m) { res.status(404).json({ error: "Mensagem não encontrada." }); return; }
+  if (m.autorId === reporterId) { res.status(400).json({ error: "Não podes denunciar o teu próprio conteúdo." }); return; }
+  if (m.retiradoEm) { res.status(404).json({ error: "Conteúdo indisponível." }); return; }
+  // Verificações baratas ANTES de copiar imagens (a transação repete-as com a linha bloqueada)
+  const [jaDenunciou] = await db.select({ id: reportsTable.id }).from(reportsTable)
+    .where(and(eq(reportsTable.reporterId, reporterId), eq(reportsTable.targetType, "mensagem"), eq(reportsTable.targetId, m.id))).limit(1);
+  if (jaDenunciou) { res.status(409).json({ error: "Já denunciaste este conteúdo." }); return; }
+
+  const [{ id: reportId }] = (await db.execute(sql`SELECT nextval(pg_get_serial_sequence('reports', 'id'))::int AS id`)).rows as { id: number }[];
+  const prova = await prepararProvaMensagem({ conversationId: id, mensagemId: m.id, donoId: m.autorId, reportId });
+  try {
+    const r = await criarDenuncia({
+      reporterId, targetType: "mensagem", targetId: m.id, reason: motivo, description: descricao, autoRetirar: true,
+      reportId, snapshotPronto: prova.snapshot,
+    });
+    res.status(201).json({ id: r.id, retiradoTemporariamente: r.retiradoAuto });
+  } catch (err) {
+    await apagarCopiasDeProva(prova.copias); // a denúncia não foi criada: não ficam cópias órfãs
+    tratarErro(err, res, req.log);
   }
 });
 
