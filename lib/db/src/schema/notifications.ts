@@ -10,6 +10,7 @@ export const notificationTipoEnum = pgEnum("notification_tipo", [
   "nova_subscricao",
   "pagamento_recebido",
   "sistema",
+  "gorjeta_recebida",
 ]);
 
 export const notificationsTable = pgTable("notifications", {

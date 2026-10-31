@@ -498,7 +498,13 @@ export const MessageTipo = {
   imagem: 'imagem',
   audio: 'audio',
   post_partilhado: 'post_partilhado',
+  gorjeta: 'gorjeta',
 } as const;
+
+export interface MessageGorjeta {
+  /** Valor da gorjeta em Kz (inteiro). */
+  valor: number;
+}
 
 export interface Message {
   id: number;
@@ -511,6 +517,8 @@ export interface Message {
   mediaUrl?: string | null;
   lido?: boolean;
   criadoEm: string;
+  /** Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão. */
+  gorjeta?: MessageGorjeta;
 }
 
 export interface Conversation {
@@ -524,6 +532,19 @@ export interface Conversation {
 
 export interface ConversationInput {
   participanteId: number;
+}
+
+export interface GorjetaMensagemInput {
+  /** Kz inteiros, de 50 a 100 000 por gorjeta (limite diário de 300 000 Kz por remetente). */
+  valor: number;
+  /** @maxLength 255 */
+  mensagem?: string;
+  /**
+     * Chave de idempotência (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a mesma mensagem sem nova cobrança.
+     * @minLength 16
+     * @maxLength 64
+     */
+  chave: string;
 }
 
 export type MessageInputTipo = typeof MessageInputTipo[keyof typeof MessageInputTipo];

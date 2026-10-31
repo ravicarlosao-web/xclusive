@@ -224,6 +224,7 @@ app.post(
   [
     "/api/posts/:postId/gorjeta",
     "/api/live/:streamId/tip",
+    "/api/conversations/:id/gorjeta",
     "/api/posts/:id/unlock",
     "/api/live/:streamId/ticket",
   ],

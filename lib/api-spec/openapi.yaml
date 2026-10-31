@@ -783,6 +783,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnreadCount"
 
+  /conversations/{id}/gorjeta:
+    post:
+      operationId: sendMessageTip
+      tags: [messages]
+      summary: Enviar gorjeta a um criador dentro da conversa (atómica e idempotente)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GorjetaMensagemInput"
+      responses:
+        "201":
+          description: Gorjeta enviada (mensagem criada)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "200":
+          description: Repetição com a mesma chave (mesma mensagem, sem nova cobrança)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Valor, mensagem ou chave inválidos, ou auto-gorjeta
+        "402":
+          description: Saldo insuficiente (codigo saldo_insuficiente)
+        "403":
+          description: Bloqueaste, regra restritiva, conta de administração ou destinatário que ainda não pode receber gorjetas (campo codigo)
+        "404":
+          description: Conversa indisponível
+        "409":
+          description: Chave já usada com outro pedido
+        "429":
+          description: Limite diário (codigo limite_diario) ou demasiados pedidos
+        "503":
+          description: Comissão não configurada (nada foi cobrado)
+
   /conversations/{id}/messages:
     get:
       operationId: getMessages
@@ -1702,7 +1747,7 @@ components:
           $ref: "#/components/schemas/UserSummary"
         tipo:
           type: string
-          enum: [texto, imagem, audio, post_partilhado]
+          enum: [texto, imagem, audio, post_partilhado, gorjeta]
         conteudo:
           type: ["string", "null"]
         mediaUrl:
@@ -1712,6 +1757,33 @@ components:
         criadoEm:
           type: string
           format: date-time
+        gorjeta:
+          description: Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.
+          $ref: "#/components/schemas/MessageGorjeta"
+
+    MessageGorjeta:
+      type: object
+      required: [valor]
+      properties:
+        valor:
+          description: Valor da gorjeta em Kz (inteiro).
+          type: integer
+
+    GorjetaMensagemInput:
+      type: object
+      required: [valor, chave]
+      properties:
+        valor:
+          description: Kz inteiros, de 50 a 100 000 por gorjeta (limite diário de 300 000 Kz por remetente).
+          type: integer
+        mensagem:
+          type: string
+          maxLength: 255
+        chave:
+          description: Chave de idempotência (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a mesma mensagem sem nova cobrança.
+          type: string
+          minLength: 16
+          maxLength: 64
 
     MessageInput:
       type: object
