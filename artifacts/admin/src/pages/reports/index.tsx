@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { AlertTriangle, Eye } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Textarea } from '@/components/ui/textarea';
+import { ExcertoMensagem } from '@/components/reports/ExcertoMensagem';
 import { AcoesMais18, ResumoInfracaoMais18, TIPOS_MAIS18, useResumoInfracao, type TipoMais18 } from '@/components/mais18/AcoesMais18';
 
 type Estado = 'pendente' | 'em_analise' | 'procedente' | 'improcedente';
@@ -24,7 +25,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   menor: 'Menor de idade', sem_consentimento: 'Sem consentimento', direitos_autor: 'Direitos de autor',
   violencia: 'Violência', assedio: 'Assédio', spam: 'Spam', conteudo_mais18_nao_marcado: 'Conteúdo +18 não marcado', outro: 'Outro',
 };
-const TIPO_LABEL: Record<string, string> = { post: 'Publicação', story: 'Story', comment: 'Comentário', user: 'Perfil', live: 'Live' };
+const TIPO_LABEL: Record<string, string> = { post: 'Publicação', story: 'Story', comment: 'Comentário', user: 'Perfil', live: 'Live', mensagem: 'Mensagem' };
 
 /** Pedidos autenticados ao admin (o IBAN/IP nunca passam por aqui; os URLs assinados vêm só do detalhe). */
 async function adminCall(method: string, path: string, body?: unknown) {
@@ -101,7 +102,7 @@ export default function Reports() {
             <input type="checkbox" checked={soUrgentes} onChange={(e) => setSoUrgentes(e.target.checked)} /> Só urgentes
           </label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px] bg-card"><SelectValue placeholder="Filtrar por estado" /></SelectTrigger>
+            <SelectTrigger className="w-[180px] bg-card" aria-label="Filtrar por estado"><SelectValue placeholder="Filtrar por estado" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="pendente">Pendentes</SelectItem>
@@ -129,7 +130,7 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   // Cada abertura do detalhe grava audit_log no servidor (o conteúdo só é devolvido se o registo for gravado)
-  const { data: d, isLoading, error } = useQuery({
+  const { data: d, isLoading, error, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['report-detail', id],
     queryFn: () => adminCall('GET', `/admin/reports/${id}`),
     staleTime: Infinity,
@@ -206,7 +207,12 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Denúncia #{id}</DialogTitle></DialogHeader>
         {isLoading && <p className="text-sm text-muted-foreground">A carregar…</p>}
-        {error && <p className="text-sm text-red-400">{String((error as Error).message)}</p>}
+        {error && (
+          <div role="alert" className="space-y-2" data-testid="denuncia-erro-detalhe">
+            <p className="text-sm text-red-400">{String((error as Error).message)}</p>
+            <Button size="sm" variant="outline" data-testid="denuncia-tentar-novamente" disabled={isFetching} onClick={() => { void refetch(); }}>Tentar novamente</Button>
+          </div>
+        )}
         {d && (
           <div className="space-y-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -228,6 +234,10 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 <>
                   <p>Autor: {d.alvo.dono ? `@${d.alvo.dono.username}${d.alvo.dono.ativo ? '' : ' (suspenso)'}` : '—'} · {d.alvo.removido ? <strong className="text-red-400">RETIRADO</strong> : 'visível'}</p>
                   {d.alvo.resumo && <p className="whitespace-pre-wrap">{d.alvo.resumo}</p>}
+                  {d.targetType === 'mensagem' && (
+                    <ExcertoMensagem excerto={d.alvo.mensagem ?? null} denunciante={d.reporterUsername ?? String(d.reporterId ?? '—')} denunciado={d.alvo.dono?.username ?? String(d.targetOwnerId ?? '—')}
+                      sha256={d.alvoSnapshotSha256} capturadoEm={d.alvoSnapshot?.capturadoEm ?? d.criadoEm} carregadoEm={dataUpdatedAt} aRecarregar={isFetching} onRecarregar={() => { void refetch(); }} />
+                  )}
                   {d.alvo.enquete && (
                     <div className="rounded border p-2 space-y-1" data-testid="denuncia-enquete">
                       <p className="text-xs uppercase text-muted-foreground">
@@ -285,7 +295,7 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
                 </div>
                 {decisao === 'procedente' && (
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={retirar} disabled={marcarMais18} onChange={(e) => setRetirar(e.target.checked)} /> Retirar o conteúdo</label>
+                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={retirar} disabled={marcarMais18} onChange={(e) => setRetirar(e.target.checked)} /> {d.targetType === 'mensagem' ? 'Retirar a mensagem (fica escondida; nada se apaga)' : 'Retirar o conteúdo'}</label>
                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={suspender} disabled={marcarMais18} onChange={(e) => setSuspender(e.target.checked)} /> Suspender o autor</label>
                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={avisarAutor} onChange={(e) => setAvisarAutor(e.target.checked)} /> Avisar o autor</label>
                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={avisarDenunciante} onChange={(e) => setAvisarDenunciante(e.target.checked)} /> Avisar o denunciante</label>
@@ -338,7 +348,8 @@ function DenunciaDialog({ id, onClose }: { id: number; onClose: () => void }) {
               </div>
             )}
 
-            {d.alvo.existe && (
+            {/* Mensagem: retirar/repor diretos não existem (o servidor recusa); a retirada faz-se na decisão procedente */}
+            {d.alvo.existe && d.targetType !== 'mensagem' && (
               <div className="flex flex-wrap gap-2 pt-1 border-t">
                 {d.alvo.removido ? (
                   <>
