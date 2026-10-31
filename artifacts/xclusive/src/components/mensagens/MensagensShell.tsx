@@ -107,7 +107,7 @@ export function MensagensShell({ convId }: { convId: number }) {
 
       {/* Painel da direita: conversa, ou o estado vazio (só em md+) */}
       {aberta ? (
-        <div className="flex-1 min-w-0 h-[100dvh] md:h-full" data-testid="mensagens-painel">
+        <div className="flex-1 min-w-0 h-[calc(100dvh-60px)] md:h-full" data-testid="mensagens-painel">
           <ConversaPainel key={convId} convId={convId} />
         </div>
       ) : (

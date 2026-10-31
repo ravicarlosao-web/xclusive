@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Info, Image as ImageIcon, Heart, Loader2 } from 'lucide-react';
+import { ArrowLeft, Info, Image as ImageIcon, Heart, Loader2, X } from 'lucide-react';
+import { ACCEPT_IMAGEM, enviarImagemMensagem, textoErro, validarImagem } from './imagemMensagem';
+import { ImagemBolha } from './ImagemBolha';
+import { VisualizadorImagens, type ImagemVista } from './VisualizadorImagens';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useGetMessages,
@@ -34,6 +37,15 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const jaAbriu = useRef(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  // Anexo em preparação: miniatura, estado (pronto / a enviar / erro) e URL já enviado (para não repetir o upload ao tentar de novo)
+  const [anexo, setAnexo] = useState<{ file: File; preview: string; estado: 'pronto' | 'a_enviar' | 'erro'; erro?: string; url?: string } | null>(null);
+  const [erroAnexo, setErroAnexo] = useState<string | null>(null);
+  const [vista, setVista] = useState<number | null>(null);
+  const gatilho = useRef<HTMLElement | null>(null);
+  // true enquanto o painel está colado ao fim (o crescimento de imagens que carregam não o deve descolar)
+  const noFim = useRef(true);
+  const ultimoAuto = useRef(0); // instante do último scroll programático (os seus eventos de scroll não contam como gesto do utilizador)
+  const irParaFim = (el: HTMLElement, comportamento: ScrollBehavior = 'auto') => { ultimoAuto.current = Date.now(); el.scrollTo({ top: el.scrollHeight, behavior: comportamento }); };
 
   // Dados da conversa (para obter o parceiro)
   const { data: conversations } = useGetConversations();
@@ -65,7 +77,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
   }, [convId, markConversationRead]);
 
   // Enviar mensagem
-  const { mutate: sendMsg, isPending: isSending } = useSendMessage({
+  const { mutate: sendMsg, mutateAsync: sendMsgAsync, isPending: isSendingTexto } = useSendMessage({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) });
@@ -80,11 +92,69 @@ export function ConversaPainel({ convId }: { convId: number }) {
     const el = scrollRef.current;
     if (!el) return;
     if (!jaAbriu.current && messages.length === 0) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: jaAbriu.current ? 'smooth' : 'auto' });
+    noFim.current = true;
+    irParaFim(el, jaAbriu.current ? 'smooth' : 'auto');
     jaAbriu.current = true;
   }, [messages.length]);
 
+  const isSending = isSendingTexto || anexo?.estado === 'a_enviar';
+
+  // Miniatura: URL local libertado ao remover/trocar/sair
+  useEffect(() => () => { if (anexo) URL.revokeObjectURL(anexo.preview); }, [anexo?.preview]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const escolherImagem = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const problema = validarImagem(file);
+    if (problema) { setErroAnexo(problema); return; }
+    setErroAnexo(null);
+    setAnexo({ file, preview: URL.createObjectURL(file), estado: 'pronto' });
+  };
+  const removerAnexo = () => { setAnexo(null); setErroAnexo(null); };
+
+  const enviarAnexo = async () => {
+    if (!anexo || anexo.estado === 'a_enviar') return;
+    const legenda = inputText.trim();
+    setAnexo({ ...anexo, estado: 'a_enviar', erro: undefined });
+    try {
+      const url = anexo.url ?? await enviarImagemMensagem(anexo.file);
+      try {
+        await sendMsgAsync({ id: convId, data: { tipo: 'imagem', mediaUrl: url, ...(legenda ? { conteudo: legenda } : {}) } });
+      } catch (e) {
+        setAnexo((a) => (a ? { ...a, estado: 'erro', erro: textoErro(e), url } : a));
+        return;
+      }
+      setAnexo(null); setInputText('');
+    } catch (e) {
+      setAnexo((a) => (a ? { ...a, estado: 'erro', erro: textoErro(e) } : a));
+    }
+  };
+
+  const imagens: ImagemVista[] = useMemo(() => messages.filter((m) => m.tipo === 'imagem' && m.mediaUrl).map((m) => ({
+    id: m.id, url: m.mediaUrl as string, legenda: m.conteudo, autor: m.autorId === (user as any)?.id ? 'ti' : (m.autor?.nomeExibicao ?? m.autor?.username ?? 'utilizador'),
+  })), [messages, user]);
+  const abrirImagem = (id: number, el: HTMLElement) => { gatilho.current = el; const i = imagens.findIndex((x) => x.id === id); if (i >= 0) setVista(i); };
+  const fecharVista = useCallback(() => { setVista(null); const g = gatilho.current; if (g && g.isConnected) setTimeout(() => g.focus(), 0); }, []);
+
+  // Qualquer crescimento do conteúdo (imagens que carregam) mantém o painel no fim, se lá estava
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const c = conteudoRef.current;
+    if (!c || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => { const el = scrollRef.current; if (el && noFim.current) irParaFim(el); });
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, []);
+
+  // Uma imagem que acaba de carregar aumenta a altura: se estávamos no fim, continua no fim
+  const aoCarregarImagem = useCallback(() => {
+    const el = scrollRef.current;
+    if (el && noFim.current) irParaFim(el);
+  }, []);
+
   const handleSend = () => {
+    if (anexo) { void enviarAnexo(); return; }
     if (!inputText.trim() || isSending) return;
     const text = inputText.trim();
     setInputText('');
@@ -92,7 +162,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
   };
 
   return (
-    <section aria-label="Conversa" data-testid="conversa-painel" className="h-[100dvh] md:h-full min-w-0 flex flex-col bg-background relative z-50 md:z-auto">
+    <section aria-label="Conversa" data-testid="conversa-painel" className="h-[calc(100dvh-60px)] md:h-full min-w-0 flex flex-col bg-background relative">
       {/* Header */}
       <div className="h-16 border-b border-border flex items-center justify-between px-4 bg-card/80 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-4">
@@ -126,8 +196,9 @@ export function ConversaPainel({ convId }: { convId: number }) {
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 custom-scrollbar flex flex-col">
+      <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
 
+        <div ref={conteudoRef} className="flex flex-col">
         {/* Perfil do parceiro no topo */}
         {partner && (
           <div className="flex flex-col items-center justify-center py-10">
@@ -182,13 +253,16 @@ export function ConversaPainel({ convId }: { convId: number }) {
                     <AvatarFallback>{fallback}</AvatarFallback>
                   </Avatar>
                 )}
-                <div className={`group relative flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                  {msg.mediaUrl ? (
-                    <div className="rounded-2xl overflow-hidden border border-border shadow-md max-w-[220px]">
-                      <img src={msg.mediaUrl} alt="imagem" className="w-full object-cover" />
+                <div className={`group relative flex min-w-0 flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+                  {msg.tipo === 'imagem' && msg.mediaUrl ? (
+                    <div className={`flex min-w-0 max-w-full flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                      <ImagemBolha src={msg.mediaUrl} legenda={msg.conteudo} autor={isMe ? 'ti' : (msg.autor?.nomeExibicao ?? msg.autor?.username ?? 'utilizador')} onAbrir={(el) => abrirImagem(msg.id, el)} onCarregada={aoCarregarImagem} />
+                      {msg.conteudo && (
+                        <div className={`px-4 py-2 rounded-2xl text-[15px] break-words ${isMe ? 'bg-primary text-white' : 'bg-secondary text-foreground border border-border'}`}>{msg.conteudo}</div>
+                      )}
                     </div>
                   ) : (
-                    <div className={`px-4 py-2.5 rounded-2xl text-[15px] ${
+                    <div className={`px-4 py-2.5 rounded-2xl text-[15px] break-words ${
                       isMe
                         ? 'bg-primary text-white rounded-br-sm shadow-none dark:shadow-[0_4px_10px_rgba(255,62,114,0.15)]'
                         : 'bg-secondary text-foreground rounded-bl-sm border border-border'
@@ -196,7 +270,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
                       {msg.conteudo}
                     </div>
                   )}
-                  <span className={`text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute ${isMe ? 'right-0 -bottom-4' : 'left-0 -bottom-4'}`}>
+                  <span className={`text-[10px] text-muted-foreground mt-1 invisible group-hover:visible absolute ${isMe ? 'right-0 -bottom-4' : 'left-0 -bottom-4'}`}>
                     {formatMsgTime(msg.criadoEm)}
                   </span>
                 </div>
@@ -205,15 +279,37 @@ export function ConversaPainel({ convId }: { convId: number }) {
           })}
           <div className="h-4" />
         </div>
+        </div>
       </div>
 
       {/* Input Area */}
       <div className="p-4 border-t border-border bg-card shrink-0">
+        {erroAnexo && <p role="alert" data-testid="anexo-erro-tipo" className="mb-2 text-sm text-destructive">{erroAnexo}</p>}
+        {anexo && (
+          <div data-testid="anexo" className="mb-3 flex items-start gap-3">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-border bg-secondary">
+              <img src={anexo.preview} alt="Pré-visualização da imagem a enviar" className="h-full w-full object-cover" data-testid="anexo-miniatura" />
+              {anexo.estado === 'a_enviar' && <div data-testid="anexo-a-enviar" role="status" aria-label="A enviar a imagem" className="absolute inset-0 flex items-center justify-center bg-background/70"><Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" /></div>}
+            </div>
+            <div className="min-w-0 flex-1 pt-1 text-sm">
+              <p className="truncate text-muted-foreground">{anexo.file.name}</p>
+              {anexo.estado === 'a_enviar' && <p className="text-muted-foreground">A enviar…</p>}
+              {anexo.estado === 'erro' && (
+                <div role="alert" data-testid="anexo-erro" className="text-destructive">
+                  <p>{anexo.erro}</p>
+                  <button type="button" data-testid="anexo-tentar" onClick={() => { void enviarAnexo(); }} className="mt-1 min-h-[44px] rounded-md px-2 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tentar novamente</button>
+                </div>
+              )}
+            </div>
+            <button type="button" data-testid="anexo-remover" aria-label="Remover imagem" onClick={removerAnexo} disabled={anexo.estado === 'a_enviar'}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-5 w-5" aria-hidden="true" /></button>
+          </div>
+        )}
         <div className="flex items-center gap-2 bg-secondary rounded-full px-4 py-1 border border-transparent focus-within:border-border">
-          <input ref={imageInputRef} type="file" accept="image/*,video/*" className="hidden" />
+          <input ref={imageInputRef} type="file" accept={ACCEPT_IMAGEM} onChange={escolherImagem} data-testid="conversa-ficheiro" className="hidden" tabIndex={-1} aria-hidden="true" />
           <button
             aria-label="Anexar imagem" className="flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-primary transition-colors bg-primary/10 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => imageInputRef.current?.click()}
+            onClick={() => imageInputRef.current?.click()} disabled={isSending}
             type="button"
           >
             <ImageIcon className="w-5 h-5 text-primary" />
@@ -222,17 +318,17 @@ export function ConversaPainel({ convId }: { convId: number }) {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Mensagem..." aria-label="Escrever mensagem" data-testid="conversa-input"
+            placeholder={anexo ? 'Adicionar legenda…' : 'Mensagem...'} aria-label={anexo ? 'Legenda da imagem' : 'Escrever mensagem'} data-testid="conversa-input"
             className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none h-10"
             disabled={isSending}
           />
-          {inputText.trim() ? (
+          {inputText.trim() || anexo ? (
             <button
               onClick={handleSend}
               disabled={isSending}
               aria-label="Enviar mensagem" data-testid="conversa-enviar" className="min-h-[44px] text-primary hover:text-primary/80 font-bold px-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
             >
-              {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enviar'}
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin" aria-label="A enviar" /> : 'Enviar'}
             </button>
           ) : (
             <button type="button" aria-label="Gosto" className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full">
@@ -241,6 +337,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
           )}
         </div>
       </div>
+      <VisualizadorImagens imagens={imagens} indice={vista} onMudar={setVista} onFechar={fecharVista} />
     </section>
   );
 }
