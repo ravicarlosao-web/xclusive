@@ -533,6 +533,8 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     // Preferência de conteúdo +18 (só da própria conta): null = ainda não escolheu
     preferenciaMais18: user.preferenciaMais18 ?? null,
     preferenciaMais18Em: user.preferenciaMais18Em?.toISOString?.() ?? null,
+    // Quem pode escrever-me (só da própria conta)
+    quemPodeEscrever: user.quemPodeEscrever ?? "todos",
     totalSeguidores,
     totalSeguindo,
     totalPublicacoes,

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { permissaoMensagem, textoRegra, TEXTO_BLOQUEASTE } from "../lib/permissaoMensagem";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
 import { urlMedia, urlImagemMensagem, verificarImagemMensagem } from "../lib/storage";
@@ -25,7 +27,7 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
 
   const participations = await db.select({ conversationId: conversationParticipantsTable.conversationId })
     .from(conversationParticipantsTable)
-    .where(and(eq(conversationParticipantsTable.utilizadorId, userId), semParticipanteInativo(conversationParticipantsTable.conversationId)))
+    .where(and(eq(conversationParticipantsTable.utilizadorId, userId), semParticipanteInativo(conversationParticipantsTable.conversationId), semBloqueadoPorMim(userId, conversationParticipantsTable.conversationId)))
     .limit(limit)
     .offset(offset);
 
@@ -77,55 +79,64 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
   res.json(result);
 });
 
-// Criar conversa
+// Criar conversa (ou devolver a existente)
 router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const { participanteId } = req.body;
+  const raw = req.body?.participanteId;
+  if (raw === undefined || raw === null || raw === "") { res.status(400).json({ error: "participanteId é obrigatório" }); return; }
+  const alvoId = Number(raw);
+  if (!Number.isInteger(alvoId) || alvoId <= 0) { res.status(400).json({ error: "participanteId inválido" }); return; }
+  if (alvoId === userId) { res.status(400).json({ error: "Não podes iniciar uma conversa contigo próprio." }); return; }
 
-  if (!participanteId) { res.status(400).json({ error: "participanteId é obrigatório" }); return; }
   // Não se abre conversa com uma conta inativa (suspensa ou encerrada).
-  const [alvo] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, Number(participanteId)));
+  const [alvo] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, alvoId));
   if (!alvo || !alvo.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
-  // Verificar se já existe
-  const myConvs = await db.select({ conversationId: conversationParticipantsTable.conversationId })
-    .from(conversationParticipantsTable)
-    .where(eq(conversationParticipantsTable.utilizadorId, userId));
+  // Bloqueio em qualquer sentido: mesma resposta que a conta inativa (não revela o bloqueio).
+  const perm = await permissaoMensagem(userId, { destinatarioId: alvoId });
+  if (perm.estado === "fui_bloqueado" || perm.estado === "bloqueaste") { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
-  for (const { conversationId } of myConvs) {
-    const [existing] = await db.select()
-      .from(conversationParticipantsTable)
-      .where(and(eq(conversationParticipantsTable.conversationId, conversationId), eq(conversationParticipantsTable.utilizadorId, participanteId)));
-    if (existing) {
-      const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conversationId));
-      const participants = await db.select({ u: usersTable })
-        .from(conversationParticipantsTable)
-        .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
-        .where(eq(conversationParticipantsTable.conversationId, conversationId));
-      res.json({
-        id: conversationId,
-        participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
-        tipo: conv?.tipo || "privada",
-        ultimaMensagem: null,
-        totalNaoLidas: 0,
-        criadoEm: conv?.criadoEm?.toISOString() || new Date().toISOString(),
-      });
-      return;
-    }
-  }
-
-  const [conv] = await db.insert(conversationsTable).values({ tipo: "privada" }).returning();
-  await db.insert(conversationParticipantsTable).values({ conversationId: conv.id, utilizadorId: userId });
-  await db.insert(conversationParticipantsTable).values({ conversationId: conv.id, utilizadorId: participanteId });
-
-  const participants = await db.select({ u: usersTable })
+  const participantesDe = async (conversationId: number) => (await db.select({ u: usersTable })
     .from(conversationParticipantsTable)
     .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
-    .where(eq(conversationParticipantsTable.conversationId, conv.id));
+    .where(eq(conversationParticipantsTable.conversationId, conversationId)))
+    .map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 }));
+
+  // Conversa já existente com este participante (uma só consulta): devolve-a, mesmo que a regra impeça novos envios (modo leitura).
+  const cpAlvo = alias(conversationParticipantsTable, "cp_alvo");
+  const [existente] = await db.select({ id: conversationsTable.id, tipo: conversationsTable.tipo, criadoEm: conversationsTable.criadoEm })
+    .from(conversationParticipantsTable)
+    .innerJoin(cpAlvo, eq(cpAlvo.conversationId, conversationParticipantsTable.conversationId))
+    .innerJoin(conversationsTable, eq(conversationsTable.id, conversationParticipantsTable.conversationId))
+    .where(and(eq(conversationParticipantsTable.utilizadorId, userId), eq(cpAlvo.utilizadorId, alvoId), eq(conversationsTable.tipo, "privada")))
+    .limit(1);
+  if (existente) {
+    res.json({
+      id: existente.id,
+      participantes: await participantesDe(existente.id),
+      tipo: existente.tipo,
+      ultimaMensagem: null,
+      totalNaoLidas: 0,
+      criadoEm: existente.criadoEm.toISOString(),
+    });
+    return;
+  }
+
+  // Conversa nova: aplica-se a regra de quem pode escrever
+  if (perm.estado === "regra") {
+    res.status(403).json({ error: textoRegra(perm), codigo: "mensagens_restritas", regra: perm.regra });
+    return;
+  }
+
+  const conv = await db.transaction(async (tx) => {
+    const [c] = await tx.insert(conversationsTable).values({ tipo: "privada" }).returning();
+    await tx.insert(conversationParticipantsTable).values([{ conversationId: c.id, utilizadorId: userId }, { conversationId: c.id, utilizadorId: alvoId }]);
+    return c;
+  });
 
   res.status(201).json({
     id: conv.id,
-    participantes: participants.map(({ u }) => ({ id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 })),
+    participantes: await participantesDe(conv.id),
     tipo: conv.tipo,
     ultimaMensagem: null,
     totalNaoLidas: 0,
@@ -146,6 +157,7 @@ router.get("/conversations/unread-count", requireAuth, async (req: AuthRequest, 
       eq(messagesTable.lido, false),
       sql`${messagesTable.autorId} != ${userId}`,
       semParticipanteInativo(messagesTable.conversationId),
+      semBloqueadoPorMim(userId, messagesTable.conversationId),
     ));
 
   res.json({ count: count || 0 });
@@ -162,6 +174,9 @@ async function temParticipanteInativo(conversationId: number): Promise<boolean> 
 
 /** SQL: a conversa (coluna) NÃO tem participantes inativos. */
 const semParticipanteInativo = (col: unknown) => sql`NOT EXISTS (SELECT 1 FROM conversation_participants cp2 JOIN users u2 ON u2.id = cp2.utilizador_id WHERE cp2.conversation_id = ${col} AND NOT u2.ativo)`;
+
+/** SQL: a conversa (coluna) NÃO tem um participante que EU bloqueei (o bloqueado continua a ver as conversas). */
+const semBloqueadoPorMim = (userId: number, col: unknown) => sql`NOT EXISTS (SELECT 1 FROM user_blocks ub JOIN conversation_participants cp3 ON cp3.utilizador_id = ub.blocked_id WHERE ub.blocker_id = ${userId} AND cp3.conversation_id = ${col})`;
 
 /** Verifica se o utilizador é participante da conversa */
 async function verificarParticipante(conversationId: number, userId: number): Promise<boolean> {
@@ -186,6 +201,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
     return;
   }
   if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
+  const perm = await permissaoMensagem(req.userId!, { conversationId: id });
 
   const messages = await db.select({ m: messagesTable, u: usersTable })
     .from(messagesTable)
@@ -207,6 +223,9 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
     })),
     page: 1,
     hasMore: false,
+    // Sem pedido novo: o composer sabe se pode enviar. O bloqueio nunca é revelado a quem foi bloqueado (restricao null).
+    podeEnviar: perm.pode,
+    restricao: perm.estado === "regra" ? "regra" : perm.estado === "bloqueaste" ? "bloqueaste" : null,
   });
 });
 
@@ -242,6 +261,12 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     return;
   }
   if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
+
+  // Bloqueio e regra de quem pode escrever (avaliados a cada envio; o histórico não é afetado)
+  const perm = await permissaoMensagem(req.userId!, { conversationId: id });
+  if (perm.estado === "fui_bloqueado") { res.status(404).json({ error: "Conversa indisponível." }); return; } // igual à conta inativa
+  if (perm.estado === "bloqueaste") { res.status(403).json({ error: TEXTO_BLOQUEASTE, codigo: "bloqueaste" }); return; }
+  if (perm.estado === "regra") { res.status(403).json({ error: textoRegra(perm), codigo: "mensagens_restritas", regra: perm.regra }); return; }
 
   const parsed = sendMessageSchema.safeParse(req.body);
   if (!parsed.success) {

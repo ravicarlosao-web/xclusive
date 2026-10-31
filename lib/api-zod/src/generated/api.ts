@@ -59,6 +59,7 @@ export const RegisterResponse = zod.object({
   "segueVoce": zod.boolean().optional(),
   "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
   "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 })
 })
@@ -95,6 +96,7 @@ export const LoginResponse = zod.object({
   "segueVoce": zod.boolean().optional(),
   "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
   "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 })
 })
@@ -142,6 +144,7 @@ export const GetMeResponse = zod.object({
   "segueVoce": zod.boolean().optional(),
   "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
   "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 })
 
@@ -172,7 +175,8 @@ export const UpdateProfileBody = zod.object({
   "avatarUrl": zod.string().optional(),
   "capaUrl": zod.string().optional(),
   "tipoConta": zod.enum(['pessoal', 'criador']).optional(),
-  "privado": zod.boolean().optional()
+  "privado": zod.boolean().optional(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só criadores podem escolher um valor diferente de \"todos\" (403 para os restantes).')
 })
 
 export const UpdateProfileResponse = zod.object({
@@ -193,8 +197,54 @@ export const UpdateProfileResponse = zod.object({
   "segueVoce": zod.boolean().optional(),
   "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
   "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 })
+
+
+/**
+ * @summary Contas bloqueadas pelo utilizador autenticado
+ */
+export const GetBlockedUsersQueryParams = zod.object({
+  "page": zod.coerce.number().int().optional(),
+  "limit": zod.coerce.number().int().optional()
+})
+
+export const GetBlockedUsersResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "verificado": zod.boolean(),
+  "tipoConta": zod.string().optional(),
+  "estaASeguir": zod.boolean().optional(),
+  "totalSeguidores": zod.int().optional()
+})),
+  "total": zod.int(),
+  "page": zod.int(),
+  "hasMore": zod.boolean()
+})
+
+
+/**
+ * @summary Bloquear utilizador (afeta só mensagens e novas conversas; idempotente)
+ */
+export const BlockUserParams = zod.object({
+  "username": zod.coerce.string()
+})
+
+export const BlockUserResponse = zod.unknown()
+
+
+/**
+ * @summary Desbloquear utilizador (idempotente)
+ */
+export const UnblockUserParams = zod.object({
+  "username": zod.coerce.string()
+})
+
+export const UnblockUserResponse = zod.unknown()
 
 
 /**
@@ -222,6 +272,7 @@ export const GetUserProfileResponse = zod.object({
   "segueVoce": zod.boolean().optional(),
   "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
   "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 })
 
@@ -1064,6 +1115,8 @@ export const GetMessagesParams = zod.object({
 })
 
 export const GetMessagesResponse = zod.object({
+  "podeEnviar": zod.boolean().describe('O utilizador autenticado pode enviar mensagens nesta conversa agora.'),
+  "restricao": zod.union([zod.literal('regra'),zod.literal('bloqueaste'),zod.literal(null)]).nullish().describe('Porque não pode enviar. \"regra\" = regra de quem pode escrever do outro; \"bloqueaste\" = bloqueaste o outro; null = sem restrição ou motivo não revelado.'),
   "messages": zod.array(zod.object({
   "id": zod.int(),
   "autorId": zod.int(),

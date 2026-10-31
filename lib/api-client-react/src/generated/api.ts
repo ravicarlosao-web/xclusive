@@ -28,6 +28,7 @@ import type {
   CreatorStats,
   EarningPoint,
   Enquete,
+  GetBlockedUsersParams,
   GetCreatorEarningsParams,
   GetCreatorTransactionsParams,
   GetExploreParams,
@@ -689,6 +690,232 @@ export const useUpdateProfile = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateProfileMutationOptions(options));
+    }
+
+export const getGetBlockedUsersUrl = (params?: GetBlockedUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/users/me/blocks?${stringifiedParams}` : `/api/users/me/blocks`
+}
+
+/**
+ * @summary Contas bloqueadas pelo utilizador autenticado
+ */
+export const getBlockedUsers = async (params?: GetBlockedUsersParams, options?: Parameters<typeof customFetch>[1]): Promise<PaginatedUsers> => {
+
+  return customFetch<PaginatedUsers>(getGetBlockedUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBlockedUsersQueryKey = (params?: GetBlockedUsersParams,) => {
+    return [
+    `/api/users/me/blocks`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBlockedUsersQueryOptions = <TData = Awaited<ReturnType<typeof getBlockedUsers>>, TError = ErrorType<unknown>>(params?: GetBlockedUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBlockedUsersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBlockedUsers>>> = ({ signal }) => getBlockedUsers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBlockedUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getBlockedUsers>>>
+export type GetBlockedUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Contas bloqueadas pelo utilizador autenticado
+ */
+
+export function useGetBlockedUsers<TData = Awaited<ReturnType<typeof getBlockedUsers>>, TError = ErrorType<unknown>>(
+ params?: GetBlockedUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBlockedUsersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getBlockUserUrl = (username: string,) => {
+
+
+
+
+  return `/api/users/${username}/block`
+}
+
+/**
+ * @summary Bloquear utilizador (afeta só mensagens e novas conversas; idempotente)
+ */
+export const blockUser = async (username: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getBlockUserUrl(username),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getBlockUserMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof blockUser>>, TError,{username: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof blockUser>>, TError,{username: string}, TContext> => {
+
+const mutationKey = ['blockUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof blockUser>>, {username: string}> = (props) => {
+          const {username} = props ?? {};
+
+          return  blockUser(username,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BlockUserMutationResult = NonNullable<Awaited<ReturnType<typeof blockUser>>>
+
+    export type BlockUserMutationError = ErrorType<void>
+
+    /**
+ * @summary Bloquear utilizador (afeta só mensagens e novas conversas; idempotente)
+ */
+export const useBlockUser = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof blockUser>>, TError,{username: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof blockUser>>,
+        TError,
+        {username: string},
+        TContext
+      > => {
+      return useMutation(getBlockUserMutationOptions(options));
+    }
+
+export const getUnblockUserUrl = (username: string,) => {
+
+
+
+
+  return `/api/users/${username}/block`
+}
+
+/**
+ * @summary Desbloquear utilizador (idempotente)
+ */
+export const unblockUser = async (username: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getUnblockUserUrl(username),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnblockUserMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,{username: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,{username: string}, TContext> => {
+
+const mutationKey = ['unblockUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unblockUser>>, {username: string}> = (props) => {
+          const {username} = props ?? {};
+
+          return  unblockUser(username,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnblockUserMutationResult = NonNullable<Awaited<ReturnType<typeof unblockUser>>>
+
+    export type UnblockUserMutationError = ErrorType<void>
+
+    /**
+ * @summary Desbloquear utilizador (idempotente)
+ */
+export const useUnblockUser = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,{username: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unblockUser>>,
+        TError,
+        {username: string},
+        TContext
+      > => {
+      return useMutation(getUnblockUserMutationOptions(options));
     }
 
 export const getGetUserProfileUrl = (username: string,) => {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UserProfilePreferenciaMais18 } from './userProfilePreferenciaMais18';
+import type { UserProfileQuemPodeEscrever } from './userProfileQuemPodeEscrever';
 import type { UserProfileTipoConta } from './userProfileTipoConta';
 
 export interface UserProfile {
@@ -35,5 +36,7 @@ export interface UserProfile {
   preferenciaMais18?: UserProfilePreferenciaMais18;
   /** @nullable */
   preferenciaMais18Em?: Date | null;
+  /** Só na própria conta (/auth/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de "todos". */
+  quemPodeEscrever?: UserProfileQuemPodeEscrever;
   criadoEm: Date;
 }
