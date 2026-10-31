@@ -9,5 +9,8 @@ import type { MessageInputTipo } from './messageInputTipo';
 
 export interface MessageInput {
   tipo: MessageInputTipo;
-  conteudo: string;
+  /** Texto, ou legenda (opcional) quando tipo é imagem. */
+  conteudo?: string;
+  /** Só com tipo imagem (obrigatório). URL do CDN de uma imagem (jpg, jpeg, png, webp, até 10 MB) enviada pelo próprio remetente. */
+  mediaUrl?: string;
 }

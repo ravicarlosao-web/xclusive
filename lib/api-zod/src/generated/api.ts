@@ -1097,7 +1097,8 @@ export const SendMessageParams = zod.object({
 
 export const SendMessageBody = zod.object({
   "tipo": zod.enum(['texto', 'imagem', 'audio']),
-  "conteudo": zod.string()
+  "conteudo": zod.string().optional().describe('Texto, ou legenda (opcional) quando tipo é imagem.'),
+  "mediaUrl": zod.string().optional().describe('Só com tipo imagem (obrigatório). URL do CDN de uma imagem (jpg, jpeg, png, webp, até 10 MB) enviada pelo próprio remetente.')
 })
 
 export const SendMessageResponse = zod.object({
