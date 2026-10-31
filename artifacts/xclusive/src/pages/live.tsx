@@ -1236,6 +1236,11 @@ export default function LivePage() {
   const [tipValor, setTipValor] = useState('');
   const [tipMensagem, setTipMensagem] = useState('');
   const [sendingTip, setSendingTip] = useState(false);
+  // Chave de idempotência da gorjeta: criada ao abrir; REUTILIZADA em «tentar de novo» e em cliques repetidos (nunca cobra duas vezes);
+  // renova-se depois de sucesso, de um conflito (409) e quando o valor ou a mensagem mudam.
+  const novaChaveGorjeta = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`);
+  const tipChave = useRef<string>(novaChaveGorjeta());
+  useEffect(() => { if (tipOpen) tipChave.current = novaChaveGorjeta(); }, [tipOpen]);
 
   async function handleSendTip() {
     const valor = Number(tipValor);
@@ -1250,20 +1255,23 @@ export default function LivePage() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ valor, mensagem: tipMensagem || undefined }),
+        body: JSON.stringify({ valor, mensagem: tipMensagem || undefined, chave: tipChave.current }),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao enviar gorjeta');
+        throw Object.assign(new Error(err.error || 'Erro ao enviar gorjeta'), { codigo: err.codigo as string | undefined });
       }
 
+      tipChave.current = novaChaveGorjeta();
       toast.success(`Gorjeta de ${formatKz(valor)} enviada!`);
       setTipOpen(false);
       setTipValor('');
       setTipMensagem('');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao enviar gorjeta');
+      const conflito = (err as { codigo?: string } | null)?.codigo === 'chave_reutilizada';
+      if (conflito) tipChave.current = novaChaveGorjeta();
+      toast.error(conflito ? 'Houve um conflito com o pedido anterior. Tenta novamente.' : (err instanceof Error ? err.message : 'Erro ao enviar gorjeta'));
     } finally {
       setSendingTip(false);
     }
@@ -1752,7 +1760,7 @@ export default function LivePage() {
                 min="1"
                 placeholder="Ex: 500"
                 value={tipValor}
-                onChange={(e) => setTipValor(e.target.value)}
+                onChange={(e) => { setTipValor(e.target.value); tipChave.current = novaChaveGorjeta(); }}
               />
             </div>
 
@@ -1763,7 +1771,7 @@ export default function LivePage() {
                   key={v}
                   variant="outline"
                   size="sm"
-                  onClick={() => setTipValor(String(v))}
+                  onClick={() => { setTipValor(String(v)); tipChave.current = novaChaveGorjeta(); }}
                   className={tipValor === String(v) ? 'border-amber-500 text-amber-700 dark:text-amber-400' : ''}
                 >
                   {v} Kz
@@ -1777,7 +1785,7 @@ export default function LivePage() {
                 id="tip-mensagem"
                 placeholder="Deixa uma mensagem para o criador..."
                 value={tipMensagem}
-                onChange={(e) => setTipMensagem(e.target.value)}
+                onChange={(e) => { setTipMensagem(e.target.value); tipChave.current = novaChaveGorjeta(); }}
                 maxLength={255}
                 rows={3}
               />

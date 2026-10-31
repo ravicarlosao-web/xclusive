@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Coins, Wallet, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
+
+const novaChave = (): string => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`);
 
 interface TipModalProps {
   open: boolean;
@@ -33,6 +35,10 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
   const [selected, setSelected] = useState<number | null>(null);
   const [custom, setCustom] = useState('');
   const [phase, setPhase] = useState<Phase>('select');
+  // Chave de idempotência: criada ao abrir; REUTILIZADA em «tentar de novo» e em cliques repetidos (nunca cobra duas vezes);
+  // renova-se depois de sucesso, de um conflito (409) e quando o valor muda.
+  const chave = useRef(novaChave());
+  useEffect(() => { if (open) chave.current = novaChave(); }, [open]);
 
   const effectiveAmount = selected ?? (custom ? parseInt(custom, 10) : null);
   const canSend =
@@ -56,12 +62,15 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
     }
     setPhase('loading');
     try {
-      await sendTip(creator.username, effectiveAmount, postId);
+      await sendTip(creator.username, effectiveAmount, postId, chave.current);
+      chave.current = novaChave();
       setPhase('success');
       onTipSent?.();
     } catch (err: any) {
       setPhase('select');
-      toast({ variant: 'destructive', title: 'Erro ao enviar gorjeta', description: err?.message || 'Tenta de novo.' });
+      const conflito = err?.codigo === 'chave_reutilizada';
+      if (conflito) chave.current = novaChave();
+      toast({ variant: 'destructive', title: 'Erro ao enviar gorjeta', description: conflito ? 'Houve um conflito com o pedido anterior. Tenta novamente.' : (err?.message || 'Tenta de novo.') });
     }
   };
 
@@ -139,7 +148,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     {PRESET_AMOUNTS.map(amt => (
                       <button
                         key={amt}
-                        onClick={() => { setSelected(amt); setCustom(''); }}
+                        onClick={() => { setSelected(amt); setCustom(''); chave.current = novaChave(); }}
                         className={cn(
                           'h-11 rounded-xl text-sm font-bold border transition-all duration-150',
                           selected === amt
@@ -162,7 +171,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                       min={1}
                       placeholder="Ex: 750"
                       value={custom}
-                      onChange={e => { setCustom(e.target.value); setSelected(null); }}
+                      onChange={e => { setCustom(e.target.value); setSelected(null); chave.current = novaChave(); }}
                       className="h-11 rounded-xl pr-12 bg-secondary border-border focus:border-primary"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">Kz</span>

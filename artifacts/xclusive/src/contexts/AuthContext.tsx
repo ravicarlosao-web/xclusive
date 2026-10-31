@@ -328,7 +328,8 @@ interface AuthContextType {
   /** Update the current user's account type locally (mock + optimistic). Used by KYC flow. */
   updateTipoConta: (tipo: 'pessoal' | 'criador') => void;
   /** Envia gorjeta ao criador. Lança erro se saldo insuficiente. */
-  sendTip: (creatorUsername: string, amount: number, postId?: number) => Promise<void>;
+  /** `chave`: chave de idempotência opcional (a mesma chave nunca cobra duas vezes); um 409 «chave_reutilizada» chega como erro com `codigo`. */
+  sendTip: (creatorUsername: string, amount: number, postId?: number, chave?: string) => Promise<void>;
   /** Submete pedido de carregamento (fica pendente até aprovação do admin) */
   topUp: (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
@@ -615,7 +616,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendTip = useCallback(async (creatorUsername: string, amount: number, postId?: number) => {
+  const sendTip = useCallback(async (creatorUsername: string, amount: number, postId?: number, chave?: string) => {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       throw new Error('Valor de gorjeta inválido.');
     }
@@ -631,11 +632,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Authorization: `Bearer ${token}`,
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ valor: amount }),
+        body: JSON.stringify({ valor: amount, ...(chave ? { chave } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error || 'Erro ao enviar gorjeta.');
+        throw Object.assign(new Error((err as any).error || 'Erro ao enviar gorjeta.'), { codigo: (err as any).codigo as string | undefined });
       }
       // Actualizar saldo local a partir da API após débito bem-sucedido
       await fetchApiWallet(token);
