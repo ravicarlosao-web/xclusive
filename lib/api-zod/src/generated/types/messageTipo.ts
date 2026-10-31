@@ -14,4 +14,5 @@ export const MessageTipo = {
   imagem: 'imagem',
   audio: 'audio',
   post_partilhado: 'post_partilhado',
+  gorjeta: 'gorjeta',
 } as const;

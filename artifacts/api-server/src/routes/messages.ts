@@ -1,8 +1,10 @@
 import { Router } from "express";
-import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable } from "@workspace/db";
+import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { permissaoMensagem, textoRegra, TEXTO_BLOQUEASTE } from "../lib/permissaoMensagem";
+import { GORJETA_MENSAGEM, GorjetaErro, enviarGorjetaMensagem, erroDePermissaoGorjeta, formatarKz } from "../lib/gorjetaMensagem";
+import { CommissionNotConfiguredError } from "../lib/commission";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { z } from "zod";
 import { urlMedia, urlImagemMensagem, verificarImagemMensagem } from "../lib/storage";
@@ -45,10 +47,12 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
       .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
       .where(and(eq(conversationParticipantsTable.conversationId, convId)));
 
-    const [lastMsg] = await db.select().from(messagesTable)
+    const [ultima] = await db.select({ m: messagesTable, valorGorjeta: messageTipsTable.valor }).from(messagesTable)
+      .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
       .where(eq(messagesTable.conversationId, convId))
       .orderBy(desc(messagesTable.criadoEm))
       .limit(1);
+    const lastMsg = ultima?.m;
 
     const [{ unread }] = await db.select({ unread: sql<number>`count(*)::int` })
       .from(messagesTable)
@@ -70,6 +74,8 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
         mediaUrl: urlMedia(lastMsg.mediaUrl),
         lido: lastMsg.lido,
         criadoEm: lastMsg.criadoEm.toISOString(),
+        // Gorjeta: só o valor (o front compõe a pré-visualização "Gorjeta de X Kz")
+        ...(lastMsg.tipo === "gorjeta" && ultima?.valorGorjeta != null ? { gorjeta: { valor: Number(ultima.valorGorjeta) } } : {}),
       } : null,
       totalNaoLidas: unread || 0,
       criadoEm: conv?.criadoEm?.toISOString() || new Date().toISOString(),
@@ -203,15 +209,16 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
   if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
   const perm = await permissaoMensagem(req.userId!, { conversationId: id });
 
-  const messages = await db.select({ m: messagesTable, u: usersTable })
+  const messages = await db.select({ m: messagesTable, u: usersTable, valorGorjeta: messageTipsTable.valor })
     .from(messagesTable)
     .innerJoin(usersTable, eq(messagesTable.autorId, usersTable.id))
+    .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
     .where(eq(messagesTable.conversationId, id))
     .orderBy(desc(messagesTable.criadoEm))
     .limit(50);
 
   res.json({
-    messages: messages.reverse().map(({ m, u }) => ({
+    messages: messages.reverse().map(({ m, u, valorGorjeta }) => ({
       id: m.id,
       autorId: m.autorId,
       autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
@@ -220,6 +227,8 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
       mediaUrl: urlMedia(m.mediaUrl),
       lido: m.lido,
       criadoEm: m.criadoEm.toISOString(),
+      // Gorjeta: só o valor (nunca saldo nem comissão)
+      ...(m.tipo === "gorjeta" && valorGorjeta != null ? { gorjeta: { valor: Number(valorGorjeta) } } : {}),
     })),
     page: 1,
     hasMore: false,
@@ -310,6 +319,60 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     lido: msg.lido,
     criadoEm: msg.criadoEm.toISOString(),
   });
+});
+
+/**
+ * POST /api/conversations/:id/gorjeta  { valor: inteiro (50 a 100 000 Kz), mensagem?: ≤ 255, chave: 16-64 [A-Za-z0-9_-] }
+ * Gorjeta a um criador dentro da conversa: debita a carteira do remetente, credita os ganhos do criador menos a comissão e cria uma
+ * mensagem tipo 'gorjeta'. Atómica e idempotente (mesma chave = mesma mensagem, 200; outro pedido com a chave = 409). Ver lib/gorjetaMensagem.ts.
+ */
+router.post("/conversations/:id/gorjeta", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+  const remetenteId = req.userId!;
+
+  if (!(await verificarParticipante(id, remetenteId))) { res.status(403).json({ error: "Sem acesso a esta conversa" }); return; }
+  if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
+
+  // Bloqueio, regra, admin, auto-gorjeta e destinatário (os mesmos códigos e textos do envio de mensagens)
+  const perm = await permissaoMensagem(remetenteId, { conversationId: id });
+  const erroPerm = erroDePermissaoGorjeta(perm, remetenteId);
+  if (erroPerm) { res.status(erroPerm.httpStatus).json({ error: erroPerm.message, ...(erroPerm.codigo ? { codigo: erroPerm.codigo } : {}), ...(erroPerm.extra ?? {}) }); return; }
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const { valor, mensagem, chave } = b;
+  if (typeof valor !== "number" || !Number.isFinite(valor) || !Number.isInteger(valor)) { res.status(400).json({ error: "O valor da gorjeta tem de ser um número inteiro de Kz.", codigo: "valor_invalido" }); return; }
+  if (valor < GORJETA_MENSAGEM.MIN_KZ) { res.status(400).json({ error: `O valor mínimo da gorjeta é ${formatarKz(GORJETA_MENSAGEM.MIN_KZ)} Kz.`, codigo: "valor_invalido" }); return; }
+  if (valor > GORJETA_MENSAGEM.MAX_KZ) { res.status(400).json({ error: `O valor máximo por gorjeta é ${formatarKz(GORJETA_MENSAGEM.MAX_KZ)} Kz.`, codigo: "valor_invalido" }); return; }
+  if (typeof chave !== "string" || !/^[A-Za-z0-9_-]{16,64}$/.test(chave)) { res.status(400).json({ error: "Chave de idempotência inválida.", codigo: "chave_invalida" }); return; }
+  if (mensagem !== undefined && mensagem !== null && typeof mensagem !== "string") { res.status(400).json({ error: "Mensagem inválida." }); return; }
+  const texto = typeof mensagem === "string" ? mensagem.trim() : "";
+  if (texto.length > GORJETA_MENSAGEM.MENSAGEM_MAX) { res.status(400).json({ error: `A mensagem da gorjeta pode ter no máximo ${GORJETA_MENSAGEM.MENSAGEM_MAX} caracteres.` }); return; }
+
+  try {
+    const r = await enviarGorjetaMensagem({ remetenteId, destinatarioId: perm.destinatarioId!, conversationId: id, valor, mensagem: texto || null, chave });
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, remetenteId));
+    res.status(r.criada ? 201 : 200).json({
+      id: r.mensagem.id,
+      autorId: r.mensagem.autorId,
+      autor: { id: user.id, username: user.username, nomeExibicao: user.nomeExibicao, avatarUrl: urlMedia(user.avatarUrl), verificado: user.verificado, tipoConta: user.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+      tipo: r.mensagem.tipo,
+      conteudo: r.mensagem.conteudo,
+      mediaUrl: null,
+      lido: r.mensagem.lido,
+      criadoEm: r.mensagem.criadoEm.toISOString(),
+      gorjeta: { valor: r.valor },
+    });
+  } catch (err) {
+    if (err instanceof GorjetaErro) { res.status(err.httpStatus).json({ error: err.message, ...(err.codigo ? { codigo: err.codigo } : {}), ...(err.extra ?? {}) }); return; }
+    if (err instanceof CommissionNotConfiguredError) {
+      req.log?.error({ motivo: err.motivo }, "Comissão não configurada: gorjeta recusada, nada foi cobrado");
+      res.status(503).json({ error: err.message });
+      return;
+    }
+    req.log?.error({ err }, "Gorjeta em mensagem: erro");
+    res.status(500).json({ error: "Erro interno." });
+  }
 });
 
 export default router;

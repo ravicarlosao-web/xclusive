@@ -30,25 +30,31 @@ export interface PermissaoMensagem {
   /** @username de R (para as mensagens de recusa). */
   destinatarioUsername: string | null;
   destinatarioId: number | null;
+  /** Dados do destinatário e role do remetente (para as gorjetas: criador, verificado, ativo, admin). null se não há outro participante. */
+  destinatario: { tipoConta: string; ativo: boolean; verificado: boolean; role: string } | null;
+  remetenteRole: string | null;
 }
 
-const SEM_OUTRO: PermissaoMensagem = { estado: "ok", pode: true, regra: "todos", destinatarioUsername: null, destinatarioId: null };
+const SEM_OUTRO: PermissaoMensagem = { estado: "ok", pode: true, regra: "todos", destinatarioUsername: null, destinatarioId: null, destinatario: null, remetenteRole: null };
+
+/** Qualquer executor com `execute` (a ligação normal ou uma transação). */
+type Executor = Pick<typeof db, "execute">;
 
 /**
  * Permissão de S escrever a R. R pode vir dado, ou deduzir-se do outro participante da conversa.
  * `conversationId` (opcional) só serve a resposta permitida e a dedução de R.
  */
-export async function permissaoMensagem(remetenteId: number, opcoes: { destinatarioId?: number | null; conversationId?: number | null }): Promise<PermissaoMensagem> {
+export async function permissaoMensagem(remetenteId: number, opcoes: { destinatarioId?: number | null; conversationId?: number | null }, q: Executor = db): Promise<PermissaoMensagem> {
   const R = opcoes.destinatarioId ?? null;
   const C = opcoes.conversationId ?? null;
   const agora = new Date();
-  const r = await db.execute(sql`
+  const r = await q.execute(sql`
     WITH s AS (SELECT id, role FROM users WHERE id = ${remetenteId}),
     r AS (
-      SELECT id, role, username, tipo_conta, quem_pode_escrever FROM users
+      SELECT id, role, username, tipo_conta, quem_pode_escrever, ativo, verificado FROM users
       WHERE id = COALESCE(${R}::int, (SELECT utilizador_id FROM conversation_participants WHERE conversation_id = ${C}::int AND utilizador_id <> ${remetenteId} LIMIT 1))
     )
-    SELECT s.role AS s_role, r.id AS r_id, r.role AS r_role, r.username AS r_username, r.tipo_conta AS r_tipo, r.quem_pode_escrever AS r_regra,
+    SELECT s.role AS s_role, r.id AS r_id, r.role AS r_role, r.username AS r_username, r.tipo_conta AS r_tipo, r.quem_pode_escrever AS r_regra, r.ativo AS r_ativo, r.verificado AS r_verificado,
       EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = s.id AND blocked_id = r.id) AS eu_bloqueei,
       EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = r.id AND blocked_id = s.id) AS fui_bloqueado,
       EXISTS (SELECT 1 FROM follows WHERE seguidor_id = s.id AND seguido_id = r.id AND estado = 'aceite') AS segue,
@@ -59,7 +65,11 @@ export async function permissaoMensagem(remetenteId: number, opcoes: { destinata
   if (!row) return SEM_OUTRO; // sem outro participante (conversa legada de uma só pessoa): nada a restringir
 
   const regra: RegraMensagem = row.r_tipo === "criador" && (REGRAS_MENSAGEM as readonly string[]).includes(String(row.r_regra)) ? (row.r_regra as RegraMensagem) : "todos";
-  const base = { regra, destinatarioUsername: String(row.r_username), destinatarioId: Number(row.r_id) };
+  const base = {
+    regra, destinatarioUsername: String(row.r_username), destinatarioId: Number(row.r_id),
+    destinatario: { tipoConta: String(row.r_tipo), ativo: !!row.r_ativo, verificado: !!row.r_verificado, role: String(row.r_role) },
+    remetenteRole: String(row.s_role),
+  };
   if (ROLES_ADMIN.includes(String(row.s_role)) || ROLES_ADMIN.includes(String(row.r_role))) return { ...base, estado: "ok", pode: true };
   if (row.fui_bloqueado) return { ...base, estado: "fui_bloqueado", pode: false };
   if (row.eu_bloqueei) return { ...base, estado: "bloqueaste", pode: false };

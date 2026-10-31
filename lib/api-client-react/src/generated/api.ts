@@ -35,6 +35,7 @@ import type {
   GetFeedParams,
   GetNotificationsParams,
   GetUserPostsParams,
+  GorjetaMensagemInput,
   HealthStatus,
   Highlight,
   HighlightInput,
@@ -3090,6 +3091,78 @@ export function useGetUnreadConversationsCount<TData = Awaited<ReturnType<typeof
 
 
 
+
+export const getSendMessageTipUrl = (id: number,) => {
+
+
+
+
+  return `/api/conversations/${id}/gorjeta`
+}
+
+/**
+ * @summary Enviar gorjeta a um criador dentro da conversa (atómica e idempotente)
+ */
+export const sendMessageTip = async (id: number,
+    gorjetaMensagemInput: GorjetaMensagemInput, options?: Parameters<typeof customFetch>[1]): Promise<Message> => {
+
+  return customFetch<Message>(getSendMessageTipUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gorjetaMensagemInput)
+  }
+);}
+
+
+
+
+
+export const getSendMessageTipMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessageTip>>, TError,{id: number;data: BodyType<GorjetaMensagemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendMessageTip>>, TError,{id: number;data: BodyType<GorjetaMensagemInput>}, TContext> => {
+
+const mutationKey = ['sendMessageTip'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendMessageTip>>, {id: number;data: BodyType<GorjetaMensagemInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendMessageTip(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendMessageTipMutationResult = NonNullable<Awaited<ReturnType<typeof sendMessageTip>>>
+    export type SendMessageTipMutationBody = BodyType<GorjetaMensagemInput>
+    export type SendMessageTipMutationError = ErrorType<void>
+
+    /**
+ * @summary Enviar gorjeta a um criador dentro da conversa (atómica e idempotente)
+ */
+export const useSendMessageTip = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMessageTip>>, TError,{id: number;data: BodyType<GorjetaMensagemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendMessageTip>>,
+        TError,
+        {id: number;data: BodyType<GorjetaMensagemInput>},
+        TContext
+      > => {
+      return useMutation(getSendMessageTipMutationOptions(options));
+    }
 
 export const getGetMessagesUrl = (id: number,) => {
 

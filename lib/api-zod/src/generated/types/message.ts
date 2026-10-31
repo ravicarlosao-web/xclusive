@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageGorjeta } from './messageGorjeta';
 import type { MessageTipo } from './messageTipo';
 import type { UserSummary } from './userSummary';
 
@@ -19,4 +20,6 @@ export interface Message {
   mediaUrl?: string | null;
   lido?: boolean;
   criadoEm: Date;
+  /** Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão. */
+  gorjeta?: MessageGorjeta;
 }

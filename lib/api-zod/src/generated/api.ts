@@ -1043,11 +1043,14 @@ export const GetConversationsResponseItem = zod.object({
   "estaASeguir": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
-  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado']),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
   "conteudo": zod.string().nullish(),
   "mediaUrl": zod.string().nullish(),
   "lido": zod.boolean().optional(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
 }).optional(),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
@@ -1088,11 +1091,14 @@ export const CreateConversationResponse = zod.object({
   "estaASeguir": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
-  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado']),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
   "conteudo": zod.string().nullish(),
   "mediaUrl": zod.string().nullish(),
   "lido": zod.boolean().optional(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
 }).optional(),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
@@ -1104,6 +1110,50 @@ export const CreateConversationResponse = zod.object({
  */
 export const GetUnreadConversationsCountResponse = zod.object({
   "count": zod.int()
+})
+
+
+/**
+ * @summary Enviar gorjeta a um criador dentro da conversa (atómica e idempotente)
+ */
+export const SendMessageTipParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const sendMessageTipBodyMensagemMax = 255;
+
+export const sendMessageTipBodyChaveMin = 16;
+export const sendMessageTipBodyChaveMax = 64;
+
+
+
+export const SendMessageTipBody = zod.object({
+  "valor": zod.int().describe('Kz inteiros, de 50 a 100 000 por gorjeta (limite diário de 300 000 Kz por remetente).'),
+  "mensagem": zod.string().max(sendMessageTipBodyMensagemMax).optional(),
+  "chave": zod.string().min(sendMessageTipBodyChaveMin).max(sendMessageTipBodyChaveMax).describe('Chave de idempotência (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a mesma mensagem sem nova cobrança.')
+})
+
+export const SendMessageTipResponse = zod.object({
+  "id": zod.int(),
+  "autorId": zod.int(),
+  "autor": zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "verificado": zod.boolean(),
+  "tipoConta": zod.string().optional(),
+  "estaASeguir": zod.boolean().optional(),
+  "totalSeguidores": zod.int().optional()
+}).optional(),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
+  "conteudo": zod.string().nullish(),
+  "mediaUrl": zod.string().nullish(),
+  "lido": zod.boolean().optional(),
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
 })
 
 
@@ -1130,11 +1180,14 @@ export const GetMessagesResponse = zod.object({
   "estaASeguir": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
-  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado']),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
   "conteudo": zod.string().nullish(),
   "mediaUrl": zod.string().nullish(),
   "lido": zod.boolean().optional(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
 })),
   "page": zod.int(),
   "hasMore": zod.boolean()
@@ -1167,11 +1220,14 @@ export const SendMessageResponse = zod.object({
   "estaASeguir": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
-  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado']),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
   "conteudo": zod.string().nullish(),
   "mediaUrl": zod.string().nullish(),
   "lido": zod.boolean().optional(),
-  "criadoEm": zod.coerce.date()
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.')
 })
 
 
