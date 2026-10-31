@@ -9,6 +9,7 @@ import { z } from "zod/v4";
 import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
+import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
 import { liveStartSchema } from "../lib/liveTicket";
 import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl, isViewerTokenConfigured } from "../lib/liveViewerToken";
@@ -219,12 +220,8 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
     }
 
     const result = await db.transaction(async (tx) => {
-      // 1. Bloquear linha do remetente
-      const [sender] = await tx
-        .select({ saldo: usersTable.saldo })
-        .from(usersTable)
-        .where(eq(usersTable.id, senderId))
-        .for("update");
+      // 1. Bloquear as linhas do remetente e da criadora (por id crescente: sem deadlock A→B / B→A)
+      const sender = (await bloquearUtilizadores(tx, [senderId, stream.criadorId])).get(senderId);
 
       if (!sender) throw new PaymentError("Utilizador não encontrado.", 404);
 
@@ -235,7 +232,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
 
       // 2b. Ler taxa de comissão activa (FOR SHARE).
       const commissionRate = await getCommissionRate(tx, stream.criadorId);
-      const { valorCriador, comissao } = calcComissao(valor, commissionRate);
+      const { valorCriador, comissao } = comissaoParaCobranca(valor, commissionRate);
 
       // 3. Debitar remetente (valor total — o fã paga sempre o valor cheio)
       await tx
@@ -246,7 +243,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       // 4. Creditar ganhos líquidos ao criador da live
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}::numeric` })
         .where(eq(usersTable.id, stream.criadorId));
 
       // 5. Registar a gorjeta específica da live
@@ -268,7 +265,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           vendedorId: stream.criadorId,
           tipo: "gorjeta",
           valor: String(valor),
-          comissao: String(comissao),
+          comissao,
           taxaComissao: String(commissionRate),
           conteudoId: streamId,
           descricao: `Gorjeta na Live #${streamId}${mensagem ? ` - ${mensagem}` : ""}`,
@@ -532,12 +529,8 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
         if (stream.status !== "ao_vivo") throw new PaymentError("Esta live já não está ativa.", 409);
         if (stream.tipo !== "paga") throw new PaymentError("Esta live é gratuita.", 400);
 
-        // 2. Bloquear a linha do comprador (serializa pedidos simultâneos dele).
-        const [buyer] = await tx
-          .select({ saldo: usersTable.saldo })
-          .from(usersTable)
-          .where(eq(usersTable.id, buyerId))
-          .for("update");
+        // 2. Bloquear as linhas do comprador e da criadora (por id crescente: sem deadlock A→B / B→A; serializa pedidos simultâneos dele).
+        const buyer = (await bloquearUtilizadores(tx, [buyerId, stream.criadorId])).get(buyerId);
         if (!buyer) throw new PaymentError("Utilizador não encontrado.", 404);
 
         // 3. Já tem bilhete → idempotente, não cobra.

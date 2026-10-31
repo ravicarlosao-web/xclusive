@@ -6,7 +6,8 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { lerVisualizador, bloqueadoMais18 } from "../lib/conteudoMais18";
 import { postVisivel } from "../lib/takedown";
-import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
+import { getCommissionRate, CommissionNotConfiguredError } from "../lib/commission";
+import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
 
 const router = Router();
 
@@ -54,12 +55,9 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
     if (post.autorId === senderId) { res.status(400).json({ error: "Não podes dar gorjeta ao teu próprio post." }); return; }
 
     const purchase = await db.transaction(async (tx) => {
-      // 1. Bloquear linha do remetente (FOR UPDATE) para serializar pedidos concorrentes.
-      const [sender] = await tx
-        .select({ saldo: usersTable.saldo })
-        .from(usersTable)
-        .where(eq(usersTable.id, senderId))
-        .for("update");
+      // 1. Bloquear as linhas do remetente e do criador (FOR UPDATE, por id crescente) para serializar pedidos concorrentes
+      //    sem deadlock A→B / B→A.
+      const sender = (await bloquearUtilizadores(tx, [senderId, post.autorId])).get(senderId);
 
       if (!sender) throw new PaymentError("Utilizador não encontrado.", 404);
 
@@ -70,7 +68,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
 
       // 2b. Ler taxa de comissão activa (FOR SHARE — impede alteração durante a transação).
       const commissionRate = await getCommissionRate(tx, post.autorId);
-      const { valorCriador, comissao } = calcComissao(valor, commissionRate);
+      const { valorCriador, comissao } = comissaoParaCobranca(valor, commissionRate);
 
       // 3. Debitar saldo do remetente (valor total — o fã paga sempre o valor cheio).
       await tx
@@ -81,7 +79,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
       // 4. Creditar ganhos do criador (apenas a sua parte líquida após comissão).
       await tx
         .update(usersTable)
-        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` })
+        .set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}::numeric` })
         .where(eq(usersTable.id, post.autorId));
 
       // 5. Registar transação com comissão da plataforma gravada.
@@ -92,7 +90,7 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
           vendedorId: post.autorId,
           tipo: "gorjeta",
           valor: String(valor),
-          comissao: String(comissao),
+          comissao,
           taxaComissao: String(commissionRate),
           conteudoId: postId,
           descricao: `Gorjeta ao post #${postId}`,

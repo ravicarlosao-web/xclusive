@@ -13,7 +13,8 @@ import {
   lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
 } from "../lib/conteudoMais18";
 import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
-import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
+import { getCommissionRate, CommissionNotConfiguredError } from "../lib/commission";
+import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
 import { lerFeed, lerFiltro } from "../lib/feed";
 import { erroSeguro } from "../lib/erroSeguro";
 import { criarEnquete, validarNovaEnquete, lerEnquetesEmLote, votar, EnqueteErro, MSG_ENQUETE } from "../lib/enquetes";
@@ -202,8 +203,8 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
 
     // 2. Transacção atómica de compra
     await db.transaction(async (tx) => {
-      // a) Bloquear o comprador
-      const [comprador] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
+      // a) Bloquear o comprador e o criador (por id crescente: sem deadlock A→B / B→A)
+      const comprador = (await bloquearUtilizadores(tx, [userId, post.autorId])).get(userId);
       if (!comprador) throw new PaymentError("Utilizador não encontrado.", 404);
 
       // b) Verificar se já tem acesso (AGORA DENTRO DO LOCK para evitar race conditions)
@@ -214,13 +215,13 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
 
       // b) Calcular comissões
       const commissionRate = await getCommissionRate(tx, post.autorId);
-      const { valorCriador, comissao } = calcComissao(precoNumber, commissionRate);
+      const { valorCriador, comissao } = comissaoParaCobranca(precoNumber, commissionRate);
 
       // c) Debitar o comprador
       await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoNumber}` }).where(eq(usersTable.id, userId));
 
       // d) Creditar o criador
-      await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` }).where(eq(usersTable.id, post.autorId));
+      await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}::numeric` }).where(eq(usersTable.id, post.autorId));
 
       // e) Registar a compra (PPV)
       await tx.insert(purchasesTable).values({
@@ -228,7 +229,7 @@ router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Pro
         vendedorId: post.autorId,
         tipo: "ppv",
         valor: String(precoNumber),
-        comissao: String(comissao),
+        comissao,
         taxaComissao: String(commissionRate),
         conteudoId: id,
         descricao: `Desbloqueio PPV do post #${id}`,
