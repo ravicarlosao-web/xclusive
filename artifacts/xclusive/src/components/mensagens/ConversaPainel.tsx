@@ -9,6 +9,8 @@ import { GorjetaCartao } from './GorjetaCartao';
 import { GorjetaDialog } from './GorjetaDialog';
 import { ACCEPT_IMAGEM, enviarImagemMensagem, textoErro, validarImagem } from './imagemMensagem';
 import { ImagemBolha } from './ImagemBolha';
+import { MensagemRemovida, OpcoesMensagem } from './OpcoesMensagem';
+import { ReportDialog } from '@/components/shared/ReportDialog';
 import { VisualizadorImagens, type ImagemVista } from './VisualizadorImagens';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -61,6 +63,9 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const abriuDialogoDoMenu = useRef(false);
   const [avisoEnvio, setAvisoEnvio] = useState<string | null>(null);
   const [gorjetaAberta, setGorjetaAberta] = useState(false);
+  // Denúncia de mensagem: id da mensagem em causa + botão que abriu o menu (recebe o foco ao fechar)
+  const [denunciarId, setDenunciarId] = useState<number | null>(null);
+  const gatilhoDenuncia = useRef<HTMLElement | null>(null);
   // Texto que não chegou a ser enviado (o composer pode passar a restrito depois do erro: o texto continua visível)
   const [naoEnviado, setNaoEnviado] = useState<string | null>(null);
 
@@ -330,16 +335,12 @@ export function ConversaPainel({ convId }: { convId: number }) {
             const avatarUrl = msg.autor?.avatarUrl ?? '';
             const fallback = (msg.autor?.nomeExibicao ?? msg.autor?.username ?? '?')[0].toUpperCase();
 
-            return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                {!isMe && (
-                  <Avatar className="w-8 h-8 mr-2 self-end mb-1 shrink-0">
-                    <AvatarImage src={avatarUrl} />
-                    <AvatarFallback>{fallback}</AvatarFallback>
-                  </Avatar>
-                )}
-                <div className={`group relative flex min-w-0 flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                  {msg.tipo === 'gorjeta' && msg.gorjeta ? (
+            const comOpcoes = !isMe && !msg.retirada;
+            const bolha = (
+                <div className={`group relative flex min-w-0 flex-col ${comOpcoes ? 'max-w-full' : 'max-w-[75%]'} ${isMe ? 'items-end' : 'items-start'}`}>
+                  {msg.retirada ? (
+                    <MensagemRemovida />
+                  ) : msg.tipo === 'gorjeta' && msg.gorjeta ? (
                     <GorjetaCartao valor={msg.gorjeta.valor} mensagem={msg.conteudo} enviada={isMe} />
                   ) : msg.tipo === 'imagem' && msg.mediaUrl ? (
                     <div className={`flex min-w-0 max-w-full flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
@@ -361,6 +362,18 @@ export function ConversaPainel({ convId }: { convId: number }) {
                     {formatMsgTime(msg.criadoEm)}
                   </span>
                 </div>
+            );
+            return (
+              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {!isMe && (
+                  <Avatar className="w-8 h-8 mr-2 self-end mb-1 shrink-0">
+                    <AvatarImage src={avatarUrl} />
+                    <AvatarFallback>{fallback}</AvatarFallback>
+                  </Avatar>
+                )}
+                {comOpcoes ? (
+                  <OpcoesMensagem onDenunciar={(el) => { gatilhoDenuncia.current = el; setDenunciarId(msg.id); }}>{bolha}</OpcoesMensagem>
+                ) : bolha}
               </div>
             );
           })}
@@ -465,6 +478,11 @@ export function ConversaPainel({ convId }: { convId: number }) {
       {partner && dialogoBloqueio && (
         <BloqueioDialog aberto modo={dialogoBloqueio} username={partner.username} onFechar={() => setDialogoBloqueio(null)}
           onConcluido={() => { if (dialogoBloqueio === 'bloquear') setLocation('/mensagens'); else void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) }); }} />
+      )}
+      {denunciarId !== null && (
+        <ReportDialog open targetType="mensagem" targetId={denunciarId} conversaId={convId}
+          onClose={() => { setDenunciarId(null); const g = gatilhoDenuncia.current; if (g && g.isConnected) setTimeout(() => g.focus(), 0); }}
+          onEnviada={() => { void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) }); void queryClient.invalidateQueries({ queryKey: getGetConversationsQueryKey() }); }} />
       )}
       <VisualizadorImagens imagens={imagens} indice={vista} onMudar={setVista} onFechar={fecharVista} />
     </section>
