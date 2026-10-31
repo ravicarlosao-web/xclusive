@@ -19,7 +19,8 @@ function formatTime(dateStr: string) {
 }
 
 /** Texto da última mensagem na lista (a gorjeta mostra quem enviou e o valor; nunca o texto opcional). */
-function previsualizacao(m: { tipo: string; conteudo?: string | null; autorId: number; gorjeta?: { valor: number } }, meuId?: number): string {
+function previsualizacao(m: { retirada?: boolean; tipo: string; conteudo?: string | null; autorId: number; gorjeta?: { valor: number } }, meuId?: number): string {
+  if (m.retirada) return 'Mensagem removida pela moderação';
   if (m.tipo === 'gorjeta') return `${m.autorId === meuId ? 'Enviaste' : 'Recebeste'} uma gorjeta${m.gorjeta ? ` de ${m.gorjeta.valor.toLocaleString('pt-PT')} Kz` : ''}`;
   return m.conteudo ?? (m.tipo === 'imagem' ? 'Imagem' : 'Áudio');
 }
