@@ -5,6 +5,7 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProfileUpdateQuemPodeEscrever } from './profileUpdateQuemPodeEscrever';
 import type { ProfileUpdateTipoConta } from './profileUpdateTipoConta';
 
 export interface ProfileUpdate {
@@ -15,4 +16,6 @@ export interface ProfileUpdate {
   capaUrl?: string;
   tipoConta?: ProfileUpdateTipoConta;
   privado?: boolean;
+  /** Só criadores podem escolher um valor diferente de "todos" (403 para os restantes). */
+  quemPodeEscrever?: ProfileUpdateQuemPodeEscrever;
 }

@@ -6,8 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Message } from './message';
+import type { PaginatedMessagesRestricao } from './paginatedMessagesRestricao';
 
 export interface PaginatedMessages {
+  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. */
+  podeEnviar: boolean;
+  /**
+     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+     * @nullable
+     */
+  restricao?: PaginatedMessagesRestricao;
   messages: Message[];
   page: number;
   hasMore: boolean;

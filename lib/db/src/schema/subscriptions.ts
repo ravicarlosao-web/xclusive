@@ -31,6 +31,8 @@ export const subscriptionsTable = pgTable("subscriptions", {
 }, (t) => [
   // No máximo uma subscrição "ativa" por par subscritor/criador (duplicados e cliques duplos).
   uniqueIndex("subscriptions_unica_ativa").on(t.subscriitorId, t.criadorId).where(sql`${t.estado} = 'ativa'`),
+  // Consultas "A subscreve B" (inclui 'cancelada' dentro do prazo, que o índice parcial acima não cobre)
+  index("subscriptions_subscritor_criador_idx").on(t.subscriitorId, t.criadorId),
 ]);
 
 export const purchasesTable = pgTable("purchases", {

@@ -92,6 +92,18 @@ export const UserProfilePreferenciaMais18 = {
   filtrar: 'filtrar',
 } as const;
 
+/**
+ * Só na própria conta (/auth/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de "todos".
+ */
+export type UserProfileQuemPodeEscrever = typeof UserProfileQuemPodeEscrever[keyof typeof UserProfileQuemPodeEscrever];
+
+
+export const UserProfileQuemPodeEscrever = {
+  todos: 'todos',
+  seguidores_assinantes: 'seguidores_assinantes',
+  assinantes: 'assinantes',
+} as const;
+
 export interface UserProfile {
   id: number;
   username: string;
@@ -119,6 +131,8 @@ export interface UserProfile {
   preferenciaMais18?: UserProfilePreferenciaMais18;
   /** @nullable */
   preferenciaMais18Em?: string | null;
+  /** Só na própria conta (/auth/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de "todos". */
+  quemPodeEscrever?: UserProfileQuemPodeEscrever;
   criadoEm: string;
 }
 
@@ -147,6 +161,18 @@ export const ProfileUpdateTipoConta = {
   criador: 'criador',
 } as const;
 
+/**
+ * Só criadores podem escolher um valor diferente de "todos" (403 para os restantes).
+ */
+export type ProfileUpdateQuemPodeEscrever = typeof ProfileUpdateQuemPodeEscrever[keyof typeof ProfileUpdateQuemPodeEscrever];
+
+
+export const ProfileUpdateQuemPodeEscrever = {
+  todos: 'todos',
+  seguidores_assinantes: 'seguidores_assinantes',
+  assinantes: 'assinantes',
+} as const;
+
 export interface ProfileUpdate {
   nomeExibicao?: string;
   bio?: string;
@@ -155,6 +181,8 @@ export interface ProfileUpdate {
   capaUrl?: string;
   tipoConta?: ProfileUpdateTipoConta;
   privado?: boolean;
+  /** Só criadores podem escolher um valor diferente de "todos" (403 para os restantes). */
+  quemPodeEscrever?: ProfileUpdateQuemPodeEscrever;
 }
 
 export interface PaginatedUsers {
@@ -515,7 +543,26 @@ export interface MessageInput {
   mediaUrl?: string;
 }
 
+/**
+ * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+ * @nullable
+ */
+export type PaginatedMessagesRestricao = typeof PaginatedMessagesRestricao[keyof typeof PaginatedMessagesRestricao] | null;
+
+
+export const PaginatedMessagesRestricao = {
+  regra: 'regra',
+  bloqueaste: 'bloqueaste',
+} as const;
+
 export interface PaginatedMessages {
+  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. */
+  podeEnviar: boolean;
+  /**
+     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+     * @nullable
+     */
+  restricao?: PaginatedMessagesRestricao;
   messages: Message[];
   page: number;
   hasMore: boolean;
@@ -659,6 +706,11 @@ export interface SubscriptionInput {
   /** Preço que o utilizador viu no UI antes de confirmar. O servidor rejeita o pedido (409) se o preço do plano tiver sido alterado entretanto, evitando débitos silenciosos por race condition. */
   precoEsperado: number;
 }
+
+export type GetBlockedUsersParams = {
+page?: number;
+limit?: number;
+};
 
 export type GetUserPostsParams = {
 /**

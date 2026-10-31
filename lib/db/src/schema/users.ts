@@ -63,7 +63,13 @@ export const usersTable = pgTable("users", {
    * Os identificadores (email, documento) ficam bloqueados em `identifier_blocks`, só como hash.
    */
   banidaEm: timestamp("banida_em"),
+  /**
+   * Quem pode escrever-me: 'todos' | 'seguidores_assinantes' | 'assinantes'. Só tem efeito em contas tipo_conta = 'criador'
+   * (qualquer outra conta conta como 'todos'). Ver lib/permissaoMensagem.ts.
+   */
+  quemPodeEscrever: varchar("quem_pode_escrever", { length: 24 }).notNull().default("todos"),
 }, (table) => [
+  check("users_quem_pode_escrever_chk", sql`${table.quemPodeEscrever} IN ('todos', 'seguidores_assinantes', 'assinantes')`),
   check("users_banida_inativa_chk", sql`${table.banidaEm} IS NULL OR ${table.ativo} = false`),
   check("users_encerrada_inativa_chk", sql`${table.encerradaEm} IS NULL OR ${table.ativo} = false`),
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),

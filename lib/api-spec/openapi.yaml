@@ -152,6 +152,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserProfile"
 
+  /users/me/blocks:
+    get:
+      operationId: getBlockedUsers
+      tags: [users]
+      summary: Contas bloqueadas pelo utilizador autenticado
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contas bloqueadas (mais recentes primeiro)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+
+  /users/{username}/block:
+    post:
+      operationId: blockUser
+      tags: [users]
+      summary: Bloquear utilizador (afeta só mensagens e novas conversas; idempotente)
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bloqueado
+        "400":
+          description: Não é possível bloquear a própria conta
+        "403":
+          description: Conta de administração (não se bloqueia nem bloqueia)
+        "404":
+          description: Utilizador não encontrado
+
+    delete:
+      operationId: unblockUser
+      tags: [users]
+      summary: Desbloquear utilizador (idempotente)
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Desbloqueado
+        "404":
+          description: Utilizador não encontrado
+
   /users/{username}:
     get:
       operationId: getUserProfile
@@ -1193,6 +1254,10 @@ components:
         preferenciaMais18Em:
           type: ["string", "null"]
           format: date-time
+        quemPodeEscrever:
+          description: Só na própria conta (/auth/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de "todos".
+          type: string
+          enum: [todos, seguidores_assinantes, assinantes]
         criadoEm:
           type: string
           format: date-time
@@ -1236,6 +1301,10 @@ components:
           enum: [pessoal, criador]
         privado:
           type: boolean
+        quemPodeEscrever:
+          description: Só criadores podem escolher um valor diferente de "todos" (403 para os restantes).
+          type: string
+          enum: [todos, seguidores_assinantes, assinantes]
 
     PaginatedUsers:
       type: object
@@ -1660,8 +1729,15 @@ components:
 
     PaginatedMessages:
       type: object
-      required: [messages, page, hasMore]
+      required: [messages, page, hasMore, podeEnviar]
       properties:
+        podeEnviar:
+          description: O utilizador autenticado pode enviar mensagens nesta conversa agora.
+          type: boolean
+        restricao:
+          description: Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+          type: ["string", "null"]
+          enum: [regra, bloqueaste, null]
         messages:
           type: array
           items:

@@ -27,6 +27,8 @@ const updateProfileSchema = z.object({
   // tipoConta é intencionalmente excluído — a mudança pessoal→criador requer KYC
   // via POST /users/me/tornar-criador
   privado: z.boolean().optional(),
+  // Quem pode escrever-me: só criadores podem escolher algo diferente de "todos" (ver PATCH /users/me)
+  quemPodeEscrever: z.enum(["todos", "seguidores_assinantes", "assinantes"]).optional(),
 });
 
 const kycSubmissionSchema = z.object({
@@ -253,7 +255,7 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
 router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   // tipoConta foi removido intencionalmente — use POST /users/me/tornar-criador
-  const { nomeExibicao, bio, link, avatarUrl, capaUrl, privado } = req.body;
+  const { nomeExibicao, bio, link, avatarUrl, capaUrl, privado, quemPodeEscrever } = req.body;
 
   const updates: Record<string, any> = {};
   if (nomeExibicao !== undefined) updates.nomeExibicao = nomeExibicao;
@@ -271,7 +273,17 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     updates.capaUrl = v;
   }
   if (privado !== undefined) updates.privado = privado;
-
+  if (quemPodeEscrever !== undefined) {
+    // Só criadores têm regra diferente de "todos"; para os restantes é sempre "todos" (e o pedido é recusado)
+    if (quemPodeEscrever !== "todos") {
+      const [atual] = await db.select({ tipoConta: usersTable.tipoConta }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      if (atual?.tipoConta !== "criador") {
+        res.status(403).json({ error: "Só os criadores podem escolher quem lhes pode enviar mensagens.", codigo: "so_criadores" });
+        return;
+      }
+    }
+    updates.quemPodeEscrever = quemPodeEscrever;
+  }
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, userId)).returning();
 
   const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, userId), utilizadorAtivo(followsTable.seguidorId)));
@@ -289,6 +301,7 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,
+    quemPodeEscrever: user.quemPodeEscrever,
     totalSeguidores: seguidores || 0,
     totalSeguindo: seguindo || 0,
     totalPublicacoes: posts || 0,
@@ -501,7 +514,8 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
       // A conta passa a aparecer na fila de revisão, mas só fica verificada
       // depois da aprovação explícita de um administrador.
       await tx.update(usersTable)
-        .set({ tipoConta: "criador", verificado: false })
+        // Criadores NOVOS começam com mensagens só de seguidores e assinantes (o criador pode mudar em Definições)
+        .set({ tipoConta: "criador", verificado: false, quemPodeEscrever: "seguidores_assinantes" })
         .where(eq(usersTable.id, userId));
     });
   } catch (error) {
