@@ -1,6 +1,6 @@
 import { useRoute } from 'wouter';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useGetUserProfile, getUserPosts, useFollowUser, useUnfollowUser, useCreateConversation, getFreshAuthToken } from '@workspace/api-client-react';
+import { useGetUserProfile, getUserPosts, useFollowUser, useUnfollowUser, useCreateConversation, getFreshAuthToken, useGetBlockedUsers, getGetBlockedUsersQueryKey } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,8 @@ import { ExclusivoCard } from '@/components/subscricoes/ExclusivoCard';
 import { PostDetailModal } from '@/components/shared/PostDetailModal';
 import { FollowListModal } from '@/components/shared/FollowListModal';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
+import { BloqueioDialog, textoErroServidor } from '@/components/mensagens/bloqueio';
+import { MensagemRestritaDialog } from '@/components/mensagens/MensagemRestritaDialog';
 import { useDesktop } from '@/hooks/useDesktop';
 import { useColunaParada } from '@/hooks/useColunaParada';
 import { useAjusteColuna } from '@/hooks/useAjusteColuna';
@@ -86,6 +88,13 @@ export default function Profile() {
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
   const createConversationMutation = useCreateConversation();
+  // Bloquear/Desbloquear: o estado vem da lista de bloqueados (só em perfis de outros)
+  const { data: bloqueados } = useGetBlockedUsers({ limit: 50 }, {
+    query: { queryKey: getGetBlockedUsersQueryKey({ limit: 50 }), enabled: !!me && !isMe && !!username, staleTime: 30_000 },
+  });
+  const bloqueado = !!bloqueados?.users?.some((u) => u.username === username);
+  const [dialogoBloqueio, setDialogoBloqueio] = useState<'bloquear' | 'desbloquear' | null>(null);
+  const [mensagemRestrita, setMensagemRestrita] = useState<string | null>(null);
 
   const [isFollowingLocally, setIsFollowingLocally] = useState<boolean | undefined>(undefined);
   const [reportOpen, setReportOpen] = useState(false);
@@ -154,7 +163,17 @@ export default function Profile() {
       });
       setLocation(`/mensagens/${conversation.id}`);
     } catch (error) {
-      console.error('[Messages] conversation creation error:', error);
+      const st = (error as { status?: number } | null)?.status;
+      if (st === 403 && (error as { data?: { codigo?: string } } | null)?.data?.codigo === 'mensagens_restritas') {
+        // Criador com regra restritiva e sem relação: explica (texto do servidor) e oferece a ação
+        setMensagemRestrita(textoErroServidor(error, 'Este criador restringiu quem lhe pode enviar mensagens.'));
+        return;
+      }
+      toast({
+        variant: 'destructive',
+        title: st === 404 ? 'Não é possível enviar mensagem a esta conta' : 'Não foi possível abrir a conversa',
+        description: st === 404 ? undefined : textoErroServidor(error, 'Tenta novamente dentro de instantes.'),
+      });
     }
   };
 
@@ -258,7 +277,8 @@ export default function Profile() {
       {/* Coluna central: banner, identidade, assinatura, separadores e lista contínua */}
       <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
         <PerfilCabecalhoFixo visivel={compacto} nome={profile.nomeExibicao} verificado={profile.verificado} onVoltar={voltar}
-          onCopiarLigacao={() => { void copiarLigacao(); }} onDenunciar={isMe ? undefined : () => setReportOpen(true)} />
+          onCopiarLigacao={() => { void copiarLigacao(); }} onDenunciar={isMe ? undefined : () => setReportOpen(true)}
+          onBloquear={isMe ? undefined : () => setDialogoBloqueio(bloqueado ? 'desbloquear' : 'bloquear')} bloqueado={bloqueado} usernameBloqueio={profile.username} />
         <div ref={bannerRef}>
         <PerfilBanner
           capaUrl={previewCapa ?? profile.capaUrl}
@@ -270,6 +290,7 @@ export default function Profile() {
           onAbrirSeguindo={() => setFollowModal({ type: 'following' })}
           onCopiarLigacao={() => { void copiarLigacao(); }}
           onDenunciar={isMe ? undefined : () => setReportOpen(true)}
+          onBloquear={isMe ? undefined : () => setDialogoBloqueio(bloqueado ? 'desbloquear' : 'bloquear')} bloqueado={bloqueado} usernameBloqueio={profile.username}
           slotDono={isMe ? <BannerEditor username={profile.username} temCapa={!!profile.capaUrl} onPreview={setPreviewCapa} /> : undefined}
         />
         </div>
@@ -304,6 +325,14 @@ export default function Profile() {
           )}
         />
         {!isMe && <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={profile.id} />}
+        {!isMe && dialogoBloqueio && <BloqueioDialog aberto modo={dialogoBloqueio} username={profile.username} onFechar={() => setDialogoBloqueio(null)} />}
+        {!isMe && (
+          <MensagemRestritaDialog aberto={mensagemRestrita !== null} texto={mensagemRestrita ?? ''} username={profile.username}
+            podeSeguir={!isFollowing} temSubscricao={ehCriadorVisto}
+            onSeguir={() => { setMensagemRestrita(null); handleFollowToggle(); }}
+            onSubscrever={() => { setMensagemRestrita(null); setTimeout(() => document.getElementById('perfil-assinatura-titulo')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); }}
+            onFechar={() => setMensagemRestrita(null)} />
+        )}
 
         {/* Assinatura: o que antes era a aba "Exclusivo" (mesmo componente, mesma lógica e condições) */}
         {ehCriadorVisto && (

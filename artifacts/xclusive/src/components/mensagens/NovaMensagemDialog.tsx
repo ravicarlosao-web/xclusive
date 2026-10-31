@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { textoErroServidor } from './bloqueio';
 
 const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -18,7 +19,7 @@ export function NovaMensagemDialog({ open, onClose, conversas }: { open: boolean
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [termo, setTermo] = useState('');
-  const [erro, setErro] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const criar = useCreateConversation();
 
   const username = user?.username ?? '';
@@ -36,7 +37,7 @@ export function NovaMensagemDialog({ open, onClose, conversas }: { open: boolean
 
   const escolher = async (u: UserSummary) => {
     if (criar.isPending) return;
-    setErro(false);
+    setErro(null);
     const existente = conversas.find((c) => c.participantes.some((p) => p.id === u.id));
     try {
       const id = existente ? existente.id : (await criar.mutateAsync({ data: { participanteId: u.id } })).id;
@@ -44,20 +45,22 @@ export function NovaMensagemDialog({ open, onClose, conversas }: { open: boolean
       setTermo('');
       onClose();
       setLocation(`/mensagens/${id}`);
-    } catch {
-      setErro(true);
+    } catch (e) {
+      // 403 mensagens_restritas e 404 trazem o texto do servidor; o resto, o genérico
+      const st = (e as { status?: number } | null)?.status;
+      setErro(st === 403 || st === 404 ? textoErroServidor(e, 'Não foi possível abrir a conversa. Tenta novamente.') : 'Não foi possível abrir a conversa. Tenta novamente.');
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { setTermo(''); setErro(false); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setTermo(''); setErro(null); onClose(); } }}>
       <DialogContent className="max-w-md" data-testid="nova-mensagem">
         <DialogHeader>
           <DialogTitle>Nova mensagem</DialogTitle>
           <DialogDescription>Escolhe para quem queres enviar a mensagem.</DialogDescription>
         </DialogHeader>
         <Input value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="Pesquisar…" aria-label="Pesquisar destinatário" className="min-h-[44px]" data-testid="nova-mensagem-pesquisa" />
-        {erro && <p role="alert" className="text-sm text-destructive">Não foi possível abrir a conversa. Tenta novamente.</p>}
+        {erro && <p role="alert" data-testid="nova-mensagem-erro" className="text-sm text-destructive">{erro}</p>}
         <div className="max-h-[50vh] overflow-y-auto" data-testid="nova-mensagem-lista">
           {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">A carregar…</p>}
           {isError && (

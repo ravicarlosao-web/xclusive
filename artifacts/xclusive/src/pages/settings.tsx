@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
 import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
+import { QuemPodeEscrever, ContasBloqueadas } from '@/components/mensagens/PrivacidadeMensagens';
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
 import { enviarImagem } from '@/lib/uploadImagem';
@@ -218,6 +219,14 @@ export default function Settings() {
                 <Switch defaultChecked />
               </div>
             </div>
+
+            {/* Mensagens: quem pode escrever-te (só criadores) e contas bloqueadas (todos); não aparece em modo mock (sem API) */}
+            {!isMockMode && user && (
+              <div className="space-y-8 pt-4 border-t border-border" data-testid="privacidade-mensagens">
+                {user.tipoConta === 'criador' && <QuemPodeEscrever atual={user.quemPodeEscrever} />}
+                <ContasBloqueadas />
+              </div>
+            )}
 
             {/* Conteúdo +18: escolha atual, data e alteração (não aparece em modo mock, onde a conta não tem este campo) */}
             {!isMockMode && user && user.preferenciaMais18 !== undefined && (
