@@ -1132,22 +1132,26 @@ router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: Admi
 router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
-    const [user] = await db.select().from(usersTable)
-      .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
-    if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
-
     const { valor, motivo } = req.body;
     const valorNum = Number(valor);
-    if (!Number.isFinite(valorNum)) {
-      return void res.status(400).json({ error: "Valor inválido." });
+
+    // A linha do criador bloqueia-se (FOR UPDATE) ANTES de ler o saldo e de calcular o novo valor: um débito/crédito concorrente
+    // (gorjeta, compra, carregamento) espera pelo ajuste em vez de ser sobrescrito por um saldo calculado com um valor antigo.
+    const r = await db.transaction(async (tx) => {
+      const [user] = await tx.select().from(usersTable)
+        .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1).for("update");
+      if (!user) return { erro: 404 as const };
+      if (!Number.isFinite(valorNum)) return { erro: 400 as const };
+
+      const saldoAnterior = Number(user.saldo);
+      const novoSaldo = saldoAnterior + valorNum;
+      await tx.update(usersTable).set({ saldo: String(novoSaldo) }).where(eq(usersTable.id, id));
+      return { saldoAnterior, novoSaldo };
+    });
+    if ("erro" in r) {
+      return void (r.erro === 404 ? res.status(404).json({ error: "Criador não encontrado" }) : res.status(400).json({ error: "Valor inválido." }));
     }
-
-    const saldoAnterior = Number(user.saldo);
-    const novoSaldo = saldoAnterior + valorNum;
-
-    await db.update(usersTable)
-      .set({ saldo: String(novoSaldo) })
-      .where(eq(usersTable.id, id));
+    const { saldoAnterior, novoSaldo } = r;
 
     await logAudit(req, "balance_adjustment", "user", id, {
       before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor: valorNum, motivo: motivo ?? null,

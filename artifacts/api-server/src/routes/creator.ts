@@ -4,7 +4,8 @@ import { eq, and, sql, desc, inArray, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
-import { getCommissionRate, calcComissao, lerTaxaEfetiva, CommissionNotConfiguredError } from "../lib/commission";
+import { getCommissionRate, lerTaxaEfetiva, CommissionNotConfiguredError } from "../lib/commission";
+import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
 import { subscricaoComAcesso } from "../lib/exclusiveAccess";
 import { urlMedia } from "../lib/storage";
 
@@ -303,17 +304,17 @@ async function cobrarSubscricao(
   const precoReal = Number(plan.preco);
   // A taxa vem da base de dados e lê-se ANTES de qualquer débito (sem taxa válida lança 503 e nada é cobrado).
   const commissionRate = await getCommissionRate(tx, plan.criadorId);
-  const { valorCriador, comissao } = calcComissao(precoReal, commissionRate);
+  const { valorCriador, comissao } = comissaoParaCobranca(precoReal, commissionRate);
 
   await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} - ${precoReal}` }).where(eq(usersTable.id, subscritorId));
-  await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}` }).where(eq(usersTable.id, plan.criadorId));
+  await tx.update(usersTable).set({ ganhos: sql`${usersTable.ganhos} + ${valorCriador}::numeric` }).where(eq(usersTable.id, plan.criadorId));
 
   await tx.insert(purchasesTable).values({
     compradorId: subscritorId,
     vendedorId: plan.criadorId,
     tipo: "subscricao",
     valor: plan.preco,
-    comissao: String(comissao),
+    comissao,
     taxaComissao: String(commissionRate),
     conteudoId: plan.id,
     descricao,
@@ -325,10 +326,14 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
   const body = req.body as { planoId: number; precoEsperado: number } | { criadorId: number };
 
   try {
+    // Criador do plano (leitura simples, só para ordenar os locks; o plano volta a ler-se dentro da transação).
+    const criadorDoPlano = "planoId" in body
+      ? (await db.select({ criadorId: subscriptionPlansTable.criadorId }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, body.planoId)).limit(1))[0]?.criadorId
+      : body.criadorId;
     const sub = await db.transaction(async (tx) => {
-      // 1. Bloquear linha do subscritor (FOR UPDATE) para serializar pedidos concorrentes
-      //    do mesmo utilizador — evita double-spend e subscrições duplicadas.
-      const [subscriber] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
+      // 1. Bloquear as linhas do subscritor e do criador (FOR UPDATE, por id crescente: sem deadlock A→B / B→A)
+      //    e serializar pedidos concorrentes do mesmo utilizador — evita double-spend e subscrições duplicadas.
+      const subscriber = (await bloquearUtilizadores(tx, [req.userId!, criadorDoPlano])).get(req.userId!);
       if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
 
       let plan: typeof subscriptionPlansTable.$inferSelect | null = null;
@@ -446,9 +451,12 @@ router.post("/subscriptions/:id/renovar", requireAuth, validate(renewSchema), as
   const { periodoAtual, precoEsperado } = req.body as z.infer<typeof renewSchema>;
 
   try {
+    // Criador da subscrição (leitura simples, só para ordenar os locks; a subscrição volta a ler-se com FOR UPDATE dentro da transação).
+    const [subPre] = await db.select({ criadorId: subscriptionsTable.criadorId }).from(subscriptionsTable)
+      .where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.subscriitorId, req.userId!))).limit(1);
     const result = await db.transaction(async (tx) => {
-      // Serializa por utilizador: dois cliques simultâneos correm um depois do outro.
-      const [subscriber] = await tx.select({ saldo: usersTable.saldo }).from(usersTable).where(eq(usersTable.id, req.userId!)).for("update");
+      // Serializa por utilizador (e bloqueia o criador por id crescente, sem deadlock): dois cliques simultâneos correm um depois do outro.
+      const subscriber = (await bloquearUtilizadores(tx, [req.userId!, subPre?.criadorId])).get(req.userId!);
       if (!subscriber) throw new PaymentError("Utilizador não encontrado.", 404);
 
       const [sub] = await tx.select().from(subscriptionsTable)
