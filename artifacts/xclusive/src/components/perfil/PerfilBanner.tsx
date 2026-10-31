@@ -16,7 +16,7 @@ export interface EstatisticasPerfil {
  * de entrada da imagem (hoje definida em Definições); sem capa mostra o cinzento neutro do tema. Seta de voltar, nome e estatísticas
  * em cima à esquerda; menu ⋮ (copiar ligação, denunciar) em cima à direita.
  */
-export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbrirFas, onAbrirSeguindo, onCopiarLigacao, onDenunciar, slotDono }: {
+export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbrirFas, onAbrirSeguindo, onCopiarLigacao, onDenunciar, onBloquear, bloqueado, usernameBloqueio, slotDono }: {
   capaUrl?: string | null;
   nome: string;
   verificado: boolean;
@@ -26,6 +26,9 @@ export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbr
   onAbrirSeguindo: () => void;
   onCopiarLigacao: () => void;
   onDenunciar?: () => void;
+  onBloquear?: () => void;
+  bloqueado?: boolean;
+  usernameBloqueio?: string;
   /** Só para o dono: botão de alterar banner e pré-visualização (sobre a faixa). */
   slotDono?: React.ReactNode;
 }) {
@@ -50,7 +53,7 @@ export function PerfilBanner({ capaUrl, nome, verificado, stats, onVoltar, onAbr
         )}
           </div>
         </div>
-        <PerfilMenu onCopiarLigacao={onCopiarLigacao} onDenunciar={onDenunciar} />
+        <PerfilMenu onCopiarLigacao={onCopiarLigacao} onDenunciar={onDenunciar} onBloquear={onBloquear} bloqueado={bloqueado} usernameBloqueio={usernameBloqueio} />
       </div>
 
       {slotDono}

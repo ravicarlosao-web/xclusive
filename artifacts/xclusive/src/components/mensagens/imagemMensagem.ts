@@ -15,6 +15,7 @@ export function validarImagem(file: File): string | null {
 
 /** Texto de erro a mostrar (usa o `error` do servidor quando existe, p. ex. num 400). */
 export function textoErro(e: unknown): string {
+  if ((e as { status?: number } | null)?.status === 404) return 'Não é possível enviar mensagens nesta conversa.';
   const data = (e as { data?: { error?: unknown } } | null)?.data;
   if (data && typeof data.error === 'string' && data.error) return data.error;
   if (e instanceof Error && e.message && (e as { isUpload?: boolean }).isUpload) return e.message;

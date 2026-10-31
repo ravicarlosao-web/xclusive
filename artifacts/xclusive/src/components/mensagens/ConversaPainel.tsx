@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Info, Image as ImageIcon, Heart, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Ban, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { BloqueioDialog, textoErroServidor } from './bloqueio';
 import { ACCEPT_IMAGEM, enviarImagemMensagem, textoErro, validarImagem } from './imagemMensagem';
 import { ImagemBolha } from './ImagemBolha';
 import { VisualizadorImagens, type ImagemVista } from './VisualizadorImagens';
@@ -11,6 +13,8 @@ import {
   useGetMessages,
   useSendMessage,
   useGetConversations,
+  useGetUserProfile,
+  getGetUserProfileQueryKey,
   useMarkConversationRead,
   getGetMessagesQueryKey,
   getGetConversationsQueryKey,
@@ -27,6 +31,8 @@ function formatMsgTime(dateStr: string) {
     return '';
   }
 }
+
+const TEXTO_GENERICO = 'Não é possível enviar mensagens nesta conversa.';
 
 /** Painel da conversa: cabeçalho, mensagens com scroll próprio e composer fixo em baixo. Sem ícones de chamada. */
 export function ConversaPainel({ convId }: { convId: number }) {
@@ -47,17 +53,47 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const ultimoAuto = useRef(0); // instante do último scroll programático (os seus eventos de scroll não contam como gesto do utilizador)
   const irParaFim = (el: HTMLElement, comportamento: ScrollBehavior = 'auto') => { ultimoAuto.current = Date.now(); el.scrollTo({ top: el.scrollHeight, behavior: comportamento }); };
 
+  const [, setLocation] = useLocation();
+  const [dialogoBloqueio, setDialogoBloqueio] = useState<'bloquear' | 'desbloquear' | null>(null);
+  // Menu → diálogo: o menu não pode devolver o foco ao seu botão depois de o diálogo abrir (senão o foco escapa do diálogo)
+  const abriuDialogoDoMenu = useRef(false);
+  const [avisoEnvio, setAvisoEnvio] = useState<string | null>(null);
+  // Texto que não chegou a ser enviado (o composer pode passar a restrito depois do erro: o texto continua visível)
+  const [naoEnviado, setNaoEnviado] = useState<string | null>(null);
+
   // Dados da conversa (para obter o parceiro)
   const { data: conversations } = useGetConversations();
   const conv = conversations?.find(c => c.id === convId);
-  const partner = conv?.participantes.find(p => p.username !== user?.username)
+  const parceiroDaLista = conv?.participantes.find(p => p.username !== user?.username)
     ?? conv?.participantes[0];
 
-  // Mensagens
-  const { data: msgData, isLoading, isError } = useGetMessages(convId, {
-    query: { queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0 },
+  // Mensagens (404/403: conversa indisponível, sem tentar de novo)
+  const { data: msgData, isLoading, isError, error: msgErro } = useGetMessages(convId, {
+    query: {
+      queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0,
+      retry: (n, e) => { const st = (e as { status?: number } | null)?.status; return st === 404 || st === 403 ? false : n < 1; },
+    },
   });
   const messages = msgData?.messages ?? [];
+  const statusErro = (msgErro as { status?: number } | null)?.status;
+  const erroIndisponivel = isError && (statusErro === 404 || statusErro === 403);
+
+  // Parceiro: da lista de conversas; se a conversa não está lá (p. ex. bloqueaste-a ou abriste o URL direto), pelo autor das mensagens
+  // que não és tu (sem endpoint novo). Se nem assim, o cabeçalho mostra só "Conversa".
+  const parceiroDasMensagens = messages.find((m) => m.autorId !== (user as any)?.id)?.autor;
+  const partner = parceiroDaLista ?? parceiroDasMensagens;
+  // Sem acesso, ou sem forma de saber com quem é a conversa (fora da lista e sem mensagens do outro): estado "indisponível"
+  const indisponivel = erroIndisponivel || (!!msgData && conversations !== undefined && !partner);
+
+  // Composer conforme podeEnviar/restricao (o bloqueio nunca é revelado a quem foi bloqueado: restricao null)
+  const carregado = !!msgData;
+  const podeEnviar = msgData?.podeEnviar ?? true;
+  const restricao = msgData?.restricao ?? null;
+  const restrito = carregado && !podeEnviar;
+  // Se já segues o criador, só a subscrição desbloqueia (regra "só assinantes"): o texto acompanha
+  const { data: perfilParceiro } = useGetUserProfile(partner?.username ?? '', {
+    query: { queryKey: getGetUserProfileQueryKey(partner?.username ?? ''), enabled: restricao === 'regra' && !!partner },
+  });
 
   const { mutate: markConversationRead } = useMarkConversationRead({
     mutation: {
@@ -158,7 +194,18 @@ export function ConversaPainel({ convId }: { convId: number }) {
     if (!inputText.trim() || isSending) return;
     const text = inputText.trim();
     setInputText('');
-    sendMsg({ id: convId, data: { tipo: 'texto', conteudo: text } });
+    setAvisoEnvio(null);
+    setNaoEnviado(null);
+    sendMsg({ id: convId, data: { tipo: 'texto', conteudo: text } }, {
+      // O texto NÃO se perde: volta à caixa e o aviso mostra a causa; a conversa recarrega para o composer refletir o estado
+      onError: (e) => {
+        setInputText((atual) => (atual.trim() ? `${text} ${atual}` : text));
+        setNaoEnviado(text);
+        const st = (e as { status?: number } | null)?.status;
+        setAvisoEnvio(st === 404 ? TEXTO_GENERICO : textoErroServidor(e, 'Não foi possível enviar a mensagem. Tenta novamente.'));
+        void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) });
+      },
+    });
   };
 
   return (
@@ -180,20 +227,53 @@ export function ConversaPainel({ convId }: { convId: number }) {
                 <span className="text-xs text-muted-foreground">@{partner.username}</span>
               </div>
             </Link>
-          ) : (
+          ) : isLoading || conversations === undefined ? (
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-secondary animate-pulse" />
               <div className="h-4 w-28 bg-secondary rounded animate-pulse" />
             </div>
+          ) : (
+            <span className="font-bold text-sm" data-testid="conversa-titulo-generico">Conversa</span>
           )}
         </div>
-        {partner && (
-          <Link href={`/perfil/${partner.username}`} aria-label={`Informações de ${partner.nomeExibicao ?? partner.username}`} data-testid="conversa-info"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <Info className="w-6 h-6" aria-hidden="true" />
-          </Link>
-        )}
+        <div className="flex items-center">
+          {partner && !indisponivel && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" aria-label="Mais opções da conversa" data-testid="conversa-menu"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <MoreVertical className="w-6 h-6" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60" onCloseAutoFocus={(e) => { if (abriuDialogoDoMenu.current) { e.preventDefault(); abriuDialogoDoMenu.current = false; } }}>
+                {restricao === 'bloqueaste' ? (
+                  <DropdownMenuItem data-testid="conversa-desbloquear" onSelect={() => { abriuDialogoDoMenu.current = true; setDialogoBloqueio('desbloquear'); }} className="min-h-[44px] gap-2"><UserRoundCheck className="h-4 w-4" aria-hidden="true" /> Desbloquear @{partner.username}</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem data-testid="conversa-bloquear" onSelect={() => { abriuDialogoDoMenu.current = true; setDialogoBloqueio('bloquear'); }} className="min-h-[44px] gap-2"><Ban className="h-4 w-4 text-destructive" aria-hidden="true" /> Bloquear @{partner.username}</DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {partner && (
+            <Link href={`/perfil/${partner.username}`} aria-label={`Informações de ${partner.nomeExibicao ?? partner.username}`} data-testid="conversa-info"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Info className="w-6 h-6" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
       </div>
+
+      {indisponivel ? (
+        <div data-testid="conversa-indisponivel" className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+          <p className="text-lg font-bold">Conversa indisponível.</p>
+          <p className="text-sm text-muted-foreground">Esta conversa já não está acessível.</p>
+          <p className="text-xs text-muted-foreground">Se bloqueaste esta conta, podes desbloqueá-la em <Link href="/definicoes" className="font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Definições &gt; Privacidade</Link>.</p>
+          <Link href="/mensagens" data-testid="conversa-indisponivel-voltar"
+            className="inline-flex min-h-[44px] items-center rounded-full bg-primary px-6 text-sm font-bold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Voltar às conversas
+          </Link>
+        </div>
+      ) : (<>
 
       {/* Messages Area */}
       <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
@@ -305,6 +385,31 @@ export function ConversaPainel({ convId }: { convId: number }) {
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-5 w-5" aria-hidden="true" /></button>
           </div>
         )}
+        {avisoEnvio && <p role="alert" data-testid="envio-aviso" className="mb-2 text-sm text-destructive">{avisoEnvio}</p>}
+        {restrito && !anexo ? (
+          <div data-testid="composer-restrito" className="flex flex-col gap-3 rounded-2xl bg-secondary p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            {naoEnviado && <p data-testid="texto-nao-enviado" className="w-full break-words rounded-lg border border-border bg-background p-2 text-muted-foreground sm:order-last"><span className="font-semibold text-foreground">Mensagem não enviada: </span>{naoEnviado}</p>}
+            <p data-testid="composer-restrito-texto" className="text-foreground">
+              {restricao === 'regra'
+                ? (perfilParceiro?.estaASeguir
+                    ? `Só os assinantes de @${partner?.username ?? ''} podem enviar-lhe mensagens.`
+                    : `Só os seguidores e assinantes de @${partner?.username ?? ''} podem enviar-lhe mensagens.`)
+                : restricao === 'bloqueaste' ? 'Bloqueaste esta conta.' : TEXTO_GENERICO}
+            </p>
+            {restricao === 'regra' && partner && (
+              <Link href={`/perfil/${partner.username}`} data-testid="composer-restrito-perfil"
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-bold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {perfilParceiro?.estaASeguir ? 'Ver perfil e subscrever' : 'Seguir ou subscrever'}
+              </Link>
+            )}
+            {restricao === 'bloqueaste' && partner && (
+              <button type="button" data-testid="composer-restrito-desbloquear" onClick={() => setDialogoBloqueio('desbloquear')}
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-bold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                Desbloquear
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex items-center gap-2 bg-secondary rounded-full px-4 py-1 border border-transparent focus-within:border-border">
           <input ref={imageInputRef} type="file" accept={ACCEPT_IMAGEM} onChange={escolherImagem} data-testid="conversa-ficheiro" className="hidden" tabIndex={-1} aria-hidden="true" />
           <button
@@ -316,7 +421,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
           </button>
           <Input
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => { setInputText(e.target.value); if (avisoEnvio) setAvisoEnvio(null); }}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={anexo ? 'Adicionar legenda…' : 'Mensagem...'} aria-label={anexo ? 'Legenda da imagem' : 'Escrever mensagem'} data-testid="conversa-input"
             className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none h-10"
@@ -336,7 +441,14 @@ export function ConversaPainel({ convId }: { convId: number }) {
             </button>
           )}
         </div>
+        )}
       </div>
+      </>)}
+
+      {partner && dialogoBloqueio && (
+        <BloqueioDialog aberto modo={dialogoBloqueio} username={partner.username} onFechar={() => setDialogoBloqueio(null)}
+          onConcluido={() => { if (dialogoBloqueio === 'bloquear') setLocation('/mensagens'); else void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) }); }} />
+      )}
       <VisualizadorImagens imagens={imagens} indice={vista} onMudar={setVista} onFechar={fecharVista} />
     </section>
   );
