@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { AlertTriangle, Coins, Flag, ImageOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /** Os URLs assinados das cópias de prova duram 5 minutos (PROVA_URL_TTL_SECONDS no servidor). */
 const VALIDADE_URL_MS = 5 * 60 * 1000;
@@ -124,5 +125,68 @@ export function ExcertoMensagem({ excerto, denunciante, denunciado, sha256, capt
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+
+export interface RetiradaDaMensagem {
+  retirada: boolean; retiradaEm: string | null; retiradoPor: string | null; retiradoMotivo: string | null; retiradaAuto: boolean;
+  podeRepor: boolean; impedimento: string | null;
+}
+
+const MOTIVO_MIN = 5, MOTIVO_MAX = 300;
+
+/**
+ * Estado da mensagem denunciada (visível ou retirada, quem, quando, porquê) e a reposição: «Repor mensagem» só se o servidor disser que se
+ * pode (podeRepor); senão mostra o impedimento. A reposição pede sempre um motivo e fica registada no audit; a denúncia mantém o estado.
+ */
+export function EstadoMensagem({ retirada, aRepor, erro, onRepor, onLimparErro }: {
+  retirada: RetiradaDaMensagem | null | undefined; aRepor: boolean; erro: string | null; onRepor: (motivo: string) => Promise<boolean>; onLimparErro: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  if (!retirada) return null;
+  const valido = motivo.trim().length >= MOTIVO_MIN && motivo.trim().length <= MOTIVO_MAX;
+  const fechar = () => { if (aRepor) return; setAberto(false); setMotivo(''); onLimparErro(); };
+
+  return (
+    <section aria-labelledby="estado-mensagem-titulo" className="space-y-2 rounded-md border p-3" data-testid="estado-mensagem">
+      <h3 id="estado-mensagem-titulo" className="text-xs uppercase text-muted-foreground">Estado da mensagem</h3>
+      {retirada.retirada ? (
+        <div className="space-y-1 text-sm">
+          <p><span className="rounded border border-destructive px-1.5 py-0.5 text-xs font-semibold" data-testid="estado-retirada">Retirada</span>{' '}
+            {retirada.retiradaAuto ? 'automaticamente (denúncia de menor)' : retirada.retiradoPor ? <>por <strong>{retirada.retiradoPor}</strong></> : null}
+            {retirada.retiradaEm ? <> em {hora(retirada.retiradaEm)}</> : null}
+          </p>
+          {retirada.retiradoMotivo && <p className="break-words text-muted-foreground">Motivo: {retirada.retiradoMotivo}</p>}
+          {retirada.podeRepor ? (
+            <Button size="sm" variant="outline" className="min-h-[44px] sm:min-h-8" data-testid="repor-abrir" onClick={() => setAberto(true)}>Repor mensagem</Button>
+          ) : retirada.impedimento && (
+            <p role="note" className="rounded-md border border-border bg-muted p-2 text-xs" data-testid="repor-impedimento">Não pode ser reposta: {retirada.impedimento}</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm" data-testid="estado-visivel"><span className="rounded border border-border px-1.5 py-0.5 text-xs font-semibold">Visível</span> A mensagem está visível para os dois participantes.</p>
+      )}
+
+      <Dialog open={aberto} onOpenChange={(o) => { if (!o) fechar(); }}>
+        <DialogContent className="sm:max-w-[480px]" data-testid="repor-dialogo">
+          <DialogHeader>
+            <DialogTitle>Repor mensagem</DialogTitle>
+            <DialogDescription>A mensagem volta a aparecer normalmente para os dois participantes. A denúncia mantém a decisão, a prova continua congelada e a reposição fica registada na auditoria.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label htmlFor="repor-motivo" className="text-sm font-medium">Motivo da reposição (obrigatório)</label>
+            <Textarea id="repor-motivo" data-testid="repor-motivo" rows={3} maxLength={MOTIVO_MAX} value={motivo} aria-describedby="repor-motivo-ajuda" aria-invalid={!!erro} onChange={(e) => { setMotivo(e.target.value); if (erro) onLimparErro(); }} />
+            <p id="repor-motivo-ajuda" className="text-xs text-muted-foreground">{motivo.trim().length}/{MOTIVO_MAX} · mínimo {MOTIVO_MIN} caracteres</p>
+            {erro && <p role="alert" className="text-xs text-destructive" data-testid="repor-erro">{erro}</p>}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={fechar} disabled={aRepor}>Cancelar</Button>
+            <Button data-testid="repor-confirmar" disabled={!valido || aRepor} onClick={async () => { if (await onRepor(motivo.trim())) { setAberto(false); setMotivo(''); } }}>{aRepor ? 'A repor…' : 'Repor mensagem'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }
