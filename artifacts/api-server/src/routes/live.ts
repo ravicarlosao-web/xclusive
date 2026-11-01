@@ -291,7 +291,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           comissao,
           taxaComissao: String(commissionRate),
           conteudoId: streamId,
-          descricao: `Gorjeta na Live #${streamId}${mensagem ? ` - ${mensagem}` : ""}`,
+          descricao: `Gorjeta na Live #${streamId}`,   // sem o texto do fã (a mensagem não entra nos extratos nem na exportação)
           ...(chave ? { chaveIdempotencia: chave, pedidoHash } : {}),
         });
 

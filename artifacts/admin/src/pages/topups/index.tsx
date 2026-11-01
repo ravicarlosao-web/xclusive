@@ -21,20 +21,43 @@ interface TopUpRequest {
   status: 'pendente' | 'aprovado' | 'rejeitado';
   processadoEm?: string;
   adminNota?: string;
-  comprovantivoBase64?: string;
+  temComprovativo?: boolean;
   comprovantivoNome?: string;
 }
 
 function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; onClose: () => void }) {
-  if (!request?.comprovantivoBase64) return null;
+  // O ficheiro NÃO vem na lista: pede-se ao abrir (cada abertura fica registada no audit_log do servidor).
+  const [ficheiro, setFicheiro] = useState<string | null>(null);
+  const [aCarregar, setACarregar] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFicheiro(null);
+    setErro(null);
+    if (!request?.temComprovativo) return;
+    let cancelado = false;
+    setACarregar(true);
+    const token = localStorage.getItem('admin_token');
+    fetch(`/api/admin/topups/${request.id}/comprovativo`, { headers: token ? { Authorization: 'Bearer ' + token } : {} })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+        if (!cancelado) setFicheiro(json.comprovantivoBase64 ?? null);
+      })
+      .catch((e: Error) => { if (!cancelado) setErro(e.message || 'Não foi possível abrir o comprovativo.'); })
+      .finally(() => { if (!cancelado) setACarregar(false); });
+    return () => { cancelado = true; };
+  }, [request?.id, request?.temComprovativo]);
+
+  if (!request?.temComprovativo) return null;
 
   function openInNewTab() {
-    if (!request) return;
+    if (!request || !ficheiro) return;
     const win = window.open();
     if (win) {
       win.document.write(
         `<html><head><title>${request.comprovantivoNome ?? 'Comprovativo'}</title></head>` +
-        `<body style="margin:0"><embed src="${request.comprovantivoBase64}" type="application/pdf" width="100%" height="100%" /></body></html>`
+        `<body style="margin:0"><embed src="${ficheiro}" type="application/pdf" width="100%" height="100%" /></body></html>`
       );
     }
   }
@@ -53,17 +76,21 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
                 <span className="font-bold">{request.amount.toLocaleString('pt-PT')} Kz</span>
               </p>
             </div>
-            <Button size="sm" variant="outline" onClick={openInNewTab} className="gap-2 text-xs">
+            <Button size="sm" variant="outline" onClick={openInNewTab} disabled={!ficheiro} className="gap-2 text-xs">
               <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
             </Button>
           </div>
         </DialogHeader>
         <div className="flex-1 overflow-hidden">
-          <iframe
-            src={request.comprovantivoBase64}
-            title="Comprovativo PDF"
-            className="w-full h-full border-0"
-          />
+          {aCarregar && <p className="p-6 text-sm text-muted-foreground" data-testid="comprovativo-a-carregar">A carregar o comprovativo…</p>}
+          {erro && <p role="alert" className="p-6 text-sm text-destructive" data-testid="comprovativo-erro">{erro}</p>}
+          {ficheiro && (
+            <iframe
+              src={ficheiro}
+              title="Comprovativo PDF"
+              className="w-full h-full border-0"
+            />
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -163,7 +190,7 @@ export default function TopUps() {
     },
     {
       header: 'Comprovativo',
-      cell: (item) => item.comprovantivoBase64 ? (
+      cell: (item) => item.temComprovativo ? (
         <Button
           size="sm"
           variant="outline"
