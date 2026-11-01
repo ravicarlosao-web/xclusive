@@ -5,14 +5,17 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { temSubscricaoAtiva } from "../lib/exclusiveAccess";
 import { storyVisivel } from "../lib/takedown";
 import { eliminarStory, responderErroEliminacao } from "../lib/provaProtegida";
-import { lerVisualizador, storyPermitida, storyBloqueada, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
-import { urlMedia, urlCanonico } from "../lib/storage";
+import { lerVisualizador, storyPermitida, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
+import { urlMedia, urlMediaPropria } from "../lib/storage";
 
 const router = Router();
 
-// Feed de stories
-router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const userId = req.userId;
+/**
+ * REGRA ÚNICA de visibilidade de stories (usada pelo feed e por «ver»): ativas (não expiradas), não retiradas, de autor ativo, de quem o
+ * utilizador segue (ou dele próprio), permitidas pela regra +18 e, se a audiência for «subscritores», só com subscrição ativa (ou do autor).
+ * `storyId` restringe a uma story; a lista vazia significa «não visível».
+ */
+async function storiesVisiveis(userId: number | undefined, storyId?: number) {
   const now = new Date();
 
   let authorIds: number[] = [];
@@ -24,9 +27,10 @@ router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<
 
   // Filtro +18 na query: as stories filtradas saem ANTES de agrupar por autor (não ficam grupos vazios).
   const visualizador = await lerVisualizador(userId);
+  const unica = storyId === undefined ? undefined : eq(storiesTable.id, storyId);
   const allStories = authorIds.length > 0
-    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel(), storyPermitida(visualizador))).orderBy(desc(storiesTable.criadoEm))
-    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel(), storyPermitida(visualizador))).orderBy(desc(storiesTable.criadoEm)).limit(20);
+    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel(), storyPermitida(visualizador), unica)).orderBy(desc(storiesTable.criadoEm))
+    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel(), storyPermitida(visualizador), unica)).orderBy(desc(storiesTable.criadoEm)).limit(20);
 
   // Filtrar stories de audiência restrita: "subscritores" só visível com subscrição ativa
   const stories: typeof allStories = [];
@@ -38,6 +42,13 @@ router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<
     }
     stories.push(s);
   }
+  return stories;
+}
+
+// Feed de stories
+router.get("/stories/feed", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  const userId = req.userId;
+  const stories = await storiesVisiveis(userId);
 
   // Agrupar por utilizador
   const byUser = new Map<number, any[]>();
@@ -82,11 +93,15 @@ router.post("/stories", requireAuth, async (req: AuthRequest, res): Promise<void
   const marcacao = lerMarcacaoMais18(req.body.mais18);
   if (!marcacao.ok) { res.status(400).json({ error: MSG_MAIS18_INVALIDO }); return; }
 
+  // Só ficheiros que o próprio autor enviou pelo /upload (nosso CDN, users/<id>/media/<uuid>.<ext>)
+  const mediaValida = urlMediaPropria(String(mediaUrl), req.userId!);
+  if (!mediaValida) { res.status(400).json({ error: "mediaUrl inválido: só são aceites ficheiros enviados por ti através da plataforma." }); return; }
+
   const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
   const [story] = await db.insert(storiesTable).values({
     autorId: req.userId!,
-    mediaUrl: urlCanonico(String(mediaUrl)),
+    mediaUrl: mediaValida,
     tipo: tipo || "imagem",
     duracao: duracao || 5,
     audiencia: audiencia || "todos",
@@ -109,16 +124,11 @@ router.delete("/stories/:id", requireAuth, async (req: AuthRequest, res): Promis
   }
 });
 
-// Ver story
+// Ver story: só se a story for visível para este utilizador pela MESMA regra do feed (senão 404: expirada, retirada, inexistente, de conta inativa, de quem não segue ou sem subscrição)
 router.post("/stories/:id/view", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
-  if (await storyBloqueada(id, await lerVisualizador(req.userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
-  if (req.userId) {
-    const [existing] = await db.select().from(storyViewsTable).where(and(eq(storyViewsTable.storyId, id), eq(storyViewsTable.utilizadorId, req.userId)));
-    if (!existing) {
-      await db.insert(storyViewsTable).values({ storyId: id, utilizadorId: req.userId });
-    }
-  }
+  if (!Number.isInteger(id) || id <= 0 || (await storiesVisiveis(req.userId, id)).length === 0) { res.status(404).json({ error: "Não encontrado" }); return; }
+  await db.insert(storyViewsTable).values({ storyId: id, utilizadorId: req.userId! }).onConflictDoNothing();
   res.json({ ok: true });
 });
 
@@ -158,10 +168,14 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
   const { titulo, capaUrl, storyIds } = req.body;
   if (!titulo) { res.status(400).json({ error: "Título é obrigatório" }); return; }
 
+  // A capa é uma imagem enviada pelo próprio autor (o mesmo validador das stories e dos posts)
+  const capaValida = capaUrl ? urlMediaPropria(String(capaUrl), req.userId!, { apenasImagem: true }) : null;
+  if (capaUrl && !capaValida) { res.status(400).json({ error: "capaUrl inválido: só são aceites imagens enviadas por ti através da plataforma." }); return; }
+
   const [highlight] = await db.insert(highlightsTable).values({
     utilizadorId: req.userId!,
     titulo,
-    capaUrl: capaUrl ? urlCanonico(String(capaUrl)) : null,
+    capaUrl: capaValida,
   }).returning();
 
   if (storyIds && Array.isArray(storyIds)) {

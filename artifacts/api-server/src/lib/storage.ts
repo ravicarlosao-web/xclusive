@@ -418,6 +418,31 @@ export function urlAvatarOuCapa(url: string, userId: number, opcoes: { gif?: boo
   return urlCanonico(url);
 }
 
+const CHAVE_MEDIA_PROPRIA = /^users\/(\d+)\/media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|jpeg|png|webp|gif|mp4)$/;
+/**
+ * Média de posts, stories e capas de destaques: só ficheiros que o PRÓPRIO utilizador enviou pelo /upload, ou seja, URL do nosso CDN com a
+ * chave exata que o upload gera: "users/<id do utilizador>/media/<uuid>.<ext>", com ext = jpg|jpeg|png|webp|gif (imagens) ou mp4 (vídeos:
+ * o upload converte sempre os vídeos para "….mp4"). Recusa outros domínios e esquemas, ficheiros de outro utilizador, extensões
+ * diferentes, segmentos perigosos ("..", "//", "%", barras invertidas, caracteres de controlo) e query/fragmento que não seja o token de
+ * assinatura do CDN. Devolve o URL canónico (sem token), ou null. Sem BUNNY_CDN_HOSTNAME recusa (não há como distinguir o que é nosso).
+ * `apenasImagem` (capas) recusa também vídeo.
+ */
+export function urlMediaPropria(url: string, userId: number, opcoes: { apenasImagem?: boolean } = {}): string | null {
+  if (!publicHost() || typeof url !== "string" || url === "" || url.length > 1000) return null;
+  if (/[\\\s\u0000-\u001f]/.test(url) || url.includes("..")) return null;
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return null; }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+  if (parsed.username || parsed.password || parsed.hash || parsed.pathname.includes("%")) return null;
+  if (parsed.search && !/^\?token=[A-Za-z0-9_-]+&expires=\d+$/.test(parsed.search)) return null;
+  const key = getStorageKeyFromPublicUrl(url);
+  if (!key) return null;
+  const m = CHAVE_MEDIA_PROPRIA.exec(key);
+  if (!m || m[1] !== String(userId)) return null;
+  if (opcoes.apenasImagem && m[2] === "mp4") return null;
+  return urlCanonico(url);
+}
+
 /** Tamanho máximo de uma imagem anexada a uma mensagem. */
 export const MENSAGEM_IMAGEM_MAX_BYTES = 10 * 1024 * 1024;
 

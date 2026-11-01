@@ -6,10 +6,10 @@ import { requireAuth, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { eliminarPost, eliminarComentario, responderErroEliminacao } from "../lib/provaProtegida";
 import { temAcessoExclusivo } from "../lib/exclusiveAccess";
-import { resolveMediaUrl, urlMedia, urlCanonico } from "../lib/storage";
+import { resolveMediaUrl, urlMedia, urlMediaPropria } from "../lib/storage";
 import { postVisivel, commentVisivel } from "../lib/takedown";
 import {
-  lerVisualizador, postVisivelPara, postBloqueado, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
+  lerVisualizador, postVisivelPara, bloqueadoMais18, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18,
   lerMarcacaoMais18, MSG_MAIS18_INVALIDO,
 } from "../lib/conteudoMais18";
 import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
@@ -117,7 +117,13 @@ router.post("/posts", requireAuth, validate(createPostSchema), async (req: AuthR
         res.status(400).json({ error: "Os ficheiros de um post exclusivo têm de ser enviados como privados. Atualiza a página e tenta novamente." });
         return;
       }
-      mediaToStore.push({ ...m, url: urlCanonico(m.url) });
+      // Só ficheiros que o próprio autor enviou pelo /upload (nosso CDN, users/<id>/media/<uuid>.<ext>)
+      const urlValido = urlMediaPropria(m.url, userId);
+      if (!urlValido) {
+        res.status(400).json({ error: "Média inválida: só são aceites ficheiros enviados por ti através da plataforma." });
+        return;
+      }
+      mediaToStore.push({ ...m, url: urlValido });
     }
   }
 
@@ -291,14 +297,24 @@ router.delete("/posts/:id", requireAuth, async (req: AuthRequest, res): Promise<
   }
 });
 
+/**
+ * Gostar, guardar e comentar só em posts que o utilizador PODE VER: a mesma visibilidade da leitura (não retirado, autor ativo, regra +18).
+ * Post inexistente, retirado, de conta inativa ou +18 que não pode ver → false (a rota responde 404). Retirar o próprio gosto/guardado não passa por aqui.
+ */
+async function postInteragivel(id: number, userId: number): Promise<boolean> {
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const [r] = await db.select({ id: postsTable.id }).from(postsTable).where(and(eq(postsTable.id, id), postVisivelPara(await lerVisualizador(userId)))).limit(1);
+  return !!r;
+}
+
 // Curtir
 router.post("/posts/:id/like", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const userId = req.userId!;
-  if (await postBloqueado(id, await lerVisualizador(userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!(await postInteragivel(id, userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
   const [existing] = await db.select().from(likesTable).where(and(eq(likesTable.utilizadorId, userId), eq(likesTable.alvoTipo, "post"), eq(likesTable.alvoId, id)));
   if (!existing) {
-    await db.insert(likesTable).values({ utilizadorId: userId, alvoTipo: "post", alvoId: id });
+    await db.insert(likesTable).values({ utilizadorId: userId, alvoTipo: "post", alvoId: id }).onConflictDoNothing();
     // Notificar o autor do post (se não for o próprio)
     const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id));
     if (post && post.autorId !== userId) {
@@ -324,10 +340,10 @@ router.delete("/posts/:id/like", requireAuth, async (req: AuthRequest, res): Pro
 router.post("/posts/:id/save", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const userId = req.userId!;
-  if (await postBloqueado(id, await lerVisualizador(userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!(await postInteragivel(id, userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
   const [existing] = await db.select().from(savedPostsTable).where(and(eq(savedPostsTable.utilizadorId, userId), eq(savedPostsTable.postId, id)));
   if (!existing) {
-    await db.insert(savedPostsTable).values({ utilizadorId: userId, postId: id });
+    await db.insert(savedPostsTable).values({ utilizadorId: userId, postId: id }).onConflictDoNothing();
   }
   res.json({ ok: true });
 });
@@ -373,7 +389,7 @@ router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), a
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   const userId = req.userId!;
   const { texto, comentarioPaiId } = req.body;
-  if (await postBloqueado(id, await lerVisualizador(userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!(await postInteragivel(id, userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   const [comment] = await db.insert(commentsTable).values({
     postId: id,

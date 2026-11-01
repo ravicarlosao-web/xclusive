@@ -1,3 +1,4 @@
+import { linkSeguro } from "../lib/linkSeguro";
 import { Router, type Response } from "express";
 import { db, usersTable, followsTable, revokedTokensTable, userLegalAcceptancesTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -526,7 +527,7 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     bio: user.bio,
     avatarUrl: urlMedia(user.avatarUrl),
     capaUrl: urlMedia(user.capaUrl),
-    link: user.link,
+    link: linkSeguro(user.link),
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,
