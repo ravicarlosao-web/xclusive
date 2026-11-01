@@ -89,6 +89,20 @@ async function logAudit(
   }
 }
 
+/** Grava o audit DENTRO da transação da ação: se falhar, a ação desfaz-se e o admin recebe erro (nunca há ação sem rasto). */
+async function auditNaTransacao(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  req: AdminRequest,
+  action: string,
+  targetType: string | null,
+  targetId: number | null,
+  details: Record<string, unknown>,
+): Promise<void> {
+  await tx.insert(auditLogTable).values({
+    adminId: req.adminId!, action, targetType: targetType ?? undefined, targetId: targetId ?? undefined, details, ipAddress: req.ip ?? null,
+  });
+}
+
 // ── Paginação helper ──────────────────────────────────────────────────────────
 
 function paginate<T>(items: T[], total: number, page: number, limit: number) {
@@ -234,7 +248,7 @@ router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> =
       role: user.role,
       avatarUrl: urlMedia(user.avatarUrl ?? null),
     },
-    expiresIn: 14400,
+    expiresIn: 900, // segundos: igual à duração real do JWT de acesso (15 min)
   });
 });
 
@@ -629,10 +643,16 @@ router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRe
   }
 });
 
-router.get("/admin/users/:id", async (req, res): Promise<void> => {
+router.get("/admin/users/:id", async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    // Vista individual com dados pessoais (email): o acesso fica no audit_log NA MESMA transação; se o registo falhar, nada é devolvido.
+    const user = await db.transaction(async (tx) => {
+      const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+      if (!u) return null;
+      await auditNaTransacao(tx, req, "user_dados_vistos", "user", id, { vista: "ficha" });
+      return u;
+    });
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
     const [[{ totalPosts }], [{ totalSeguidores }], [{ totalSeguindo }]] = await Promise.all([
@@ -671,6 +691,11 @@ router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): P
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
+    // Alterar OUTRO admin/superadmin: só o superadmin (a própria conta continua editável)
+    if ((user.role === "admin" || user.role === "superadmin") && user.id !== req.adminId && req.adminRole !== "superadmin") {
+      return void res.status(403).json({ error: "Apenas o superadmin pode alterar outra conta de administração." });
+    }
+
     const CAMPOS_PERMITIDOS = ["nomeExibicao", "bio", "verificado"] as const;
     const before: Record<string, unknown> = {};
     const updates: Record<string, unknown> = {};
@@ -684,8 +709,11 @@ router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): P
       return void res.status(400).json({ error: "Nenhum campo válido para actualizar." });
     }
 
-    const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
-    await logAudit(req, "user_edit", "user", id, { before, after: updates });
+    const updated = await db.transaction(async (tx) => {
+      const [u] = await tx.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
+      await auditNaTransacao(tx, req, "user_edit", "user", id, { before, after: updates });
+      return u;
+    });
     res.json(mapUser(updated));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao editar utilizador");
@@ -709,6 +737,11 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
       return void res.status(409).json({ error: "Esta conta foi encerrada pelo próprio utilizador: não se suspende nem se reativa. Se for para a reabrir, usa «Reabrir conta» (dentro dos 30 dias)." });
     }
 
+    // Suspender ou reativar OUTRO admin/superadmin: só o superadmin
+    if ((user.role === "admin" || user.role === "superadmin") && user.id !== req.adminId && req.adminRole !== "superadmin") {
+      return void res.status(403).json({ error: "Apenas o superadmin pode suspender ou reativar outra conta de administração." });
+    }
+
     const { estado } = req.body;
     if (!["ativo", "suspenso"].includes(estado)) {
       return void res.status(400).json({ error: "Estado inválido. Use 'ativo' ou 'suspenso'." });
@@ -720,9 +753,7 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
       if (user.id === req.adminId) {
         return void res.status(403).json({ error: "Não podes suspender a tua própria conta." });
       }
-      if (user.role === "admin" || user.role === "superadmin") {
-        return void res.status(403).json({ error: "Não é possível suspender uma conta de administrador." });
-      }
+      // Contas de administração: só o superadmin as suspende (a verificação acima já recusou os admins)
     }
 
     // Suspender: ativo=false + sessões e refresh tokens revogados (função partilhada), tudo numa transação com o audit.
@@ -769,13 +800,20 @@ router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, re
     if (user.role === "superadmin" && req.adminRole !== "superadmin") {
       return void res.status(403).json({ error: "Não é possível alterar a role de um superadmin" });
     }
+    // Despromover/alterar OUTRO admin: só o superadmin
+    if (user.role === "admin" && user.id !== req.adminId && req.adminRole !== "superadmin") {
+      return void res.status(403).json({ error: "Apenas o superadmin pode alterar a role de outro administrador." });
+    }
     if (user.id === req.adminId && novoRole === "superadmin" && req.adminRole !== "superadmin") {
       return void res.status(403).json({ error: "Não podes promover-te a superadmin" });
     }
 
     const roleAnterior = user.role;
-    const [updated] = await db.update(usersTable).set({ role: novoRole }).where(eq(usersTable.id, id)).returning();
-    await logAudit(req, "user_role_change", "user", id, { before: { role: roleAnterior }, after: { role: novoRole } });
+    const updated = await db.transaction(async (tx) => {
+      const [u] = await tx.update(usersTable).set({ role: novoRole }).where(eq(usersTable.id, id)).returning();
+      await auditNaTransacao(tx, req, "user_role_change", "user", id, { before: { role: roleAnterior }, after: { role: novoRole } });
+      return u;
+    });
     res.json(mapUser(updated));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao alterar role");
@@ -1119,9 +1157,12 @@ router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: Admi
     if (req.body.beneficios !== undefined) updates.beneficios = String(req.body.beneficios);
     if (req.body.ativo !== undefined) updates.ativo = Boolean(req.body.ativo);
 
-    const [updated] = await db.update(subscriptionPlansTable).set(updates)
-      .where(eq(subscriptionPlansTable.id, planId)).returning();
-    await logAudit(req, "plan_edit", "plan", planId, { before, after: updates });
+    const updated = await db.transaction(async (tx) => {
+      const [u] = await tx.update(subscriptionPlansTable).set(updates)
+        .where(eq(subscriptionPlansTable.id, planId)).returning();
+      await auditNaTransacao(tx, req, "plan_edit", "plan", planId, { before, after: updates });
+      return u;
+    });
     res.json({ success: true, ...updated, preco: Number(updated.preco) });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao editar plano");
@@ -1146,16 +1187,16 @@ router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: 
       const saldoAnterior = Number(user.saldo);
       const novoSaldo = saldoAnterior + valorNum;
       await tx.update(usersTable).set({ saldo: String(novoSaldo) }).where(eq(usersTable.id, id));
+      // Audit na MESMA transação (com a linha do criador ainda bloqueada): se falhar, o ajuste desfaz-se.
+      await auditNaTransacao(tx, req, "balance_adjustment", "user", id, {
+        before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor: valorNum, motivo: motivo ?? null,
+      });
       return { saldoAnterior, novoSaldo };
     });
     if ("erro" in r) {
       return void (r.erro === 404 ? res.status(404).json({ error: "Criador não encontrado" }) : res.status(400).json({ error: "Valor inválido." }));
     }
-    const { saldoAnterior, novoSaldo } = r;
-
-    await logAudit(req, "balance_adjustment", "user", id, {
-      before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor: valorNum, motivo: motivo ?? null,
-    });
+    const { novoSaldo } = r;
     res.json({ success: true, novoSaldo });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao ajustar saldo");
@@ -1779,13 +1820,20 @@ router.get("/admin/finance/transactions", async (req, res) => {
   }
 });
 
-router.get("/admin/finance/transactions/export", async (req, res) => {
+router.get("/admin/finance/transactions/export", async (req: AdminRequest, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(purchasesTable)
-      .orderBy(desc(purchasesTable.criadoEm))
-      .limit(10000);
+    // A exportação fica no audit_log (admin, quando, filtros e nº de linhas) NA MESMA transação da leitura: se o registo falhar, nada é exportado.
+    const rows = await db.transaction(async (tx) => {
+      const linhas = await tx
+        .select()
+        .from(purchasesTable)
+        .orderBy(desc(purchasesTable.criadoEm))
+        .limit(10000);
+      await auditNaTransacao(tx, req, "transacoes_exportadas", "platform", null, {
+        formato: "csv", filtros: { ordem: "criadoEm desc", limite: 10000 }, linhas: linhas.length,
+      });
+      return linhas;
+    });
 
     const headers = ["id", "tipo", "valor", "compradorId", "vendedorId", "descricao", "criadoEm"];
     const csvRows = rows.map(r =>
@@ -2109,6 +2157,14 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
           .where(eq(usersTable.id, request.userId));
       }
 
+      // Audit na MESMA transação (depois do pedido e do crédito): se falhar, o pedido volta a «pendente» e nada é creditado.
+      await auditNaTransacao(tx, req, status === "aprovado" ? "topup_approved" : "topup_rejected", "topup", id, {
+        amount: Number(request.amount),
+        userId: request.userId,
+        reference: request.reference,
+        notas: notas ?? null,
+      });
+
       return request;
     });
 
@@ -2116,13 +2172,6 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
       res.status(409).json({ error: "Este pedido já foi processado ou não existe." });
       return;
     }
-
-    await logAudit(req, status === "aprovado" ? "topup_approved" : "topup_rejected", "topup", id, {
-      amount: Number(updated.amount),
-      userId: updated.userId,
-      reference: updated.reference,
-      notas: notas ?? null,
-    });
 
     res.json({
       id: updated.id,
@@ -2165,31 +2214,34 @@ router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Pr
 
     const targetUsers = await db.select({ id: usersTable.id }).from(usersTable).where(and(...conditions));
     
-    let totalCriadas = 0;
-    if (targetUsers.length > 0) {
-      // Drizzle ORM supports batch inserts seamlessly via array
-      const notificationsData = targetUsers.map(user => ({
-        destinatarioId: user.id,
-        tipo: "sistema" as const,
-        atorId: req.adminId, // The admin is the sender
-        mensagem: mensagem.substring(0, 255), // safety limit
-      }));
+    // Notificações e audit na MESMA transação: se o audit falhar, nenhuma notificação fica enviada.
+    const totalCriadas = await db.transaction(async (tx) => {
+      let total = 0;
+      if (targetUsers.length > 0) {
+        // Drizzle ORM supports batch inserts seamlessly via array
+        const notificationsData = targetUsers.map(user => ({
+          destinatarioId: user.id,
+          tipo: "sistema" as const,
+          atorId: req.adminId, // The admin is the sender
+          mensagem: mensagem.substring(0, 255), // safety limit
+        }));
 
-      // Insert in chunks of 500 to avoid query size limits on huge DBs
-      const chunkSize = 500;
-      for (let i = 0; i < notificationsData.length; i += chunkSize) {
-        const chunk = notificationsData.slice(i, i + chunkSize);
-        await db.insert(notificationsTable).values(chunk);
+        // Insert in chunks of 500 to avoid query size limits on huge DBs
+        const chunkSize = 500;
+        for (let i = 0; i < notificationsData.length; i += chunkSize) {
+          const chunk = notificationsData.slice(i, i + chunkSize);
+          await tx.insert(notificationsTable).values(chunk);
+        }
+        total = targetUsers.length;
       }
-      totalCriadas = targetUsers.length;
-    }
-
-    // Guardar o broadcast no audit_log como registo
-    await logAudit(req, "broadcast_send", "platform", null, {
-      titulo,
-      mensagem,
-      segmento: segmento ?? "todos",
-      totalEntregas: totalCriadas,
+      // Guardar o broadcast no audit_log como registo
+      await auditNaTransacao(tx, req, "broadcast_send", "platform", null, {
+        titulo,
+        mensagem,
+        segmento: segmento ?? "todos",
+        totalEntregas: total,
+      });
+      return total;
     });
 
     res.status(201).json({

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
 import { auditLogTable, db, menorCasesTable, messagesTable, messageTipsTable, reportsTable, usersTable } from "@workspace/db";
 import { restaurarAlvo, TakedownError } from "./takedown";
+import { temMenorProcedente } from "./provaProtegida";
 import { copiarImagemParaProvas, deletePrivate, getStorageKeyFromPublicUrl, isStorageConfigured } from "./storage";
 
 /**
@@ -101,10 +102,11 @@ export function excertoParaAdmin(snapshot: unknown, assinar: (chave: string) => 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Q = Tx | typeof db;
 
-export type ImpedimentoRepor = "nao_retirada" | "por_decidir" | "caso_menor" | "outra_denuncia";
+export type ImpedimentoRepor = "nao_retirada" | "por_decidir" | "menor_procedente" | "caso_menor" | "outra_denuncia";
 const TEXTO_IMPEDIMENTO: Record<ImpedimentoRepor, string> = {
   nao_retirada: "A mensagem não está retirada (já foi reposta ou nunca foi retirada).",
   por_decidir: "Decide primeiro a denúncia: só se repõe uma mensagem depois de a denúncia estar decidida.",
+  menor_procedente: "Há uma denúncia de menor julgada procedente sobre esta mensagem: não pode ser reposta.",
   caso_menor: "Há um caso de menor aberto ou confirmado associado a esta mensagem: não pode ser reposta.",
   outra_denuncia: "Há outra denúncia aberta ou procedente sobre esta mesma mensagem: não pode ser reposta.",
 };
@@ -135,6 +137,8 @@ export async function estadoRetiradaMensagem(q: Q, rep: { id: number; targetId: 
 
   if (!m?.retiradoEm) return impedido("nao_retirada");
   if (rep.status === "pendente" || rep.status === "em_analise") return impedido("por_decidir");
+  // Denúncia de menor julgada procedente (esta ou outra): a mensagem nunca se repõe, sem exceção
+  if (await temMenorProcedente(q, "mensagem", rep.targetId)) return impedido("menor_procedente");
   const doAlvo = q.select({ id: reportsTable.id }).from(reportsTable).where(and(eq(reportsTable.targetType, "mensagem"), eq(reportsTable.targetId, rep.targetId)));
   const casos = await q.select({ id: menorCasesTable.id }).from(menorCasesTable)
     .where(and(inArray(menorCasesTable.estado, ["aberto", "confirmado"]), inArray(menorCasesTable.reportId, doAlvo))).limit(1);
