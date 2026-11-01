@@ -10,6 +10,7 @@ import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
+import { ChaveReutilizadaError, chaveOpcional, foiViolacaoDaChave, hashPedidoGorjeta, lerCompraPorChave, lerTipDaCompra } from "../lib/idempotenciaGorjeta";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
 import { liveStartSchema } from "../lib/liveTicket";
 import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl, isViewerTokenConfigured } from "../lib/liveViewerToken";
@@ -183,14 +184,27 @@ router.post("/live/:streamId/end", requireAuth, async (req: AuthRequest, res): P
 const liveTipSchema = z.object({
   valor: z.number().int().positive("O valor deve ser superior a zero"),
   mensagem: z.string().max(255).optional(),
+  /** Chave de idempotência (opcional): a mesma chave devolve a gorjeta original sem nova cobrança. */
+  chave: chaveOpcional,
 });
 
 // Envia uma gorjeta para uma live ativa
 router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (req: AuthRequest, res): Promise<void> => {
   try {
     const streamId = Number(req.params.streamId);
-    const { valor, mensagem } = req.body;
+    const { valor, mensagem, chave } = req.body as { valor: number; mensagem?: string; chave?: string };
     const senderId = req.userId!;
+    const pedidoHash = chave ? hashPedidoGorjeta("live", streamId, valor, mensagem) : null;
+
+    // Repetição com a mesma chave (a gorjeta já foi feita): devolve a original ANTES das validações de estado, sem cobrar,
+    // sem nova linha em live_tips e sem novo evento na sala.
+    if (chave && pedidoHash) {
+      const compra = await lerCompraPorChave(db, senderId, chave, pedidoHash);
+      if (compra) {
+        const original = await lerTipDaCompra(db, compra);
+        if (original) { res.status(201).json({ tip: original }); return; }
+      }
+    }
 
     const [stream] = await db.select().from(liveStreamsTable).where(eq(liveStreamsTable.id, streamId)).limit(1);
     if (!stream) {
@@ -224,6 +238,15 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       const sender = (await bloquearUtilizadores(tx, [senderId, stream.criadorId])).get(senderId);
 
       if (!sender) throw new PaymentError("Utilizador não encontrado.", 404);
+
+      // 1b. Idempotência (sob o lock do remetente e antes de qualquer débito): a mesma (remetente, chave) devolve a gorjeta original.
+      if (chave && pedidoHash) {
+        const compra = await lerCompraPorChave(tx, senderId, chave, pedidoHash);
+        if (compra) {
+          const original = await lerTipDaCompra(tx, compra);
+          if (original) return { tip: original, repetida: true as const };
+        }
+      }
 
       // 2. Verificar saldo
       if (Number(sender.saldo) < valor) {
@@ -269,12 +292,14 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           taxaComissao: String(commissionRate),
           conteudoId: streamId,
           descricao: `Gorjeta na Live #${streamId}${mensagem ? ` - ${mensagem}` : ""}`,
+          ...(chave ? { chaveIdempotencia: chave, pedidoHash } : {}),
         });
 
-      return tip;
+      return { tip, repetida: false as const };
     });
 
-    res.status(201).json({ tip: result });
+    res.status(201).json({ tip: result.tip });
+    if (result.repetida) return; // repetição: sem novo evento na sala
 
     // Notificar todos na sala sobre a gorjeta (fire-and-forget — não bloqueia a resposta HTTP)
     try {
@@ -296,6 +321,21 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       // Ignorar — não deve falhar o pedido HTTP
     }
   } catch (err) {
+    // Corrida que escapou à leitura: o índice único recusou o segundo insert; repete-se a leitura e devolve-se a original.
+    if (foiViolacaoDaChave(err) && !res.headersSent) {
+      try {
+        const b = req.body as { valor: number; mensagem?: string; chave?: string };
+        if (b.chave) {
+          const compra = await lerCompraPorChave(db, req.userId!, b.chave, hashPedidoGorjeta("live", Number(req.params.streamId), b.valor, b.mensagem));
+          const original = compra ? await lerTipDaCompra(db, compra) : null;
+          if (original) { res.status(201).json({ tip: original }); return; }
+        }
+      } catch (e2) { err = e2; }
+    }
+    if (err instanceof ChaveReutilizadaError) {
+      res.status(409).json({ error: err.message, codigo: err.codigo });
+      return;
+    }
     if (err instanceof CommissionNotConfiguredError) {
       req.log?.error({ motivo: err.motivo }, "Comissão não configurada: pagamento recusado, nada foi cobrado");
       res.status(503).json({ error: err.message });

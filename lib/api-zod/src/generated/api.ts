@@ -681,6 +681,77 @@ export const VotarEnqueteResponse = zod.object({
 
 
 /**
+ * Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança.
+ * @summary Enviar gorjeta a um post (idempotente com chave)
+ */
+export const SendPostTipParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const sendPostTipBodyChaveMin = 16;
+export const sendPostTipBodyChaveMax = 64;
+
+
+export const sendPostTipBodyChaveRegExp = new RegExp('^[A-Za-z0-9_-]{16,64}$');
+
+
+export const SendPostTipBody = zod.object({
+  "valor": zod.number().describe('Valor em Kz (positivo; o front envia inteiros).'),
+  "chave": zod.string().min(sendPostTipBodyChaveMin).max(sendPostTipBodyChaveMax).regex(sendPostTipBodyChaveRegExp).optional().describe('Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.')
+})
+
+export const SendPostTipResponse = zod.object({
+  "purchase": zod.object({
+  "id": zod.int(),
+  "compradorId": zod.int(),
+  "vendedorId": zod.int(),
+  "tipo": zod.string(),
+  "valor": zod.string(),
+  "comissao": zod.string(),
+  "taxaComissao": zod.string().nullish(),
+  "conteudoId": zod.int().nullish(),
+  "descricao": zod.string().nullish(),
+  "criadoEm": zod.coerce.date()
+})
+})
+
+
+/**
+ * Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança, sem nova linha de gorjeta e sem novo evento na sala.
+ * @summary Enviar gorjeta a uma live ativa (idempotente com chave)
+ */
+export const SendLiveTipParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const sendLiveTipBodyMensagemMax = 255;
+
+export const sendLiveTipBodyChaveMin = 16;
+export const sendLiveTipBodyChaveMax = 64;
+
+
+export const sendLiveTipBodyChaveRegExp = new RegExp('^[A-Za-z0-9_-]{16,64}$');
+
+
+export const SendLiveTipBody = zod.object({
+  "valor": zod.int().describe('Kz inteiros, positivos.'),
+  "mensagem": zod.string().max(sendLiveTipBodyMensagemMax).optional(),
+  "chave": zod.string().min(sendLiveTipBodyChaveMin).max(sendLiveTipBodyChaveMax).regex(sendLiveTipBodyChaveRegExp).optional().describe('Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.')
+})
+
+export const SendLiveTipResponse = zod.object({
+  "tip": zod.object({
+  "id": zod.int(),
+  "streamId": zod.int(),
+  "remetenteId": zod.int(),
+  "valor": zod.int(),
+  "mensagem": zod.string().nullish(),
+  "criadoEm": zod.coerce.date()
+})
+})
+
+
+/**
  * @summary Curtir publicação
  */
 export const LikePostParams = zod.object({

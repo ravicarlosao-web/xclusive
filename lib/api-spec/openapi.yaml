@@ -14,6 +14,7 @@ tags:
   - name: stories
   - name: explore
   - name: messages
+  - name: live
   - name: notifications
   - name: highlights
   - name: creator
@@ -484,6 +485,92 @@ paths:
           description: Já votaste (enquete_ja_votou) ou a enquete já terminou (enquete_encerrada)
         "429":
           description: Demasiados votos (30 por minuto)
+
+  /posts/{id}/gorjeta:
+    post:
+      operationId: sendPostTip
+      tags: [posts]
+      summary: Enviar gorjeta a um post (idempotente com chave)
+      description: Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostTipInput"
+      responses:
+        "201":
+          description: Gorjeta enviada (ou repetição com a mesma chave e o mesmo pedido, sem nova cobrança)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostTipResponse"
+        "400":
+          description: Valor ou chave inválidos, ou gorjeta ao próprio post
+        "402":
+          description: Saldo insuficiente
+        "404":
+          description: Post não encontrado
+        "409":
+          description: Chave já usada com outro pedido (codigo chave_reutilizada)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipKeyConflict"
+        "429":
+          description: Demasiadas gorjetas num curto espaço de tempo
+        "503":
+          description: Comissão não configurada (nada foi cobrado)
+
+  /live/{id}/tip:
+    post:
+      operationId: sendLiveTip
+      tags: [live]
+      summary: Enviar gorjeta a uma live ativa (idempotente com chave)
+      description: Sem `chave` o pedido comporta-se como sempre. Com `chave` (16 a 64 caracteres), a mesma chave do mesmo remetente devolve a gorjeta original (mesmo estado e corpo) sem nova cobrança, sem nova linha de gorjeta e sem novo evento na sala.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveTipInput"
+      responses:
+        "201":
+          description: Gorjeta enviada (ou repetição com a mesma chave e o mesmo pedido, sem nova cobrança)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveTipResponse"
+        "400":
+          description: Valor ou chave inválidos, live já terminada ou gorjeta à própria live
+        "402":
+          description: Saldo insuficiente
+        "403":
+          description: Live paga sem bilhete
+        "404":
+          description: Live não encontrada
+        "409":
+          description: Chave já usada com outro pedido (codigo chave_reutilizada)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipKeyConflict"
+        "429":
+          description: Demasiadas gorjetas num curto espaço de tempo
+        "503":
+          description: Comissão não configurada (nada foi cobrado)
 
   /posts/{id}/like:
     post:
@@ -1830,6 +1917,105 @@ components:
         retiradoTemporariamente:
           description: "Motivo menor: a mensagem foi retirada (escondida) enquanto aguarda análise."
           type: boolean
+
+    PostTipInput:
+      type: object
+      required: [valor]
+      properties:
+        valor:
+          description: Valor em Kz (positivo; o front envia inteiros).
+          type: number
+        chave:
+          description: Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.
+          type: string
+          minLength: 16
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]{16,64}$"
+
+    LiveTipInput:
+      type: object
+      required: [valor]
+      properties:
+        valor:
+          description: Kz inteiros, positivos.
+          type: integer
+        mensagem:
+          type: string
+          maxLength: 255
+        chave:
+          description: Chave de idempotência opcional (16 a 64 caracteres A-Za-z0-9_-). A mesma chave devolve a gorjeta original sem nova cobrança.
+          type: string
+          minLength: 16
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]{16,64}$"
+
+    PostTipPurchase:
+      type: object
+      required: [id, compradorId, vendedorId, tipo, valor, comissao, criadoEm]
+      properties:
+        id:
+          type: integer
+        compradorId:
+          type: integer
+        vendedorId:
+          type: integer
+        tipo:
+          type: string
+        valor:
+          type: string
+        comissao:
+          type: string
+        taxaComissao:
+          type: ["string", "null"]
+        conteudoId:
+          type: ["integer", "null"]
+        descricao:
+          type: ["string", "null"]
+        criadoEm:
+          type: string
+          format: date-time
+
+    PostTipResponse:
+      type: object
+      required: [purchase]
+      properties:
+        purchase:
+          $ref: "#/components/schemas/PostTipPurchase"
+
+    LiveTip:
+      type: object
+      required: [id, streamId, remetenteId, valor, criadoEm]
+      properties:
+        id:
+          type: integer
+        streamId:
+          type: integer
+        remetenteId:
+          type: integer
+        valor:
+          type: integer
+        mensagem:
+          type: ["string", "null"]
+        criadoEm:
+          type: string
+          format: date-time
+
+    LiveTipResponse:
+      type: object
+      required: [tip]
+      properties:
+        tip:
+          $ref: "#/components/schemas/LiveTip"
+
+    TipKeyConflict:
+      type: object
+      required: [error, codigo]
+      properties:
+        error:
+          type: string
+        codigo:
+          type: string
+          enum: [chave_reutilizada]
 
     GorjetaMensagemInput:
       type: object

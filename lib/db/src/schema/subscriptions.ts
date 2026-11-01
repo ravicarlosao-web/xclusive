@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, pgEnum, index, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 
@@ -55,9 +55,15 @@ export const purchasesTable = pgTable("purchases", {
   conteudoId: integer("conteudo_id"),
   descricao: text("descricao"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  /** Chave de idempotência (opcional) das gorjetas de posts e de lives: a mesma (comprador, chave) devolve a compra original. NULL nas restantes. */
+  chaveIdempotencia: varchar("chave_idempotencia", { length: 64 }),
+  /** SHA-256 do pedido que gravou a chave (tipo da gorjeta, alvo, valor, mensagem): a mesma chave com outro pedido é um conflito (409). */
+  pedidoHash: varchar("pedido_hash", { length: 64 }),
 }, (t) => [
   // Suporta GET /users/:username/gorjetas com ORDER BY criado_em DESC e LIMIT/OFFSET
   index("purchases_vendedor_tipo_criado_em_idx").on(t.vendedorId, t.tipo, t.criadoEm),
+  // A chave é do comprador: a mesma chave em contas diferentes é permitida
+  uniqueIndex("purchases_comprador_chave_uq").on(t.compradorId, t.chaveIdempotencia).where(sql`${t.chaveIdempotencia} IS NOT NULL`),
 ]);
 
 
