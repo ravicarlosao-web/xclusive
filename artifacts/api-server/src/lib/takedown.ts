@@ -6,7 +6,7 @@ import {
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
 import { suspenderConta, desligarSocketsDepois } from "./suspensao";
-import { temMenorAberta } from "./provaProtegida";
+import { temMenorAberta, temMenorProcedente } from "./provaProtegida";
 import { enquetePara, type AlvoEnquete } from "./enquetes";
 
 /**
@@ -136,6 +136,10 @@ export async function restaurarAlvo(tx: Tx, type: TargetType, id: number): Promi
   // Com uma denúncia de menor por decidir, o conteúdo não volta a ficar visível.
   if (await temMenorAberta(tx, type, id)) {
     throw new TakedownError("Há uma denúncia de menor por decidir sobre este conteúdo: não pode ser reposto enquanto a denúncia não estiver decidida e arquivada.", 409);
+  }
+  // Com uma denúncia de menor julgada PROCEDENTE o conteúdo nunca volta a ser reposto (sem exceção, nem para o admin).
+  if (await temMenorProcedente(tx, type, id)) {
+    throw new TakedownError("Há uma denúncia de menor julgada procedente sobre este conteúdo: não pode ser reposto.", 409);
   }
   const limpa = { retiradoEm: null, retiradoMotivo: null, retiradoPor: null };
   switch (type) {

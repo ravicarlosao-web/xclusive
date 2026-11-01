@@ -76,6 +76,14 @@ export async function temMenorAberta(q: Q, tipo: TipoProtegido, id: number): Pro
   return r.length > 0;
 }
 
+/** Há alguma denúncia 'menor' julgada PROCEDENTE sobre o alvo? (bloqueia a reposição, sem exceção). */
+export async function temMenorProcedente(q: Q, tipo: TipoProtegido, id: number): Promise<boolean> {
+  const r = await q.select({ id: reportsTable.id }).from(reportsTable)
+    .where(and(eq(reportsTable.targetType, tipo), eq(reportsTable.targetId, id), eq(reportsTable.reason, "menor"), eq(reportsTable.status, "procedente")))
+    .limit(1);
+  return r.length > 0;
+}
+
 function avaliar(retirado: boolean, reports: { reason: string; status: string }[], ator: Ator): MotivoBloqueio | null {
   if (retirado) return "retirado";
   if (reports.some((r) => r.reason === "menor" && r.status === "procedente")) return "menor_procedente";
