@@ -44,7 +44,8 @@ export default function Settings() {
   const [nomeExibicao, setNomeExibicao] = useState(user?.nomeExibicao || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [link, setLink] = useState(user?.link || '');
-  const [privado, setPrivado] = useState(user?.privado || false);
+  // «Conta privada» deixou de ser editável (a regra só protege parte do conteúdo); o valor atual continua a ser reenviado para não alterar contas existentes.
+  const [privado] = useState(user?.privado || false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -203,14 +204,6 @@ export default function Settings() {
             <h2 className="text-xl font-bold mb-6">Privacidade da Conta</h2>
             
             <div className="space-y-6">
-              <div className="flex items-center justify-between p-4 border border-border rounded-xl">
-                <div className="space-y-0.5">
-                  <Label className="text-base font-bold">Conta Privada</Label>
-                  <p className="text-sm text-muted-foreground">Apenas as pessoas que aprovares podem ver as tuas fotos e vídeos.</p>
-                </div>
-                <Switch checked={privado} onCheckedChange={setPrivado} />
-              </div>
-
               <div className="flex items-center justify-between p-4 border border-border rounded-xl">
                 <div className="space-y-0.5">
                   <Label className="text-base font-bold">Estado de Atividade</Label>
