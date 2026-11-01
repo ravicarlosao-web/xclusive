@@ -1,3 +1,4 @@
+import { linkSeguro, LINK_PERFIL_MAX } from "../lib/linkSeguro";
 import { Router } from "express";
 import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, likesTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray, desc } from "drizzle-orm";
@@ -21,7 +22,8 @@ import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos
 const updateProfileSchema = z.object({
   nomeExibicao: z.string().min(1).max(100).optional(),
   bio: z.string().max(500).optional(),
-  link: z.union([z.url().max(500), z.literal("")]).optional(),
+  // Só http:// e https:// (nunca javascript:, data:, file:…); sem diferenciar maiúsculas
+  link: z.union([z.url({ protocol: /^https?$/ }).max(LINK_PERFIL_MAX), z.literal("")]).optional(),
   avatarUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
   capaUrl: z.union([z.url().max(1000), z.literal("")]).optional(),
   // tipoConta é intencionalmente excluído — a mudança pessoal→criador requer KYC
@@ -297,7 +299,7 @@ router.patch("/users/me", requireAuth, validate(updateProfileSchema), async (req
     bio: user.bio,
     avatarUrl: urlMedia(user.avatarUrl),
     capaUrl: urlMedia(user.capaUrl),
-    link: user.link,
+    link: linkSeguro(user.link),
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,
@@ -639,7 +641,7 @@ router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promi
     bio: user.bio,
     avatarUrl: urlMedia(user.avatarUrl),
     capaUrl: urlMedia(user.capaUrl),
-    link: user.link,
+    link: linkSeguro(user.link),
     tipoConta: user.tipoConta,
     verificado: user.verificado,
     privado: user.privado,

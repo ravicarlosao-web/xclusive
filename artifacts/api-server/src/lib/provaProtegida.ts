@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db, postsTable, storiesTable, commentsTable, liveStreamsTable, postMediaTable, likesTable, messagesTable,
-  reportsTable, auditLogTable,
+  reportsTable, auditLogTable, usersTable, highlightsTable,
 } from "@workspace/db";
 import { deleteFile, deletePrivate, getStorageKeyFromPublicUrl, isPaidKey } from "./storage";
 import { erroSeguro } from "./erroSeguro";
@@ -143,16 +143,41 @@ async function executar<T>(userId: number, ator: Ator, tipo: string, id: number,
   }
 }
 
-/** Apaga os ficheiros no Bunny DEPOIS do commit (melhor esforço). Falhas: só contagens em log e uma linha de audit. */
-async function apagarFicheirosDepoisDoCommit(urls: string[], userId: number, postId: number): Promise<void> {
-  let falhas = 0;
+/**
+ * O ficheiro (chave no armazenamento) ainda é usado por outro conteúdo? Procura a chave em post_media, avatar e capa de utilizadores,
+ * stories, mensagens e capas de destaques. Em caso de dúvida (erro na consulta) devolve true: mais vale não apagar. Corre DEPOIS de o post
+ * ter sido eliminado, por isso as linhas encontradas são sempre de OUTROS conteúdos.
+ */
+async function ficheiroEmUso(key: string): Promise<boolean> {
+  try {
+    const r = await db.execute(sql`
+      select 1 where exists (select 1 from ${postMediaTable} where strpos(url, ${key}) > 0)
+        or exists (select 1 from ${usersTable} where strpos(coalesce(avatar_url, ''), ${key}) > 0 or strpos(coalesce(capa_url, ''), ${key}) > 0)
+        or exists (select 1 from ${storiesTable} where strpos(media_url, ${key}) > 0)
+        or exists (select 1 from ${messagesTable} where strpos(coalesce(media_url, ''), ${key}) > 0)
+        or exists (select 1 from ${highlightsTable} where strpos(coalesce(capa_url, ''), ${key}) > 0)`);
+    return r.rows.length > 0;
+  } catch (err) { void err; return true; }
+}
+
+/**
+ * Apaga os ficheiros no Bunny DEPOIS do commit (melhor esforço). SÓ apaga chaves do AUTOR DO POST (users/<autor>/… ou paid/<autor>/…, nunca do
+ * ator que apagou, que pode ser um admin) e SÓ se nenhum outro conteúdo usar o mesmo ficheiro. O resto fica no armazenamento.
+ * Falhas: só contagens em log e uma linha de audit.
+ */
+async function apagarFicheirosDepoisDoCommit(urls: string[], userId: number, postId: number, autorId: number): Promise<void> {
+  let falhas = 0, preservados = 0;
   for (const url of urls) {
     try {
-      if (isPaidKey(url)) { await deletePrivate(url); continue; }
-      const key = getStorageKeyFromPublicUrl(url);
-      if (key) await deleteFile(key);
+      const privado = isPaidKey(url);
+      const key = privado ? url : getStorageKeyFromPublicUrl(url);
+      if (!key) continue;
+      if (!key.startsWith(`${privado ? "paid" : "users"}/${autorId}/`) || key.includes("..")) { preservados++; continue; }   // ficheiro de outro utilizador: nunca se apaga
+      if (await ficheiroEmUso(key)) { preservados++; continue; }                                                           // ainda usado por outro conteúdo
+      if (privado) await deletePrivate(url); else await deleteFile(key);
     } catch (err) { falhas++; void err; }
   }
+  if (preservados > 0) logger.info({ preservados, total: urls.length }, "Eliminação de ficheiros após o commit: ficheiros preservados (de outro utilizador ou em uso)");
   if (falhas > 0) {
     logger.warn({ falhas, total: urls.length }, "Eliminação de ficheiros após o commit: falhas (melhor esforço)");
     try {
@@ -166,9 +191,11 @@ async function apagarFicheirosDepoisDoCommit(urls: string[], userId: number, pos
  * Transação única: bloqueio da linha, regras, audit_log e remoção. Ficheiros só depois do commit.
  */
 export async function eliminarPost(o: { postId: number; userId: number; ator: Ator; motivo?: string; ip: string | null }): Promise<{ ficheiros: number }> {
+  let autorDoPost = o.userId;
   const urls = await executar(o.userId, o.ator, "post", o.postId, o.ip, () => db.transaction(async (tx) => {
     const [post] = await tx.select().from(postsTable).where(eq(postsTable.id, o.postId)).for("update");
     if (!post) throw new EliminacaoErro("Post não encontrado", 404);
+    autorDoPost = post.autorId;
     if (o.ator === "autor" && post.autorId !== o.userId) throw new EliminacaoErro("Sem permissão", 403);
     const bloqueio = await motivoDeBloqueio(tx, "post", o.postId, o.ator);
     if (bloqueio) throw new EliminacaoBloqueadaError(bloqueio, o.ator);
@@ -185,7 +212,7 @@ export async function eliminarPost(o: { postId: number; userId: number; ator: At
     await tx.delete(postsTable).where(eq(postsTable.id, o.postId));
     return media.map((m) => m.url);
   }));
-  await apagarFicheirosDepoisDoCommit(urls, o.userId, o.postId);
+  await apagarFicheirosDepoisDoCommit(urls, o.userId, o.postId, autorDoPost);
   return { ficheiros: urls.length };
 }
 
