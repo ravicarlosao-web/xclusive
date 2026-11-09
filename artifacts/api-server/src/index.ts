@@ -10,6 +10,7 @@ import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 import { startReportEscalationJob } from "./lib/reportEscalation";
+import { garantirAmbienteArranque } from "./lib/ambienteArranque";
 
 // Falhas não tratadas: regista (o hook do logger redige erros de BD: sem query nem parâmetros) e TERMINA com
 // código 1 após um pequeno atraso para o log sair; o PM2 reinicia. Nunca engole o erro e continua.
@@ -35,6 +36,9 @@ if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = "production";
   logger.warn("NODE_ENV não definido — a assumir 'production'. Define NODE_ENV=development só em desenvolvimento local.");
 }
+
+// Em produção, sem as variáveis obrigatórias (ex.: BAN_HASH_PEPPER) a API não arranca (sai com código 1).
+garantirAmbienteArranque();
 
 const rawPort = process.env["PORT"] || "8080";
 const port = Number(rawPort);
