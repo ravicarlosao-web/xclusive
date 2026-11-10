@@ -10,6 +10,7 @@ import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 import { startReportEscalationJob } from "./lib/reportEscalation";
+import { avisarConfigEmail } from "./lib/email";
 import { garantirAmbienteArranque } from "./lib/ambienteArranque";
 
 // Falhas não tratadas: regista (o hook do logger redige erros de BD: sem query nem parâmetros) e TERMINA com
@@ -39,6 +40,8 @@ if (!process.env.NODE_ENV) {
 
 // Em produção, sem as variáveis obrigatórias (ex.: BAN_HASH_PEPPER) a API não arranca (sai com código 1).
 garantirAmbienteArranque();
+// Email: só avisa (nunca falha) se EMAIL_TRANSPORTE=smtp e faltar configuração; lista NOMES de variáveis, nunca valores.
+avisarConfigEmail();
 
 const rawPort = process.env["PORT"] || "8080";
 const port = Number(rawPort);

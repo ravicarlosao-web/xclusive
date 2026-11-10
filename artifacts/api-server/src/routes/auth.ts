@@ -19,6 +19,7 @@ import { getMinWithdrawal } from "./wallet";
 import { erroSeguro } from "../lib/erroSeguro";
 import { MSG_CONTA_BANIDA, identificadorBloqueado } from "../lib/banimento";
 import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from "../lib/encerramento";
+import { emailLegal } from "../lib/contactos";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -144,7 +145,7 @@ router.get("/auth/legal-config", async (req, res): Promise<void> => {
       empresaNome: lerEnvOpcional("LEGAL_EMPRESA_NOME") ?? "ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS",
       empresaNif: lerEnvOpcional("LEGAL_EMPRESA_NIF"),
       empresaSede: lerEnvOpcional("LEGAL_EMPRESA_SEDE"),
-      emailLegal: lerEnvOpcional("LEGAL_EMAIL") ?? "legal@xclusive.ao",
+      emailLegal: emailLegal(),
       minimoLevantamento,
       prazoLevantamentoMin: PRAZO_LEVANTAMENTO_MIN_DIAS,
       prazoLevantamentoMax: PRAZO_LEVANTAMENTO_MAX_DIAS,
