@@ -62,6 +62,7 @@ import { emailLegal } from "../lib/encerramento.js";
 import { casoAtivoDaConta } from "../lib/menores.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
 import { idDe, paginacaoDe, MSG_PAGINACAO_INVALIDA } from "../lib/params.js";
+import { enviarEmail, lerConfigEmail, type MotivoFalha } from "../lib/email.js";
 import { suspenderConta, desligarSockets, MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
@@ -2313,6 +2314,43 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
 // ────────────────────────────────────────────────────────────────────────────
 // BROADCAST
 // ────────────────────────────────────────────────────────────────────────────
+
+// ── Envio de teste de email: SÓ superadmin, SÓ para o email do próprio superadmin autenticado (o corpo do pedido é ignorado) ──
+const emailTesteCounts = new Map<number, { count: number; resetAt: number }>();
+const MSG_EMAIL_TESTE: Record<MotivoFalha, string> = {
+  desligado: "O envio de email está desligado (EMAIL_TRANSPORTE não é «smtp»).",
+  configuracao_incompleta: "A configuração de email está incompleta (vê o aviso no arranque da API: só lista nomes de variáveis).",
+  autenticacao: "O servidor de email recusou as credenciais.",
+  ligacao: "Não foi possível ligar ao servidor de email.",
+  rejeitado: "O servidor de email rejeitou a mensagem.",
+  mensagem_invalida: "Mensagem inválida.",
+  erro: "Não foi possível enviar o email.",
+};
+router.post("/admin/email/teste", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") return void res.status(403).json({ error: "Apenas o superadmin pode enviar o email de teste." });
+  // Limite por admin: 3 pedidos em 15 minutos (conta as tentativas, não só os sucessos).
+  const agora = Date.now(), e = emailTesteCounts.get(req.adminId!);
+  if (!e || e.resetAt < agora) emailTesteCounts.set(req.adminId!, { count: 1, resetAt: agora + 15 * 60_000 });
+  else if (++e.count > 3) return void res.status(429).json({ error: "Demasiados envios de teste. Tenta novamente em 15 minutos." });
+  try {
+    const [eu] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, req.adminId!)).limit(1);
+    if (!eu) return void res.status(404).json({ error: "Conta não encontrada." });
+    // Registo ANTES de enviar (se falhar, nada é enviado). Sem o endereço nem qualquer valor de configuração.
+    await db.transaction(async (tx) => {
+      await auditNaTransacao(tx, req, "email_teste_enviado", "user", req.adminId!, { transporte: lerConfigEmail().transporte, destino: "o próprio superadmin" });
+    });
+    const r = await enviarEmail({
+      para: eu.email,
+      assunto: "Teste de envio — Xclusive",
+      texto: "Este é um email de teste enviado pelo painel da Xclusive.\n\nSe o recebeste, o envio de email está configurado. Não precisas de responder.",
+    });
+    if (r.ok) return void res.json({ enviado: true });
+    res.status(503).json({ enviado: false, motivo: r.motivo, mensagem: MSG_EMAIL_TESTE[r.motivo] });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro no envio de teste de email");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
 
 router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode enviar difusões a todos os utilizadores." }); return; }

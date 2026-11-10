@@ -9,7 +9,7 @@ import { enviarEMarcarAlerta, textoAlerta } from "../lib/alertaExterno";
 import { bloquearAlvo } from "../lib/provaProtegida";
 import { jsonCanonico, sha256Hex } from "../lib/hashCanonico";
 import {
-  TARGET_TYPES_GENERICOS, REPORT_REASONS, TARGET_LABEL, REPORTS_CONTACT_EMAIL,
+  TARGET_TYPES_GENERICOS, REPORT_REASONS, TARGET_LABEL, emailDenuncias,
   lerAlvo, retirarAlvo, notificarSistema, notificarAdmins, TakedownError, type TargetType,
 } from "../lib/takedown";
 
@@ -233,7 +233,7 @@ router.post("/reports/public", limitePublico, validate(publicSchema), async (req
 });
 
 router.get("/reports/contact", (_req, res): void => {
-  res.json({ email: REPORTS_CONTACT_EMAIL });
+  res.json({ email: emailDenuncias() });
 });
 
 export default router;

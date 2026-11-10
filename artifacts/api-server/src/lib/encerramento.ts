@@ -24,7 +24,8 @@ export const JANELA_DIAS = 30;
 const DIA_MS = 24 * 60 * 60 * 1000;
 export const apagarApos = (encerradaEm: Date): Date => new Date(encerradaEm.getTime() + JANELA_DIAS * DIA_MS);
 
-export const emailLegal = (): string => process.env.LEGAL_EMAIL?.trim() || "legal@xclusive.ao";
+export { emailLegal } from "./contactos";   // um só sítio para o email legal por defeito (ver lib/contactos.ts)
+import { emailLegal } from "./contactos";
 
 export const MSG_ENCERRADA_JANELA = () => `A tua conta foi encerrada a teu pedido. Se mudaste de ideias, contacta ${emailLegal()} nos primeiros ${JANELA_DIAS} dias.`;
 export const MSG_ENCERRADA_DEFINITIVA = "Esta conta foi encerrada e já não pode ser reaberta.";
