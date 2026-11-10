@@ -61,6 +61,7 @@ import { banirConta, BanimentoErro, MSG_CONTA_BANIDA } from "../lib/banimento.js
 import { emailLegal } from "../lib/encerramento.js";
 import { casoAtivoDaConta } from "../lib/menores.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
+import { idDe, paginacaoDe, MSG_PAGINACAO_INVALIDA } from "../lib/params.js";
 import { suspenderConta, desligarSockets, MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
@@ -499,8 +500,8 @@ function formatAuditMessage(action: string, admin: string, targetType: string | 
 router.get("/admin/users", async (req, res) => {
   try {
     const { page = "1", limit = "10", role, estado, search } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     const conditions: any[] = [];
@@ -666,7 +667,7 @@ router.get("/admin/users/commission-overview", requireAdmin, async (req: AdminRe
 
 router.get("/admin/users/:id", async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     // Vista individual com dados pessoais (email): o acesso fica no audit_log NA MESMA transação; se o registo falhar, nada é devolvido.
     const user = await db.transaction(async (tx) => {
       const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
@@ -708,7 +709,7 @@ router.get("/admin/users/:id", async (req: AdminRequest, res): Promise<void> => 
 
 router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
@@ -744,7 +745,7 @@ router.patch("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): P
 
 router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
@@ -806,7 +807,7 @@ router.patch("/admin/users/:id/status", requireAdmin, async (req: AdminRequest, 
 
 router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
@@ -844,7 +845,7 @@ router.patch("/admin/users/:id/role", requireAdmin, async (req: AdminRequest, re
 
 router.delete("/admin/users/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!user) return void res.status(404).json({ error: "Utilizador não encontrado" });
 
@@ -924,8 +925,8 @@ router.post("/admin/users/:id/reabrir", requireAdmin, async (req: AdminRequest, 
 router.get("/admin/creators", async (req, res) => {
   try {
     const { page = "1", limit = "10", search } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     const conditions: any[] = [eq(usersTable.tipoConta, "criador")];
@@ -1099,6 +1100,8 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
       const [atual] = await tx.select().from(usersTable)
         .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).for("update").limit(1);
       if (!atual) throw new KycConflito("Criador não encontrado", 404);
+      // Conta banida ou encerrada: a verificação não se decide (antes, aprovar dava 200 e deixava a conta verificada). Suspensa mantém-se.
+      if (atual.banidaEm || atual.encerradaEm) throw new KycConflito("Conta banida ou encerrada: a verificação não pode ser decidida.", 409);
       const [submission] = await tx.select({ id: kycSubmissionsTable.id })
         .from(kycSubmissionsTable)
         .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
@@ -1187,7 +1190,7 @@ router.post("/admin/creators/:id/revogar", requireAdmin, async (req: AdminReques
 
 router.get("/admin/creators/:id/plans", async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = idDe(req.params.id); if (id === null) return void res.status(400).json({ error: "ID inválido." });
     const plans = await db.select().from(subscriptionPlansTable)
       .where(eq(subscriptionPlansTable.criadorId, id))
       .orderBy(asc(subscriptionPlansTable.preco));
@@ -1222,7 +1225,7 @@ router.get("/admin/creators/:id/plans", async (req, res) => {
 
 router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const planId = Number(req.params.planId);
+    const planId = idDe(req.params.planId); if (planId === null) return void res.status(400).json({ error: "ID inválido." });
     const [plan] = await db.select().from(subscriptionPlansTable)
       .where(eq(subscriptionPlansTable.id, planId)).limit(1);
     if (!plan) return void res.status(404).json({ error: "Plano não encontrado" });
@@ -1249,9 +1252,14 @@ router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: Admi
 
 router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
-    const id = Number(req.params.id);
-    const { valor, motivo } = req.body;
-    const valorNum = Number(valor);
+    const id = idDe(req.params.id);
+    if (id === null) return void res.status(400).json({ error: "ID inválido." });
+    const { valor, motivo } = req.body ?? {};
+    // Só número: diferente de 0, no máximo 1 000 000 000 em módulo e com no máximo 2 decimais (texto, null, «» e 0 são recusados).
+    if (typeof valor !== "number" || !Number.isFinite(valor) || valor === 0 || Math.abs(valor) > 1_000_000_000 || Math.abs(valor * 100 - Math.round(valor * 100)) > 1e-6) {
+      return void res.status(400).json({ error: "Valor inválido." });
+    }
+    const valorCent = Math.round(valor * 100);
 
     // A linha do criador bloqueia-se (FOR UPDATE) ANTES de ler o saldo e de calcular o novo valor: um débito/crédito concorrente
     // (gorjeta, compra, carregamento) espera pelo ajuste em vez de ser sobrescrito por um saldo calculado com um valor antigo.
@@ -1259,19 +1267,20 @@ router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: 
       const [user] = await tx.select().from(usersTable)
         .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1).for("update");
       if (!user) return { erro: 404 as const };
-      if (!Number.isFinite(valorNum)) return { erro: 400 as const };
 
       const saldoAnterior = Number(user.saldo);
-      const novoSaldo = saldoAnterior + valorNum;
-      await tx.update(usersTable).set({ saldo: String(novoSaldo) }).where(eq(usersTable.id, id));
+      const novoCent = Math.round(saldoAnterior * 100) + valorCent;
+      if (novoCent < 0) return { erro: 409 as const }; // débito acima do saldo: nada muda (a BD também o recusaria)
+      const novoSaldo = novoCent / 100;
+      await tx.update(usersTable).set({ saldo: novoSaldo.toFixed(2) }).where(eq(usersTable.id, id));
       // Audit na MESMA transação (com a linha do criador ainda bloqueada): se falhar, o ajuste desfaz-se.
       await auditNaTransacao(tx, req, "balance_adjustment", "user", id, {
-        before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor: valorNum, motivo: motivo ?? null,
+        before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor, motivo: motivo ?? null,
       });
       return { saldoAnterior, novoSaldo };
     });
     if ("erro" in r) {
-      return void (r.erro === 404 ? res.status(404).json({ error: "Criador não encontrado" }) : res.status(400).json({ error: "Valor inválido." }));
+      return void (r.erro === 404 ? res.status(404).json({ error: "Criador não encontrado" }) : res.status(409).json({ error: "Saldo insuficiente para este débito." }));
     }
     const { novoSaldo } = r;
     res.json({ success: true, novoSaldo });
@@ -1288,8 +1297,8 @@ router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: 
 router.get("/admin/posts", async (req, res) => {
   try {
     const { page = "1", limit = "10", search } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     const conditions: any[] = [];
@@ -1379,8 +1388,8 @@ const REPORT_TRANSITIONS: Record<ReportStatus, ReportStatus[]> = {
 router.get("/admin/reports", async (req, res) => {
   try {
     const { page = "1", limit = "10", targetType, status, reason, urgente } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     if (status && !REPORT_STATUSES.includes(status as ReportStatus)) {
@@ -1572,6 +1581,8 @@ router.patch("/admin/reports/:id", requireAdmin, async (req: AdminRequest, res):
       }
 
       if (acoes.retirar) {
+        // Alvo que já não existe: não há nada a retirar (antes respondia 200 e gravava acaoRetirou = true sem retirar nada).
+        if (!(await lerAlvo(tx, r.targetType as TargetType, r.targetId))) throw new TakedownError("O conteúdo denunciado já não existe: não há nada a retirar.", 409);
         const res1 = await retirarAlvo(tx, r.targetType as TargetType, r.targetId, req.adminId!, motivoRetirada);
         retirou = true;
         if (res1.mudou) {
@@ -1857,12 +1868,15 @@ router.get("/admin/finance/kpis", async (req, res) => {
 router.get("/admin/finance/transactions", async (req, res) => {
   try {
     const { page = "1", limit = "10", tipo } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     const conditions: any[] = [];
-    if (tipo) conditions.push(eq(purchasesTable.tipo, tipo as any));
+    if (tipo) {
+      if (!(purchasesTable.tipo.enumValues as readonly string[]).includes(tipo)) return void res.status(400).json({ error: "Tipo inválido." });
+      conditions.push(eq(purchasesTable.tipo, tipo as any));
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const compradorAlias = sql`pagador`;
@@ -1956,8 +1970,8 @@ class WithdrawalHttpError extends Error {
 router.get("/admin/withdrawals", async (req, res) => {
   try {
     const { page = "1", limit = "10", status } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     if (status && !WITHDRAWAL_STATUSES.includes(status as WithdrawalStatus)) {
@@ -2143,8 +2157,8 @@ router.patch("/admin/withdrawals/:id", requireAdmin, async (req: AdminRequest, r
 router.get("/admin/topups", async (req, res) => {
   try {
     const { page = "1", limit = "20", status } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+    const pageNum = pg.page, limitNum = pg.limit;
     const offset = (pageNum - 1) * limitNum;
 
     const estadosValidos = ["pendente", "aprovado", "rejeitado"];
@@ -2329,7 +2343,7 @@ router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Pr
         const notificationsData = targetUsers.map(user => ({
           destinatarioId: user.id,
           tipo: "sistema" as const,
-          atorId: req.adminId, // The admin is the sender
+          // Sem ator: a difusão não expõe a conta do admin aos utilizadores (id, username e nome).
           mensagem: mensagem.substring(0, 255), // safety limit
         }));
 
@@ -2534,8 +2548,8 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
 
 router.get("/admin/audit-log", async (req, res) => {
   const { page = "1", limit = "10", adminId, action } = req.query as Record<string, string>;
-  const pageNum = Math.max(1, Number(page));
-  const limitNum = Math.min(100, Math.max(1, Number(limit)));
+  const pg = paginacaoDe(page, limit, 100); if (!pg) return void res.status(400).json({ error: MSG_PAGINACAO_INVALIDA });
+  const pageNum = pg.page, limitNum = pg.limit;
   const offset = (pageNum - 1) * limitNum;
 
   try {

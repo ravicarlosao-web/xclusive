@@ -289,6 +289,8 @@ router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest,
     return;
   }
   const { tipo, conteudo, mediaUrl } = parsed.data;
+  // Mensagem de texto vazia (em falta, «» ou só espaços/quebras de linha): recusada. A imagem aceita legenda vazia.
+  if (tipo === "texto" && !(conteudo ?? "").trim()) { res.status(400).json({ error: "A mensagem não pode estar vazia." }); return; }
 
   // Imagem: exige mediaUrl; qualquer outro tipo não aceita mediaUrl.
   let mediaGuardada: string | null = null;

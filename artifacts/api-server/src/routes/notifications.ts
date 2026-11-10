@@ -24,7 +24,8 @@ router.get("/notifications", requireAuth, async (req: AuthRequest, res): Promise
     notifications: notifs.map(({ n, ator }) => ({
       id: n.id,
       tipo: n.tipo,
-      ator: ator ? {
+      // Contas de administração nunca aparecem como ator (as notificações antigas de difusão ainda trazem o admin gravado).
+      ator: ator && ator.role !== "admin" && ator.role !== "superadmin" ? {
         id: ator.id, username: ator.username, nomeExibicao: ator.nomeExibicao,
         avatarUrl: urlMedia(ator.avatarUrl), verificado: ator.verificado, tipoConta: ator.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
