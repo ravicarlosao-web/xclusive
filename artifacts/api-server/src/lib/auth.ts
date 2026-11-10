@@ -25,13 +25,13 @@ export interface JwtPayload {
 
 /** Access token — curta duração (15 min). */
 export function signAccessToken(payload: Omit<JwtPayload, "jti" | "type">): string {
-  return jwt.sign({ ...payload, type: "access", jti: randomUUID() }, SECRET, { expiresIn: "15m" });
+  return jwt.sign({ ...payload, type: "access", jti: randomUUID() }, SECRET, { expiresIn: "15m", algorithm: "HS256" });
 }
 
 /** Refresh token — longa duração (7 dias), armazenado em httpOnly cookie. */
 export function signRefreshToken(userId: number, username: string, role?: string): { token: string; jti: string } {
   const jti = randomUUID();
-  const token = jwt.sign({ userId, username, role, type: "refresh", jti }, SECRET, { expiresIn: "7d" });
+  const token = jwt.sign({ userId, username, role, type: "refresh", jti }, SECRET, { expiresIn: "7d", algorithm: "HS256" });
   return { token, jti };
 }
 
@@ -39,8 +39,12 @@ export function signRefreshToken(userId: number, username: string, role?: string
 export const signToken = signAccessToken;
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, SECRET) as JwtPayload;
+  // Algoritmo fixado: HS384/HS512 (mesmo segredo) e "none" são recusados.
+  return jwt.verify(token, SECRET, { algorithms: ["HS256"] }) as JwtPayload;
 }
+
+/** Hash bcrypt (custo 12) de uma palavra-passe inventada: usado para igualar o tempo de resposta quando a conta não existe. */
+export const DUMMY_HASH = "$2b$12$/ZJ.yK89Rrk.o8mE3hNdj.Xq6JLrZ3xhuGFRfKCcK/qpAtFVqD1CO";
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);

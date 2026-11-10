@@ -39,7 +39,7 @@ async function adminFetchMsg(path: string, options?: RequestInit) {
 
 export const adminApi = {
   login: (email: string, password: string) =>
-    adminFetch('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    adminFetchMsg('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
   getDashboardKpis: () => adminFetch('/admin/dashboard/kpis'),
   getDashboardCharts: () => adminFetch('/admin/dashboard/charts'),

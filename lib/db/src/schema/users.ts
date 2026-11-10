@@ -70,6 +70,10 @@ export const usersTable = pgTable("users", {
   quemPodeEscrever: varchar("quem_pode_escrever", { length: 24 }).notNull().default("todos"),
 }, (table) => [
   check("users_quem_pode_escrever_chk", sql`${table.quemPodeEscrever} IN ('todos', 'seguidores_assinantes', 'assinantes')`),
+  // Email único sem distinguir maiúsculas de minúsculas (o registo guarda-o em minúsculas; isto protege contra corridas e contas antigas).
+  uniqueIndex("users_email_lower_uq").on(sql`lower(${table.email})`),
+  // Username sempre em minúsculas (o registo já o guarda assim). Migração separada: só se aplica com 0 violações.
+  check("users_username_minusculas_chk", sql`${table.username} = lower(${table.username})`),
   check("users_banida_inativa_chk", sql`${table.banidaEm} IS NULL OR ${table.ativo} = false`),
   check("users_encerrada_inativa_chk", sql`${table.encerradaEm} IS NULL OR ${table.ativo} = false`),
   check("users_saldo_nao_negativo", sql`${table.saldo} >= 0`),

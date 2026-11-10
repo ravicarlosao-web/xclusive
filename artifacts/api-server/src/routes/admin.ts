@@ -11,7 +11,7 @@
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
-import { signToken } from "../lib/auth.js";
+import { signToken, DUMMY_HASH } from "../lib/auth.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
   db,
@@ -56,12 +56,12 @@ import {
   TARGET_TYPES, TARGET_LABEL, alvoSuportado, rotuloAlvo, lerAlvo, retirarAlvo, restaurarAlvo, notificarSistema, TakedownError, type TargetType,
 } from "../lib/takedown.js";
 import { eliminarPost, responderErroEliminacao } from "../lib/provaProtegida.js";
-import { reabrirConta, EncerramentoErro } from "../lib/encerramento.js";
-import { banirConta, BanimentoErro } from "../lib/banimento.js";
+import { reabrirConta, EncerramentoErro, mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA } from "../lib/encerramento.js";
+import { banirConta, BanimentoErro, MSG_CONTA_BANIDA } from "../lib/banimento.js";
 import { emailLegal } from "../lib/encerramento.js";
 import { casoAtivoDaConta } from "../lib/menores.js";
 import { erroSeguro } from "../lib/erroSeguro.js";
-import { suspenderConta, desligarSockets } from "../lib/suspensao.js";
+import { suspenderConta, desligarSockets, MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
 import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
@@ -222,19 +222,31 @@ router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> =
     res.status(400).json({ error: "Email e password são obrigatórios" });
     return;
   }
+  // lower(users.email) = email recebido em minúsculas: funciona com emails guardados com maiúsculas (nunca bloqueia uma conta existente).
+  const emailN = String(email).trim().toLowerCase();
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.email, email))
+    .where(sql`lower(${usersTable.email}) = ${emailN}`)
+    .orderBy(usersTable.id)
     .limit(1);
 
   if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
+    // Conta inexistente ou sem papel de admin: corre o bcrypt na mesma (custo igual) para o tempo não revelar que o email existe.
+    await bcrypt.compare(String(password), DUMMY_HASH);
     res.status(401).json({ error: "Credenciais inválidas" });
     return;
   }
-  const passwordOk = await bcrypt.compare(password, user.passwordHash);
+  const passwordOk = await bcrypt.compare(String(password), user.passwordHash);
   if (!passwordOk) {
     res.status(401).json({ error: "Credenciais inválidas" });
+    return;
+  }
+  // Conta suspensa, encerrada ou banida: SÓ depois de a palavra-passe estar certa, e SEM token (mesmas mensagens do login normal).
+  if (!user.ativo) {
+    if (user.banidaEm) { res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA }); return; }
+    if (user.encerradaEm) { res.status(403).json({ error: await mensagemContaEncerrada(db, user.id), codigo: CODIGO_CONTA_ENCERRADA }); return; }
+    res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
     return;
   }
   const token = signToken({ userId: user.id, username: user.username, role: user.role });
