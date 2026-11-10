@@ -16,6 +16,8 @@ import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
 import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
 import { AlterarPassword } from '@/components/settings/AlterarPassword';
+import { VerificarEmail } from '@/components/settings/VerificarEmail';
+import { useEmailVerificado } from '@/hooks/useEmailVerificado';
 import { QuemPodeEscrever, ContasBloqueadas } from '@/components/mensagens/PrivacidadeMensagens';
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
@@ -28,6 +30,17 @@ const SECCOES = [
   { id: 'subscricoes', rotulo: 'Subscrições', Icone: Star, testid: 'tab-subscricoes' },
   { id: 'security', rotulo: 'Segurança', Icone: Shield, testid: undefined },
 ] as const;
+
+/** Bloco «Email» do separador Segurança: estado da verificação e botão de envio. */
+function BlocoEmail() {
+  const { estado, recarregar } = useEmailVerificado();
+  return (
+    <section className="border border-border rounded-xl p-4 space-y-3" aria-label="Verificação de email" data-testid="bloco-email">
+      <h3 className="font-bold">Email</h3>
+      <VerificarEmail estado={estado} aoAtualizar={() => { void recarregar(); }} aoVerificarOutraVez={() => { void recarregar(); }} />
+    </section>
+  );
+}
 
 export default function Settings() {
   const { user, logout, isMockMode, updateAvatarUrl } = useAuth();
@@ -279,6 +292,7 @@ export default function Settings() {
             <h2 className="text-xl font-bold mb-6">Segurança</h2>
             
             <div className="space-y-4">
+              <BlocoEmail />
               <AlterarPassword />
               <Button variant="outline" className="w-full justify-start text-left h-12">
                 Autenticação de Dois Fatores (2FA)

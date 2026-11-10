@@ -22,8 +22,8 @@ import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from 
 import { emailLegal } from "../lib/contactos";
 import { logger } from "../lib/logger";
 import { enviarEmail, lerConfigEmail, urlPublico } from "../lib/email";
-import { emailRecuperacao, emailPasswordAlterada } from "../lib/emailsConta";
-import { criarTokenRecuperacao, consumirTokenRecuperacao, invalidarTokensRecuperacao, pedidosNaUltimaHora, tokenComFormato, MAX_EMAILS_POR_ENDERECO_HORA } from "../lib/tokensEmail";
+import { emailRecuperacao, emailPasswordAlterada, emailVerificacao } from "../lib/emailsConta";
+import { criarTokenRecuperacao, consumirTokenRecuperacao, invalidarTokensRecuperacao, pedidosNaUltimaHora, tokenComFormato, MAX_EMAILS_POR_ENDERECO_HORA, criarTokenVerificacao, consumirTokenVerificacao, verificacoesNaUltimaHora, segundosAteReenvio, descartarToken } from "../lib/tokensEmail";
 import { terminarSessoesDaConta } from "../lib/sessoesConta";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
@@ -454,6 +454,71 @@ router.post("/auth/redefinir-password", validate(redefinirSchema), async (req, r
   }
 });
 
+// ── Verificação de email (exigida para pedir para ser criador) ───────────────────────────────────────────────
+// O endereço vem SEMPRE da conta (nunca do pedido). Token de finalidade «verificar_email»: nunca serve para redefinir a palavra-passe.
+const confirmarEmailSchema = z.object({ token: z.string().min(1, "Ligação inválida").max(200) });
+const MSG_ENVIO_EMAIL_INDISPONIVEL = "O envio de email está temporariamente indisponível. Tenta daqui a pouco.";
+
+router.post("/auth/verificar-email/pedir", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  try {
+    const [u] = await db.select({ id: usersTable.id, email: usersTable.email, ativo: usersTable.ativo, emailVerificadoEm: usersTable.emailVerificadoEm }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+    if (!u || !u.ativo) { res.status(401).json({ error: "Não autenticado" }); return; }
+    if (u.emailVerificadoEm) { res.json({ jaVerificado: true }); return; }
+    const cfg = lerConfigEmail();
+    if (cfg.transporte !== "smtp" || cfg.faltam.length > 0 || !urlPublico("/verificar-email?token=x")) {
+      logger.warn({ motivo: cfg.transporte !== "smtp" ? "desligado" : "configuracao_incompleta" }, "Verificação de email: pedido recebido mas o envio de email não está disponível");
+      res.status(503).json({ error: MSG_ENVIO_EMAIL_INDISPONIVEL, codigo: "email_indisponivel" }); return;
+    }
+    // Máximo 3 por endereço por hora e intervalo mínimo entre reenvios, contados na BD (bloqueio por endereço para pedidos paralelos).
+    const emailN = u.email.toLowerCase();
+    const r = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"verificar:" + emailN}))`);
+      if ((await verificacoesNaUltimaHora(tx, u.email)) >= MAX_EMAILS_POR_ENDERECO_HORA) return { erro: "limite_hora" as const };
+      const espera = await segundosAteReenvio(tx, u.id);
+      if (espera > 0) return { erro: "demasiado_cedo" as const, espera };
+      return { token: await criarTokenVerificacao(tx, { userId: u.id, email: u.email, ip: (req.ip ?? "").slice(0, 45) }) };
+    });
+    if ("erro" in r) {
+      if (r.erro === "limite_hora") { res.status(429).json({ error: "Já enviámos vários emails para este endereço. Tenta novamente dentro de uma hora.", codigo: "limite_hora" }); return; }
+      res.setHeader("Retry-After", String(r.espera));
+      res.status(429).json({ error: `Aguarda ${r.espera} segundos antes de pedir outro email.`, codigo: "demasiado_cedo", esperarSegundos: r.espera }); return;
+    }
+    const ligacao = urlPublico(`/verificar-email?token=${r.token}`)!;
+    const m = emailVerificacao(ligacao);
+    const env = await enviarEmail({ para: u.email, assunto: m.assunto, texto: m.texto, html: m.html });
+    if (!env.ok) {
+      await descartarToken(db, r.token).catch(() => {});   // o email não saiu: não conta para os limites
+      logger.warn({ motivo: env.motivo }, "Verificação de email: o email não foi enviado");
+      res.status(503).json({ error: MSG_ENVIO_EMAIL_INDISPONIVEL, codigo: "email_indisponivel" }); return;
+    }
+    res.status(202).json({ mensagem: "Enviámos um email de verificação. Abre a ligação para confirmar." });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Verificar email (pedir): erro interno");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.post("/auth/verificar-email/confirmar", validate(confirmarEmailSchema), async (req, res): Promise<void> => {
+  const { token } = req.body as { token: string };
+  if (!tokenComFormato(token)) { res.status(400).json({ error: MSG_TOKEN_INVALIDO, codigo: "token_invalido" }); return; }
+  try {
+    const ok = await db.transaction(async (tx) => {
+      // Uso único e atómico; só vale se o endereço do token ainda é o email atual da conta.
+      const userId = await consumirTokenVerificacao(tx, token);
+      if (userId === null) return false;
+      const [u] = await tx.select({ id: usersTable.id, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, userId)).for("update").limit(1);
+      if (!u || !u.ativo) return false;
+      await tx.update(usersTable).set({ emailVerificadoEm: sql`coalesce(${usersTable.emailVerificadoEm}, now())` }).where(eq(usersTable.id, userId));
+      return true;
+    });
+    if (!ok) { res.status(400).json({ error: MSG_TOKEN_INVALIDO, codigo: "token_invalido" }); return; }
+    res.json({ ok: true });   // não inicia sessão
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Verificar email (confirmar): erro interno");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 router.post("/auth/alterar-password", requireAuth, validate(alterarSchema), async (req: AuthRequest, res): Promise<void> => {
   const { passwordAtual, novaPassword } = req.body as { passwordAtual: string; novaPassword: string };
   try {
@@ -669,6 +734,8 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     preferenciaMais18Em: user.preferenciaMais18Em?.toISOString?.() ?? null,
     // Quem pode escrever-me (só da própria conta)
     quemPodeEscrever: user.quemPodeEscrever ?? "todos",
+    // Email verificado (só da própria conta; o momento exato não se expõe)
+    emailVerificado: !!user.emailVerificadoEm,
     totalSeguidores,
     totalSeguindo,
     totalPublicacoes,

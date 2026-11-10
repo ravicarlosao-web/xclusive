@@ -20,6 +20,7 @@ import {
   getFreshAuthToken,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { AvisoVerificarEmail } from '@/components/settings/AvisoVerificarEmail';
 
 type Period = '7d' | '30d' | '1y';
 
@@ -212,6 +213,7 @@ export default function Monetization() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-6xl mx-auto p-4 sm:p-8 pb-24">
+      <AvisoVerificarEmail />
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Painel do Criador</h1>

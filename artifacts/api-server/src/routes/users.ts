@@ -397,13 +397,20 @@ router.post("/users/me/tornar-criador", requireAuth, validate(kycSubmissionSchem
   const userId = req.userId!;
 
   // Verificar se já é criador
-  const [current] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado })
+  const [current] = await db.select({ tipoConta: usersTable.tipoConta, verificado: usersTable.verificado, emailVerificadoEm: usersTable.emailVerificadoEm })
     .from(usersTable)
     .where(eq(usersTable.id, userId));
 
   if (!current) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
   if (current.tipoConta === "criador") {
     res.status(409).json({ error: "A conta já é do tipo criador." });
+    return;
+  }
+
+  // O email tem de estar verificado ANTES de qualquer upload ou registo (nada é criado). O bloqueio é aqui, no servidor.
+  // Falha fechado: sem email enviável ninguém chega a verificar, logo ninguém se torna criador. Criadores já existentes não passam por aqui.
+  if (!current.emailVerificadoEm) {
+    res.status(403).json({ error: "Verifica o teu email antes de te tornares criador.", codigo: "email_nao_verificado" });
     return;
   }
 

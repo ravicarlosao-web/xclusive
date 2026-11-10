@@ -136,6 +136,30 @@ const redefinirLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Verificação de email: pedir = 10 por IP e 5 por conta em 15 minutos (além dos 3/hora por endereço e do intervalo mínimo, na BD); confirmar = 20 por IP.
+const verificarEmailPedirIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Demasiados pedidos. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const verificarEmailPedirContaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Demasiados pedidos. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userIdKey,
+});
+const verificarEmailConfirmarLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Demasiadas tentativas. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -247,6 +271,8 @@ app.use("/api/auth/refresh", refreshLimiter);
 app.use("/api/auth/esqueci-password", esqueciLimiter);
 app.use("/api/auth/redefinir-password", redefinirLimiter);
 app.post("/api/auth/alterar-password", alterarPasswordLimiter);
+app.post("/api/auth/verificar-email/pedir", verificarEmailPedirIpLimiter, verificarEmailPedirContaLimiter);
+app.post("/api/auth/verificar-email/confirmar", verificarEmailConfirmarLimiter);
 // Os limitadores contam SÓ as ações sensíveis (método + caminho); as leituras e as restantes escritas
 // (likes, saves, comentários, PATCH /users/me) ficam sob o globalAuthLimiter.
 app.post(
