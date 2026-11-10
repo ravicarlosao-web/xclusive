@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
 import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
+import { AlterarPassword } from '@/components/settings/AlterarPassword';
 import { QuemPodeEscrever, ContasBloqueadas } from '@/components/mensagens/PrivacidadeMensagens';
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
@@ -278,9 +279,7 @@ export default function Settings() {
             <h2 className="text-xl font-bold mb-6">Segurança</h2>
             
             <div className="space-y-4">
-              <Button variant="outline" className="w-full justify-start text-left h-12">
-                Alterar Password
-              </Button>
+              <AlterarPassword />
               <Button variant="outline" className="w-full justify-start text-left h-12">
                 Autenticação de Dois Fatores (2FA)
               </Button>

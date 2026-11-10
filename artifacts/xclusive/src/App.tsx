@@ -26,6 +26,7 @@ import Onboarding from '@/pages/onboarding';
 import KYCPage from '@/pages/kyc';
 import Carteira from '@/pages/carteira';
 import EsquecestePassword from '@/pages/esqueceste-password';
+import RedefinirPassword from '@/pages/redefinir-password';
 import LivePage from '@/pages/live';
 import LivePublishTest from '@/pages/live-publish-test';
 import IrEmDireto from '@/pages/ir-em-direto';
@@ -146,6 +147,8 @@ function Router() {
       <Route path="/termos-criadoras" component={TermosCriadoras} />
       <Route path="/modelo-consentimento" component={ModeloConsentimento} />
       <Route path="/esqueceste-password">{() => <PublicOnlyRoute component={EsquecestePassword} path="/esqueceste-password" />}</Route>
+      {/* Redefinir com a ligação do email: aberta a todos (com ou sem sessão) */}
+      <Route path="/redefinir-password" component={RedefinirPassword} />
       
       {/* Protected Routes */}
       <Route path="/onboarding">{(params) => <ProtectedRoute component={Onboarding} path="/onboarding" />}</Route>

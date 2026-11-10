@@ -68,6 +68,8 @@ export const usersTable = pgTable("users", {
    * (qualquer outra conta conta como 'todos'). Ver lib/permissaoMensagem.ts.
    */
   quemPodeEscrever: varchar("quem_pode_escrever", { length: 24 }).notNull().default("todos"),
+  /** Última alteração da palavra-passe: qualquer token (acesso ou refresh) emitido nesse segundo ou antes deixa de valer. NULL = nunca alterada. */
+  passwordAlteradaEm: timestamp("password_alterada_em"),
 }, (table) => [
   check("users_quem_pode_escrever_chk", sql`${table.quemPodeEscrever} IN ('todos', 'seguidores_assinantes', 'assinantes')`),
   // Email único sem distinguir maiúsculas de minúsculas (o registo guarda-o em minúsculas; isto protege contra corridas e contas antigas).

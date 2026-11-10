@@ -38,6 +38,16 @@ export function signRefreshToken(userId: number, username: string, role?: string
 /** @deprecated Usar signAccessToken. Mantido para compatibilidade. */
 export const signToken = signAccessToken;
 
+/**
+ * Um token (acesso ou refresh) emitido no segundo da alteração da palavra-passe ou antes deixa de valer. Sem alteração (NULL), nunca.
+ * Compara-se em segundos inteiros (o `iat` do JWT é em segundos); sem `iat` o token é recusado.
+ */
+export function emitidoAntesDaAlteracao(iat: number | undefined, alteradaEm: Date | null | undefined): boolean {
+  if (!alteradaEm) return false;
+  if (typeof iat !== "number") return true;
+  return iat <= Math.floor(alteradaEm.getTime() / 1000);
+}
+
 export function verifyToken(token: string): JwtPayload {
   // Algoritmo fixado: HS384/HS512 (mesmo segredo) e "none" são recusados.
   return jwt.verify(token, SECRET, { algorithms: ["HS256"] }) as JwtPayload;
@@ -180,12 +190,17 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
         .from(revokedTokensTable)
         .where(eq(revokedTokensTable.jti, payload.jti))
         .limit(1),
-      db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm })
+      db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm, passwordAlteradaEm: usersTable.passwordAlteradaEm })
         .from(usersTable)
         .where(eq(usersTable.id, payload.userId))
         .limit(1),
     ]);
 
+    // Palavra-passe alterada depois de este token ter sido emitido: sessão terminada (cobre os tokens de acesso, que não se enumeram).
+    if (userRows[0] && emitidoAntesDaAlteracao(payload.iat, userRows[0].passwordAlteradaEm)) {
+      res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
+      return;
+    }
     if (revokedRows[0]) {
       res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
       return;

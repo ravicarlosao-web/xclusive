@@ -30,8 +30,25 @@ export default function EsquecestePassword() {
     defaultValues: { email: '' },
   });
 
-  const onSubmit = (_values: FormValues) => {
-    setSubmitted(true);
+  // Chama a API; a resposta é sempre a mesma (existir ou não conta). Só mostra «enviámos as instruções» depois de o pedido ser aceite.
+  const [erro, setErro] = useState<string | null>(null);
+  const onSubmit = async (values: FormValues) => {
+    setErro(null);
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/auth/esqueci-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: values.email.trim() }),
+      });
+      if (res.status === 202) { setSubmitted(true); return; }
+      if (res.status === 429) { setErro('Demasiados pedidos. Tenta novamente dentro de 15 minutos.'); return; }
+      if (res.status === 400) { setErro('Insere um email válido.'); return; }
+      setErro('Não foi possível enviar o pedido. Tenta novamente dentro de instantes.');
+    } catch {
+      setErro('Não foi possível contactar o servidor. Tenta novamente.');
+    }
   };
 
   return (
@@ -52,9 +69,9 @@ export default function EsquecestePassword() {
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-8 h-8 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold mb-2">Email enviado!</h1>
+              <h1 className="text-2xl font-bold mb-2">Verifica o teu email</h1>
               <p className="text-muted-foreground mb-8">
-                Se existir uma conta com esse email, receberás um link para redefinir a tua password em breve.
+                Se existir uma conta com este email, enviámos as instruções.
               </p>
               <Link href="/login">
                 <Button className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-semibold">
@@ -96,6 +113,7 @@ export default function EsquecestePassword() {
                     )}
                   />
 
+                  {erro && <p role="alert" className="text-sm text-destructive" data-testid="esqueci-erro">{erro}</p>}
                   <Button
                     type="submit"
                     className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-semibold text-base"

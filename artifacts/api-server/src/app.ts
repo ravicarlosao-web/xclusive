@@ -120,6 +120,22 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Recuperação de palavra-passe: 5 pedidos por IP em 15 minutos; redefinir: 10 tentativas por IP em 15 minutos.
+const esqueciLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Demasiados pedidos de recuperação. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const redefinirLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Demasiadas tentativas. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -152,6 +168,16 @@ const gorjetaLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 10,
   message: { error: "Demasiadas gorjetas num curto espaço de tempo. Tenta novamente dentro de 1 minuto." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userIdKey,
+});
+
+// Alterar palavra-passe: 10 tentativas em 15 minutos por utilizador (a palavra-passe atual não se adivinha por força bruta)
+const alterarPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Demasiadas tentativas. Tenta novamente dentro de 15 minutos." },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userIdKey,
@@ -218,6 +244,9 @@ const globalAuthLimiter = rateLimit({
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth/refresh", refreshLimiter);
+app.use("/api/auth/esqueci-password", esqueciLimiter);
+app.use("/api/auth/redefinir-password", redefinirLimiter);
+app.post("/api/auth/alterar-password", alterarPasswordLimiter);
 // Os limitadores contam SÓ as ações sensíveis (método + caminho); as leituras e as restantes escritas
 // (likes, saves, comentários, PATCH /users/me) ficam sob o globalAuthLimiter.
 app.post(
