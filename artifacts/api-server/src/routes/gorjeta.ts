@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { db, purchasesTable, usersTable, postsTable } from "@workspace/db";
+import { db, purchasesTable, usersTable, postsTable, notificationsTable } from "@workspace/db";
+import { formatarKz } from "../lib/gorjetaMensagem";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, type AuthRequest } from "../lib/auth";
@@ -113,6 +114,13 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
           ...(chave ? { chaveIdempotencia: chave, pedidoHash } : {}),
         })
         .returning();
+
+      // 6. Notificação ao criador, NA MESMA transação do pagamento (só existe se a gorjeta se concretizou; a repetição idempotente
+      //    devolveu antes e não chega aqui). Sem alvo: o front só trata alvo de «gorjeta_recebida» como conversa.
+      await tx.insert(notificationsTable).values({
+        destinatarioId: post.autorId, tipo: "gorjeta_recebida", atorId: senderId, alvoId: null,
+        mensagem: `enviou-te uma gorjeta de ${formatarKz(valor)} Kz no teu post`,
+      });
 
       return p;
     });

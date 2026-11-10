@@ -193,8 +193,11 @@ router.patch("/posts/:id/mais18", requireAuth, validate(editarMais18Schema), asy
 
 // Desbloquear post PPV
 router.post("/posts/:id/unlock", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const idTxt = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const userId = req.userId!;
+  // Só dígitos (até 9): «abc» dá 400; 0 ou um id que não existe continuam a dar 404 («Post não encontrado»).
+  if (!/^\d{1,9}$/.test(String(idTxt))) { res.status(400).json({ error: "ID inválido." }); return; }
+  const id = Number(idTxt);
 
   try {
     // 1. Verificar se o post existe e é exclusivo

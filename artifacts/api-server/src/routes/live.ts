@@ -1,7 +1,8 @@
 import { Router } from "express";
 import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
-import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable } from "@workspace/db";
+import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable, notificationsTable } from "@workspace/db";
+import { formatarKz } from "../lib/gorjetaMensagem";
 import { liveVisivel } from "../lib/takedown";
 import { lerVisualizador, livePermitida, liveBloqueada, CODIGO_CONTEUDO_MAIS18, MSG_CONTEUDO_MAIS18, lerMarcacaoMais18, MSG_MAIS18_INVALIDO } from "../lib/conteudoMais18";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -294,6 +295,12 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
           descricao: `Gorjeta na Live #${streamId}`,   // sem o texto do fã (a mensagem não entra nos extratos nem na exportação)
           ...(chave ? { chaveIdempotencia: chave, pedidoHash } : {}),
         });
+
+      // 7. Notificação ao criador NA MESMA transação (a repetição idempotente devolveu antes e não chega aqui). Sem alvo.
+      await tx.insert(notificationsTable).values({
+        destinatarioId: stream.criadorId, tipo: "gorjeta_recebida", atorId: senderId, alvoId: null,
+        mensagem: `enviou-te uma gorjeta de ${formatarKz(valor)} Kz na tua live`,
+      });
 
       return { tip, repetida: false as const };
     });

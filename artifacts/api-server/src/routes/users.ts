@@ -660,18 +660,22 @@ router.post("/users/:username/follow", requireAuth, async (req: AuthRequest, res
   const userId = req.userId!;
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [target] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!target || target.id === userId) { res.status(400).json({ error: "Inválido" }); return; }
+  // Conta inexistente OU inativa (encerrada, banida, suspensa): a mesma resposta (não revela que a conta existe) e nada é gravado.
+  if (!target || !target.ativo || target.id === userId) { res.status(400).json({ error: "Inválido" }); return; }
 
   const [existing] = await db.select().from(followsTable).where(and(eq(followsTable.seguidorId, userId), eq(followsTable.seguidoId, target.id)));
   if (!existing) {
-    await db.insert(followsTable).values({ seguidorId: userId, seguidoId: target.id });
-    // Notificar o utilizador seguido
-    await db.insert(notificationsTable).values({
-      destinatarioId: target.id,
-      tipo: "novo_seguidor",
-      atorId: userId,
-      alvoId: null,
-    }).onConflictDoNothing();
+    // onConflictDoNothing: dois pedidos em paralelo não dão 500 ao que perde; só quem criou a relação notifica.
+    const criada = await db.insert(followsTable).values({ seguidorId: userId, seguidoId: target.id }).onConflictDoNothing().returning({ id: followsTable.seguidorId });
+    if (criada.length > 0) {
+      // Notificar o utilizador seguido
+      await db.insert(notificationsTable).values({
+        destinatarioId: target.id,
+        tipo: "novo_seguidor",
+        atorId: userId,
+        alvoId: null,
+      }).onConflictDoNothing();
+    }
   }
   res.json({ ok: true });
 });

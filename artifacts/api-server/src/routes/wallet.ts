@@ -10,6 +10,7 @@ import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { emailLegal } from "../lib/encerramento";
 import { createGpoCharge, createRefCharge } from "../lib/appypay";
+import { paginacaoDe, MSG_PAGINACAO_INVALIDA } from "../lib/params";
 
 const router = Router();
 
@@ -48,8 +49,9 @@ router.get("/wallet/balance", requireAuth, async (req: AuthRequest, res): Promis
  */
 router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const page = Math.max(1, parseInt(req.query["page"] as string || "1", 10));
-  const limit = Math.min(50, Math.max(1, parseInt(req.query["limit"] as string || "20", 10)));
+  const pg = paginacaoDe(req.query["page"], req.query["limit"], 50, 20);
+  if (!pg) { res.status(400).json({ error: MSG_PAGINACAO_INVALIDA }); return; }
+  const { page, limit } = pg;
   const offset = (page - 1) * limit;
 
   try {
@@ -169,6 +171,9 @@ router.post("/wallet/topup", requireAuth, async (req: AuthRequest, res): Promise
 
     res.status(201).json({ request });
   } catch (err) {
+    // Pedidos em paralelo com a mesma referência: a leitura prévia deixa passar vários e o índice único recusa os restantes (23505).
+    const e = err as { code?: string; cause?: { code?: string } } | null;
+    if ((e?.code ?? e?.cause?.code) === "23505") { res.status(409).json({ error: "Pedido com esta referência já foi submetido." }); return; }
     req.log?.error({ err }, "Erro ao submeter carregamento");
     res.status(500).json({ error: "Erro ao submeter pedido de carregamento." });
   }
