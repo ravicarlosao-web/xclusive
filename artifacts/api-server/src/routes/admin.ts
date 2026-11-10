@@ -511,16 +511,24 @@ router.get("/admin/users", async (req, res) => {
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [rows, [{ total }]] = await Promise.all([
-      db.select().from(usersTable)
-        .where(where)
-        .orderBy(desc(usersTable.criadoEm))
-        .limit(limitNum)
-        .offset(offset),
-      db.select({ total: count() }).from(usersTable).where(where),
-    ]);
+    // A lista traz o email de todos: cada leitura fica no audit_log NA MESMA transação (se o registo falhar, nada é devolvido).
+    // Sem saldo nem ganhos (o painel não os usa na lista; estão na ficha individual, também auditada).
+    const { rows, total } = await db.transaction(async (tx) => {
+      const [linhas, [{ total: n }]] = await Promise.all([
+        tx.select().from(usersTable)
+          .where(where)
+          .orderBy(desc(usersTable.criadoEm))
+          .limit(limitNum)
+          .offset(offset),
+        tx.select({ total: count() }).from(usersTable).where(where),
+      ]);
+      await auditNaTransacao(tx, req as AdminRequest, "users_lista_vista", "platform", null, {
+        filtros: { role: role ?? null, estado: estado ?? null, comPesquisa: Boolean(search) }, pagina: pageNum, limite: limitNum, linhas: linhas.length,
+      });
+      return { rows: linhas, total: n };
+    });
 
-    res.json(paginate(rows.map(mapUser), Number(total), pageNum, limitNum));
+    res.json(paginate(rows.map((u) => { const { saldo: _s, ganhos: _g, ...semDinheiro } = mapUser(u); return semDinheiro; }), Number(total), pageNum, limitNum));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao listar utilizadores");
     res.status(500).json({ error: "Erro interno." });
@@ -539,6 +547,7 @@ router.get("/admin/users", async (req, res) => {
  *   - null: remove o override (volta à taxa global)
  */
 router.patch("/admin/users/:id/commission", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode alterar a comissão de um criador." }); return; }
   try {
     const userId = parseInt(String(req.params.id), 10);
     if (isNaN(userId)) { res.status(400).json({ error: "ID inválido." }); return; }
@@ -1038,9 +1047,14 @@ router.get("/admin/kyc/:submissionId/:tipo", requireAdmin, async (req: AdminRequ
 /** Motivo da recusa de KYC: 10 a 500 caracteres; nunca números de documento (6+ dígitos seguidos) nem emails. */
 const MSG_MOTIVO_KYC_INVALIDO = "O motivo não pode conter números de documento nem emails";
 
+class KycConflito extends Error {
+  constructor(msg: string, public readonly httpStatus: number) { super(msg); this.name = "KycConflito"; }
+}
+
 router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
     const [user] = await db.select().from(usersTable)
       .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1);
     if (!user) return void res.status(404).json({ error: "Criador não encontrado" });
@@ -1066,32 +1080,42 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
     }
 
     // Transação única: utilizador, submissão, audit e notificação. Se uma falhar, reverte tudo.
+    // Só se decide uma submissão PENDENTE (quem já está aprovado ou recusado dá 409) e o bloqueio é sempre pela mesma ordem:
+    // 1.º a linha do utilizador, 2.º a submissão pendente. Dois admins em simultâneo: o segundo espera, já não encontra
+    // submissão pendente e recebe 409 (nunca ficam a conta e a submissão incoerentes).
     const updated = await db.transaction(async (tx) => {
+      const [atual] = await tx.select().from(usersTable)
+        .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).for("update").limit(1);
+      if (!atual) throw new KycConflito("Criador não encontrado", 404);
+      const [submission] = await tx.select({ id: kycSubmissionsTable.id })
+        .from(kycSubmissionsTable)
+        .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
+        .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`)
+        .for("update")
+        .limit(1);
+      if (!submission) {
+        throw new KycConflito(atual.verificado
+          ? "Esta conta já está verificada: não há verificação pendente. Para retirar o estatuto de criadora usa «Revogar criadora» (superadmin)."
+          : "Não há nenhuma verificação pendente para decidir.", 409);
+      }
+
       const [u] = await tx.update(usersTable)
         .set(acao === "aprovar" ? { verificado: true, tipoConta: "criador" as const } : { verificado: false, tipoConta: "pessoal" as const })
         .where(eq(usersTable.id, id))
         .returning();
 
-      // Nota: aprova/recusa mesmo sem submissão pendente (comportamento anterior mantido).
-      const [submission] = await tx.select({ id: kycSubmissionsTable.id })
-        .from(kycSubmissionsTable)
-        .where(and(eq(kycSubmissionsTable.userId, id), eq(kycSubmissionsTable.status, "pendente")))
-        .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`)
-        .limit(1);
-      if (submission) {
-        await tx.update(kycSubmissionsTable)
-          .set({
-            status: acao === "aprovar" ? "aprovado" : "rejeitado",
-            motivoRejeicao: motivo,
-            revistoEm: new Date(),
-            revistoPor: req.adminId!,
-          })
-          .where(eq(kycSubmissionsTable.id, submission.id));
-      }
+      await tx.update(kycSubmissionsTable)
+        .set({
+          status: acao === "aprovar" ? "aprovado" : "rejeitado",
+          motivoRejeicao: motivo,
+          revistoEm: new Date(),
+          revistoPor: req.adminId!,
+        })
+        .where(eq(kycSubmissionsTable.id, submission.id));
 
       await tx.insert(auditLogTable).values({
         adminId: req.adminId!, action: `kyc_${acao}`, targetType: "user", targetId: id,
-        details: { before: { verificado: user.verificado }, after: { verificado: u.verificado }, motivo },
+        details: { before: { verificado: atual.verificado }, after: { verificado: u.verificado }, motivo },
         ipAddress: req.ip ?? null,
       });
 
@@ -1103,7 +1127,48 @@ router.patch("/admin/creators/:id/kyc", requireAdmin, async (req: AdminRequest, 
     });
     res.json({ success: true, user: mapUser(updated) });
   } catch (err) {
+    if (err instanceof KycConflito) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error(erroSeguro(err), "Erro ao processar KYC");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * Revogar o estatuto de criadora a uma conta JÁ aprovada (o KYC só decide submissões pendentes). Só superadmin, motivo obrigatório
+ * (10 a 500 caracteres). Não trata o dinheiro: recusa com 409 enquanto houver ganhos, levantamentos em curso (pendente, aprovado ou
+ * retido) ou subscrições ativas, e diz quais; o admin resolve-os primeiro. Transação única: utilizador bloqueado, estado, audit e aviso.
+ */
+router.post("/admin/creators/:id/revogar", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") return void res.status(403).json({ error: "Apenas o superadmin pode revogar uma criadora." });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (motivo.length < 10 || motivo.length > 500) return void res.status(400).json({ error: "Indica o motivo da revogação (entre 10 e 500 caracteres)." });
+  try {
+    await db.transaction(async (tx) => {
+      const [u] = await tx.select().from(usersTable).where(eq(usersTable.id, id)).for("update").limit(1);
+      if (!u || u.tipoConta !== "criador") throw new KycConflito("Criador não encontrado", 404);
+      if (u.role === "admin" || u.role === "superadmin") throw new KycConflito("Não é possível revogar uma conta de administração.", 403);
+      if (!u.verificado) throw new KycConflito("Esta conta não está verificada: a verificação pendente decide-se em «Fila KYC».", 409);
+
+      const [{ emCurso }] = await tx.select({ emCurso: count() }).from(withdrawalRequestsTable)
+        .where(and(eq(withdrawalRequestsTable.creatorId, id), inArray(withdrawalRequestsTable.status, ["pendente", "aprovado", "retido"])));
+      const [{ ativas }] = await tx.select({ ativas: count() }).from(subscriptionsTable)
+        .where(and(eq(subscriptionsTable.criadorId, id), eq(subscriptionsTable.estado, "ativa")));
+      const impedimentos: string[] = [];
+      if (Number(u.ganhos) > 0) impedimentos.push("ganhos por levantar");
+      if (Number(emCurso) > 0) impedimentos.push("levantamentos em curso");
+      if (Number(ativas) > 0) impedimentos.push("subscrições ativas");
+      if (impedimentos.length > 0) throw new KycConflito(`Não é possível revogar enquanto houver ${impedimentos.join(", ")}. Resolve-os primeiro.`, 409);
+
+      await tx.update(usersTable).set({ verificado: false, tipoConta: "pessoal" }).where(eq(usersTable.id, id));
+      await auditNaTransacao(tx, req, "criador_revogado", "user", id, { motivo, before: { tipoConta: u.tipoConta, verificado: u.verificado }, after: { tipoConta: "pessoal", verificado: false } });
+      await notificarSistema(tx, id, "O teu estatuto de criadora foi revogado. A tua conta passa a pessoal.");
+    });
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof KycConflito) return void res.status(err.httpStatus).json({ error: err.message });
+    (req as any).log?.error(erroSeguro(err), "Erro ao revogar criadora");
     res.status(500).json({ error: "Erro interno." });
   }
 });
@@ -1835,9 +1900,16 @@ router.get("/admin/finance/transactions/export", async (req: AdminRequest, res) 
       return linhas;
     });
 
+    // CSV seguro: cada transação numa só linha (quebras de linha do texto passam a espaço), texto entre aspas com as aspas duplicadas,
+    // e texto que começa por = + - @ (ou tab/CR) leva um apóstrofo à frente para o Excel/Sheets o tratar como texto e não como fórmula.
+    const csvTexto = (v: unknown): string => {
+      let t = String(v ?? "").replace(/[\r\n]+/g, " ");
+      if (/^[=+\-@\t]/.test(t)) t = `'${t}`;
+      return /[",]/.test(t) || t !== String(v ?? "") ? `"${t.replace(/"/g, '""')}"` : t;
+    };
     const headers = ["id", "tipo", "valor", "compradorId", "vendedorId", "descricao", "criadoEm"];
     const csvRows = rows.map(r =>
-      [r.id, r.tipo, r.valor, r.compradorId, r.vendedorId, r.descricao ?? "", r.criadoEm.toISOString()].join(",")
+      [r.id, csvTexto(r.tipo), r.valor, r.compradorId, r.vendedorId, csvTexto(r.descricao), r.criadoEm.toISOString()].join(",")
     );
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", "attachment; filename=transacoes.csv");
@@ -2079,7 +2151,8 @@ router.get("/admin/topups", async (req, res) => {
         amount: topupRequestsTable.amount,
         reference: topupRequestsTable.reference,
         status: topupRequestsTable.status,
-        comprovantivoBase64: topupRequestsTable.comprovantivoBase64,
+        // O comprovativo (ficheiro em base64, pode ter MB) NÃO vem na lista: só o detalhe o devolve, auditado (GET /admin/topups/:id/comprovativo)
+        temComprovativo: sql<boolean>`(${topupRequestsTable.comprovantivoBase64} is not null and length(${topupRequestsTable.comprovantivoBase64}) > 0)`,
         comprovantivoNome: topupRequestsTable.comprovantivoNome,
         processadoPor: topupRequestsTable.processadoPor,
         processadoEm: topupRequestsTable.processadoEm,
@@ -2109,6 +2182,27 @@ router.get("/admin/topups", async (req, res) => {
     ));
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao listar carregamentos");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// Comprovativo de um carregamento (base64 em JSON). Cada visualização grava audit_log NA MESMA transação: se o registo falhar, o ficheiro não é devolvido.
+router.get("/admin/topups/:id/comprovativo", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido." });
+  try {
+    const out = await db.transaction(async (tx) => {
+      const [t] = await tx.select({ id: topupRequestsTable.id, userId: topupRequestsTable.userId, base64: topupRequestsTable.comprovantivoBase64, nome: topupRequestsTable.comprovantivoNome })
+        .from(topupRequestsTable).where(eq(topupRequestsTable.id, id)).limit(1);
+      if (!t || !t.base64) return null;
+      await auditNaTransacao(tx, req, "topup_comprovativo_visto", "topup", id, { userId: t.userId });
+      return { id: t.id, nome: t.nome ?? null, comprovantivoBase64: t.base64 };
+    });
+    if (!out) return void res.status(404).json({ error: "Comprovativo não encontrado." });
+    res.set("Cache-Control", "no-store");
+    res.json(out);
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro ao obter comprovativo");
     res.status(500).json({ error: "Erro interno." });
   }
 });
@@ -2195,6 +2289,7 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
 // ────────────────────────────────────────────────────────────────────────────
 
 router.post("/admin/broadcast", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode enviar difusões a todos os utilizadores." }); return; }
   try {
     const { titulo, mensagem, segmento } = req.body;
     if (!titulo || !mensagem) {
@@ -2293,8 +2388,9 @@ router.get("/admin/broadcast/history", async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 
 // Defaults aplicados quando a tabela está vazia. A comissão NÃO tem default: vem sempre da base de dados.
+// «maintenance_mode» foi retirado (a API nunca o aplicou): a linha que exista na BD fica, mas já não se lê nem se escreve.
+const CHAVES_RETIRADAS = new Set(["maintenance_mode"]);
 const DEFAULT_SETTINGS: Record<string, unknown> = {
-  maintenance_mode: { enabled: false },
   [REGISTOS_KEY]: { value: true }, // registos abertos por omissão
   allowed_countries: { list: ["AO", "MZ", "ZA", "PT", "BR"] },
   min_withdrawal_amount: { value: 5000 },
@@ -2305,7 +2401,7 @@ router.get("/admin/settings", async (req, res) => {
     const rows = await db.select().from(platformSettingsTable);
     const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS, [COMMISSION_KEY]: null }; // null = não definida
     for (const row of rows) {
-      settings[row.key] = row.value;
+      if (!CHAVES_RETIRADAS.has(row.key)) settings[row.key] = row.value;
     }
     res.json(settings);
   } catch (err) {
@@ -2315,6 +2411,7 @@ router.get("/admin/settings", async (req, res) => {
 });
 
 router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode alterar as definições da plataforma." }); return; }
 
   try {
     const erros: string[] = [];
@@ -2327,10 +2424,6 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
       const v = cr !== null && typeof cr === "object" && !Array.isArray(cr) ? (cr as { value?: unknown }).value : undefined;
       if (!taxaValida(v) || !taxaComDuasCasas(v)) erros.push("commission_rate.value deve ser um número entre 0 e 100 (no máximo 2 casas decimais)");
       else updates.push({ key: COMMISSION_KEY, value: { value: v } });
-    }
-    if (req.body.maintenance_mode !== undefined) {
-      if (typeof req.body.maintenance_mode?.enabled !== "boolean") erros.push("maintenance_mode.enabled deve ser boolean");
-      else updates.push({ key: "maintenance_mode", value: { enabled: req.body.maintenance_mode.enabled } });
     }
     if (req.body.registos_abertos !== undefined) {
       // Estritamente boolean: null, string, número, array ou objeto vazio são recusados.
@@ -2356,7 +2449,7 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
 
     const beforeRows = await db.select().from(platformSettingsTable);
     const before: Record<string, unknown> = {};
-    for (const r of beforeRows) before[r.key] = r.value;
+    for (const r of beforeRows) if (!CHAVES_RETIRADAS.has(r.key)) before[r.key] = r.value;
 
     // Upserts e audit na MESMA transação: se o audit falhar, nada é alterado.
     await db.transaction(async (tx) => {
@@ -2414,7 +2507,7 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
 
     const afterRows = await db.select().from(platformSettingsTable);
     const after: Record<string, unknown> = { ...DEFAULT_SETTINGS, [COMMISSION_KEY]: null };
-    for (const r of afterRows) after[r.key] = r.value;
+    for (const r of afterRows) if (!CHAVES_RETIRADAS.has(r.key)) after[r.key] = r.value;
 
     res.json(after);
   } catch (err) {

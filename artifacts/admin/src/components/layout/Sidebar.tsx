@@ -15,6 +15,11 @@ interface SidebarProps {
   isMobile?: boolean;
 }
 
+// Só o superadmin envia difusões e altera as definições globais (o servidor recusa os outros com 403)
+function souSuperadmin(): boolean {
+  try { return JSON.parse(localStorage.getItem('admin_user') ?? '{}')?.role === 'superadmin'; } catch { return false; }
+}
+
 export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps) {
   const [location] = useLocation();
 
@@ -40,7 +45,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/broadcast', label: 'Broadcast', icon: Bell },
     { href: '/settings', label: 'Definições', icon: Settings },
     { href: '/audit-log', label: 'Audit Log', icon: ClipboardList },
-  ];
+  ].filter((item) => souSuperadmin() || !['/broadcast', '/settings'].includes(item.href));   // um admin simples não pode usar Broadcast nem Definições
 
   return (
     <div className="flex flex-col h-full bg-[hsl(var(--sidebar))]">

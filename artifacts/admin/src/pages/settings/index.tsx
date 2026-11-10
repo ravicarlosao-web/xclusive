@@ -13,21 +13,27 @@ import { Save } from 'lucide-react';
 
 // ── Página principal de Definições ────────────────────────────────────────────
 
+// Só o superadmin altera as definições globais (o servidor responde 403 aos outros admins)
+function souSuperadmin(): boolean {
+  try { return JSON.parse(localStorage.getItem('admin_user') ?? '{}')?.role === 'superadmin'; } catch { return false; }
+}
+
 export default function Settings() {
   const queryClient = useQueryClient();
+  const superadmin = souSuperadmin();
   const { toast } = useToast();
   const [formData, setFormData] = useState<any>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
-    queryFn: adminApi.getSettings
+    queryFn: adminApi.getSettings,
+    enabled: superadmin,
   });
 
   useEffect(() => {
     if (settings && !formData) {
       setFormData({
         minWithdrawalAmount: (settings as any).min_withdrawal_amount?.value ?? 5000,
-        maintenanceMode: (settings as any).maintenance_mode?.enabled ?? false,
         registosAbertos: (settings as any).registos_abertos?.value !== false,
         allowedCountries: ((settings as any).allowed_countries?.list ?? []).join(', '),
       });
@@ -37,15 +43,36 @@ export default function Settings() {
   const updateSettings = useMutation({
     mutationFn: (data: any) => adminApi.updateSettings({
       min_withdrawal_amount: { value: data.minWithdrawalAmount },
-      maintenance_mode: { enabled: data.maintenanceMode },
       registos_abertos: { value: data.registosAbertos },
       allowed_countries: { list: data.allowedCountries.split(',').map((s: string) => s.trim()) },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       toast({ title: 'Definições guardadas com sucesso' });
+    },
+    onError: (err: any) => {
+      let msg = 'Não foi possível guardar as definições.';
+      try { msg = JSON.parse(err.message)?.error ?? msg; } catch { /* mensagem simples */ }
+      toast({ title: 'Erro', description: msg, variant: 'destructive' });
     }
   });
+
+  if (!superadmin) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Definições da Plataforma</h1>
+          <p className="text-muted-foreground">Configurações globais que afetam todos os utilizadores.</p>
+        </div>
+        <Card className="border-border" data-testid="definicoes-so-superadmin">
+          <CardHeader>
+            <CardTitle>Só o superadmin pode alterar estas definições</CardTitle>
+            <CardDescription>A conta atual é de administrador. Pede a alteração a um superadmin.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading || !formData) return <div>A carregar definições...</div>;
 
@@ -114,26 +141,6 @@ export default function Settings() {
                 id="registos-abertos"
                 checked={formData.registosAbertos}
                 onCheckedChange={c => setFormData({...formData, registosAbertos: c})}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border border-destructive/20">
-          <CardHeader>
-            <CardTitle className="text-destructive">Modo de Manutenção</CardTitle>
-            <CardDescription>Impede o acesso público à plataforma. Os administradores mantêm o acesso.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between border border-border p-4 rounded-lg bg-card/50">
-              <div className="space-y-0.5">
-                <Label className="text-base">Ativar Modo Manutenção</Label>
-                <p className="text-sm text-muted-foreground">O site mostrará uma página de "Em breve / Manutenção".</p>
-              </div>
-              <Switch
-                checked={formData.maintenanceMode}
-                onCheckedChange={c => setFormData({...formData, maintenanceMode: c})}
-                className="data-[state=checked]:bg-destructive"
               />
             </div>
           </CardContent>
