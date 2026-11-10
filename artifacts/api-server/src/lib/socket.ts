@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from "node:http";
 import crypto from "node:crypto";
 import { Server as SocketServer, type Socket } from "socket.io";
-import { verifyToken } from "./auth";
+import { verifyToken, emitidoAntesDaAlteracao } from "./auth";
 import { db, liveStreamsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -87,6 +87,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           ativo: usersTable.ativo,
           username: usersTable.username,
           avatarUrl: usersTable.avatarUrl,
+          passwordAlteradaEm: usersTable.passwordAlteradaEm,
         })
         .from(usersTable)
         .where(eq(usersTable.id, payload.userId))
@@ -94,6 +95,10 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 
       if (!user || !user.ativo) {
         return next(new Error("Conta suspensa ou não encontrada."));
+      }
+      // Palavra-passe alterada depois de este token ter sido emitido: recusa a ligação.
+      if (emitidoAntesDaAlteracao(payload.iat, user.passwordAlteradaEm)) {
+        return next(new Error("Sessão terminada."));
       }
 
       socket.data.userId = payload.userId;

@@ -7,7 +7,7 @@ import {
   signAccessToken, signRefreshToken, verifyToken,
   hashPassword, comparePassword, requireAuth, revokeToken,
   createSession, deleteSession, deleteAllUserSessions,
-  REFRESH_COOKIE, DUMMY_HASH, type AuthRequest, type JwtPayload,
+  REFRESH_COOKIE, DUMMY_HASH, emitidoAntesDaAlteracao, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
 import { MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao";
 import {
@@ -20,6 +20,11 @@ import { erroSeguro } from "../lib/erroSeguro";
 import { MSG_CONTA_BANIDA, identificadorBloqueado } from "../lib/banimento";
 import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from "../lib/encerramento";
 import { emailLegal } from "../lib/contactos";
+import { logger } from "../lib/logger";
+import { enviarEmail, lerConfigEmail, urlPublico } from "../lib/email";
+import { emailRecuperacao, emailPasswordAlterada } from "../lib/emailsConta";
+import { criarTokenRecuperacao, consumirTokenRecuperacao, invalidarTokensRecuperacao, pedidosNaUltimaHora, tokenComFormato, MAX_EMAILS_POR_ENDERECO_HORA } from "../lib/tokensEmail";
+import { terminarSessoesDaConta } from "../lib/sessoesConta";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
 // Activar Secure em qualquer ambiente que não seja desenvolvimento local.
@@ -85,6 +90,9 @@ export function validarDataNascimento(valor: string, agora: Date = new Date()): 
   return null;
 }
 
+/** Regra da palavra-passe (registo, redefinição e alteração). */
+const passwordRegra = z.string().min(8, "Password deve ter pelo menos 8 caracteres").max(128);
+
 const registerSchema = z.object({
   nomeCompleto: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
   email: z.email("Email inválido").max(255),
@@ -93,7 +101,7 @@ const registerSchema = z.object({
     .min(3, "Username deve ter pelo menos 3 caracteres")
     .max(50)
     .regex(/^[a-zA-Z0-9_]+$/, "Username só pode conter letras, números e _"),
-  password: z.string().min(8, "Password deve ter pelo menos 8 caracteres").max(128),
+  password: passwordRegra,
   // Obrigatória; formato, data real, não futura e idade >= 18 são validados no handler (mensagens claras).
   dataNascimento: z.string().min(1, "Data de nascimento é obrigatória").max(20),
   // Aceite dos documentos legais: versões que o utilizador viu (têm de ser as vigentes).
@@ -369,6 +377,103 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
   }
 });
 
+// ── Recuperação e alteração da palavra-passe ────────────────────────────────────────────────────────────────
+const MSG_RECUPERACAO = "Se existir uma conta com este email, enviámos as instruções.";
+const MSG_TOKEN_INVALIDO = "Esta ligação é inválida ou expirou. Pede uma nova.";
+const ROLES_ADMIN = new Set(["admin", "superadmin"]);
+
+const esqueciSchema = z.object({ email: z.email("Email inválido").max(255) });
+const redefinirSchema = z.object({ token: z.string().min(1, "Ligação inválida").max(200), password: passwordRegra });
+const alterarSchema = z.object({ passwordAtual: z.string().min(1, "Indica a palavra-passe atual").max(128), novaPassword: passwordRegra });
+
+/** Aviso «a tua palavra-passe foi alterada»: em segundo plano, nunca lança, e sem dados pessoais nos logs. */
+function avisarPasswordAlterada(email: string): void {
+  void (async () => {
+    const cfg = lerConfigEmail();
+    if (cfg.transporte !== "smtp" || cfg.faltam.length > 0) { logger.warn({ motivo: cfg.transporte !== "smtp" ? "desligado" : "configuracao_incompleta" }, "Palavra-passe alterada: o aviso por email não foi enviado"); return; }
+    const m = emailPasswordAlterada();
+    const r = await enviarEmail({ para: email, assunto: m.assunto, texto: m.texto, html: m.html });
+    if (!r.ok) logger.warn({ motivo: r.motivo }, "Palavra-passe alterada: o aviso por email não foi enviado");
+  })().catch(() => logger.warn({ motivo: "erro" }, "Palavra-passe alterada: o aviso por email não foi enviado"));
+}
+
+/** Trabalho do pedido de recuperação, DEPOIS de a resposta (sempre igual) ter sido enviada. Nunca lança. */
+async function processarRecuperacao(emailN: string, ip: string): Promise<void> {
+  const cfg = lerConfigEmail();
+  if (cfg.transporte !== "smtp" || cfg.faltam.length > 0) {
+    logger.warn({ motivo: cfg.transporte !== "smtp" ? "desligado" : "configuracao_incompleta" }, "Recuperação de palavra-passe: pedido recebido mas o envio de email não está disponível");
+    return;
+  }
+  const [u] = await db.select({ id: usersTable.id, email: usersTable.email, role: usersTable.role, ativo: usersTable.ativo }).from(usersTable)
+    .where(sql`lower(${usersTable.email}) = ${emailN}`).orderBy(usersTable.id).limit(1);
+  if (!u || !u.ativo) return;                                        // conta inexistente ou inativa: nada é enviado
+  if (ROLES_ADMIN.has(u.role)) { logger.info({ motivo: "conta_de_administracao" }, "Recuperação de palavra-passe ignorada"); return; }   // admins: nada é enviado
+  // Máximo 3 emails por endereço por hora, contado na BD (com um bloqueio por endereço para pedidos em paralelo).
+  const token = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"recuperar:" + emailN}))`);
+    if ((await pedidosNaUltimaHora(tx, u.email)) >= MAX_EMAILS_POR_ENDERECO_HORA) return null;
+    return criarTokenRecuperacao(tx, { userId: u.id, email: u.email, ip });
+  });
+  if (!token) return;
+  const ligacao = urlPublico(`/redefinir-password?token=${token}`);
+  if (!ligacao) { logger.warn({ motivo: "configuracao_incompleta" }, "Recuperação de palavra-passe: sem APP_URL_PUBLICO"); return; }
+  const m = emailRecuperacao(ligacao);
+  const r = await enviarEmail({ para: u.email, assunto: m.assunto, texto: m.texto, html: m.html });
+  if (!r.ok) logger.warn({ motivo: r.motivo }, "Recuperação de palavra-passe: o email não foi enviado");
+}
+
+router.post("/auth/esqueci-password", validate(esqueciSchema), (req, res): void => {
+  // Resposta SEMPRE igual (202) e imediata: a existência da conta não se revela, nem pelo tempo. O trabalho corre depois.
+  const emailN = normalizarEmailConta(req.body.email), ip = (req.ip ?? "").slice(0, 45);
+  res.status(202).json({ mensagem: MSG_RECUPERACAO });
+  setImmediate(() => { processarRecuperacao(emailN, ip).catch(() => logger.warn({ motivo: "erro" }, "Recuperação de palavra-passe: falha ao processar o pedido")); });
+});
+
+router.post("/auth/redefinir-password", validate(redefinirSchema), async (req, res): Promise<void> => {
+  const { token, password } = req.body as { token: string; password: string };
+  if (!tokenComFormato(token)) { res.status(400).json({ error: MSG_TOKEN_INVALIDO, codigo: "token_invalido" }); return; }
+  try {
+    const r = await db.transaction(async (tx) => {
+      // Uso único e atómico: o UPDATE condicional só deixa passar UM pedido com este token (e só se não expirou).
+      const userId = await consumirTokenRecuperacao(tx, token);
+      if (userId === null) return null;
+      const [u] = await tx.select({ id: usersTable.id, email: usersTable.email, role: usersTable.role, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, userId)).for("update").limit(1);
+      if (!u || !u.ativo || ROLES_ADMIN.has(u.role)) return null;
+      await tx.update(usersTable).set({ passwordHash: await hashPassword(password), passwordAlteradaEm: new Date() }).where(eq(usersTable.id, userId));
+      await invalidarTokensRecuperacao(tx, userId);
+      return { userId, email: u.email };
+    });
+    if (!r) { res.status(400).json({ error: MSG_TOKEN_INVALIDO, codigo: "token_invalido" }); return; }
+    // Termina TODAS as sessões. Se isto falhar, a palavra-passe já mudou e os tokens antigos já caem pelo password_alterada_em.
+    try { await terminarSessoesDaConta(r.userId); } catch { logger.warn({ motivo: "erro" }, "Redefinir palavra-passe: falha ao terminar as sessões (os tokens antigos caem pelo password_alterada_em)"); }
+    avisarPasswordAlterada(r.email);
+    res.json({ ok: true });   // não inicia sessão
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Redefinir palavra-passe: erro interno");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.post("/auth/alterar-password", requireAuth, validate(alterarSchema), async (req: AuthRequest, res): Promise<void> => {
+  const { passwordAtual, novaPassword } = req.body as { passwordAtual: string; novaPassword: string };
+  try {
+    const [u] = await db.select({ id: usersTable.id, email: usersTable.email, passwordHash: usersTable.passwordHash }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+    if (!u) { res.status(401).json({ error: "Não autenticado" }); return; }
+    if (!(await comparePassword(passwordAtual, u.passwordHash))) { res.status(403).json({ error: "A palavra-passe atual está incorreta.", codigo: "password_incorreta" }); return; }
+    if (novaPassword === passwordAtual) { res.status(400).json({ error: "A nova palavra-passe tem de ser diferente da atual.", codigo: "password_igual" }); return; }
+    await db.transaction(async (tx) => {
+      await tx.update(usersTable).set({ passwordHash: await hashPassword(novaPassword), passwordAlteradaEm: new Date() }).where(eq(usersTable.id, u.id));
+      await invalidarTokensRecuperacao(tx, u.id);
+    });
+    try { await terminarSessoesDaConta(u.id); } catch { logger.warn({ motivo: "erro" }, "Alterar palavra-passe: falha ao terminar as sessões (os tokens antigos caem pelo password_alterada_em)"); }
+    avisarPasswordAlterada(u.email);
+    res.json({ ok: true });   // a sessão atual também termina: a pessoa volta a entrar
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Alterar palavra-passe: erro interno");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
 // Logout não exige access token válido — aceita dois caminhos:
 //   (a) access token presente e válido → revoga-o + revoga o refresh cookie
 //   (b) access token ausente ou expirado → revoga apenas o refresh cookie
@@ -462,8 +567,8 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
 
   // Conta suspensa (ou inexistente): não renova a sessão. Falha de DB = negar (fail-closed).
   try {
-    const [conta] = await db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
-    if (!conta) {
+    const [conta] = await db.select({ ativo: usersTable.ativo, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm, passwordAlteradaEm: usersTable.passwordAlteradaEm }).from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
+    if (!conta || emitidoAntesDaAlteracao(payload.iat, conta.passwordAlteradaEm)) {   // palavra-passe alterada depois de este refresh token ter sido emitido: sessão terminada
       clearRefreshCookie(res);
       res.status(401).json({ error: "Sessão inválida. Faz login novamente." });
       return;

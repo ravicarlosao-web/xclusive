@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable, revokedTokensTable } from "@workspace/db";
-import { verifyToken } from "../lib/auth.js";
+import { verifyToken, emitidoAntesDaAlteracao } from "../lib/auth.js";
 
 export interface AdminRequest extends Request {
   adminId?: number;
@@ -54,7 +54,7 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
       payload.jti
         ? db.select({ jti: revokedTokensTable.jti }).from(revokedTokensTable).where(eq(revokedTokensTable.jti, payload.jti)).limit(1)
         : Promise.resolve([] as { jti: string }[]),
-      db.select({ ativo: usersTable.ativo, role: usersTable.role, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm })
+      db.select({ ativo: usersTable.ativo, role: usersTable.role, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm, passwordAlteradaEm: usersTable.passwordAlteradaEm })
         .from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1),
     ]);
     if (revogados[0]) {
@@ -62,6 +62,11 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
       return;
     }
     const conta = contas[0];
+    // Palavra-passe alterada depois de este token ter sido emitido.
+    if (conta && emitidoAntesDaAlteracao((payload as { iat?: number }).iat, conta.passwordAlteradaEm)) {
+      res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
+      return;
+    }
     if (conta && !conta.ativo && (conta.encerradaEm || conta.banidaEm)) {
       res.status(401).json({ error: "Conta encerrada.", codigo: "conta_encerrada" });
       return;

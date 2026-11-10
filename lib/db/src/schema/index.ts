@@ -12,3 +12,4 @@ export * from "./kyc";
 export * from "./live";
 
 export * from "./menores";
+export * from "./emailTokens";
