@@ -272,12 +272,12 @@ export default function KYCPage() {
   // RENDER
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground flex flex-col">
+    <main className="min-h-[100dvh] bg-background text-foreground flex flex-col">
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {step !== 'intro' && step !== 'success' ? (
-            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => {
+            <Button variant="ghost" size="icon" aria-label="Voltar ao passo anterior" className="shrink-0" onClick={() => {
               const idx = STEP_ORDER.indexOf(step);
               goTo(STEP_ORDER[Math.max(0, idx - 1)]);
             }}>
@@ -285,7 +285,7 @@ export default function KYCPage() {
             </Button>
           ) : (
             <Link href={user ? `/perfil/${user.username}` : '/home'}>
-              <Button variant="ghost" size="icon" className="shrink-0">
+              <Button variant="ghost" size="icon" aria-label="Fechar" className="shrink-0">
                 <X className="w-5 h-5" />
               </Button>
             </Link>
@@ -836,6 +836,6 @@ export default function KYCPage() {
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

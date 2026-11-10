@@ -1423,6 +1423,7 @@ export default function LivePage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Mais opções"
                   className="w-8 h-8 rounded-full bg-black/50 text-white backdrop-blur-md hover:bg-black/70 border border-white/10"
                 >
                   <MoreVertical className="w-4 h-4" />
@@ -1532,6 +1533,7 @@ export default function LivePage() {
               variant="ghost"
               size="icon"
               onClick={() => navigate('/home')}
+              aria-label="Voltar"
               className="rounded-full shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -1548,9 +1550,9 @@ export default function LivePage() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="font-semibold text-sm truncate">
+                  <h1 className="font-semibold text-sm truncate">
                     {stream.criador.nomeExibicao ?? stream.criador.username}
-                  </p>
+                  </h1>
                   <p className="text-xs text-muted-foreground truncate">@{stream.criador.username}</p>
                 </div>
                 <SeloMais18 mais18={stream.mais18} />
@@ -1665,7 +1667,7 @@ export default function LivePage() {
             <div className="p-3.5 border-b border-border flex items-center justify-between bg-muted/20">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold text-sm">Chat em Direto</h3>
+                <h2 className="font-semibold text-sm">Chat em Direto</h2>
               </div>
               <Badge variant="secondary" className="text-[11px] gap-1 px-2">
                 <Users className="w-3 h-3" /> {viewers}

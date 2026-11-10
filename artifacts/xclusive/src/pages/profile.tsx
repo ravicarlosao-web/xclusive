@@ -142,13 +142,17 @@ export default function Profile() {
   // Derive final following state
   const isFollowing = isFollowingLocally !== undefined ? isFollowingLocally : profile?.estaASeguir;
 
+  // Seguir/deixar de seguir: ignora cliques enquanto o pedido decorre (o duplo clique já não alterna duas vezes) e
+  // reverte o estado otimista se o pedido falhar.
+  const aSeguir = followMutation.isPending || unfollowMutation.isPending;
   const handleFollowToggle = () => {
+    if (aSeguir) return;
     if (isFollowing) {
       setIsFollowingLocally(false);
-      unfollowMutation.mutate({ username });
+      unfollowMutation.mutate({ username }, { onError: () => setIsFollowingLocally(true) });
     } else {
       setIsFollowingLocally(true);
-      followMutation.mutate({ username });
+      followMutation.mutate({ username }, { onError: () => setIsFollowingLocally(false) });
     }
   };
 
@@ -315,7 +319,7 @@ export default function Profile() {
             </>
           ) : (
             <>
-              <BotaoRedondo rotulo={isFollowing ? 'A seguir' : 'Seguir'} ativo={!!isFollowing} onClick={handleFollowToggle} destaque={isFollowing ? undefined : 'primario'} testid="perfil-seguir">
+              <BotaoRedondo rotulo={isFollowing ? 'A seguir' : 'Seguir'} ativo={!!isFollowing} onClick={handleFollowToggle} desativado={aSeguir} destaque={isFollowing ? undefined : 'primario'} testid="perfil-seguir">
                 {isFollowing ? <UserCheck className="h-5 w-5" aria-hidden="true" /> : <UserPlus className="h-5 w-5" aria-hidden="true" />}
               </BotaoRedondo>
               <BotaoRedondo rotulo="Mensagem" onClick={handleStartConversation} desativado={createConversationMutation.isPending} testid="perfil-mensagem"><MessageCircle className="h-5 w-5" aria-hidden="true" /></BotaoRedondo>
