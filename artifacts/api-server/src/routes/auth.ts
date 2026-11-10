@@ -7,7 +7,7 @@ import {
   signAccessToken, signRefreshToken, verifyToken,
   hashPassword, comparePassword, requireAuth, revokeToken,
   createSession, deleteSession, deleteAllUserSessions,
-  REFRESH_COOKIE, type AuthRequest, type JwtPayload,
+  REFRESH_COOKIE, DUMMY_HASH, type AuthRequest, type JwtPayload,
 } from "../lib/auth";
 import { MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao";
 import {
@@ -17,7 +17,7 @@ import { validate } from "../lib/validate";
 import { urlMedia } from "../lib/storage";
 import { getMinWithdrawal } from "./wallet";
 import { erroSeguro } from "../lib/erroSeguro";
-import { MSG_CONTA_BANIDA, MSG_REGISTO_RECUSADO, identificadorBloqueado } from "../lib/banimento";
+import { MSG_CONTA_BANIDA, identificadorBloqueado } from "../lib/banimento";
 import { mensagemContaEncerrada, CODIGO_CONTA_ENCERRADA, utilizadorAtivo } from "../lib/encerramento";
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
@@ -155,8 +155,29 @@ router.get("/auth/legal-config", async (req, res): Promise<void> => {
   }
 });
 
+const MSG_USERNAME_EM_USO = "Esse nome de utilizador já está em uso";
+const CODIGO_USERNAME_EM_USO = "username_em_uso";
+const MSG_EMAIL_INDISPONIVEL = "Não foi possível criar a conta com este email. Se já tens conta, entra.";
+const CODIGO_EMAIL_INDISPONIVEL = "email_indisponivel";
+
+/** Email normalizado para guardar e comparar: sem espaços nas pontas e em minúsculas. */
+function normalizarEmailConta(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** Violação de índice único (23505) no registo: qual dos dois (username | email); undefined se for outro erro. */
+function violacaoUnica(err: unknown): "username" | "email" | undefined {
+  const e = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } } | null;
+  const code = e?.code ?? e?.cause?.code, constraint = (e?.constraint ?? e?.cause?.constraint ?? "").toLowerCase();
+  if (code !== "23505") return undefined;
+  if (constraint.includes("username")) return "username";
+  if (constraint.includes("email")) return "email";
+  return undefined;
+}
+
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
   const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;
+  const emailN = normalizarEmailConta(email); // trim + minúsculas (não colapsa pontos nem «+»: contas diferentes continuam permitidas)
 
   // Registos fechados pelo admin: recusa logo no início (antes de bcrypt e de qualquer escrita), para qualquer tipo de conta.
   // Falha a ler o estado = negar (fail-closed).
@@ -192,20 +213,20 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
   try {
     // Email banido (ou variante normalizada): recusa genérica, sem dizer porquê. Antes de bcrypt e de qualquer escrita; uma só
     // consulta indexada, como as outras recusas deste ponto. Sem BAN_HASH_PEPPER a verificação fica desligada (aviso seguro).
-    if (await identificadorBloqueado(db, "email", email)) {
-      res.status(400).json({ error: MSG_REGISTO_RECUSADO });
-      return;
-    }
-
-    const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    if (existing) {
-      res.status(400).json({ error: "Email ou username já em uso" });
-      return;
-    }
-
-    const [existingUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username));
+    // Username PRIMEIRO (é público: aparece nos perfis) e só depois o email, para a resposta do username nunca dizer nada sobre o email.
+    const usernameN = username.toLowerCase();
+    const [existingUsername] = await db.select({ id: usersTable.id }).from(usersTable).where(sql`lower(${usersTable.username}) = ${usernameN}`).limit(1);
     if (existingUsername) {
-      res.status(400).json({ error: "Email ou username já em uso" });
+      res.status(409).json({ error: MSG_USERNAME_EM_USO, codigo: CODIGO_USERNAME_EM_USO });
+      return;
+    }
+
+    // Email banido (ou variante normalizada) e email já usado dão EXATAMENTE a mesma resposta (nada revela o estado de banido).
+    // A comparação é por lower(email): contas antigas guardadas com maiúsculas também contam como «em uso».
+    const emailBanido = await identificadorBloqueado(db, "email", emailN);
+    const [existing] = emailBanido ? [undefined] : await db.select({ id: usersTable.id }).from(usersTable).where(sql`lower(${usersTable.email}) = ${emailN}`).limit(1);
+    if (emailBanido || existing) {
+      res.status(409).json({ error: MSG_EMAIL_INDISPONIVEL, codigo: CODIGO_EMAIL_INDISPONIVEL });
       return;
     }
 
@@ -223,8 +244,8 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       if (!(await lerRegistosAbertosBloqueando(tx))) throw new RegistosFechadosError();
       const [created] = await tx.insert(usersTable).values({
         nomeExibicao: nomeCompleto,
-        email,
-        username: username.toLowerCase(),
+        email: emailN,
+        username: usernameN,
         passwordHash,
         dataNascimento,
         tipoConta: tipoConta || "pessoal",
@@ -265,6 +286,10 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       res.status(403).json({ error: MSG_REGISTOS_FECHADOS, codigo: CODIGO_REGISTOS_FECHADOS });
       return;
     }
+    // Registos em paralelo: o índice único apanha o que escapou às leituras → 409 claro (nunca 500).
+    const dup = violacaoUnica(err);
+    if (dup === "username") { res.status(409).json({ error: MSG_USERNAME_EM_USO, codigo: CODIGO_USERNAME_EM_USO }); return; }
+    if (dup === "email") { res.status(409).json({ error: MSG_EMAIL_INDISPONIVEL, codigo: CODIGO_EMAIL_INDISPONIVEL }); return; }
     (req as any).log?.error(erroSeguro(err), "Register: erro interno");
     res.status(500).json({ error: "Erro interno." });
   }
@@ -273,7 +298,6 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
 // Hash dummy usado para normalizar o tempo de resposta quando a conta não existe.
 // bcrypt.compare corre sempre o mesmo trabalho independentemente do hash —
 // elimina o timing oracle entre "conta inexistente" e "password errada".
-const DUMMY_HASH = "$2b$12$invalidhashusedfortimingprotectionXXXXXXXXXXXXXXXXXXX";
 
 router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void> => {
   const { email, password } = req.body;
@@ -281,9 +305,12 @@ router.post("/auth/login", validate(loginSchema), async (req, res): Promise<void
   try {
     // Queries por email e username em paralelo — evita que a segunda query
     // sequencial produza uma diferença de latência observável (timing oracle).
+    // REGRA: compara lower(users.email) com o identificador já em minúsculas — funciona com emails guardados com maiúsculas
+    // (contas antigas), antes e depois de qualquer correção de dados, e nunca bloqueia uma conta existente.
+    const ident = normalizarEmailConta(email);
     const [[byEmail], [byUsername]] = await Promise.all([
-      db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase())),
-      db.select().from(usersTable).where(eq(usersTable.username, email.toLowerCase())),
+      db.select().from(usersTable).where(sql`lower(${usersTable.email}) = ${ident}`).orderBy(usersTable.id).limit(1),
+      db.select().from(usersTable).where(sql`lower(${usersTable.username}) = ${ident}`).orderBy(usersTable.id).limit(1),
     ]);
 
     const user = byEmail ?? byUsername ?? null;
