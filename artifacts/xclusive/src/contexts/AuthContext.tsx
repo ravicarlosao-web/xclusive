@@ -12,6 +12,7 @@ import {
   setTokenRefreshHandler,
   setOnTokenRefreshed,
   setOnSessionExpired,
+  executeTokenRefresh,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -316,6 +317,10 @@ interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /** Há token guardado mas a API não respondeu (429, 5xx, rede) depois das tentativas: a sessão mantém-se e não se vai para o login. */
+  erroLigacao: boolean;
+  /** Volta a pedir o utilizador (e a renovar a sessão, se for preciso). */
+  tentarNovamente: () => void;
   isMockMode: boolean;
   /** Saldo da carteira em Kz (null se não autenticado ou modo API real) */
   saldo: number | null;
@@ -385,6 +390,35 @@ function getMockGanhos(): number | null {
   } catch { return null; }
 }
 
+// ─── Sessão: só 401/403 contam como «sem sessão» ─────────────────────────────
+// 429, 5xx e falha de rede são falhas TRANSITÓRIAS: a sessão mantém-se e o utilizador vê o ecrã «Não foi possível ligar».
+const TENTATIVAS_ME = 3;
+const ATRASOS_ME_MS = [1000, 2000, 4000];
+const ATRASO_MAX_MS = 30_000;
+function estadoDe(err: unknown): number | undefined {
+  const e = err as { status?: number; response?: { status?: number } } | null;
+  return e?.status ?? e?.response?.status;
+}
+const semSessao = (st: number | undefined) => st === 401 || st === 403;
+function retryAfterMs(err: unknown): number | null {
+  const v = (err as { headers?: Headers } | null)?.headers?.get?.('retry-after');
+  if (!v) return null;
+  const seg = Number(v);
+  if (Number.isFinite(seg) && seg >= 0) return Math.min(seg * 1000, ATRASO_MAX_MS);
+  const data = Date.parse(v);
+  return Number.isNaN(data) ? null : Math.min(Math.max(data - Date.now(), 0), ATRASO_MAX_MS);
+}
+
+/** Última tentativa de renovação falhou por motivo transitório (429, 5xx, rede)? Então o callback de sessão expirada NÃO apaga a sessão. */
+let renovacaoFalhouTransitoria = false;
+type Renovacao = 'ok' | 'expirada' | 'transitoria';
+/** Renovação de sessão: UM só pedido em curso, partilhado por todos os chamadores (interceptor, temporizador, erro do /auth/me). */
+async function renovarSessao(): Promise<Renovacao> {
+  const novo = await executeTokenRefresh();
+  if (novo) return 'ok';
+  return renovacaoFalhouTransitoria ? 'transitoria' : 'expirada';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -401,14 +435,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isMockToken = import.meta.env.DEV && (token?.startsWith('mock_token_') ?? false);
 
-  const { data: apiUser, isLoading: isUserLoading, error } = useGetMe({
+  const { data: apiUser, isLoading: isUserLoading, error, refetch: refazerMe } = useGetMe({
     query: {
       queryKey: ['/api/auth/me'],
       enabled: !!token && !isMockToken,
-      retry: false,
+      // 401/403: sem tentativas (o tratamento próprio está abaixo). 429, 5xx e rede: 3 tentativas com atrasos crescentes (ou o Retry-After).
+      retry: (falhas: number, err: unknown) => !semSessao(estadoDe(err)) && falhas < TENTATIVAS_ME,
+      retryDelay: (falhas: number, err: unknown) => retryAfterMs(err) ?? ATRASOS_ME_MS[Math.min(falhas, ATRASOS_ME_MS.length - 1)],
       staleTime: 1000 * 60 * 5,
     }
   });
+
+  // Falha transitória ao renovar a sessão (depois de um 401): também mostra «Não foi possível ligar», sem apagar a sessão.
+  const [renovacaoTransitoria, setRenovacaoTransitoria] = useState(false);
 
   const setToken = useCallback((newToken: string | null) => {
     if (newToken) {
@@ -420,32 +459,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /** Tenta renovar o access token via refresh cookie httpOnly.
-   *  Devolve true se bem-sucedido, false se a sessão expirou. */
-  const tryRefreshToken = useCallback(async (): Promise<boolean> => {
-    try {
-      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/auth/refresh`, {
-        method: 'POST',
-        credentials: 'same-origin',
-      });
-      if (!res.ok) {
-        if (res.status === 403) {
-          const corpo = await res.json().catch(() => null);
-          if (corpo?.codigo === 'conta_suspensa') marcarContaSuspensa();
-          else if (corpo?.codigo === 'conta_encerrada') marcarContaEncerrada(typeof corpo?.error === 'string' ? corpo.error : 'A tua conta foi encerrada.');
-        }
-        return false;
-      }
-      const data = await res.json();
-      if (data?.token) { setToken(data.token); return true; }
-      return false;
-    } catch { return false; }
-  }, [setToken]);
+  /** Renova o access token (refresh cookie httpOnly) pelo MESMO voo único do cliente da API: nunca há dois POST /auth/refresh em simultâneo. */
+  const tryRefreshToken = useCallback(async (): Promise<Renovacao> => {
+    const r = await renovarSessao();
+    setRenovacaoTransitoria(r === 'transitoria');
+    return r;
+  }, []);
 
   // Registar handlers de renovação no cliente API global (customFetch)
   useEffect(() => {
     setTokenRefreshHandler(async () => {
+      renovacaoFalhouTransitoria = false;
       try {
         const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
         const res = await fetch(`${base}/api/auth/refresh`, {
@@ -458,6 +482,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (corpo?.codigo === 'conta_suspensa') marcarContaSuspensa();
             else if (corpo?.codigo === 'conta_encerrada') marcarContaEncerrada(typeof corpo?.error === 'string' ? corpo.error : 'A tua conta foi encerrada.');
           }
+          // Só 401/403 = sessão acabada. 429, 5xx e outros: falha transitória, a sessão mantém-se.
+          if (!semSessao(res.status)) renovacaoFalhouTransitoria = true;
           return null;
         }
         const data = await res.json();
@@ -465,8 +491,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(data.token);
           return data.token;
         }
+        renovacaoFalhouTransitoria = true;
         return null;
       } catch {
+        renovacaoFalhouTransitoria = true; // falha de rede
         return null;
       }
     });
@@ -477,6 +505,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     setOnSessionExpired(() => {
+      if (renovacaoFalhouTransitoria) return; // 429, 5xx ou rede ao renovar: não apaga a sessão
       localStorage.removeItem('xclusive_token');
       setTokenState(null);
     });
@@ -502,7 +531,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Em 401/403: tenta refresh antes de fazer logout
   useEffect(() => {
     if (error && !isMockToken) {
-      const status = (error as any)?.response?.status;
+      const status = estadoDe(error);
       // Conta suspensa a meio da sessão: limpa a sessão e leva ao login com o aviso (sem tentar renovar).
       // Conta encerrada (noutro dispositivo): mesma saída, com a mensagem própria.
       if (status === 401 && (error as any)?.data?.codigo === 'conta_encerrada') {
@@ -519,13 +548,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLocation('/login');
         return;
       }
-      if (status === 401 || status === 403) {
-        tryRefreshToken().then(refreshed => {
-          if (refreshed) {
+      if (semSessao(status)) {
+        if (!localStorage.getItem('xclusive_token')) return; // o interceptor já terminou a sessão: nada a renovar
+        // O interceptor acabou de tentar renovar e falhou por motivo transitório: não repete já o pedido; mostra «Não foi possível ligar».
+        if (renovacaoFalhouTransitoria) { setRenovacaoTransitoria(true); return; }
+        tryRefreshToken().then(resultado => {
+          if (resultado === 'ok') {
             queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-          } else {
+          } else if (resultado === 'expirada') {
             setToken(null);
-          }
+          } // 'transitoria': mantém a sessão; o ecrã «Não foi possível ligar» deixa tentar de novo
         });
       }
     }
@@ -1034,14 +1066,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resolvedUser = isMockToken ? mockUser : (apiUser || null);
-  const isLoading = token && !isMockToken ? isUserLoading : false;
+  // 401/403 no /auth/me com token guardado: enquanto o efeito de erro renova (ou desiste), continua «a carregar» (nunca salta já para o login).
+  const aResolverSessao = !!token && !isMockToken && !apiUser && !!error && semSessao(estadoDe(error)) && !renovacaoTransitoria;
+  const isLoading = token && !isMockToken ? (isUserLoading || aResolverSessao) : false;
   const isAuthenticated = !!resolvedUser && !!token;
+  const erroLigacao = !!token && !isMockToken && !resolvedUser && !isUserLoading && ((!!error && !semSessao(estadoDe(error))) || renovacaoTransitoria);
+  const tentarNovamente = () => { setRenovacaoTransitoria(false); void refazerMe(); };
 
   return (
     <AuthContext.Provider value={{
       user: resolvedUser,
       isLoading,
       isAuthenticated,
+      erroLigacao,
+      tentarNovamente,
       isMockMode: isMockToken,
       saldo,
       ganhos,

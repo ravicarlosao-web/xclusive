@@ -296,7 +296,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
               <AvatarImage src={partner.avatarUrl ?? ''} />
               <AvatarFallback>{(partner.nomeExibicao ?? partner.username ?? '?')[0].toUpperCase()}</AvatarFallback>
             </Avatar>
-            <h2 className="text-xl font-bold">{partner.nomeExibicao ?? partner.username}</h2>
+            <h1 className="text-xl font-bold">{partner.nomeExibicao ?? partner.username}</h1>
             <span className="text-muted-foreground text-sm">@{partner.username}</span>
             <Link href={`/perfil/${partner.username}`} className="mt-4 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <span className="inline-flex min-h-[44px] items-center px-4 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg text-sm font-semibold transition-colors">

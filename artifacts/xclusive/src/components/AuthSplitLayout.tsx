@@ -45,7 +45,7 @@ export function AuthSplitLayout({ frase, centroFixo = false, children }: { frase
   );
 
   return (
-    <div className="relative min-h-screen bg-background flex">
+    <main className="relative min-h-screen bg-background flex">
       {/* Botão do tema: canto superior direito do ecrã, comum ao login e ao registo */}
       <BotaoTema className="absolute top-4 right-4 z-30" />
 
@@ -72,6 +72,6 @@ export function AuthSplitLayout({ frase, centroFixo = false, children }: { frase
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md space-y-8">{children}<RodapeLegal /></div>
       </div>
-    </div>
+    </main>
   );
 }

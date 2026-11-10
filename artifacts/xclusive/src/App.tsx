@@ -46,6 +46,8 @@ const queryClient = new QueryClient({
   },
 });
 
+import { EcraSemLigacao } from '@/components/EcraSemLigacao';
+
 function RedirectTo({ to }: { to: string }) {
   const [, setLocation] = useLocation();
   useEffect(() => { setLocation(to); }, [to, setLocation]);
@@ -54,27 +56,30 @@ function RedirectTo({ to }: { to: string }) {
 
 // Full-screen protected route — no AppLayout sidebar (used for immersive flows like KYC)
 function FullscreenProtectedRoute({ component: Component, path }: { component: any, path: string }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) setLocation('/login');
-  }, [isLoading, isAuthenticated, setLocation]);
+    if (!isLoading && !isAuthenticated && !erroLigacao) setLocation('/login');
+  }, [isLoading, isAuthenticated, erroLigacao, setLocation]);
 
+  if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
   if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
   if (!isAuthenticated) return null;
   return <Component />;
 }
 
 function ProtectedRoute({ component: Component, ...rest }: { component: any, path: string }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && !erroLigacao) {
       setLocation('/login');
     }
-  }, [isLoading, isAuthenticated, setLocation]);
+  }, [isLoading, isAuthenticated, erroLigacao, setLocation]);
+
+  if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
 
   if (isLoading) {
     return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
@@ -90,7 +95,7 @@ function ProtectedRoute({ component: Component, ...rest }: { component: any, pat
 }
 
 function PublicOnlyRoute({ component: Component, ...rest }: { component: any, path: string }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -99,6 +104,7 @@ function PublicOnlyRoute({ component: Component, ...rest }: { component: any, pa
     }
   }, [isLoading, isAuthenticated, setLocation]);
 
+  if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
   if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
   
   if (isAuthenticated) return null;
@@ -111,15 +117,16 @@ function PublicOnlyRoute({ component: Component, ...rest }: { component: any, pa
  * e, ao confirmar, o AgeGate leva a /login. Se a idade já foi confirmada, vai direto para /login.
  */
 function EntradaRoute() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || erroLigacao) return;
     if (isAuthenticated) setLocation('/home');
     else if (idadeJaConfirmada()) setLocation('/login');
-  }, [isLoading, isAuthenticated, setLocation]);
+  }, [isLoading, isAuthenticated, erroLigacao, setLocation]);
 
+  if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
   if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
   return <div className="min-h-[100dvh] bg-background" />;
 }

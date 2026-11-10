@@ -5,13 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useColunaParada } from '@/hooks/useColunaParada';
-import { Loader2, Camera, User, Lock, Bell, Shield, LogOut, Star, Sun, Moon, Check } from 'lucide-react';
+import { Loader2, Camera, User, Lock, Shield, LogOut, Star, Sun, Moon, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
@@ -24,7 +23,6 @@ import { enviarImagem } from '@/lib/uploadImagem';
 const SECCOES = [
   { id: 'profile', rotulo: 'Editar Perfil', Icone: User, testid: undefined },
   { id: 'privacy', rotulo: 'Privacidade', Icone: Lock, testid: undefined },
-  { id: 'notifications', rotulo: 'Notificações', Icone: Bell, testid: undefined },
   { id: 'aparencia', rotulo: 'Aparência', Icone: Sun, testid: 'tab-aparencia' },
   { id: 'subscricoes', rotulo: 'Subscrições', Icone: Star, testid: 'tab-subscricoes' },
   { id: 'security', rotulo: 'Segurança', Icone: Shield, testid: undefined },
@@ -203,15 +201,7 @@ export default function Settings() {
           <TabsContent value="privacy" className="mt-0 space-y-8">
             <h2 className="text-xl font-bold mb-6">Privacidade da Conta</h2>
             
-            <div className="space-y-6">
-              <div className="flex items-center justify-between p-4 border border-border rounded-xl">
-                <div className="space-y-0.5">
-                  <Label className="text-base font-bold">Estado de Atividade</Label>
-                  <p className="text-sm text-muted-foreground">Permitir que as contas que segues vejam quando estiveste online pela última vez.</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-            </div>
+            {/* «Estado de Atividade» e «Notificações» escondidos: os interruptores não gravavam nada (sem backend). */}
 
             {/* Mensagens: quem pode escrever-te (só criadores) e contas bloqueadas (todos); não aparece em modo mock (sem API) */}
             {!isMockMode && user && (
@@ -242,18 +232,6 @@ export default function Settings() {
                 <Mais18Opcoes atual={user.preferenciaMais18 ?? null} />
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="notifications" className="mt-0">
-            <h2 className="text-xl font-bold mb-6">Preferências de Notificações</h2>
-            <div className="space-y-6">
-              {['Gostos', 'Comentários', 'Novos Seguidores', 'Mensagens Diretas', 'Subscrições'].map((item) => (
-                <div key={item} className="flex items-center justify-between border-b border-border pb-4 last:border-0">
-                  <span className="font-medium">{item}</span>
-                  <Switch defaultChecked />
-                </div>
-              ))}
-            </div>
           </TabsContent>
 
           <TabsContent value="aparencia" className="mt-0 space-y-6 focus-visible:outline-none" data-testid="aparencia">

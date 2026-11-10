@@ -135,6 +135,8 @@
   --popover-foreground: 0 0% 100%;
   --popover-border: 0 0% 15%;
   --primary: 344 100% 62%;
+  /* Fundo sólido do rosa com texto BRANCO por cima (botões e bolhas): 4,56:1 (o rosa 62 % dá 3,41:1). O texto e os ícones cor-de-rosa mantêm --primary. */
+  --primary-solido: 344 100% 46%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 10%;
   --secondary-foreground: 0 0% 100%;
@@ -263,3 +265,9 @@
 .coluna-direita > :last-child { margin-bottom: 0; }
 .coluna-direita[data-linhas="4"] .cd-top-linha:nth-child(n+5) { display: none; }
 .coluna-direita[data-linhas="3"] .cd-top-linha:nth-child(n+4) { display: none; }
+
+/* Tema escuro: botões e bolhas com fundo rosa e texto branco usam o rosa sólido (contraste AA); texto/ícones rosa não mudam. Claro não muda. */
+.dark .bg-primary.text-white,
+.dark .bg-primary.text-primary-foreground { background-color: hsl(var(--primary-solido)); }
+.dark .bg-primary.text-white:hover,
+.dark .bg-primary.text-primary-foreground:hover { background-color: hsl(var(--primary-solido) / 0.9); }
