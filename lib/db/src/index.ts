@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import * as schema from "./schema";
+import { sslmodeExplicito } from "./sslmode";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -19,7 +20,9 @@ const { Pool } = pg;
 const rawSupabase = process.env.SUPABASE_DATABASE_URL ?? "";
 const isValidPgUrl =
   rawSupabase.startsWith("postgresql://") || rawSupabase.startsWith("postgres://");
-const connectionString = (isValidPgUrl ? rawSupabase : null) ?? process.env.DATABASE_URL;
+const urlBruto = (isValidPgUrl ? rawSupabase : null) ?? process.env.DATABASE_URL;
+// sslmode=prefer|require|verify-ca passam a 'verify-full' (é o que o pg 8 já faz; fica explícito para não mudar com o pg v9). Ver sslmode.ts.
+const connectionString = urlBruto ? sslmodeExplicito(urlBruto) : urlBruto;
 
 if (!connectionString) {
   throw new Error(
@@ -31,6 +34,7 @@ if (!connectionString) {
 // Supabase exige SSL; a DB interna do Replit não precisa.
 // rejectUnauthorized: false aceita o certificado auto-assinado do pgbouncer
 // do Supabase sem precisar de instalar o certificado CA manualmente.
+// ATENÇÃO: um sslmode no URL tem prioridade sobre este ssl (o pg aplica os parâmetros do URL por cima). Este ssl só vale para URLs SEM sslmode.
 const isLocal =
   connectionString.includes("localhost") ||
   connectionString.includes("127.0.0.1");
