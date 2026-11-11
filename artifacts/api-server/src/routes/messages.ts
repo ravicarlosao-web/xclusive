@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable, reportsTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { permissaoMensagem, textoRegra, TEXTO_BLOQUEASTE } from "../lib/permissaoMensagem";
 import { GORJETA_MENSAGEM, GorjetaErro, enviarGorjetaMensagem, erroDePermissaoGorjeta, formatarKz } from "../lib/gorjetaMensagem";
@@ -23,52 +23,63 @@ const router = Router();
 
 const CONVERSATIONS_MAX_LIMIT = 50;
 
-// Lista de conversas (paginada)
+// Lista de conversas (paginada), ordenada pela ÚLTIMA ATIVIDADE (mensagem mais recente; uma conversa ainda sem mensagens conta pela
+// data de criação), com desempate pelo id da conversa: a ordem é determinística, por isso a paginação não repete nem salta conversas.
 router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
   const limit = Math.min(CONVERSATIONS_MAX_LIMIT, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
   const offset = (page - 1) * limit;
 
-  const participations = await db.select({ conversationId: conversationParticipantsTable.conversationId })
-    .from(conversationParticipantsTable)
-    .where(and(eq(conversationParticipantsTable.utilizadorId, userId), semParticipanteInativo(conversationParticipantsTable.conversationId), semBloqueadoPorMim(userId, conversationParticipantsTable.conversationId)))
-    .limit(limit)
-    .offset(offset);
-
-  const conversationIds = participations.map(p => p.conversationId);
+  const ordenadas = await db.execute(sql`
+    SELECT c.id AS id, c.tipo AS tipo, c.criado_em AS criado_em
+    FROM conversation_participants cp
+    JOIN conversations c ON c.id = cp.conversation_id
+    LEFT JOIN LATERAL (SELECT m.criado_em FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) ul ON true
+    WHERE cp.utilizador_id = ${userId}
+      AND ${semParticipanteInativo(sql`c.id`)}
+      AND ${semBloqueadoPorMim(userId, sql`c.id`)}
+    ORDER BY GREATEST(ul.criado_em, c.criado_em) DESC, c.id DESC
+    LIMIT ${limit} OFFSET ${offset}`);
+  const convs = (ordenadas.rows as { id: number; tipo: "privada" | "grupo"; criado_em: Date }[]);
+  const conversationIds = convs.map((c) => c.id);
 
   if (conversationIds.length === 0) {
     res.json([]);
     return;
   }
 
-  const result = await Promise.all(conversationIds.map(async (convId) => {
-    const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, convId));
-    const participants = await db.select({ u: usersTable })
-      .from(conversationParticipantsTable)
-      .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
-      .where(and(eq(conversationParticipantsTable.conversationId, convId)));
+  // Em lote (3 consultas para a página toda, em vez de 4 por conversa)
+  const participantes = await db.select({ conversationId: conversationParticipantsTable.conversationId, u: usersTable })
+    .from(conversationParticipantsTable)
+    .innerJoin(usersTable, eq(conversationParticipantsTable.utilizadorId, usersTable.id))
+    .where(inArray(conversationParticipantsTable.conversationId, conversationIds));
+  const ultimas = await db.selectDistinctOn([messagesTable.conversationId], { m: messagesTable, valorGorjeta: messageTipsTable.valor }).from(messagesTable)
+    .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
+    .where(inArray(messagesTable.conversationId, conversationIds))
+    .orderBy(messagesTable.conversationId, desc(messagesTable.id));
+  // Não lidas = recebidas por mim (as que eu enviei não contam; é o mesmo critério do /conversations/unread-count)
+  const naoLidas = await db.select({ conversationId: messagesTable.conversationId, unread: sql<number>`count(*)::int` })
+    .from(messagesTable)
+    .where(and(inArray(messagesTable.conversationId, conversationIds), eq(messagesTable.lido, false), sql`${messagesTable.autorId} != ${userId}`))
+    .groupBy(messagesTable.conversationId);
+  const porConversa = <T extends { conversationId: number }>(l: T[]) => { const m = new Map<number, T[]>(); for (const x of l) { const a = m.get(x.conversationId); if (a) a.push(x); else m.set(x.conversationId, [x]); } return m; };
+  const partPorConv = porConversa(participantes);
+  const ultimaPorConv = new Map(ultimas.map((x) => [x.m.conversationId, x]));
+  const naoLidasPorConv = new Map(naoLidas.map((x) => [x.conversationId, x.unread]));
 
-    const [ultima] = await db.select({ m: messagesTable, valorGorjeta: messageTipsTable.valor }).from(messagesTable)
-      .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
-      .where(eq(messagesTable.conversationId, convId))
-      .orderBy(desc(messagesTable.criadoEm))
-      .limit(1);
+  const result = convs.map((conv) => {
+    const convId = conv.id;
+    const ultima = ultimaPorConv.get(convId);
     const lastMsg = ultima?.m;
-
-    const [{ unread }] = await db.select({ unread: sql<number>`count(*)::int` })
-      .from(messagesTable)
-      .where(and(eq(messagesTable.conversationId, convId), eq(messagesTable.lido, false)));
-
     return {
       id: convId,
-      participantes: participants.map(({ u }) => ({
+      participantes: (partPorConv.get(convId) ?? []).map(({ u }) => ({
         id: u.id, username: u.username, nomeExibicao: u.nomeExibicao,
         avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta,
         estaASeguir: false, segueVoce: false, totalSeguidores: 0,
       })),
-      tipo: conv?.tipo || "privada",
+      tipo: conv.tipo || "privada",
       ultimaMensagem: lastMsg ? {
         id: lastMsg.id,
         autorId: lastMsg.autorId,
@@ -81,10 +92,10 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
         ...(!lastMsg.retiradoEm && lastMsg.tipo === "gorjeta" && ultima?.valorGorjeta != null ? { gorjeta: { valor: Number(ultima.valorGorjeta) } } : {}),
         ...(lastMsg.retiradoEm ? { retirada: true } : {}),
       } : null,
-      totalNaoLidas: unread || 0,
-      criadoEm: conv?.criadoEm?.toISOString() || new Date().toISOString(),
+      totalNaoLidas: naoLidasPorConv.get(convId) ?? 0,
+      criadoEm: new Date(conv.criado_em).toISOString(),
     };
-  }));
+  });
 
   res.json(result);
 });
@@ -200,7 +211,30 @@ async function verificarParticipante(conversationId: number, userId: number): Pr
   return !!p;
 }
 
-// Mensagens de uma conversa
+const MENSAGENS_LIMITE_PADRAO = 50;
+const MENSAGENS_LIMITE_MAX = 100;
+const ID_MAX = 2147483647;
+
+/** Formato público de uma mensagem da conversa (a mesma regra em todas as páginas: retiradas ocultas, gorjeta só com o valor). */
+function formatarMensagem(m: typeof messagesTable.$inferSelect, u: typeof usersTable.$inferSelect, valorGorjeta: string | null) {
+  return {
+    id: m.id,
+    autorId: m.autorId,
+    autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
+    tipo: m.tipo,
+    // Mensagem retirada pela moderação: texto, imagem e gorjeta ficam ocultos (a conversa mantém-se)
+    conteudo: m.retiradoEm ? null : m.conteudo,
+    mediaUrl: m.retiradoEm ? null : urlMedia(m.mediaUrl),
+    lido: m.lido,
+    criadoEm: m.criadoEm.toISOString(),
+    // Gorjeta: só o valor (nunca saldo nem comissão)
+    ...(!m.retiradoEm && m.tipo === "gorjeta" && valorGorjeta != null ? { gorjeta: { valor: Number(valorGorjeta) } } : {}),
+    ...(m.retiradoEm ? { retirada: true } : {}),
+  };
+}
+
+// Mensagens de uma conversa: as últimas `limite` (50 por omissão, máximo 100) ou, com `antes=<id>`, as `limite` anteriores a essa mensagem.
+// Paginação por cursor = id da mensagem (único e monótono): mensagens novas nunca deslocam as páginas antigas.
 router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
@@ -213,31 +247,35 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
   if (await temParticipanteInativo(id)) { res.status(404).json({ error: "Conversa indisponível." }); return; }
   const perm = await permissaoMensagem(req.userId!, { conversationId: id });
 
-  const messages = await db.select({ m: messagesTable, u: usersTable, valorGorjeta: messageTipsTable.valor })
+  // Parâmetros de paginação (validados SÓ depois de todas as verificações de acesso acima)
+  const { antes: antesQ, limite: limiteQ } = req.query;
+  let antes: number | null = null;
+  if (antesQ !== undefined) {
+    if (typeof antesQ !== "string" || !/^[1-9]\d{0,9}$/.test(antesQ) || Number(antesQ) > ID_MAX) { res.status(400).json({ error: "Cursor inválido." }); return; }
+    antes = Number(antesQ);
+  }
+  let limite = MENSAGENS_LIMITE_PADRAO;
+  if (limiteQ !== undefined) {
+    if (typeof limiteQ !== "string" || !/^[1-9]\d{0,9}$/.test(limiteQ)) { res.status(400).json({ error: "Limite inválido." }); return; }
+    limite = Math.min(MENSAGENS_LIMITE_MAX, Number(limiteQ));
+  }
+
+  const linhas = await db.select({ m: messagesTable, u: usersTable, valorGorjeta: messageTipsTable.valor })
     .from(messagesTable)
     .innerJoin(usersTable, eq(messagesTable.autorId, usersTable.id))
     .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
-    .where(eq(messagesTable.conversationId, id))
-    .orderBy(desc(messagesTable.criadoEm))
-    .limit(50);
+    .where(antes === null ? eq(messagesTable.conversationId, id) : and(eq(messagesTable.conversationId, id), lt(messagesTable.id, antes)))
+    .orderBy(desc(messagesTable.id))
+    .limit(limite + 1);   // +1: sabe-se se há mais sem uma segunda consulta
+  const hasMore = linhas.length > limite;
+  const pagina = hasMore ? linhas.slice(0, limite) : linhas;
 
   res.json({
-    messages: messages.reverse().map(({ m, u, valorGorjeta }) => ({
-      id: m.id,
-      autorId: m.autorId,
-      autor: { id: u.id, username: u.username, nomeExibicao: u.nomeExibicao, avatarUrl: urlMedia(u.avatarUrl), verificado: u.verificado, tipoConta: u.tipoConta, estaASeguir: false, segueVoce: false, totalSeguidores: 0 },
-      tipo: m.tipo,
-      // Mensagem retirada pela moderação: texto, imagem e gorjeta ficam ocultos (a conversa mantém-se)
-      conteudo: m.retiradoEm ? null : m.conteudo,
-      mediaUrl: m.retiradoEm ? null : urlMedia(m.mediaUrl),
-      lido: m.lido,
-      criadoEm: m.criadoEm.toISOString(),
-      // Gorjeta: só o valor (nunca saldo nem comissão)
-      ...(!m.retiradoEm && m.tipo === "gorjeta" && valorGorjeta != null ? { gorjeta: { valor: Number(valorGorjeta) } } : {}),
-      ...(m.retiradoEm ? { retirada: true } : {}),
-    })),
+    messages: pagina.reverse().map(({ m, u, valorGorjeta }) => formatarMensagem(m, u, valorGorjeta)),
     page: 1,
-    hasMore: false,
+    hasMore,
+    // Cursor para a página anterior (id da mensagem mais antiga devolvida); null quando já não há mais
+    proximoCursor: hasMore ? pagina[0].m.id : null,
     // Sem pedido novo: o composer sabe se pode enviar. O bloqueio nunca é revelado a quem foi bloqueado (restricao null).
     podeEnviar: perm.pode,
     restricao: perm.estado === "regra" ? "regra" : perm.estado === "bloqueaste" ? "bloqueaste" : null,

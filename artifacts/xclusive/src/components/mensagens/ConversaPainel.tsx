@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import {
   getGetConversationsQueryKey,
   getGetUnreadConversationsCountQueryKey,
 } from '@workspace/api-client-react';
+import { customFetch, type Message } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -82,7 +83,71 @@ export function ConversaPainel({ convId }: { convId: number }) {
       retry: (n, e) => { const st = (e as { status?: number } | null)?.status; return st === 404 || st === 403 ? false : n < 1; },
     },
   });
-  const messages = msgData?.messages ?? [];
+  // Mensagens: a janela mais recente (esta query, que se atualiza) + as páginas anteriores (cursor `antes`), unidas por id e em ordem.
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [temMais, setTemMais] = useState(false);          // há mensagens anteriores ainda por carregar
+  const [carregouAnteriores, setCarregouAnteriores] = useState(false);
+  const [aCarregarAnteriores, setACarregarAnteriores] = useState(false);
+  const [erroAnteriores, setErroAnteriores] = useState(false);
+  const emVoo = useRef(false);                             // um só pedido de anteriores de cada vez
+  const erroRef = useRef(false);                           // o último pedido falhou: não repete sozinho (só com «Tentar novamente»)
+  const mensagensRef = useRef<Message[]>([]);
+  mensagensRef.current = messages;
+  useEffect(() => {
+    if (!msgData) return;
+    const prev = mensagensRef.current, nova = msgData.messages;
+    // A janela recente deixou de tocar nas já carregadas (chegaram mais de uma página de mensagens de uma vez): recomeça nas mais recentes
+    if (prev.length && nova.length && msgData.hasMore && nova[0].id > prev[prev.length - 1].id) { setMessages(nova); setTemMais(true); setCarregouAnteriores(false); return; }
+    if (!prev.length) setTemMais(msgData.hasMore);
+    const porId = new Map(prev.map((m) => [m.id, m] as const));
+    for (const m of nova) porId.set(m.id, m);
+    setMessages([...porId.values()].sort((a, b) => a.id - b.id));
+  }, [msgData]);
+
+  // Posição: mensagem-âncora (a primeira visível) e a sua distância ao topo do painel. Repõe-se quando se acrescenta no topo
+  // e quando algo acima da âncora muda de altura (imagens que carregam depois), para a leitura não saltar.
+  const ancora = useRef<{ id: number; topo: number } | null>(null);
+  const reporAncora = useRef(false);
+  const medirAncora = () => {
+    const el = scrollRef.current; if (!el) return;
+    const caixa = el.getBoundingClientRect();
+    for (const n of Array.from(el.querySelectorAll<HTMLElement>('[data-msg-id]'))) {
+      const r = n.getBoundingClientRect();
+      if (r.bottom > caixa.top + 1) { ancora.current = { id: Number(n.dataset.msgId), topo: r.top - caixa.top }; return; }
+    }
+    ancora.current = null;
+  };
+  const alinharAncora = () => {
+    const el = scrollRef.current, a = ancora.current; if (!el || !a) return;
+    const n = el.querySelector<HTMLElement>(`[data-msg-id="${a.id}"]`); if (!n) return;
+    const dif = (n.getBoundingClientRect().top - el.getBoundingClientRect().top) - a.topo;
+    if (Math.abs(dif) >= 1) { ultimoAuto.current = Date.now(); el.scrollTop += dif; }
+  };
+  const carregarAnteriores = async () => {
+    if (emVoo.current || !temMais || !messages.length) return;
+    emVoo.current = true; erroRef.current = false; setACarregarAnteriores(true); setErroAnteriores(false);
+    try {
+      const r = await customFetch<{ messages: Message[]; hasMore: boolean }>(`/api/conversations/${convId}/messages?antes=${messages[0].id}&limite=50`);
+      medirAncora(); reporAncora.current = true;
+      setMessages((prev) => { const porId = new Map(prev.map((m) => [m.id, m] as const)); for (const m of r.messages) if (!porId.has(m.id)) porId.set(m.id, m); return [...porId.values()].sort((a, b) => a.id - b.id); });
+      setTemMais(r.hasMore); setCarregouAnteriores(true);
+    } catch {
+      erroRef.current = true; setErroAnteriores(true);
+    } finally {
+      emVoo.current = false; setACarregarAnteriores(false);
+    }
+  };
+  useLayoutEffect(() => { if (reporAncora.current) { reporAncora.current = false; alinharAncora(); } }, [messages]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Carrega sozinho ao chegar perto do topo, mas só depois de a pessoa ter rolado (ao abrir, o topo ainda está visível antes do salto para o fim)
+  const jaRolou = useRef(false);
+  const topoRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const topo = topoRef.current, raiz = scrollRef.current;
+    if (!topo || !raiz || !temMais || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && jaRolou.current && !erroRef.current) void carregarAnteriores(); }, { root: raiz, rootMargin: '200px 0px 0px 0px' });
+    io.observe(topo);
+    return () => io.disconnect();
+  });   // sem dependências: recria o observador a cada render para ver o estado atual (barato)
   const statusErro = (msgErro as { status?: number } | null)?.status;
   const erroIndisponivel = isError && (statusErro === 404 || statusErro === 403);
 
@@ -134,14 +199,18 @@ export function ConversaPainel({ convId }: { convId: number }) {
 
   // Auto-scroll para o fundo sempre que chegam mensagens novas
   // Scroll só dentro do painel (nunca da página): ao abrir salta para o fim; depois, suave.
+  // Depende do id da ÚLTIMA mensagem (não do total): acrescentar mensagens antigas no topo não faz saltar para o fim.
+  // Se a pessoa está a ler mais acima, uma mensagem nova DO OUTRO não a puxa para baixo; as suas desce sempre.
+  const ultimaMsg = messages.length ? messages[messages.length - 1] : null;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (!jaAbriu.current && messages.length === 0) return;
+    if (jaAbriu.current && !noFim.current && ultimaMsg && ultimaMsg.autorId !== (user as any)?.id) return;
     noFim.current = true;
     irParaFim(el, jaAbriu.current ? 'smooth' : 'auto');
     jaAbriu.current = true;
-  }, [messages.length]);
+  }, [ultimaMsg?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const isSending = isSendingTexto || anexo?.estado === 'a_enviar';
 
@@ -188,7 +257,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
   useEffect(() => {
     const c = conteudoRef.current;
     if (!c || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => { const el = scrollRef.current; if (el && noFim.current) irParaFim(el); });
+    const ro = new ResizeObserver(() => { const el = scrollRef.current; if (!el) return; if (noFim.current) irParaFim(el); else alinharAncora(); });
     ro.observe(c);
     return () => ro.disconnect();
   }, []);
@@ -286,11 +355,30 @@ export function ConversaPainel({ convId }: { convId: number }) {
       ) : (<>
 
       {/* Messages Area */}
-      <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
+      <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; jaRolou.current = true; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; medirAncora(); }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
 
         <div ref={conteudoRef} className="flex flex-col">
-        {/* Perfil do parceiro no topo */}
-        {partner && (
+        {/* Mensagens anteriores: botão (e carregamento automático ao chegar perto do topo), erro e fim */}
+        <div ref={topoRef} className="flex flex-col items-center gap-2 pt-1" data-testid="conversa-topo">
+          {temMais && !erroAnteriores && (
+            <button type="button" onClick={() => { jaRolou.current = true; void carregarAnteriores(); }} disabled={aCarregarAnteriores} data-testid="conversa-carregar-anteriores"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-border bg-secondary px-4 text-sm font-semibold text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {aCarregarAnteriores ? (<><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> A carregar…</>) : 'Carregar mensagens anteriores'}
+            </button>
+          )}
+          {erroAnteriores && (
+            <div role="alert" data-testid="conversa-anteriores-erro" className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+              <p>Não foi possível carregar as mensagens anteriores.</p>
+              <button type="button" onClick={() => { void carregarAnteriores(); }} data-testid="conversa-anteriores-tentar"
+                className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-secondary px-4 font-semibold text-foreground hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tentar novamente</button>
+            </div>
+          )}
+          {!temMais && carregouAnteriores && <p className="text-xs text-muted-foreground" data-testid="conversa-inicio">Início da conversa</p>}
+        </div>
+        {/* Enquanto há mensagens anteriores por carregar o cartão não se mostra, mas a página mantém o seu título */}
+        {partner && temMais && <h1 className="sr-only">Conversa com {partner.nomeExibicao ?? partner.username}</h1>}
+        {/* Perfil do parceiro no topo (só quando já não há mensagens anteriores por carregar) */}
+        {partner && !temMais && (
           <div className="flex flex-col items-center justify-center py-10">
             <Avatar className="w-24 h-24 mb-4">
               <AvatarImage src={partner.avatarUrl ?? ''} />
@@ -364,7 +452,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
                 </div>
             );
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id} data-msg-id={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 {!isMe && (
                   <Avatar className="w-8 h-8 mr-2 self-end mb-1 shrink-0">
                     <AvatarImage src={avatarUrl} />
