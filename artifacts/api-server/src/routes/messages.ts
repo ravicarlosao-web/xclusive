@@ -1,6 +1,6 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable, reportsTable } from "@workspace/db";
-import { eq, and, sql, desc, inArray, lt } from "drizzle-orm";
+import { eq, and, sql, desc, asc, inArray, lt, gt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { permissaoMensagem, textoRegra, TEXTO_BLOQUEASTE } from "../lib/permissaoMensagem";
 import { GORJETA_MENSAGEM, GorjetaErro, enviarGorjetaMensagem, erroDePermissaoGorjeta, formatarKz } from "../lib/gorjetaMensagem";
@@ -233,11 +233,59 @@ function formatarMensagem(m: typeof messagesTable.$inferSelect, u: typeof usersT
   };
 }
 
+/**
+ * Poll da conversa aberta: GET /conversations/:id/messages?depois=<id>[&limite=n] devolve, por ordem CRESCENTE, só as mensagens com id MAIOR que `depois`
+ * (índice (conversation_id, id)). Pensado para ser barato: um poll sem novidades faz 1 consulta de acesso (participante e conta inativa juntos, na mesma
+ * ordem de decisão 403 → 404 do GET normal) e 1 consulta de mensagens, além das 2 da autenticação; só quando há novidades calcula `podeEnviar`/`restricao`.
+ * Nunca segura uma ligação do Pool à espera (sem transação, sem espera longa). O mapeamento é o das outras páginas (retiradas ocultas, gorjeta só com o valor).
+ */
+async function lerNovas(req: AuthRequest, res: Response, id: number): Promise<void> {
+  const userId = req.userId!;
+  // Acesso (a mesma decisão do GET normal, numa só consulta): não participante → 403; conta inativa → 404. SÓ depois se valida o cursor.
+  const r = await db.execute(sql`SELECT
+    EXISTS (SELECT 1 FROM conversation_participants WHERE conversation_id = ${id} AND utilizador_id = ${userId}) AS participa,
+    EXISTS (SELECT 1 FROM conversation_participants cp JOIN users u ON u.id = cp.utilizador_id WHERE cp.conversation_id = ${id} AND NOT u.ativo) AS inativo`);
+  const acesso = r.rows[0] as { participa: boolean; inativo: boolean } | undefined;
+  if (!acesso?.participa) { res.status(403).json({ error: "Sem acesso a esta conversa" }); return; }
+  if (acesso.inativo) { res.status(404).json({ error: "Conversa indisponível." }); return; }
+
+  const { depois: depoisQ, antes: antesQ, limite: limiteQ } = req.query;
+  if (antesQ !== undefined) { res.status(400).json({ error: "Usa «depois» ou «antes», não os dois." }); return; }
+  if (typeof depoisQ !== "string" || !/^[1-9]\d{0,9}$/.test(depoisQ) || Number(depoisQ) > ID_MAX) { res.status(400).json({ error: "Cursor inválido." }); return; }
+  const depois = Number(depoisQ);
+  let limite = MENSAGENS_LIMITE_PADRAO;
+  if (limiteQ !== undefined) {
+    if (typeof limiteQ !== "string" || !/^[1-9]\d{0,9}$/.test(limiteQ)) { res.status(400).json({ error: "Limite inválido." }); return; }
+    limite = Math.min(MENSAGENS_LIMITE_MAX, Number(limiteQ));
+  }
+
+  const linhas = await db.select({ m: messagesTable, u: usersTable, valorGorjeta: messageTipsTable.valor })
+    .from(messagesTable)
+    .innerJoin(usersTable, eq(messagesTable.autorId, usersTable.id))
+    .leftJoin(messageTipsTable, eq(messageTipsTable.messageId, messagesTable.id))
+    .where(and(eq(messagesTable.conversationId, id), gt(messagesTable.id, depois)))
+    .orderBy(asc(messagesTable.id))
+    .limit(limite + 1);
+  res.setHeader("Cache-Control", "no-store");
+  if (linhas.length === 0) { res.json({ messages: [], page: 1, hasMore: false }); return; }   // o caso comum: nada de novo, nada mais a calcular
+  const hasMore = linhas.length > limite;
+  const perm = await permissaoMensagem(userId, { conversationId: id });
+  res.json({
+    messages: (hasMore ? linhas.slice(0, limite) : linhas).map(({ m, u, valorGorjeta }) => formatarMensagem(m, u, valorGorjeta)),
+    page: 1,
+    hasMore,   // há mais novas do que o limite: o cliente volta a pedir logo, a partir da última que recebeu
+    podeEnviar: perm.pode,
+    restricao: perm.estado === "regra" ? "regra" : perm.estado === "bloqueaste" ? "bloqueaste" : null,
+  });
+}
+
 // Mensagens de uma conversa: as últimas `limite` (50 por omissão, máximo 100) ou, com `antes=<id>`, as `limite` anteriores a essa mensagem.
 // Paginação por cursor = id da mensagem (único e monótono): mensagens novas nunca deslocam as páginas antigas.
 router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+
+  if (req.query.depois !== undefined) { await lerNovas(req, res, id); return; }   // poll da conversa aberta (ver acima)
 
   // IDOR: verificar que o utilizador é participante desta conversa
   if (!(await verificarParticipante(id, req.userId!))) {
