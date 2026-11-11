@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } fr
 import { Link, useLocation } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Ban, Coins, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Ban, Coins, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BloqueioDialog, textoErroServidor } from './bloqueio';
 import { GorjetaCartao } from './GorjetaCartao';
@@ -25,6 +25,7 @@ import {
   getGetUnreadConversationsCountQueryKey,
 } from '@workspace/api-client-react';
 import { customFetch, type Message } from '@workspace/api-client-react';
+import { useNovasMensagens, type RespostaDepois } from '@/hooks/useNovasMensagens';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -80,6 +81,8 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const { data: msgData, isLoading, isError, error: msgErro } = useGetMessages(convId, {
     query: {
       queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0,
+      // Além do poll de mensagens novas: janela completa de 60 em 60 s (não corre com o separador escondido) e ao voltar ao separador
+      refetchInterval: 60_000, refetchOnWindowFocus: true,
       retry: (n, e) => { const st = (e as { status?: number } | null)?.status; return st === 404 || st === 403 ? false : n < 1; },
     },
   });
@@ -193,9 +196,59 @@ export function ConversaPainel({ convId }: { convId: number }) {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) });
         queryClient.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+        reiniciarPollRef.current();   // depois de enviar, o ritmo do poll volta ao base
       },
     },
   });
+
+  // ── Mensagens novas na conversa aberta (poll inteligente) ──────────────────────────────────────────────────────────────────────────
+  const reiniciarPollRef = useRef<() => void>(() => {});
+  const [naoVistas, setNaoVistas] = useState(0);            // mensagens do outro que chegaram enquanto se lê mais acima
+  const pendenteLida = useRef(false);                       // há mensagens do outro por marcar como lidas
+  const ultimaLida = useRef(0);
+  const timerLida = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Marca a conversa como lida: só com o separador visível e a pessoa no fundo, e no máximo uma vez de 5 em 5 segundos. */
+  const marcarLida = () => {
+    if (timerLida.current) return;
+    const executar = () => {
+      timerLida.current = null;
+      if (document.visibilityState === 'hidden' || !noFim.current || !pendenteLida.current) return;
+      pendenteLida.current = false;
+      ultimaLida.current = Date.now();
+      markConversationRead({ id: convId });
+    };
+    const espera = Math.max(0, ultimaLida.current + 5000 - Date.now());
+    if (espera === 0) executar(); else timerLida.current = setTimeout(executar, espera);
+  };
+  useEffect(() => () => { if (timerLida.current) clearTimeout(timerLida.current); }, []);
+
+  const { semLigacao, tentarAgora, reiniciar: reiniciarPoll } = useNovasMensagens({
+    convId,
+    ativo: convId > 0 && !!msgData && !erroIndisponivel,
+    ultimoId: () => (mensagensRef.current.length ? mensagensRef.current[mensagensRef.current.length - 1].id : null),
+    aoReceber: (r: RespostaDepois) => {
+      setMessages((prev) => { const porId = new Map(prev.map((m) => [m.id, m] as const)); for (const m of r.messages) porId.set(m.id, m); return [...porId.values()].sort((a, b) => a.id - b.id); });
+      // O compositor reflete já o estado (bloqueios, regra de quem pode escrever) sem esperar pela janela completa
+      queryClient.setQueryData(getGetMessagesQueryKey(convId), (antigo: unknown) => {
+        const a = antigo as { podeEnviar?: boolean; restricao?: string | null } | undefined;
+        return a ? { ...a, podeEnviar: r.podeEnviar ?? a.podeEnviar, restricao: r.restricao !== undefined ? r.restricao : a.restricao } : antigo;
+      });
+      const dosOutros = r.messages.filter((m) => m.autorId !== (user as any)?.id).length;
+      if (dosOutros > 0) {
+        pendenteLida.current = true;
+        if (noFim.current && document.visibilityState !== 'hidden') marcarLida();
+        else setNaoVistas((n) => n + dosOutros);
+      }
+    },
+    aoIndisponivel: () => { void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(convId) }); },
+  });
+  reiniciarPollRef.current = reiniciarPoll;
+  // Voltar ao separador com a conversa no fundo e mensagens por marcar: marca-as
+  useEffect(() => {
+    const aoVoltar = () => { if (document.visibilityState !== 'hidden' && noFim.current && pendenteLida.current) marcarLida(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
+  });   // sem dependências: vê sempre o estado atual
 
   // Auto-scroll para o fundo sempre que chegam mensagens novas
   // Scroll só dentro do painel (nunca da página): ao abrir salta para o fim; depois, suave.
@@ -354,8 +407,15 @@ export function ConversaPainel({ convId }: { convId: number }) {
         </div>
       ) : (<>
 
+      <div role="status" aria-live="polite" className="sr-only" data-testid="conversa-novas-aviso">{naoVistas > 0 ? (naoVistas === 1 ? 'Nova mensagem' : `${naoVistas} novas mensagens`) : ''}</div>
+      {semLigacao && (
+        <div role="status" data-testid="conversa-sem-ligacao" className="flex items-center justify-center gap-3 border-b border-border bg-secondary px-4 py-1.5 text-xs text-muted-foreground">
+          <span>Sem ligação. A tentar de novo…</span>
+          <button type="button" data-testid="conversa-tentar-agora" onClick={tentarAgora} className="inline-flex min-h-[44px] items-center font-semibold text-foreground underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tentar agora</button>
+        </div>
+      )}
       {/* Messages Area */}
-      <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; jaRolou.current = true; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; medirAncora(); }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
+      <div ref={scrollRef} onScroll={(e) => { if (Date.now() - ultimoAuto.current < 800) return; jaRolou.current = true; const el = e.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; medirAncora(); if (noFim.current) { setNaoVistas(0); if (pendenteLida.current) marcarLida(); } }} data-testid="conversa-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain [overflow-anchor:none] p-4 custom-scrollbar flex flex-col">
 
         <div ref={conteudoRef} className="flex flex-col">
         {/* Mensagens anteriores: botão (e carregamento automático ao chegar perto do topo), erro e fim */}
@@ -466,6 +526,16 @@ export function ConversaPainel({ convId }: { convId: number }) {
             );
           })}
           <div className="h-4" />
+          {/* Mensagens novas do outro enquanto se lê mais acima: não salta; um botão leva ao fim */}
+          {naoVistas > 0 && (
+            <div className="sticky bottom-3 z-10 flex justify-center pointer-events-none">
+              <button type="button" data-testid="conversa-novas"
+                onClick={() => { const el = scrollRef.current; if (el) irParaFim(el, 'smooth'); noFim.current = true; setNaoVistas(0); marcarLida(); }}
+                className="pointer-events-auto inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-white shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <ArrowDown className="h-4 w-4" aria-hidden="true" /> {naoVistas === 1 ? 'Nova mensagem' : `${naoVistas} novas mensagens`}
+              </button>
+            </div>
+          )}
         </div>
         </div>
       </div>
