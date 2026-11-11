@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchLegalDocs } from './legal/useLegalDocs';
+import { VerificarEmail } from '@/components/settings/VerificarEmail';
+import { useEmailVerificado } from '@/hooks/useEmailVerificado';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'intro' | 'personal' | 'document' | 'selfie' | 'liveness' | 'review' | 'success';
@@ -121,6 +123,9 @@ export default function KYCPage() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>('intro');
+  // O email tem de estar verificado para pedir para ser criador (o servidor também recusa). Em modo de demonstração não há API.
+  const { estado: estadoEmail, recarregar: recarregarEmail } = useEmailVerificado(!isMockMode);
+  const emailPorVerificar = !isMockMode && estadoEmail !== 'verificado';
   // Resultado da última verificação (só API real): aviso de recusa com motivo, ou "em análise", no passo inicial.
   const [kycAnterior, setKycAnterior] = useState<{ estado: string; motivo: string | null } | null>(null);
   useEffect(() => {
@@ -249,6 +254,7 @@ export default function KYCPage() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
+          if (res.status === 403 && body?.codigo === 'email_nao_verificado') { void recarregarEmail(); goTo('intro'); }
           const msg = body?.error ?? 'Erro ao submeter. Tenta novamente.';
           toast({ variant: 'destructive', title: 'Erro na verificação', description: msg });
           return;
@@ -386,8 +392,18 @@ export default function KYCPage() {
               <a href="/modelo-consentimento" target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-primary hover:underline">Modelo de Consentimento de Terceiros</a>.
             </p>
 
+            {emailPorVerificar && (
+              <div className="rounded-2xl border border-border bg-secondary/40 p-4 space-y-3" data-testid="kyc-email-por-verificar">
+                <p className="text-sm font-semibold">Antes de começares, verifica o teu email.</p>
+                <p className="text-sm text-muted-foreground">Só podes pedir para ser criador com o email verificado.</p>
+                <VerificarEmail estado={estadoEmail === 'erro' ? 'por_verificar' : estadoEmail} aoAtualizar={() => { void recarregarEmail(); }} aoVerificarOutraVez={() => { void recarregarEmail(); }} />
+              </div>
+            )}
+
             <Button
               onClick={() => goTo('personal')}
+              disabled={emailPorVerificar}
+              data-testid="kyc-comecar"
               className="w-full h-13 text-base font-bold bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-none dark:shadow-[0_0_30px_rgba(255,62,114,0.25)] gap-2"
             >
               Começar Verificação <ChevronRight className="w-5 h-5" />

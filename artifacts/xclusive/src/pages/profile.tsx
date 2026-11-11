@@ -32,6 +32,7 @@ import { useDesktop } from '@/hooks/useDesktop';
 import { useColunaParada } from '@/hooks/useColunaParada';
 import { useAjusteColuna } from '@/hooks/useAjusteColuna';
 import type { Post } from '@workspace/api-client-react';
+import { AvisoVerificarEmail } from '@/components/settings/AvisoVerificarEmail';
 
 export default function Profile() {
   const [, params] = useRoute('/perfil/:username');
@@ -299,6 +300,7 @@ export default function Profile() {
         />
         </div>
 
+        {isMe && <div className="px-4 pt-3"><AvisoVerificarEmail /></div>}
         <PerfilIdentidade
           nome={profile.nomeExibicao}
           username={profile.username}
