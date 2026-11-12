@@ -66,12 +66,6 @@ export interface LegalConfig {
   prazoLevantamentoMax: number;
 }
 
-export interface LoginInput {
-  email: string;
-  password: string;
-  lembrar?: boolean;
-}
-
 export type UserProfileTipoConta = typeof UserProfileTipoConta[keyof typeof UserProfileTipoConta];
 
 
@@ -136,6 +130,83 @@ export interface UserProfile {
   criadoEm: string;
 }
 
+/**
+ * O utilizador autenticado (GET /auth/me): o perfil mais o estado da verificação do email.
+ */
+export type CurrentUser = UserProfile & {
+  /** O email da conta já foi verificado. */
+  emailVerificado?: boolean;
+};
+
+/**
+ * Corpo de erro da API.
+ */
+export interface ErroApi {
+  error: string;
+  /** Código estável para o front decidir (ex. token_invalido, password_incorreta, password_igual, demasiado_cedo, limite_hora, email_indisponivel). */
+  codigo?: string;
+  esperarSegundos?: number;
+}
+
+export interface OkResposta {
+  ok: boolean;
+}
+
+export interface MensagemResposta {
+  mensagem: string;
+}
+
+export interface VerificacaoEmailPedido {
+  /** Presente (true) quando o email já estava verificado e nada foi enviado. */
+  jaVerificado?: boolean;
+  mensagem?: string;
+}
+
+export interface ForgotPasswordInput {
+  /** @maxLength 255 */
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  token: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface ChangePasswordInput {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  passwordAtual: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  novaPassword: string;
+}
+
+export interface ConfirmEmailInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  token: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+  lembrar?: boolean;
+}
+
 export interface AuthResponse {
   token: string;
   user: UserProfile;
@@ -150,6 +221,7 @@ export interface UserSummary {
   verificado: boolean;
   tipoConta?: string;
   estaASeguir?: boolean;
+  segueVoce?: boolean;
   totalSeguidores?: number;
 }
 
@@ -527,9 +599,22 @@ export interface Conversation {
   id: number;
   participantes: UserSummary[];
   tipo: ConversationTipo;
-  ultimaMensagem?: Message;
+  /** Null quando a conversa ainda não tem mensagens. */
+  ultimaMensagem?: Message | null;
   totalNaoLidas?: number;
   criadoEm: string;
+}
+
+/**
+ * Página da lista de conversas no modo com `cursor`.
+ */
+export interface ConversationsPage {
+  conversas: Conversation[];
+  /**
+     * Cursor para a página seguinte; null quando não há mais conversas.
+     * @nullable
+     */
+  proximoCursor: string | null;
 }
 
 export interface ConversationInput {
@@ -668,7 +753,7 @@ export interface MessageInput {
 }
 
 /**
- * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+ * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.
  * @nullable
  */
 export type PaginatedMessagesRestricao = typeof PaginatedMessagesRestricao[keyof typeof PaginatedMessagesRestricao] | null;
@@ -680,16 +765,21 @@ export const PaginatedMessagesRestricao = {
 } as const;
 
 export interface PaginatedMessages {
-  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. */
-  podeEnviar: boolean;
+  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. Ausente numa resposta de `depois` sem novidades. */
+  podeEnviar?: boolean;
   /**
-     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.
      * @nullable
      */
   restricao?: PaginatedMessagesRestricao;
   messages: Message[];
   page: number;
   hasMore: boolean;
+  /**
+     * Id da mensagem mais antiga devolvida, para pedir as anteriores com `antes`; null quando não há mais. Só nas respostas sem `depois`.
+     * @nullable
+     */
+  proximoCursor?: number | null;
 }
 
 export type NotificationTipo = typeof NotificationTipo[keyof typeof NotificationTipo];
@@ -884,6 +974,51 @@ export const SearchType = {
   hashtags: 'hashtags',
   all: 'all',
 } as const;
+
+export type GetConversationsParams = {
+/**
+ * Cursor opaco devolvido em `proximoCursor`; vazio (`cursor=`) pede a primeira página. A sua presença escolhe o modo com envelope. Inválido = 400.
+ */
+cursor?: string;
+/**
+ * Conversas por página no modo com `cursor` (20 por omissão, máximo 50).
+ * @minimum 1
+ * @maximum 50
+ */
+limite?: number;
+/**
+ * Modo antigo (sem `cursor`): número da página, a partir de 1.
+ * @minimum 1
+ */
+page?: number;
+/**
+ * Modo antigo (sem `cursor`): conversas por página (20 por omissão, máximo 50).
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
+export type GetMessagesParams = {
+/**
+ * Id da mensagem a partir da qual se pedem as anteriores (valor de `proximoCursor`).
+ * @minimum 1
+ * @maximum 2147483647
+ */
+antes?: number;
+/**
+ * Id da última mensagem que o cliente já tem; devolve só as mais novas.
+ * @minimum 1
+ * @maximum 2147483647
+ */
+depois?: number;
+/**
+ * Máximo de mensagens (50 por omissão, máximo 100).
+ * @minimum 1
+ * @maximum 100
+ */
+limite?: number;
+};
 
 export type MarkConversationRead200 = {
   ok: boolean;

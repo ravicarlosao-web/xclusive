@@ -7,7 +7,7 @@
  */
 
 /**
- * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+ * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.
  * @nullable
  */
 export type PaginatedMessagesRestricao = typeof PaginatedMessagesRestricao[keyof typeof PaginatedMessagesRestricao] | null;

@@ -9,14 +9,19 @@ import type { Message } from './message';
 import type { PaginatedMessagesRestricao } from './paginatedMessagesRestricao';
 
 export interface PaginatedMessages {
-  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. */
-  podeEnviar: boolean;
+  /** O utilizador autenticado pode enviar mensagens nesta conversa agora. Ausente numa resposta de `depois` sem novidades. */
+  podeEnviar?: boolean;
   /**
-     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+     * Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.
      * @nullable
      */
   restricao?: PaginatedMessagesRestricao;
   messages: Message[];
   page: number;
   hasMore: boolean;
+  /**
+     * Id da mensagem mais antiga devolvida, para pedir as anteriores com `antes`; null quando não há mais. Só nas respostas sem `depois`.
+     * @nullable
+     */
+  proximoCursor?: number | null;
 }

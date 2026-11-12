@@ -114,9 +114,168 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfile"
+                $ref: "#/components/schemas/CurrentUser"
         "401":
           description: Não autenticado
+
+  /auth/esqueci-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Pedir a recuperação da palavra-passe
+      description: >-
+        Resposta SEMPRE igual (202) e imediata, exista ou não a conta: a existência da conta não se revela, nem pelo tempo.
+        Se existir, é enviado um email com uma ligação de uso único.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "202":
+          description: Pedido recebido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensagemResposta"
+        "400":
+          description: Email inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiados pedidos
+
+  /auth/redefinir-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Redefinir a palavra-passe com a ligação recebida por email
+      description: Uso único. Termina todas as sessões da conta e NÃO inicia sessão.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Palavra-passe redefinida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResposta"
+        "400":
+          description: Ligação inválida ou expirada (`codigo` «token_invalido») ou palavra-passe fora da regra
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiados pedidos
+
+  /auth/alterar-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Alterar a palavra-passe (com sessão)
+      description: >-
+        Exige a palavra-passe atual. Termina todas as sessões, incluindo a atual (a pessoa volta a entrar).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Palavra-passe alterada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResposta"
+        "400":
+          description: Nova palavra-passe igual à atual (`codigo` «password_igual») ou fora da regra
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "401":
+          description: Não autenticado
+        "403":
+          description: Palavra-passe atual incorreta (`codigo` «password_incorreta»)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiados pedidos
+
+  /auth/verificar-email/pedir:
+    post:
+      operationId: requestEmailVerification
+      tags: [auth]
+      summary: Pedir o email de verificação do endereço da conta
+      description: >-
+        O endereço vem sempre da conta. 202 = email enviado; 200 com `jaVerificado` = o email já estava verificado.
+        429 com `codigo` «demasiado_cedo» (e `Retry-After`) ou «limite_hora»; 503 com `codigo` «email_indisponivel».
+      responses:
+        "200":
+          description: O email já estava verificado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificacaoEmailPedido"
+        "202":
+          description: Email de verificação enviado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificacaoEmailPedido"
+        "401":
+          description: Não autenticado
+        "429":
+          description: Demasiado cedo para reenviar, ou limite por hora
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "503":
+          description: Envio de email indisponível
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+
+  /auth/verificar-email/confirmar:
+    post:
+      operationId: confirmEmailVerification
+      tags: [auth]
+      summary: Confirmar o email com a ligação recebida
+      description: Uso único. Não inicia sessão.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmEmailInput"
+      responses:
+        "200":
+          description: Email verificado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResposta"
+        "400":
+          description: Ligação inválida ou expirada (`codigo` «token_invalido»)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiados pedidos
 
   # USERS
   /users/suggestions:
@@ -829,15 +988,62 @@ paths:
       operationId: getConversations
       tags: [messages]
       summary: Lista de conversas
+      description: >-
+        Ordenada pela última atividade (mensagem mais recente; uma conversa sem mensagens conta pela data de criação), com desempate pelo id.
+        Dois modos. COM `cursor` (vazio na primeira página) pagina por cursor e devolve o envelope `{ conversas, proximoCursor }`:
+        o cursor é a posição (atividade, id) da última conversa recebida, por isso uma mensagem nova a reordenar a lista não repete nem salta conversas.
+        SEM `cursor` é o modo antigo (`page`/`limit`) e devolve um array simples; este modo será descontinuado (usar `cursor`).
+        Esconde as conversas com contas inativas e com contas que o utilizador bloqueou.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Cursor opaco devolvido em `proximoCursor`; vazio (`cursor=`) pede a primeira página. A sua presença escolhe o modo com envelope. Inválido = 400.
+          schema:
+            type: string
+        - name: limite
+          in: query
+          required: false
+          description: Conversas por página no modo com `cursor` (20 por omissão, máximo 50).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: page
+          in: query
+          required: false
+          deprecated: true
+          description: >-
+            Modo antigo (sem `cursor`): número da página, a partir de 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          deprecated: true
+          description: >-
+            Modo antigo (sem `cursor`): conversas por página (20 por omissão, máximo 50).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
       responses:
         "200":
-          description: Conversas
+          description: Conversas (array no modo antigo, envelope `{ conversas, proximoCursor }` com `cursor`)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Conversation"
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+                  - $ref: "#/components/schemas/ConversationsPage"
+        "400":
+          description: Cursor ou limite inválido (modo com `cursor`)
 
     post:
       operationId: createConversation
@@ -955,12 +1161,41 @@ paths:
       operationId: getMessages
       tags: [messages]
       summary: Mensagens de uma conversa
+      description: >-
+        Sem parâmetros devolve as últimas `limite` mensagens (50 por omissão, máximo 100), por ordem crescente de id. Com `antes=<id>` devolve as
+        `limite` anteriores a essa mensagem (cursor em `proximoCursor`). Com `depois=<id>` (poll da conversa aberta) devolve só as mais novas, por
+        ordem crescente, e uma resposta sem novidades traz apenas `messages`, `page` e `hasMore`. `antes` e `depois` não se combinam (400).
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+        - name: antes
+          in: query
+          required: false
+          description: Id da mensagem a partir da qual se pedem as anteriores (valor de `proximoCursor`).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: depois
+          in: query
+          required: false
+          description: Id da última mensagem que o cliente já tem; devolve só as mais novas.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: limite
+          in: query
+          required: false
+          description: Máximo de mensagens (50 por omissão, máximo 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
       responses:
         "200":
           description: Mensagens
@@ -1357,6 +1592,97 @@ components:
           type: integer
           description: Prazo normal de levantamento, máximo, em dias úteis.
 
+    CurrentUser:
+      description: >-
+        O utilizador autenticado (GET /auth/me): o perfil mais o estado da verificação do email.
+      allOf:
+        - $ref: "#/components/schemas/UserProfile"
+        - type: object
+          properties:
+            emailVerificado:
+              description: O email da conta já foi verificado.
+              type: boolean
+
+    ErroApi:
+      description: Corpo de erro da API.
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        codigo:
+          description: Código estável para o front decidir (ex. token_invalido, password_incorreta, password_igual, demasiado_cedo, limite_hora, email_indisponivel).
+          type: string
+        esperarSegundos:
+          type: integer
+
+    OkResposta:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    MensagemResposta:
+      type: object
+      required: [mensagem]
+      properties:
+        mensagem:
+          type: string
+
+    VerificacaoEmailPedido:
+      type: object
+      properties:
+        jaVerificado:
+          description: Presente (true) quando o email já estava verificado e nada foi enviado.
+          type: boolean
+        mensagem:
+          type: string
+
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+
+    ResetPasswordInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 200
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    ChangePasswordInput:
+      type: object
+      required: [passwordAtual, novaPassword]
+      properties:
+        passwordAtual:
+          type: string
+          minLength: 1
+          maxLength: 128
+        novaPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    ConfirmEmailInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 200
+
     LoginInput:
       type: object
       required: [email, password]
@@ -1446,6 +1772,8 @@ components:
         tipoConta:
           type: string
         estaASeguir:
+          type: boolean
+        segueVoce:
           type: boolean
         totalSeguidores:
           type: integer
@@ -1829,6 +2157,19 @@ components:
           type: integer
 
     # MESSAGES
+    ConversationsPage:
+      description: Página da lista de conversas no modo com `cursor`.
+      type: object
+      required: [conversas, proximoCursor]
+      properties:
+        conversas:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+        proximoCursor:
+          description: Cursor para a página seguinte; null quando não há mais conversas.
+          type: ["string", "null"]
+
     Conversation:
       type: object
       required: [id, participantes, tipo, criadoEm]
@@ -1843,7 +2184,10 @@ components:
           type: string
           enum: [privada, grupo]
         ultimaMensagem:
-          $ref: "#/components/schemas/Message"
+          description: Null quando a conversa ainda não tem mensagens.
+          oneOf:
+            - $ref: "#/components/schemas/Message"
+            - type: "null"
         totalNaoLidas:
           type: integer
         criadoEm:
@@ -2049,13 +2393,13 @@ components:
 
     PaginatedMessages:
       type: object
-      required: [messages, page, hasMore, podeEnviar]
+      required: [messages, page, hasMore]
       properties:
         podeEnviar:
-          description: O utilizador autenticado pode enviar mensagens nesta conversa agora.
+          description: O utilizador autenticado pode enviar mensagens nesta conversa agora. Ausente numa resposta de `depois` sem novidades.
           type: boolean
         restricao:
-          description: Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado.
+          description: Porque não pode enviar. "regra" = regra de quem pode escrever do outro; "bloqueaste" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.
           type: ["string", "null"]
           enum: [regra, bloqueaste, null]
         messages:
@@ -2066,6 +2410,9 @@ components:
           type: integer
         hasMore:
           type: boolean
+        proximoCursor:
+          description: Id da mensagem mais antiga devolvida, para pedir as anteriores com `antes`; null quando não há mais. Só nas respostas sem `depois`.
+          type: ["integer", "null"]
 
     # NOTIFICATIONS
     Notification:

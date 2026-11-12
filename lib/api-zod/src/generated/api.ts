@@ -146,6 +146,94 @@ export const GetMeResponse = zod.object({
   "preferenciaMais18Em": zod.coerce.date().nullish(),
   "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
+}).and(zod.object({
+  "emailVerificado": zod.boolean().optional().describe('O email da conta já foi verificado.')
+})).describe('O utilizador autenticado (GET \/auth\/me): o perfil mais o estado da verificação do email.')
+
+
+/**
+ * Resposta SEMPRE igual (202) e imediata, exista ou não a conta: a existência da conta não se revela, nem pelo tempo. Se existir, é enviado um email com uma ligação de uso único.
+ * @summary Pedir a recuperação da palavra-passe
+ */
+export const forgotPasswordBodyEmailMax = 255;
+
+
+
+export const ForgotPasswordBody = zod.object({
+  "email": zod.email().max(forgotPasswordBodyEmailMax)
+})
+
+export const ForgotPasswordResponse = zod.object({
+  "mensagem": zod.string()
+})
+
+
+/**
+ * Uso único. Termina todas as sessões da conta e NÃO inicia sessão.
+ * @summary Redefinir a palavra-passe com a ligação recebida por email
+ */
+export const resetPasswordBodyTokenMax = 200;
+
+export const resetPasswordBodyPasswordMin = 8;
+export const resetPasswordBodyPasswordMax = 128;
+
+
+
+export const ResetPasswordBody = zod.object({
+  "token": zod.string().min(1).max(resetPasswordBodyTokenMax),
+  "password": zod.string().min(resetPasswordBodyPasswordMin).max(resetPasswordBodyPasswordMax)
+})
+
+export const ResetPasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Exige a palavra-passe atual. Termina todas as sessões, incluindo a atual (a pessoa volta a entrar).
+ * @summary Alterar a palavra-passe (com sessão)
+ */
+export const changePasswordBodyPasswordAtualMax = 128;
+
+export const changePasswordBodyNovaPasswordMin = 8;
+export const changePasswordBodyNovaPasswordMax = 128;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "passwordAtual": zod.string().min(1).max(changePasswordBodyPasswordAtualMax),
+  "novaPassword": zod.string().min(changePasswordBodyNovaPasswordMin).max(changePasswordBodyNovaPasswordMax)
+})
+
+export const ChangePasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * O endereço vem sempre da conta. 202 = email enviado; 200 com `jaVerificado` = o email já estava verificado. 429 com `codigo` «demasiado_cedo» (e `Retry-After`) ou «limite_hora»; 503 com `codigo` «email_indisponivel».
+ * @summary Pedir o email de verificação do endereço da conta
+ */
+export const RequestEmailVerificationResponse = zod.object({
+  "jaVerificado": zod.boolean().optional().describe('Presente (true) quando o email já estava verificado e nada foi enviado.'),
+  "mensagem": zod.string().optional()
+})
+
+
+/**
+ * Uso único. Não inicia sessão.
+ * @summary Confirmar o email com a ligação recebida
+ */
+export const confirmEmailVerificationBodyTokenMax = 200;
+
+
+
+export const ConfirmEmailVerificationBody = zod.object({
+  "token": zod.string().min(1).max(confirmEmailVerificationBodyTokenMax)
+})
+
+export const ConfirmEmailVerificationResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -160,6 +248,7 @@ export const GetUserSuggestionsResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })
 export const GetUserSuggestionsResponse = zod.array(GetUserSuggestionsResponseItem)
@@ -219,6 +308,7 @@ export const GetBlockedUsersResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "total": zod.int(),
@@ -313,6 +403,7 @@ export const GetUserFollowersResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "total": zod.int(),
@@ -337,6 +428,7 @@ export const GetUserFollowingResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "total": zod.int(),
@@ -371,6 +463,7 @@ export const GetUserPostsResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "legenda": zod.string().nullish(),
@@ -440,6 +533,7 @@ export const GetFeedResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "legenda": zod.string().nullish(),
@@ -525,6 +619,7 @@ export const CreatePostResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "legenda": zod.string().nullish(),
@@ -583,6 +678,7 @@ export const GetPostResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "legenda": zod.string().nullish(),
@@ -809,6 +905,7 @@ export const GetPostCommentsResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "texto": zod.string(),
@@ -846,6 +943,7 @@ export const CreateCommentResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "texto": zod.string(),
@@ -879,6 +977,7 @@ export const GetStoriesFeedResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "stories": zod.array(zod.object({
@@ -891,6 +990,7 @@ export const GetStoriesFeedResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "mediaUrl": zod.string(),
@@ -933,6 +1033,7 @@ export const CreateStoryResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "mediaUrl": zod.string(),
@@ -984,6 +1085,7 @@ export const GetStoryViewsResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "vistoEm": zod.coerce.date()
@@ -1012,6 +1114,7 @@ export const GetExploreResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "legenda": zod.string().nullish(),
@@ -1076,6 +1179,7 @@ export const SearchResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "hashtags": zod.array(zod.object({
@@ -1086,9 +1190,27 @@ export const SearchResponse = zod.object({
 
 
 /**
+ * Ordenada pela última atividade (mensagem mais recente; uma conversa sem mensagens conta pela data de criação), com desempate pelo id. Dois modos. COM `cursor` (vazio na primeira página) pagina por cursor e devolve o envelope `{ conversas, proximoCursor }`: o cursor é a posição (atividade, id) da última conversa recebida, por isso uma mensagem nova a reordenar a lista não repete nem salta conversas. SEM `cursor` é o modo antigo (`page`/`limit`) e devolve um array simples; este modo será descontinuado (usar `cursor`). Esconde as conversas com contas inativas e com contas que o utilizador bloqueou.
  * @summary Lista de conversas
  */
-export const GetConversationsResponseItem = zod.object({
+export const getConversationsQueryLimiteDefault = 20;
+export const getConversationsQueryLimiteMax = 50;
+
+export const getConversationsQueryPageDefault = 1;
+
+export const getConversationsQueryLimitDefault = 20;
+export const getConversationsQueryLimitMax = 50;
+
+
+
+export const GetConversationsQueryParams = zod.object({
+  "cursor": zod.coerce.string().optional().describe('Cursor opaco devolvido em `proximoCursor`; vazio (`cursor=`) pede a primeira página. A sua presença escolhe o modo com envelope. Inválido = 400.'),
+  "limite": zod.coerce.number().int().min(1).max(getConversationsQueryLimiteMax).default(getConversationsQueryLimiteDefault).describe('Conversas por página no modo com `cursor` (20 por omissão, máximo 50).'),
+  "page": zod.coerce.number().int().min(1).default(getConversationsQueryPageDefault).describe('Modo antigo (sem `cursor`): número da página, a partir de 1.'),
+  "limit": zod.coerce.number().int().min(1).max(getConversationsQueryLimitMax).default(getConversationsQueryLimitDefault).describe('Modo antigo (sem `cursor`): conversas por página (20 por omissão, máximo 50).')
+})
+
+export const GetConversationsResponse = zod.union([zod.array(zod.object({
   "id": zod.int(),
   "participantes": zod.array(zod.object({
   "id": zod.int(),
@@ -1098,10 +1220,11 @@ export const GetConversationsResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "tipo": zod.enum(['privada', 'grupo']),
-  "ultimaMensagem": zod.object({
+  "ultimaMensagem": zod.union([zod.object({
   "id": zod.int(),
   "autorId": zod.int(),
   "autor": zod.object({
@@ -1112,6 +1235,7 @@ export const GetConversationsResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
@@ -1123,11 +1247,53 @@ export const GetConversationsResponseItem = zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
 }).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
   "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
-}).optional(),
+}),zod.null()]).optional().describe('Null quando a conversa ainda não tem mensagens.'),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
-})
-export const GetConversationsResponse = zod.array(GetConversationsResponseItem)
+})),zod.object({
+  "conversas": zod.array(zod.object({
+  "id": zod.int(),
+  "participantes": zod.array(zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "verificado": zod.boolean(),
+  "tipoConta": zod.string().optional(),
+  "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
+  "totalSeguidores": zod.int().optional()
+})),
+  "tipo": zod.enum(['privada', 'grupo']),
+  "ultimaMensagem": zod.union([zod.object({
+  "id": zod.int(),
+  "autorId": zod.int(),
+  "autor": zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "verificado": zod.boolean(),
+  "tipoConta": zod.string().optional(),
+  "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
+  "totalSeguidores": zod.int().optional()
+}).optional(),
+  "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
+  "conteudo": zod.string().nullish(),
+  "mediaUrl": zod.string().nullish(),
+  "lido": zod.boolean().optional(),
+  "criadoEm": zod.coerce.date(),
+  "gorjeta": zod.object({
+  "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
+}).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
+  "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
+}),zod.null()]).optional().describe('Null quando a conversa ainda não tem mensagens.'),
+  "totalNaoLidas": zod.int().optional(),
+  "criadoEm": zod.coerce.date()
+})),
+  "proximoCursor": zod.string().nullable().describe('Cursor para a página seguinte; null quando não há mais conversas.')
+}).describe('Página da lista de conversas no modo com `cursor`.')])
 
 
 /**
@@ -1147,10 +1313,11 @@ export const CreateConversationResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 })),
   "tipo": zod.enum(['privada', 'grupo']),
-  "ultimaMensagem": zod.object({
+  "ultimaMensagem": zod.union([zod.object({
   "id": zod.int(),
   "autorId": zod.int(),
   "autor": zod.object({
@@ -1161,6 +1328,7 @@ export const CreateConversationResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
@@ -1172,7 +1340,7 @@ export const CreateConversationResponse = zod.object({
   "valor": zod.int().describe('Valor da gorjeta em Kz (inteiro).')
 }).optional().describe('Só nas mensagens de tipo gorjeta (o texto opcional vai em conteudo). Nunca inclui saldo nem comissão.'),
   "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
-}).optional(),
+}),zod.null()]).optional().describe('Null quando a conversa ainda não tem mensagens.'),
   "totalNaoLidas": zod.int().optional(),
   "criadoEm": zod.coerce.date()
 })
@@ -1240,6 +1408,7 @@ export const SendMessageTipResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
@@ -1255,15 +1424,31 @@ export const SendMessageTipResponse = zod.object({
 
 
 /**
+ * Sem parâmetros devolve as últimas `limite` mensagens (50 por omissão, máximo 100), por ordem crescente de id. Com `antes=<id>` devolve as `limite` anteriores a essa mensagem (cursor em `proximoCursor`). Com `depois=<id>` (poll da conversa aberta) devolve só as mais novas, por ordem crescente, e uma resposta sem novidades traz apenas `messages`, `page` e `hasMore`. `antes` e `depois` não se combinam (400).
  * @summary Mensagens de uma conversa
  */
 export const GetMessagesParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const getMessagesQueryAntesMax = 2147483647;
+
+export const getMessagesQueryDepoisMax = 2147483647;
+
+export const getMessagesQueryLimiteDefault = 50;
+export const getMessagesQueryLimiteMax = 100;
+
+
+
+export const GetMessagesQueryParams = zod.object({
+  "antes": zod.coerce.number().int().min(1).max(getMessagesQueryAntesMax).optional().describe('Id da mensagem a partir da qual se pedem as anteriores (valor de `proximoCursor`).'),
+  "depois": zod.coerce.number().int().min(1).max(getMessagesQueryDepoisMax).optional().describe('Id da última mensagem que o cliente já tem; devolve só as mais novas.'),
+  "limite": zod.coerce.number().int().min(1).max(getMessagesQueryLimiteMax).default(getMessagesQueryLimiteDefault).describe('Máximo de mensagens (50 por omissão, máximo 100).')
+})
+
 export const GetMessagesResponse = zod.object({
-  "podeEnviar": zod.boolean().describe('O utilizador autenticado pode enviar mensagens nesta conversa agora.'),
-  "restricao": zod.union([zod.literal('regra'),zod.literal('bloqueaste'),zod.literal(null)]).nullish().describe('Porque não pode enviar. \"regra\" = regra de quem pode escrever do outro; \"bloqueaste\" = bloqueaste o outro; null = sem restrição ou motivo não revelado.'),
+  "podeEnviar": zod.boolean().optional().describe('O utilizador autenticado pode enviar mensagens nesta conversa agora. Ausente numa resposta de `depois` sem novidades.'),
+  "restricao": zod.union([zod.literal('regra'),zod.literal('bloqueaste'),zod.literal(null)]).nullish().describe('Porque não pode enviar. \"regra\" = regra de quem pode escrever do outro; \"bloqueaste\" = bloqueaste o outro; null = sem restrição ou motivo não revelado. Ausente numa resposta de `depois` sem novidades.'),
   "messages": zod.array(zod.object({
   "id": zod.int(),
   "autorId": zod.int(),
@@ -1275,6 +1460,7 @@ export const GetMessagesResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
@@ -1288,7 +1474,8 @@ export const GetMessagesResponse = zod.object({
   "retirada": zod.boolean().optional().describe('Mensagem retirada pela moderação. Nesse caso conteudo, mediaUrl e gorjeta vêm ocultos (a app mostra \"Mensagem removida pela moderação\").')
 })),
   "page": zod.int(),
-  "hasMore": zod.boolean()
+  "hasMore": zod.boolean(),
+  "proximoCursor": zod.int().nullish().describe('Id da mensagem mais antiga devolvida, para pedir as anteriores com `antes`; null quando não há mais. Só nas respostas sem `depois`.')
 })
 
 
@@ -1316,6 +1503,7 @@ export const SendMessageResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "tipo": zod.enum(['texto', 'imagem', 'audio', 'post_partilhado', 'gorjeta']),
@@ -1363,6 +1551,7 @@ export const GetNotificationsResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "lida": zod.boolean(),
@@ -1412,6 +1601,7 @@ export const CreateHighlightResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "mediaUrl": zod.string(),
@@ -1450,6 +1640,7 @@ export const GetUserHighlightsResponseItem = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }),
   "mediaUrl": zod.string(),
@@ -1604,6 +1795,7 @@ export const GetCreatorTransactionsResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "descricao": zod.string().nullish(),
@@ -1641,6 +1833,7 @@ export const SubscribeResponse = zod.object({
   "verificado": zod.boolean(),
   "tipoConta": zod.string().optional(),
   "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
   "totalSeguidores": zod.int().optional()
 }).optional(),
   "estado": zod.enum(['ativa', 'cancelada']),

@@ -78,7 +78,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
     ?? conv?.participantes[0];
 
   // Mensagens (404/403: conversa indisponível, sem tentar de novo)
-  const { data: msgData, isLoading, isError, error: msgErro } = useGetMessages(convId, {
+  const { data: msgData, isLoading, isError, error: msgErro } = useGetMessages(convId, undefined, {   // (2.º argumento: parâmetros de pesquisa antes/depois/limite, que esta janela não usa)
     query: {
       queryKey: getGetMessagesQueryKey(convId), enabled: convId > 0,
       // Além do poll de mensagens novas: janela completa de 60 em 60 s (não corre com o separador escondido) e ao voltar ao separador
