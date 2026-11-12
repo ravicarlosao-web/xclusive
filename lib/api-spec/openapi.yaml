@@ -134,8 +134,10 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/AuthResponse"
                   - $ref: "#/components/schemas/GoogleCompletarPendente"
-        "401":
-          description: Token inválido (`google_invalido`) ou email do Google não verificado (`google_email_nao_verificado`)
+        "400":
+          description: >-
+            ID token recusado (inválido, expirado, nonce errado: `google_invalido`) ou email do Google não verificado (`google_email_nao_verificado`).
+            É 400 e não 401 de propósito: um 401 faria o cliente tentar renovar a sessão.
           content:
             application/json:
               schema:
@@ -248,12 +250,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoogleLigarResposta"
-        "401":
-          description: Não autenticado, ou ID token inválido
+        "400":
+          description: ID token recusado (`google_invalido`, `google_email_nao_verificado`); 400 e não 401 para o cliente não tentar renovar a sessão
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErroApi"
+        "401":
+          description: Não autenticado (sem sessão válida)
         "403":
           description: Conta não elegível (administrador)
         "404":
