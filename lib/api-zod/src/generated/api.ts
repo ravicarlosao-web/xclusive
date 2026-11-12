@@ -103,6 +103,153 @@ export const LoginResponse = zod.object({
 
 
 /**
+ * Devolve o ID de cliente OAuth (público). `clientId` null = login com o Google desligado neste servidor (o botão não deve aparecer).
+ * @summary Configuração pública do login com o Google
+ */
+export const GetGoogleConfigResponse = zod.object({
+  "clientId": zod.string().nullable()
+})
+
+
+/**
+ * Põe um cookie httpOnly de uso único (5 minutos) e devolve o nonce a passar à Google. 404 se o login com o Google estiver desligado.
+ * @summary Nonce para o login com o Google
+ */
+export const CreateGoogleNonceResponse = zod.object({
+  "nonce": zod.string()
+})
+
+
+/**
+ * Valida o ID token (assinatura RS256, iss, aud, exp, email_verificado e nonce). Conta ligada: sessão igual à do login normal. Sem ligação: nunca liga por email (409 `conta_existente`); conta nova só com os registos abertos (senão 403 `registos_fechados`), e então devolve `precisaCompletar` e um cookie com o bilhete para POST /auth/google/completar. Admins ficam excluídos.
+ * @summary Entrar com o Google (ID token)
+ */
+export const googleLoginBodyCredentialMin = 20;
+export const googleLoginBodyCredentialMax = 4096;
+
+
+
+export const GoogleLoginBody = zod.object({
+  "credential": zod.string().min(googleLoginBodyCredentialMin).max(googleLoginBodyCredentialMax).describe('O ID token (JWT) devolvido pelo Google Identity Services.')
+})
+
+export const GoogleLoginResponse = zod.union([zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "bio": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "capaUrl": zod.string().nullish(),
+  "link": zod.string().nullish(),
+  "tipoConta": zod.enum(['pessoal', 'criador']),
+  "verificado": zod.boolean(),
+  "privado": zod.boolean(),
+  "totalSeguidores": zod.int(),
+  "totalSeguindo": zod.int(),
+  "totalPublicacoes": zod.int(),
+  "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
+  "criadoEm": zod.coerce.date()
+})
+}),zod.object({
+  "precisaCompletar": zod.boolean(),
+  "nome": zod.string().nullish().describe('Nome da conta Google (para pré-preencher; pode faltar).')
+})])
+
+
+/**
+ * Só com palavra-passe definida (senão 409 `sem_password`); a conta ficaria sem forma de entrar.
+ * @summary Desligar o Google da conta
+ */
+export const UnlinkGoogleResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Passo 2: o `sub` e o email vêm SÓ do bilhete (cookie httpOnly do passo 1), nunca do corpo (um corpo com mais campos é recusado). Repete o gate dos registos, a idade, o aceite dos documentos e as verificações de username e email.
+ * @summary Concluir a criação de conta com o Google
+ */
+export const googleCompleteBodyUsernameMin = 3;
+export const googleCompleteBodyUsernameMax = 50;
+
+
+
+export const GoogleCompleteBody = zod.object({
+  "username": zod.string().min(googleCompleteBodyUsernameMin).max(googleCompleteBodyUsernameMax),
+  "dataNascimento": zod.coerce.date(),
+  "tipoConta": zod.enum(['pessoal', 'criador']).optional(),
+  "aceite": zod.object({
+  "termos": zod.string(),
+  "privacidade": zod.string(),
+  "conteudo": zod.string(),
+  "direitosAutor": zod.string(),
+  "reembolsos": zod.string(),
+  "cookies": zod.literal(true),
+  "maioridade": zod.literal(true)
+}).describe('Versões vigentes dos documentos legais que a pessoa aceitou (GET \/auth\/legal-versions) e declaração de maioridade.')
+})
+
+export const GoogleCompleteResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.int(),
+  "username": zod.string(),
+  "nomeExibicao": zod.string(),
+  "bio": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "capaUrl": zod.string().nullish(),
+  "link": zod.string().nullish(),
+  "tipoConta": zod.enum(['pessoal', 'criador']),
+  "verificado": zod.boolean(),
+  "privado": zod.boolean(),
+  "totalSeguidores": zod.int(),
+  "totalSeguindo": zod.int(),
+  "totalPublicacoes": zod.int(),
+  "estaASeguir": zod.boolean().optional(),
+  "segueVoce": zod.boolean().optional(),
+  "preferenciaMais18": zod.union([zod.literal('ver'),zod.literal('filtrar'),zod.literal(null)]).nullish().describe('Só na própria conta (\/auth\/me, login, registo). null = ainda não escolheu.'),
+  "preferenciaMais18Em": zod.coerce.date().nullish(),
+  "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
+  "criadoEm": zod.coerce.date()
+})
+})
+
+
+/**
+ * A única forma de ligar o Google a uma conta existente. Se o email do Google for igual ao da conta e estiver verificado, o email da conta passa a verificado. Admins excluídos (403).
+ * @summary Ligar o Google à conta (com sessão)
+ */
+export const linkGoogleBodyCredentialMin = 20;
+export const linkGoogleBodyCredentialMax = 4096;
+
+
+
+export const LinkGoogleBody = zod.object({
+  "credential": zod.string().min(linkGoogleBodyCredentialMin).max(linkGoogleBodyCredentialMax).describe('O ID token (JWT) devolvido pelo Google Identity Services.')
+})
+
+export const LinkGoogleResponse = zod.object({
+  "ok": zod.boolean(),
+  "emailVerificado": zod.boolean()
+})
+
+
+/**
+ * @summary Estado da ligação ao Google da conta atual
+ */
+export const GetGoogleStatusResponse = zod.object({
+  "ligado": zod.boolean(),
+  "email": zod.string().nullable().describe('Email da conta Google ligada (null se não houver ligação).')
+})
+
+
+/**
  * Empresa, contacto legal e regras de levantamento usadas nos textos legais. O mínimo de levantamento vem da mesma definição (platform_settings.min_withdrawal_amount) que valida os levantamentos.
  * @summary Dados variáveis dos textos legais (público, sem autenticação)
  */
@@ -147,7 +294,8 @@ export const GetMeResponse = zod.object({
   "quemPodeEscrever": zod.enum(['todos', 'seguidores_assinantes', 'assinantes']).optional().describe('Só na própria conta (\/auth\/me, login, registo). Quem pode iniciar ou continuar mensagens contigo. Só criadores têm valores diferentes de \"todos\".'),
   "criadoEm": zod.coerce.date()
 }).and(zod.object({
-  "emailVerificado": zod.boolean().optional().describe('O email da conta já foi verificado.')
+  "emailVerificado": zod.boolean().optional().describe('O email da conta já foi verificado.'),
+  "temPassword": zod.boolean().optional().describe('false = conta criada com o Google que ainda não definiu palavra-passe (não tem palavra-passe atual para alterar).')
 })).describe('O utilizador autenticado (GET \/auth\/me): o perfil mais o estado da verificação do email.')
 
 

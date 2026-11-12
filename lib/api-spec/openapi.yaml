@@ -76,6 +76,214 @@ paths:
         "401":
           description: Credenciais inválidas
 
+  /auth/google/config:
+    get:
+      operationId: getGoogleConfig
+      tags: [auth]
+      summary: Configuração pública do login com o Google
+      description: >-
+        Devolve o ID de cliente OAuth (público). `clientId` null = login com o Google desligado neste servidor (o botão não deve aparecer).
+      responses:
+        "200":
+          description: Configuração
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleConfig"
+
+  /auth/google/nonce:
+    post:
+      operationId: createGoogleNonce
+      tags: [auth]
+      summary: Nonce para o login com o Google
+      description: >-
+        Põe um cookie httpOnly de uso único (5 minutos) e devolve o nonce a passar à Google. 404 se o login com o Google estiver desligado.
+      responses:
+        "200":
+          description: Nonce
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleNonce"
+        "404":
+          description: Login com o Google desligado
+        "429":
+          description: Demasiados pedidos
+
+  /auth/google:
+    post:
+      operationId: googleLogin
+      tags: [auth]
+      summary: Entrar com o Google (ID token)
+      description: >-
+        Valida o ID token (assinatura RS256, iss, aud, exp, email_verificado e nonce). Conta ligada: sessão igual à do login normal.
+        Sem ligação: nunca liga por email (409 `conta_existente`); conta nova só com os registos abertos (senão 403 `registos_fechados`),
+        e então devolve `precisaCompletar` e um cookie com o bilhete para POST /auth/google/completar. Admins ficam excluídos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleCredentialInput"
+      responses:
+        "200":
+          description: Sessão iniciada, ou conta nova por completar
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AuthResponse"
+                  - $ref: "#/components/schemas/GoogleCompletarPendente"
+        "401":
+          description: Token inválido (`google_invalido`) ou email do Google não verificado (`google_email_nao_verificado`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "403":
+          description: Conta suspensa, encerrada ou banida, ou registos fechados (`registos_fechados`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "404":
+          description: Login com o Google desligado
+        "409":
+          description: Já existe uma conta com este email (`conta_existente`) ou email indisponível (`email_indisponivel`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiadas tentativas
+        "503":
+          description: Não foi possível obter as chaves da Google (ou ler o estado dos registos)
+    delete:
+      operationId: unlinkGoogle
+      tags: [auth]
+      summary: Desligar o Google da conta
+      description: Só com palavra-passe definida (senão 409 `sem_password`); a conta ficaria sem forma de entrar.
+      responses:
+        "200":
+          description: Google desligado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResposta"
+        "401":
+          description: Não autenticado
+        "404":
+          description: Não há conta Google ligada, ou login com o Google desligado
+        "409":
+          description: Sem palavra-passe definida (`sem_password`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+
+  /auth/google/completar:
+    post:
+      operationId: googleComplete
+      tags: [auth]
+      summary: Concluir a criação de conta com o Google
+      description: >-
+        Passo 2: o `sub` e o email vêm SÓ do bilhete (cookie httpOnly do passo 1), nunca do corpo (um corpo com mais campos é recusado).
+        Repete o gate dos registos, a idade, o aceite dos documentos e as verificações de username e email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleCompletarInput"
+      responses:
+        "201":
+          description: Conta criada e sessão iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Dados inválidos, menor de 18, documentos desatualizados ou bilhete inválido/expirado (`bilhete_invalido`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "403":
+          description: Registos fechados (`registos_fechados`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "404":
+          description: Login com o Google desligado
+        "409":
+          description: Username em uso, email indisponível ou Google já ligado (`google_ja_ligado`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiados registos
+        "503":
+          description: Não foi possível ler o estado dos registos
+
+  /auth/google/ligar:
+    post:
+      operationId: linkGoogle
+      tags: [auth]
+      summary: Ligar o Google à conta (com sessão)
+      description: >-
+        A única forma de ligar o Google a uma conta existente. Se o email do Google for igual ao da conta e estiver verificado, o email da conta passa a verificado.
+        Admins excluídos (403).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleCredentialInput"
+      responses:
+        "200":
+          description: Google ligado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleLigarResposta"
+        "401":
+          description: Não autenticado, ou ID token inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "403":
+          description: Conta não elegível (administrador)
+        "404":
+          description: Login com o Google desligado
+        "409":
+          description: A conta já tem Google ligado (`ja_ligado`) ou esta conta Google já está ligada a outra (`google_ja_ligado`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErroApi"
+        "429":
+          description: Demasiadas tentativas
+
+  /auth/google/estado:
+    get:
+      operationId: getGoogleStatus
+      tags: [auth]
+      summary: Estado da ligação ao Google da conta atual
+      responses:
+        "200":
+          description: Estado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleEstado"
+        "401":
+          description: Não autenticado
+        "404":
+          description: Login com o Google desligado
+
   /auth/legal-config:
     get:
       operationId: getLegalConfig
@@ -1602,6 +1810,99 @@ components:
             emailVerificado:
               description: O email da conta já foi verificado.
               type: boolean
+            temPassword:
+              description: false = conta criada com o Google que ainda não definiu palavra-passe (não tem palavra-passe atual para alterar).
+              type: boolean
+
+    GoogleConfig:
+      type: object
+      required: [clientId]
+      properties:
+        clientId:
+          type: [string, "null"]
+
+    GoogleNonce:
+      type: object
+      required: [nonce]
+      properties:
+        nonce:
+          type: string
+
+    GoogleCredentialInput:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          description: O ID token (JWT) devolvido pelo Google Identity Services.
+          type: string
+          minLength: 20
+          maxLength: 4096
+
+    GoogleCompletarPendente:
+      type: object
+      required: [precisaCompletar]
+      properties:
+        precisaCompletar:
+          type: boolean
+        nome:
+          description: Nome da conta Google (para pré-preencher; pode faltar).
+          type: [string, "null"]
+
+    GoogleCompletarInput:
+      type: object
+      required: [username, dataNascimento, aceite]
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        dataNascimento:
+          type: string
+          format: date
+        tipoConta:
+          type: string
+          enum: [pessoal, criador]
+        aceite:
+          type: object
+          description: Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade.
+          required: [termos, privacidade, conteudo, direitosAutor, reembolsos, cookies, maioridade]
+          properties:
+            termos:
+              type: string
+            privacidade:
+              type: string
+            conteudo:
+              type: string
+            direitosAutor:
+              type: string
+            reembolsos:
+              type: string
+            cookies:
+              type: boolean
+              enum: [true]
+            maioridade:
+              type: boolean
+              enum: [true]
+
+    GoogleLigarResposta:
+      type: object
+      required: [ok, emailVerificado]
+      properties:
+        ok:
+          type: boolean
+        emailVerificado:
+          type: boolean
+
+    GoogleEstado:
+      type: object
+      required: [ligado, email]
+      properties:
+        ligado:
+          type: boolean
+        email:
+          description: Email da conta Google ligada (null se não houver ligação).
+          type: [string, "null"]
 
     ErroApi:
       description: Corpo de erro da API.

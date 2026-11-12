@@ -39,7 +39,7 @@ const COOKIE_OPTS = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-function setRefreshCookie(res: Response, token: string) {
+export function setRefreshCookie(res: Response, token: string) {
   res.cookie(REFRESH_COOKIE, token, COOKIE_OPTS);
 }
 
@@ -93,7 +93,7 @@ export function validarDataNascimento(valor: string, agora: Date = new Date()): 
 /** Regra da palavra-passe (registo, redefinição e alteração). */
 const passwordRegra = z.string().min(8, "Password deve ter pelo menos 8 caracteres").max(128);
 
-const registerSchema = z.object({
+export const registerSchema = z.object({
   nomeCompleto: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
   email: z.email("Email inválido").max(255),
   username: z
@@ -164,18 +164,18 @@ router.get("/auth/legal-config", async (req, res): Promise<void> => {
   }
 });
 
-const MSG_USERNAME_EM_USO = "Esse nome de utilizador já está em uso";
-const CODIGO_USERNAME_EM_USO = "username_em_uso";
-const MSG_EMAIL_INDISPONIVEL = "Não foi possível criar a conta com este email. Se já tens conta, entra.";
-const CODIGO_EMAIL_INDISPONIVEL = "email_indisponivel";
+export const MSG_USERNAME_EM_USO = "Esse nome de utilizador já está em uso";
+export const CODIGO_USERNAME_EM_USO = "username_em_uso";
+export const MSG_EMAIL_INDISPONIVEL = "Não foi possível criar a conta com este email. Se já tens conta, entra.";
+export const CODIGO_EMAIL_INDISPONIVEL = "email_indisponivel";
 
 /** Email normalizado para guardar e comparar: sem espaços nas pontas e em minúsculas. */
-function normalizarEmailConta(email: string): string {
+export function normalizarEmailConta(email: string): string {
   return email.trim().toLowerCase();
 }
 
 /** Violação de índice único (23505) no registo: qual dos dois (username | email); undefined se for outro erro. */
-function violacaoUnica(err: unknown): "username" | "email" | undefined {
+export function violacaoUnica(err: unknown): "username" | "email" | undefined {
   const e = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } } | null;
   const code = e?.code ?? e?.cause?.code, constraint = (e?.constraint ?? e?.cause?.constraint ?? "").toLowerCase();
   if (code !== "23505") return undefined;
@@ -439,7 +439,7 @@ router.post("/auth/redefinir-password", validate(redefinirSchema), async (req, r
       if (userId === null) return null;
       const [u] = await tx.select({ id: usersTable.id, email: usersTable.email, role: usersTable.role, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, userId)).for("update").limit(1);
       if (!u || !u.ativo || ROLES_ADMIN.has(u.role)) return null;
-      await tx.update(usersTable).set({ passwordHash: await hashPassword(password), passwordAlteradaEm: new Date() }).where(eq(usersTable.id, userId));
+      await tx.update(usersTable).set({ passwordHash: await hashPassword(password), passwordAlteradaEm: new Date(), passwordDefinida: true }).where(eq(usersTable.id, userId));
       await invalidarTokensRecuperacao(tx, userId);
       return { userId, email: u.email };
     });
@@ -527,7 +527,7 @@ router.post("/auth/alterar-password", requireAuth, validate(alterarSchema), asyn
     if (!(await comparePassword(passwordAtual, u.passwordHash))) { res.status(403).json({ error: "A palavra-passe atual está incorreta.", codigo: "password_incorreta" }); return; }
     if (novaPassword === passwordAtual) { res.status(400).json({ error: "A nova palavra-passe tem de ser diferente da atual.", codigo: "password_igual" }); return; }
     await db.transaction(async (tx) => {
-      await tx.update(usersTable).set({ passwordHash: await hashPassword(novaPassword), passwordAlteradaEm: new Date() }).where(eq(usersTable.id, u.id));
+      await tx.update(usersTable).set({ passwordHash: await hashPassword(novaPassword), passwordAlteradaEm: new Date(), passwordDefinida: true }).where(eq(usersTable.id, u.id));
       await invalidarTokensRecuperacao(tx, u.id);
     });
     try { await terminarSessoesDaConta(u.id); } catch { logger.warn({ motivo: "erro" }, "Alterar palavra-passe: falha ao terminar as sessões (os tokens antigos caem pelo password_alterada_em)"); }
@@ -717,7 +717,7 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void>
   }
 });
 
-function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number, totalSeguindo: number) {
+export function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number, totalSeguindo: number) {
   return {
     id: user.id,
     username: user.username,
@@ -736,6 +736,8 @@ function formatUser(user: any, totalPublicacoes: number, totalSeguidores: number
     quemPodeEscrever: user.quemPodeEscrever ?? "todos",
     // Email verificado (só da própria conta; o momento exato não se expõe)
     emailVerificado: !!user.emailVerificadoEm,
+    // false = conta criada com o Google que ainda não definiu palavra-passe (só da própria conta)
+    temPassword: user.passwordDefinida !== false,
     totalSeguidores,
     totalSeguindo,
     totalPublicacoes,

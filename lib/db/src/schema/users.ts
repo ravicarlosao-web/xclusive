@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index, uniqueIndex, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -72,6 +72,11 @@ export const usersTable = pgTable("users", {
   passwordAlteradaEm: timestamp("password_alterada_em"),
   /** Quando o email da conta foi verificado (exigido para pedir para ser criador). NULL = não verificado; sem preenchimento retroativo. Mudar o email tem de a repor a NULL. */
   emailVerificadoEm: timestamp("email_verificado_em", { withTimezone: true }),
+  /**
+   * false = conta criada com o Google, que ainda não definiu palavra-passe (o hash guardado é aleatório e ninguém o conhece).
+   * Passa a true quando a pessoa define uma palavra-passe (redefinir ou alterar). Contas anteriores: true.
+   */
+  passwordDefinida: boolean("password_definida").notNull().default(true),
 }, (table) => [
   check("users_quem_pode_escrever_chk", sql`${table.quemPodeEscrever} IN ('todos', 'seguidores_assinantes', 'assinantes')`),
   // Email único sem distinguir maiúsculas de minúsculas (o registo guarda-o em minúsculas; isto protege contra corridas e contas antigas).
@@ -158,6 +163,22 @@ export const userLegalAcceptancesTable = pgTable("user_legal_acceptances", {
   origem: varchar("origem", { length: 20 }).notNull().default("registo"),
 }, (t) => [
   index("user_legal_acceptances_user_idx").on(t.userId),
+]);
+
+/**
+ * Identidade Google ligada a uma conta (login com o Google). A identidade é o `sub` da Google, NUNCA o email: o email só serve para
+ * mostrar/auditar (`email_google`, apagado em cascata com a conta). Uma conta tem no máximo uma identidade e um `sub` só liga a uma conta.
+ */
+export const userGoogleIdentitiesTable = pgTable("user_google_identities", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  googleSub: varchar("google_sub", { length: 255 }).notNull(),
+  emailGoogle: varchar("email_google", { length: 255 }).notNull(),
+  ligadoEm: timestamp("ligado_em", { withTimezone: true }).notNull().defaultNow(),
+  ultimoLoginEm: timestamp("ultimo_login_em", { withTimezone: true }),
+}, (t) => [
+  unique("user_google_identities_user_uq").on(t.userId),
+  unique("user_google_identities_sub_uq").on(t.googleSub),
 ]);
 
 /**

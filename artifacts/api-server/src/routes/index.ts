@@ -1,6 +1,7 @@
 import { Router } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
+import authGoogleRouter from "./authGoogle";
 import usersRouter from "./users";
 import blocksRouter from "./blocks";
 import postsRouter from "./posts";
@@ -23,6 +24,7 @@ const router: Router = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(authGoogleRouter);
 router.use(usersRouter);
 router.use(blocksRouter);
 router.use(postsRouter);

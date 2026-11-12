@@ -136,7 +136,83 @@ export interface UserProfile {
 export type CurrentUser = UserProfile & {
   /** O email da conta já foi verificado. */
   emailVerificado?: boolean;
+  /** false = conta criada com o Google que ainda não definiu palavra-passe (não tem palavra-passe atual para alterar). */
+  temPassword?: boolean;
 };
+
+export interface GoogleConfig {
+  /** @nullable */
+  clientId: string | null;
+}
+
+export interface GoogleNonce {
+  nonce: string;
+}
+
+export interface GoogleCredentialInput {
+  /**
+     * O ID token (JWT) devolvido pelo Google Identity Services.
+     * @minLength 20
+     * @maxLength 4096
+     */
+  credential: string;
+}
+
+export interface GoogleCompletarPendente {
+  precisaCompletar: boolean;
+  /**
+     * Nome da conta Google (para pré-preencher; pode faltar).
+     * @nullable
+     */
+  nome?: string | null;
+}
+
+export type GoogleCompletarInputTipoConta = typeof GoogleCompletarInputTipoConta[keyof typeof GoogleCompletarInputTipoConta];
+
+
+export const GoogleCompletarInputTipoConta = {
+  pessoal: 'pessoal',
+  criador: 'criador',
+} as const;
+
+/**
+ * Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade.
+ */
+export type GoogleCompletarInputAceite = {
+  termos: string;
+  privacidade: string;
+  conteudo: string;
+  direitosAutor: string;
+  reembolsos: string;
+  cookies: true;
+  maioridade: true;
+};
+
+export interface GoogleCompletarInput {
+  /**
+     * @minLength 3
+     * @maxLength 50
+     */
+  username: string;
+  dataNascimento: string;
+  tipoConta?: GoogleCompletarInputTipoConta;
+  /** Versões vigentes dos documentos legais que a pessoa aceitou (GET /auth/legal-versions) e declaração de maioridade. */
+  aceite: GoogleCompletarInputAceite;
+}
+
+export interface GoogleLigarResposta {
+  ok: boolean;
+  emailVerificado: boolean;
+}
+
+export interface GoogleEstado {
+  ligado: boolean;
+  /**
+     * Email da conta Google ligada (null se não houver ligação).
+     * @nullable
+     */
+  email: string | null;
+}
 
 /**
  * Corpo de erro da API.
