@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { customFetch, type Message } from '@workspace/api-client-react';
+import { getMessages, type PaginatedMessages } from '@workspace/api-client-react';
 
 /**
  * Poll inteligente da conversa aberta: pede GET /api/conversations/:id/messages?depois=<último id> e só traz o que é novo.
@@ -10,7 +10,7 @@ import { customFetch, type Message } from '@workspace/api-client-react';
  *  - falha de rede: recuo 5, 10, 20, 40, 60 s; ao 2.º falhanço seguido mostra o aviso «sem ligação».
  *  - se a resposta diz que há mais (hasMore) volta a pedir logo a seguir, no máximo 4 vezes seguidas (as mensagens vêm por ordem crescente, por isso
  *    nunca fica um buraco: o pedido seguinte continua da última recebida).
- * O `depois` não está no cliente OpenAPI gerado (ver BUGS.md): usa-se o customFetch com tipos locais.
+ * Usa o cliente OpenAPI gerado (getMessages com `depois`), que passa pelo mesmo customFetch (token, renovação e erros iguais).
  */
 export const NIVEIS_MS = [5_000, 10_000, 20_000, 30_000];
 export const VAZIOS_POR_NIVEL = 3;
@@ -21,12 +21,8 @@ const FALHAS_PARA_AVISO = 2;
 const ATRASO_MAX_FALHA_MS = 60_000;
 const RETRY_AFTER_OMISSAO_MS = 30_000;
 
-export interface RespostaDepois {
-  messages: Message[];
-  hasMore: boolean;
-  podeEnviar?: boolean;
-  restricao?: 'regra' | 'bloqueaste' | null;
-}
+/** A resposta de `depois` é a das mensagens (sem `podeEnviar`/`restricao` quando não há novidades). */
+export type RespostaDepois = PaginatedMessages;
 
 interface Opcoes {
   convId: number;
@@ -87,7 +83,7 @@ export function useNovasMensagens(opcoes: Opcoes): { semLigacao: boolean; tentar
       aborter = new AbortController();
       let imediato = false;
       try {
-        const r = await customFetch<RespostaDepois>(`/api/conversations/${convId}/messages?depois=${ultimo}&limite=50`, { signal: aborter.signal });
+        const r = await getMessages(convId, { depois: ultimo, limite: 50 }, { signal: aborter.signal });
         if (!vivo) return;
         falhas = 0;
         setSemLigacao(false);

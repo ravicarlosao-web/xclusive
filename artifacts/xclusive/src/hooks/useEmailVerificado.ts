@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { customFetch } from '@workspace/api-client-react';
+import { getMe } from '@workspace/api-client-react';
 
 export type EstadoEmail = 'carregando' | 'verificado' | 'por_verificar' | 'erro';
 
@@ -8,7 +8,7 @@ export function useEmailVerificado(ativo = true): { estado: EstadoEmail; recarre
   const [estado, setEstado] = useState<EstadoEmail>('carregando');
   const recarregar = useCallback(async () => {
     try {
-      const me = await customFetch<{ emailVerificado?: boolean }>('/api/auth/me');
+      const me = await getMe();
       setEstado(me?.emailVerificado === true ? 'verificado' : 'por_verificar');
     } catch {
       setEstado('erro');

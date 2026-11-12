@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { customFetch } from '@workspace/api-client-react';
+import { requestEmailVerification } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Loader2, MailCheck, MailWarning } from 'lucide-react';
 import type { EstadoEmail } from '@/hooks/useEmailVerificado';
@@ -25,7 +25,7 @@ export function VerificarEmail({ estado, aoAtualizar, aoVerificarOutraVez }: { e
   const pedir = async () => {
     setErro(null); setAEnviar(true);
     try {
-      const r = await customFetch<{ jaVerificado?: boolean }>('/api/auth/verificar-email/pedir', { method: 'POST' });
+      const r = await requestEmailVerification();
       if (r?.jaVerificado) { aoAtualizar?.(); return; }
       setEnviado(true); setEspera(60);
     } catch (err) {
