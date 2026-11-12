@@ -120,6 +120,36 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Login com o Google: entrar 10 por IP em 15 minutos (como o login); criar conta 5 por hora (como o registo); nonce, ligar/desligar e leitura com limites próprios.
+const googleEntrarLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Demasiadas tentativas com o Google. Tenta novamente em 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const googleCompletarLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Demasiados registos a partir deste IP. Tenta novamente em 1 hora." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const googleNonceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Demasiados pedidos. Tenta novamente dentro de 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const googleConfigLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "Demasiados pedidos. Tenta novamente dentro de 1 minuto." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Recuperação de palavra-passe: 5 pedidos por IP em 15 minutos; redefinir: 10 tentativas por IP em 15 minutos.
 const esqueciLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -282,6 +312,12 @@ app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth/refresh", refreshLimiter);
 app.use("/api/auth/esqueci-password", esqueciLimiter);
 app.use("/api/auth/redefinir-password", redefinirLimiter);
+app.post("/api/auth/google", googleEntrarLimiter);
+app.post("/api/auth/google/completar", googleCompletarLimiter);
+app.post("/api/auth/google/nonce", googleNonceLimiter);
+app.post("/api/auth/google/ligar", googleEntrarLimiter);
+app.delete("/api/auth/google", googleEntrarLimiter);
+app.get("/api/auth/google/config", googleConfigLimiter);
 app.post("/api/auth/alterar-password", alterarPasswordLimiter);
 app.post("/api/auth/verificar-email/pedir", verificarEmailPedirIpLimiter, verificarEmailPedirContaLimiter);
 app.post("/api/auth/verificar-email/confirmar", verificarEmailConfirmarLimiter);

@@ -1,18 +1,31 @@
 /**
  * Validação das variáveis de ambiente no arranque da API.
  *
- * Em produção (NODE_ENV=production) a API recusa arrancar sem as variáveis obrigatórias. Fora de produção nada bloqueia.
+ * Em produção (NODE_ENV=production) a API recusa arrancar sem as variáveis obrigatórias. Fora de produção só bloqueiam as regras do Google.
  * As mensagens dizem apenas o NOME da variável e o motivo; nunca o valor.
  */
+
+import { CLIENT_ID_RE, urlLoopback } from "./googleIdToken";
 
 export const BAN_HASH_PEPPER_MIN = 32;
 
 type Ambiente = Record<string, string | undefined>;
 
-/** Lista de erros (vazia = pode arrancar). Só valida em produção. */
+/**
+ * Lista de erros (vazia = pode arrancar). As obrigatórias só se validam em produção; as regras do login com o Google valem sempre:
+ *  - GOOGLE_JWKS_URL (chaves de teste) NUNCA em produção; fora dela, só em loopback;
+ *  - GOOGLE_CLIENT_ID, se definido, tem de ter a forma `<número>-<texto>.apps.googleusercontent.com`.
+ */
 export function errosAmbienteArranque(env: Ambiente): string[] {
-  if (env.NODE_ENV !== "production") return [];
   const erros: string[] = [];
+  const jwks = env.GOOGLE_JWKS_URL?.trim();
+  if (jwks) {
+    if (env.NODE_ENV === "production") erros.push("GOOGLE_JWKS_URL não pode estar definida em produção (é só para testes locais).");
+    else if (!urlLoopback(jwks)) erros.push("GOOGLE_JWKS_URL inválida: só é aceite um endereço de loopback (localhost, 127.0.0.1 ou [::1]).");
+  }
+  const clientId = env.GOOGLE_CLIENT_ID?.trim();
+  if (clientId && !CLIENT_ID_RE.test(clientId)) erros.push("GOOGLE_CLIENT_ID inválida (esperado <número>-<texto>.apps.googleusercontent.com).");
+  if (env.NODE_ENV !== "production") return erros;
   const pepper = env.BAN_HASH_PEPPER?.trim() ?? "";
   if (!pepper) {
     erros.push("BAN_HASH_PEPPER em falta (obrigatória em produção).");

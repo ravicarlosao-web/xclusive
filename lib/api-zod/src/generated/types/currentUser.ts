@@ -13,4 +13,6 @@ import type { UserProfile } from './userProfile';
 export type CurrentUser = UserProfile & {
   /** O email da conta já foi verificado. */
   emailVerificado?: boolean;
+  /** false = conta criada com o Google que ainda não definiu palavra-passe (não tem palavra-passe atual para alterar). */
+  temPassword?: boolean;
 };
