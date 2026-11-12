@@ -42,7 +42,7 @@ export function GoogleConta() {
       if (err?.status === 409 && cod === 'ja_ligado') setMsg({ tipo: 'erro', texto: m ?? 'Esta conta já tem uma conta Google ligada.' });
       else if (err?.status === 409 && cod === 'google_ja_ligado') setMsg({ tipo: 'erro', texto: m ?? 'Esta conta Google já está ligada a uma conta.' });
       else if (err?.status === 429) setMsg({ tipo: 'erro', texto: 'Demasiadas tentativas. Tenta novamente dentro de 15 minutos.' });
-      else if (m && (err?.status === 401 || err?.status === 403)) setMsg({ tipo: 'erro', texto: m });
+      else if (m && (err?.status === 400 || err?.status === 403)) setMsg({ tipo: 'erro', texto: m });
       else setMsg({ tipo: 'erro', texto: 'Não foi possível ligar o Google. Tenta novamente.' });
     } finally { setATrabalhar(false); }
   };

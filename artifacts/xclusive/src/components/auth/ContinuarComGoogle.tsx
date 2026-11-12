@@ -33,8 +33,7 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
     if (aEnviar) return;
     setErro(null); setAEnviar(true);
     try {
-      // `_isRetry`: um 401 aqui é um ID token recusado, não uma sessão expirada — sem isto o cliente tentaria renovar uma sessão que não existe (POST /auth/refresh)
-      const r = await googleLogin({ credential }, { _isRetry: true });
+      const r = await googleLogin({ credential });
       if ('precisaCompletar' in r) {
         try { sessionStorage.setItem(CHAVE_GOOGLE_NOME, r.nome ?? ''); } catch { /* sem armazenamento */ }
         setLocation('/google/concluir');
@@ -48,7 +47,7 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
       if (st === 403 && cod === 'conta_suspensa' && aoContaSuspensa) { aoContaSuspensa(); return; }
       if (st === 409 && cod === 'conta_existente') setErro(msg ?? 'Já existe uma conta com este email. Entra com a tua palavra-passe e liga o Google em Definições.');
       else if (st === 403 && cod === 'registos_fechados') setErro(msg ?? 'Os registos estão fechados de momento. Volta a tentar mais tarde.');
-      else if ((st === 403 || st === 409 || st === 401) && msg) setErro(msg);
+      else if ((st === 400 || st === 403 || st === 409) && msg) setErro(msg);
       else if (st === 429) setErro('Demasiadas tentativas. Tenta novamente dentro de 15 minutos.');
       else if (st === 404) setErro('O início de sessão com o Google não está disponível.');
       else setErro('Não foi possível entrar com o Google. Tenta novamente.');

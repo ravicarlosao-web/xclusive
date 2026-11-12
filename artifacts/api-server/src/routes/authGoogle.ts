@@ -81,13 +81,17 @@ function lerBilhete(raw: unknown): { sub: string; email: string; nome: string | 
   } catch { return null; }
 }
 
-/** Verifica credencial + nonce (cookie de uso único). Responde ao pedido em caso de falha e devolve null. */
+/**
+ * Verifica credencial + nonce (cookie de uso único). Responde ao pedido em caso de falha e devolve null.
+ * Uma credencial da Google recusada (inválida, expirada, nonce errado, email por verificar, conta de admin) é 400, NUNCA 401: o 401 é só «sem sessão»
+ * (requireAuth em /ligar), e o cliente trata qualquer 401 como sessão expirada e tenta renovar a sessão (POST /auth/refresh), o que aqui não faz sentido.
+ */
 async function verificarCredencial(req: Request, res: Response, credential: string): Promise<IdentidadeGoogle | null> {
   const r = (req as Request & { cookies?: Record<string, unknown> }).cookies?.[NONCE_COOKIE];
   apagarCookie(res, NONCE_COOKIE);   // uso único, venha o que vier
   const clientId = googleClientId()!;
   if (typeof r !== "string" || !r || r.length > 200) {
-    res.status(401).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
+    res.status(400).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
     return null;
   }
   let id: IdentidadeGoogle;
@@ -101,13 +105,13 @@ async function verificarCredencial(req: Request, res: Response, credential: stri
     }
     const inv = err instanceof GoogleTokenInvalido ? err : null;
     (req as { log?: { info: (o: object, m: string) => void } }).log?.info({ motivo: inv?.motivo ?? "erro" }, "Login Google: token recusado");
-    if (inv?.emailNaoVerificado) res.status(401).json({ error: MSG_GOOGLE_EMAIL_NAO_VERIFICADO, codigo: "google_email_nao_verificado" });
-    else res.status(401).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
+    if (inv?.emailNaoVerificado) res.status(400).json({ error: MSG_GOOGLE_EMAIL_NAO_VERIFICADO, codigo: "google_email_nao_verificado" });
+    else res.status(400).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
     return null;
   }
   const esperado = Buffer.from(hNonce(r)), recebido = Buffer.from(id.nonce ?? "");
   if (esperado.length !== recebido.length || !timingSafeEqual(esperado, recebido)) {
-    res.status(401).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
+    res.status(400).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" });
     return null;
   }
   return id;
@@ -155,7 +159,7 @@ router.post("/auth/google", exigirGoogle, validate(credencialSchema), async (req
     if (lig) {
       const user = lig.u;
       // Admins ficam excluídos: resposta genérica, sem token nem sessão.
-      if (ROLES_ADMIN.has(user.role)) { res.status(401).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" }); return; }
+      if (ROLES_ADMIN.has(user.role)) { res.status(400).json({ error: MSG_GOOGLE_INVALIDO, codigo: "google_invalido" }); return; }
       // Mesmos controlos e mensagens do login normal (a identidade está provada pelo Google, por isso o estado da conta pode ser dito).
       if (!user.ativo) {
         if (user.banidaEm) { res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA }); return; }
