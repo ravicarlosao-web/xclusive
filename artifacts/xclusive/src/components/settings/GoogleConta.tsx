@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { useGetGoogleStatus, getGetGoogleStatusQueryKey, linkGoogle, unlinkGoogle } from '@workspace/api-client-react';
+import { useGetGoogleConfig, getGetGoogleConfigQueryKey, useGetGoogleStatus, getGetGoogleStatusQueryKey, linkGoogle, unlinkGoogle } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleIdentity } from '@/hooks/useGoogleIdentity';
@@ -16,7 +16,10 @@ type Msg = { tipo: 'ok' | 'erro'; texto: string };
 export function GoogleConta() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const estado = useGetGoogleStatus({ query: { queryKey: getGetGoogleStatusQueryKey(), retry: false, staleTime: 60_000 } });
+  // Só se o servidor tiver o login com o Google configurado (clientId) é que o bloco existe
+  const cfg = useGetGoogleConfig({ query: { queryKey: getGetGoogleConfigQueryKey(), retry: false, staleTime: 5 * 60_000 } });
+  const ligadoNoServidor = !!cfg.data?.clientId;
+  const estado = useGetGoogleStatus({ query: { queryKey: getGetGoogleStatusQueryKey(), retry: false, staleTime: 60_000, enabled: ligadoNoServidor } });
   const alvo = useRef<HTMLDivElement>(null);
   const [msg, setMsg] = useState<Msg | null>(null);
   const [aTrabalhar, setATrabalhar] = useState(false);
@@ -60,9 +63,9 @@ export function GoogleConta() {
   };
 
   // O botão só é preparado (e o script só é carregado) quando falta ligar e o servidor tem o login com o Google.
-  const { estado: estadoBotao } = useGoogleIdentity(alvo, (c) => { void ligar(c); }, estado.isSuccess && !ligado);
+  const { estado: estadoBotao } = useGoogleIdentity(alvo, (c) => ligar(c), estado.isSuccess && !ligado);
 
-  if (desligadoNoServidor || estado.isLoading) return null;
+  if (!ligadoNoServidor || desligadoNoServidor || estado.isLoading) return null;
   if (estado.isError) return null;
 
   return (

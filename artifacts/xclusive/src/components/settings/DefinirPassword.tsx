@@ -31,6 +31,7 @@ export function DefinirPassword() {
       <Button variant="outline" className="w-full justify-start text-left h-12" onClick={() => { void enviar(); }} disabled={aEnviar || !email} data-testid="definir-password">
         {aEnviar && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Definir palavra-passe
       </Button>
+      {!email && estado.isError && <p className="text-sm text-muted-foreground" data-testid="definir-password-sem-email">Não foi possível obter o email da conta. Usa «Esqueceste a password?» no início de sessão.</p>}
       {resultado && <p role={resultado.tipo === 'erro' ? 'alert' : 'status'} className={resultado.tipo === 'erro' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'} data-testid="definir-password-resultado">{resultado.texto}</p>}
     </section>
   );

@@ -36,7 +36,7 @@ function carregarScript(): Promise<void> {
 /**
  * Prepara o botão da Google dentro de `alvo`. `aoCredencial` recebe o ID token (o chamador envia-o à API). Devolve o estado e `renovar` (novo nonce).
  */
-export function useGoogleIdentity(alvo: React.RefObject<HTMLElement | null>, aoCredencial: (credential: string) => void, ativo = true) {
+export function useGoogleIdentity(alvo: React.RefObject<HTMLElement | null>, aoCredencial: (credential: string) => void | Promise<void>, ativo = true) {
   const [estado, setEstado] = useState<EstadoGoogle>('a-ver');
   const cb = useRef(aoCredencial);
   cb.current = aoCredencial;
@@ -52,9 +52,10 @@ export function useGoogleIdentity(alvo: React.RefObject<HTMLElement | null>, aoC
       client_id: id, nonce, ux_mode: 'popup', auto_select: false, cancel_on_tap_outside: true,
       callback: (r) => {
         const c = r?.credential;
-        // o nonce gasta-se em cada tentativa (o servidor apaga o cookie): prepara já o seguinte
-        void iniciar().catch(() => setEstado('erro-rede'));
-        if (c) cb.current(c);
+        // O nonce gasta-se em cada tentativa (o servidor apaga o cookie). O seguinte só se pede DEPOIS de o pedido com esta credencial terminar:
+        // pedi-lo antes trocava o cookie do nonce a meio do pedido e o servidor recusava a credencial (corrida).
+        const feito = c ? Promise.resolve(cb.current(c)).catch(() => {}) : Promise.resolve();
+        void feito.finally(() => { if (vivo.current) void iniciar().catch(() => setEstado('erro-rede')); });
       },
     });
     el.replaceChildren();
@@ -74,7 +75,7 @@ export function useGoogleIdentity(alvo: React.RefObject<HTMLElement | null>, aoC
         setEstado('a-carregar');
         try { await carregarScript(); } catch { if (vivo.current) setEstado('erro-script'); return; }
         if (!vivo.current) return;
-        await iniciar();
+        try { await iniciar(); } catch { if (vivo.current) setEstado('erro-rede'); return; }
         if (vivo.current) setEstado('pronto');
         temporizador = setInterval(() => { void iniciar().catch(() => {}); }, RENOVAR_NONCE_MS);
       } catch {

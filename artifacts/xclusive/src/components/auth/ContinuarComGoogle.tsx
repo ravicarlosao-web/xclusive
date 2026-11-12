@@ -33,7 +33,8 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
     if (aEnviar) return;
     setErro(null); setAEnviar(true);
     try {
-      const r = await googleLogin({ credential });
+      // `_isRetry`: um 401 aqui é um ID token recusado, não uma sessão expirada — sem isto o cliente tentaria renovar uma sessão que não existe (POST /auth/refresh)
+      const r = await googleLogin({ credential }, { _isRetry: true });
       if ('precisaCompletar' in r) {
         try { sessionStorage.setItem(CHAVE_GOOGLE_NOME, r.nome ?? ''); } catch { /* sem armazenamento */ }
         setLocation('/google/concluir');
@@ -56,25 +57,29 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
     }
   };
 
-  const { estado } = useGoogleIdentity(alvo, (c) => { void enviar(c); });
+  const { estado } = useGoogleIdentity(alvo, (c) => enviar(c));
   const oculto = estado === 'a-ver' || estado === 'desligado';
 
   return (
     <div className={oculto ? 'hidden' : 'space-y-3'} data-testid="google-bloco" data-estado={estado}>
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-xs text-muted-foreground">ou</span>
-        <div className="flex-1 h-px bg-border" />
-      </div>
+      {!oculto && (
+        <div className="flex items-center gap-3" aria-hidden="true">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground">ou</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+      )}
       <div role="group" aria-label="Continuar com o Google" className="flex min-h-[44px] justify-center">
         <div ref={alvo} data-testid="google-botao" aria-busy={estado === 'a-carregar' || aEnviar} className="flex min-h-[44px] w-full justify-center" />
       </div>
-      {aEnviar && <p role="status" className="flex items-center justify-center gap-2 text-sm text-muted-foreground" data-testid="google-a-enviar"><Loader2 className="h-4 w-4 animate-spin" /> A entrar com o Google…</p>}
-      {estado === 'erro-script' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-script">Não foi possível carregar o botão do Google. Entra com o email e a palavra-passe ou tenta mais tarde.</p>}
-      {estado === 'erro-rede' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-rede">Não foi possível preparar o botão do Google. Recarrega a página para tentar de novo.</p>}
-      {erro && <p role="alert" className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm text-foreground" data-testid="google-erro">{erro}</p>}
-      <TextoAdvogado id="avisoJuntoAoBotao" className="text-center text-xs text-muted-foreground" />
-      <TextoAdvogado id="scriptECookies" className="text-center text-xs text-muted-foreground" />
+      {!oculto && (<>
+        {aEnviar && <p role="status" className="flex items-center justify-center gap-2 text-sm text-muted-foreground" data-testid="google-a-enviar"><Loader2 className="h-4 w-4 animate-spin" /> A entrar com o Google…</p>}
+        {estado === 'erro-script' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-script">Não foi possível carregar o botão do Google. Entra com o email e a palavra-passe ou tenta mais tarde.</p>}
+        {estado === 'erro-rede' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-rede">Não foi possível preparar o botão do Google. Recarrega a página para tentar de novo.</p>}
+        {erro && <p role="alert" className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm text-foreground" data-testid="google-erro">{erro}</p>}
+        <TextoAdvogado id="avisoJuntoAoBotao" className="text-center text-xs text-muted-foreground" />
+        <TextoAdvogado id="scriptECookies" className="text-center text-xs text-muted-foreground" />
+      </>)}
     </div>
   );
 }
