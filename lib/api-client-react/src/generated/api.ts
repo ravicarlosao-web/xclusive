@@ -21,20 +21,28 @@ import type {
 
 import type {
   AuthResponse,
+  ChangePasswordInput,
   Comment,
   CommentInput,
+  ConfirmEmailInput,
   Conversation,
   ConversationInput,
+  ConversationsPage,
   CreatorStats,
+  CurrentUser,
   DenunciaMensagemInput,
   DenunciaMensagemResultado,
   EarningPoint,
   Enquete,
+  ErroApi,
+  ForgotPasswordInput,
   GetBlockedUsersParams,
+  GetConversationsParams,
   GetCreatorEarningsParams,
   GetCreatorTransactionsParams,
   GetExploreParams,
   GetFeedParams,
+  GetMessagesParams,
   GetNotificationsParams,
   GetUserPostsParams,
   GorjetaMensagemInput,
@@ -46,8 +54,10 @@ import type {
   LiveTipResponse,
   LoginInput,
   MarkConversationRead200,
+  MensagemResposta,
   Message,
   MessageInput,
+  OkResposta,
   PaginatedComments,
   PaginatedMessages,
   PaginatedNotifications,
@@ -62,6 +72,7 @@ import type {
   PostTipResponse,
   ProfileUpdate,
   RegisterInput,
+  ResetPasswordInput,
   SearchParams,
   SearchResults,
   Story,
@@ -77,6 +88,7 @@ import type {
   UnreadCount,
   UserProfile,
   UserSummary,
+  VerificacaoEmailPedido,
   VotoEnqueteInput
 } from './api.schemas';
 
@@ -486,9 +498,9 @@ export const getGetMeUrl = () => {
 /**
  * @summary Utilizador autenticado
  */
-export const getMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<UserProfile> => {
+export const getMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<CurrentUser> => {
 
-  return customFetch<UserProfile>(getGetMeUrl(),
+  return customFetch<CurrentUser>(getGetMeUrl(),
   {
     ...options,
     method: 'GET'
@@ -551,6 +563,366 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 
 
 
+
+export const getForgotPasswordUrl = () => {
+
+
+
+
+  return `/api/auth/esqueci-password`
+}
+
+/**
+ * Resposta SEMPRE igual (202) e imediata, exista ou não a conta: a existência da conta não se revela, nem pelo tempo. Se existir, é enviado um email com uma ligação de uso único.
+ * @summary Pedir a recuperação da palavra-passe
+ */
+export const forgotPassword = async (forgotPasswordInput: ForgotPasswordInput, options?: Parameters<typeof customFetch>[1]): Promise<MensagemResposta> => {
+
+  return customFetch<MensagemResposta>(getForgotPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(forgotPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getForgotPasswordMutationOptions = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof forgotPassword>>, TError,{data: BodyType<ForgotPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof forgotPassword>>, TError,{data: BodyType<ForgotPasswordInput>}, TContext> => {
+
+const mutationKey = ['forgotPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof forgotPassword>>, {data: BodyType<ForgotPasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  forgotPassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ForgotPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof forgotPassword>>>
+    export type ForgotPasswordMutationBody = BodyType<ForgotPasswordInput>
+    export type ForgotPasswordMutationError = ErrorType<ErroApi | void>
+
+    /**
+ * @summary Pedir a recuperação da palavra-passe
+ */
+export const useForgotPassword = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof forgotPassword>>, TError,{data: BodyType<ForgotPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof forgotPassword>>,
+        TError,
+        {data: BodyType<ForgotPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getForgotPasswordMutationOptions(options));
+    }
+
+export const getResetPasswordUrl = () => {
+
+
+
+
+  return `/api/auth/redefinir-password`
+}
+
+/**
+ * Uso único. Termina todas as sessões da conta e NÃO inicia sessão.
+ * @summary Redefinir a palavra-passe com a ligação recebida por email
+ */
+export const resetPassword = async (resetPasswordInput: ResetPasswordInput, options?: Parameters<typeof customFetch>[1]): Promise<OkResposta> => {
+
+  return customFetch<OkResposta>(getResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resetPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getResetPasswordMutationOptions = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetPassword>>, TError,{data: BodyType<ResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetPassword>>, TError,{data: BodyType<ResetPasswordInput>}, TContext> => {
+
+const mutationKey = ['resetPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetPassword>>, {data: BodyType<ResetPasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  resetPassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof resetPassword>>>
+    export type ResetPasswordMutationBody = BodyType<ResetPasswordInput>
+    export type ResetPasswordMutationError = ErrorType<ErroApi | void>
+
+    /**
+ * @summary Redefinir a palavra-passe com a ligação recebida por email
+ */
+export const useResetPassword = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetPassword>>, TError,{data: BodyType<ResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetPassword>>,
+        TError,
+        {data: BodyType<ResetPasswordInput>},
+        TContext
+      > => {
+      return useMutation(getResetPasswordMutationOptions(options));
+    }
+
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `/api/auth/alterar-password`
+}
+
+/**
+ * Exige a palavra-passe atual. Termina todas as sessões, incluindo a atual (a pessoa volta a entrar).
+ * @summary Alterar a palavra-passe (com sessão)
+ */
+export const changePassword = async (changePasswordInput: ChangePasswordInput, options?: Parameters<typeof customFetch>[1]): Promise<OkResposta> => {
+
+  return customFetch<OkResposta>(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(changePasswordInput)
+  }
+);}
+
+
+
+
+
+export const getChangePasswordMutationOptions = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext> => {
+
+const mutationKey = ['changePassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changePassword>>, {data: BodyType<ChangePasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  changePassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangePasswordMutationResult = NonNullable<Awaited<ReturnType<typeof changePassword>>>
+    export type ChangePasswordMutationBody = BodyType<ChangePasswordInput>
+    export type ChangePasswordMutationError = ErrorType<ErroApi | void>
+
+    /**
+ * @summary Alterar a palavra-passe (com sessão)
+ */
+export const useChangePassword = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changePassword>>,
+        TError,
+        {data: BodyType<ChangePasswordInput>},
+        TContext
+      > => {
+      return useMutation(getChangePasswordMutationOptions(options));
+    }
+
+export const getRequestEmailVerificationUrl = () => {
+
+
+
+
+  return `/api/auth/verificar-email/pedir`
+}
+
+/**
+ * O endereço vem sempre da conta. 202 = email enviado; 200 com `jaVerificado` = o email já estava verificado. 429 com `codigo` «demasiado_cedo» (e `Retry-After`) ou «limite_hora»; 503 com `codigo` «email_indisponivel».
+ * @summary Pedir o email de verificação do endereço da conta
+ */
+export const requestEmailVerification = async ( options?: Parameters<typeof customFetch>[1]): Promise<VerificacaoEmailPedido> => {
+
+  return customFetch<VerificacaoEmailPedido>(getRequestEmailVerificationUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestEmailVerificationMutationOptions = <TError = ErrorType<void | ErroApi>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestEmailVerification>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestEmailVerification>>, TError,void, TContext> => {
+
+const mutationKey = ['requestEmailVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestEmailVerification>>, void> = () => {
+
+
+          return  requestEmailVerification(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestEmailVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof requestEmailVerification>>>
+
+    export type RequestEmailVerificationMutationError = ErrorType<void | ErroApi>
+
+    /**
+ * @summary Pedir o email de verificação do endereço da conta
+ */
+export const useRequestEmailVerification = <TError = ErrorType<void | ErroApi>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestEmailVerification>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestEmailVerification>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRequestEmailVerificationMutationOptions(options));
+    }
+
+export const getConfirmEmailVerificationUrl = () => {
+
+
+
+
+  return `/api/auth/verificar-email/confirmar`
+}
+
+/**
+ * Uso único. Não inicia sessão.
+ * @summary Confirmar o email com a ligação recebida
+ */
+export const confirmEmailVerification = async (confirmEmailInput: ConfirmEmailInput, options?: Parameters<typeof customFetch>[1]): Promise<OkResposta> => {
+
+  return customFetch<OkResposta>(getConfirmEmailVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(confirmEmailInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmEmailVerificationMutationOptions = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmEmailVerification>>, TError,{data: BodyType<ConfirmEmailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmEmailVerification>>, TError,{data: BodyType<ConfirmEmailInput>}, TContext> => {
+
+const mutationKey = ['confirmEmailVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmEmailVerification>>, {data: BodyType<ConfirmEmailInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmEmailVerification(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmEmailVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof confirmEmailVerification>>>
+    export type ConfirmEmailVerificationMutationBody = BodyType<ConfirmEmailInput>
+    export type ConfirmEmailVerificationMutationError = ErrorType<ErroApi | void>
+
+    /**
+ * @summary Confirmar o email com a ligação recebida
+ */
+export const useConfirmEmailVerification = <TError = ErrorType<ErroApi | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmEmailVerification>>, TError,{data: BodyType<ConfirmEmailInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmEmailVerification>>,
+        TError,
+        {data: BodyType<ConfirmEmailInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmEmailVerificationMutationOptions(options));
+    }
 
 export const getGetUserSuggestionsUrl = () => {
 
@@ -3020,20 +3392,28 @@ export function useSearch<TData = Awaited<ReturnType<typeof search>>, TError = E
 
 
 
-export const getGetConversationsUrl = () => {
+export const getGetConversationsUrl = (params?: GetConversationsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/conversations`
+  return stringifiedParams.length > 0 ? `/api/conversations?${stringifiedParams}` : `/api/conversations`
 }
 
 /**
+ * Ordenada pela última atividade (mensagem mais recente; uma conversa sem mensagens conta pela data de criação), com desempate pelo id. Dois modos. COM `cursor` (vazio na primeira página) pagina por cursor e devolve o envelope `{ conversas, proximoCursor }`: o cursor é a posição (atividade, id) da última conversa recebida, por isso uma mensagem nova a reordenar a lista não repete nem salta conversas. SEM `cursor` é o modo antigo (`page`/`limit`) e devolve um array simples; este modo será descontinuado (usar `cursor`). Esconde as conversas com contas inativas e com contas que o utilizador bloqueou.
  * @summary Lista de conversas
  */
-export const getConversations = async ( options?: Parameters<typeof customFetch>[1]): Promise<Conversation[]> => {
+export const getConversations = async (params?: GetConversationsParams, options?: Parameters<typeof customFetch>[1]): Promise<Conversation[] | ConversationsPage> => {
 
-  return customFetch<Conversation[]>(getGetConversationsUrl(),
+  return customFetch<Conversation[] | ConversationsPage>(getGetConversationsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3046,23 +3426,23 @@ export const getConversations = async ( options?: Parameters<typeof customFetch>
 
 
 
-export const getGetConversationsQueryKey = () => {
+export const getGetConversationsQueryKey = (params?: GetConversationsParams,) => {
     return [
-    `/api/conversations`
+    `/api/conversations`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetConversationsQueryOptions = <TData = Awaited<ReturnType<typeof getConversations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetConversationsQueryOptions = <TData = Awaited<ReturnType<typeof getConversations>>, TError = ErrorType<void>>(params?: GetConversationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetConversationsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetConversationsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversations>>> = ({ signal }) => getConversations({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getConversations>>> = ({ signal }) => getConversations(params, { signal, ...requestOptions });
 
 
 
@@ -3072,19 +3452,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof getConversations>>>
-export type GetConversationsQueryError = ErrorType<unknown>
+export type GetConversationsQueryError = ErrorType<void>
 
 
 /**
  * @summary Lista de conversas
  */
 
-export function useGetConversations<TData = Awaited<ReturnType<typeof getConversations>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetConversations<TData = Awaited<ReturnType<typeof getConversations>>, TError = ErrorType<void>>(
+ params?: GetConversationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetConversationsQueryOptions(options)
+  const queryOptions = getGetConversationsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -3389,20 +3769,30 @@ export const useSendMessageTip = <TError = ErrorType<void>,
       return useMutation(getSendMessageTipMutationOptions(options));
     }
 
-export const getGetMessagesUrl = (id: number,) => {
+export const getGetMessagesUrl = (id: number,
+    params?: GetMessagesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/conversations/${id}/messages`
+  return stringifiedParams.length > 0 ? `/api/conversations/${id}/messages?${stringifiedParams}` : `/api/conversations/${id}/messages`
 }
 
 /**
+ * Sem parâmetros devolve as últimas `limite` mensagens (50 por omissão, máximo 100), por ordem crescente de id. Com `antes=<id>` devolve as `limite` anteriores a essa mensagem (cursor em `proximoCursor`). Com `depois=<id>` (poll da conversa aberta) devolve só as mais novas, por ordem crescente, e uma resposta sem novidades traz apenas `messages`, `page` e `hasMore`. `antes` e `depois` não se combinam (400).
  * @summary Mensagens de uma conversa
  */
-export const getMessages = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<PaginatedMessages> => {
+export const getMessages = async (id: number,
+    params?: GetMessagesParams, options?: Parameters<typeof customFetch>[1]): Promise<PaginatedMessages> => {
 
-  return customFetch<PaginatedMessages>(getGetMessagesUrl(id),
+  return customFetch<PaginatedMessages>(getGetMessagesUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -3415,23 +3805,25 @@ export const getMessages = async (id: number, options?: Parameters<typeof custom
 
 
 
-export const getGetMessagesQueryKey = (id: number,) => {
+export const getGetMessagesQueryKey = (id: number,
+    params?: GetMessagesParams,) => {
     return [
-    `/api/conversations/${id}/messages`
+    `/api/conversations/${id}/messages`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getMessages>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getMessages>>, TError = ErrorType<unknown>>(id: number,
+    params?: GetMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetMessagesQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetMessagesQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMessages>>> = ({ signal }) => getMessages(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMessages>>> = ({ signal }) => getMessages(id,params, { signal, ...requestOptions });
 
 
 
@@ -3449,11 +3841,12 @@ export type GetMessagesQueryError = ErrorType<unknown>
  */
 
 export function useGetMessages<TData = Awaited<ReturnType<typeof getMessages>>, TError = ErrorType<unknown>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number,
+    params?: GetMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetMessagesQueryOptions(id,options)
+  const queryOptions = getGetMessagesQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -15,5 +15,6 @@ export interface UserSummary {
   verificado: boolean;
   tipoConta?: string;
   estaASeguir?: boolean;
+  segueVoce?: boolean;
   totalSeguidores?: number;
 }

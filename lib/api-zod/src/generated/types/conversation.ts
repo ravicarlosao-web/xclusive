@@ -13,7 +13,8 @@ export interface Conversation {
   id: number;
   participantes: UserSummary[];
   tipo: ConversationTipo;
-  ultimaMensagem?: Message;
+  /** Null quando a conversa ainda não tem mensagens. */
+  ultimaMensagem?: Message | null;
   totalNaoLidas?: number;
   criadoEm: Date;
 }
