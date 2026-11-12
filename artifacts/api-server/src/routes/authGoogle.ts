@@ -230,7 +230,7 @@ router.post("/auth/google/completar", exigirGoogle, validate(completarSchema), a
     const aceiteIp = (req.ip ?? "").slice(0, 45) || null;
     const uaHeader = req.headers["user-agent"];
     const aceiteUserAgent = (typeof uaHeader === "string" ? uaHeader : "").slice(0, 400) || null;
-    const nomeBase = (bilhete.nome ?? "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
+    const nomeBase = (bilhete.nome ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
 
     const user = await db.transaction(async (tx) => {
       if (!(await lerRegistosAbertosBloqueando(tx))) throw new RegistosFechadosError();
