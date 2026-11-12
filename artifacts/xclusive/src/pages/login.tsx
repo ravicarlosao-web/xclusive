@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FlaskConical } from 'lucide-react';
 import { AuthSplitLayout, AuthHeader } from '@/components/AuthSplitLayout';
+import { ContinuarComGoogle } from '@/components/auth/ContinuarComGoogle';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -207,6 +208,12 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+
+          <ContinuarComGoogle
+            contexto="login"
+            aoContaEncerrada={(msg) => { try { sessionStorage.setItem(CHAVE_ENCERRADA, msg); } catch { /* sem armazenamento */ } setEncerrada(msg); }}
+            aoContaSuspensa={() => { try { sessionStorage.setItem(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ } setSuspensa(true); }}
+          />
 
           {/* Contas de teste: SÓ em desenvolvimento local (removidas do build de produção) */}
           {import.meta.env.DEV && (

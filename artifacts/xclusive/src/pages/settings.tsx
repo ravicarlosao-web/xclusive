@@ -16,6 +16,8 @@ import { MinhasSubscricoes } from '@/components/subscricoes/MinhasSubscricoes';
 import { Mais18Opcoes } from '@/components/shared/Mais18';
 import { EncerrarContaDialog } from '@/components/shared/EncerrarContaDialog';
 import { AlterarPassword } from '@/components/settings/AlterarPassword';
+import { DefinirPassword } from '@/components/settings/DefinirPassword';
+import { GoogleConta } from '@/components/settings/GoogleConta';
 import { VerificarEmail } from '@/components/settings/VerificarEmail';
 import { useEmailVerificado } from '@/hooks/useEmailVerificado';
 import { QuemPodeEscrever, ContasBloqueadas } from '@/components/mensagens/PrivacidadeMensagens';
@@ -293,7 +295,8 @@ export default function Settings() {
             
             <div className="space-y-4">
               <BlocoEmail />
-              <AlterarPassword />
+              {!isMockMode && <GoogleConta />}
+              {user?.temPassword === false ? <DefinirPassword /> : <AlterarPassword />}
               <Button variant="outline" className="w-full justify-start text-left h-12">
                 Autenticação de Dois Fatores (2FA)
               </Button>

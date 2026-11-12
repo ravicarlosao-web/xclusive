@@ -36,6 +36,8 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
   const [bloqueiosPost, setBloqueiosPost] = useState<Bloqueio[]>([]);
   const [mensagemFinal, setMensagemFinal] = useState('');
   const eCriadora = user?.tipoConta === 'criador';
+  // Conta criada com o Google sem palavra-passe: o encerramento exige a palavra-passe, por isso tem de a definir primeiro (Definições › Segurança).
+  const semPassword = user?.temPassword === false;
 
   useEffect(() => {
     if (!aberto) return;
@@ -90,6 +92,11 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
             </ul>
             {!estado && !erroCarregar && <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> A verificar a tua conta…</p>}
             {erroCarregar && <p role="alert" className="text-sm text-destructive" data-testid="encerrar-erro-carregar">Não foi possível verificar a tua conta. Tenta novamente daqui a pouco.</p>}
+            {semPassword && (
+              <div role="alert" data-testid="encerrar-sem-password" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm">
+                Define primeiro uma palavra-passe para poderes encerrar a conta (Definições › Segurança › Definir palavra-passe).
+              </div>
+            )}
             {bloqueios.length > 0 && (
               <div role="alert" data-testid="encerrar-bloqueios" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm space-y-2">
                 <p className="font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Ainda não podes encerrar a conta:</p>
@@ -100,7 +107,7 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
             )}
             <DialogFooter className="gap-2 sm:gap-2">
               <Button variant="outline" onClick={onFechar} className="min-h-[44px]">Cancelar</Button>
-              <Button variant="destructive" disabled={!estado || bloqueios.length > 0} onClick={() => setPasso(2)} className="min-h-[44px] dark:bg-red-700 dark:hover:bg-red-800 dark:text-white" data-testid="encerrar-continuar">Continuar</Button>
+              <Button variant="destructive" disabled={!estado || bloqueios.length > 0 || semPassword} onClick={() => setPasso(2)} className="min-h-[44px] dark:bg-red-700 dark:hover:bg-red-800 dark:text-white" data-testid="encerrar-continuar">Continuar</Button>
             </DialogFooter>
           </div>
         )}
