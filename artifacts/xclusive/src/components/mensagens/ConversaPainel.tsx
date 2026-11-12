@@ -94,13 +94,14 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const [erroAnteriores, setErroAnteriores] = useState(false);
   const emVoo = useRef(false);                             // um só pedido de anteriores de cada vez
   const erroRef = useRef(false);                           // o último pedido falhou: não repete sozinho (só com «Tentar novamente»)
+  const cursorPedido = useRef<number | null>(null);        // cursor (`antes`) do último pedido de anteriores: um observador antigo pode disparar com o estado de um render já passado (emVoo já fechado), e repetiria o mesmo cursor
   const mensagensRef = useRef<Message[]>([]);
   mensagensRef.current = messages;
   useEffect(() => {
     if (!msgData) return;
     const prev = mensagensRef.current, nova = msgData.messages;
     // A janela recente deixou de tocar nas já carregadas (chegaram mais de uma página de mensagens de uma vez): recomeça nas mais recentes
-    if (prev.length && nova.length && msgData.hasMore && nova[0].id > prev[prev.length - 1].id) { setMessages(nova); setTemMais(true); setCarregouAnteriores(false); return; }
+    if (prev.length && nova.length && msgData.hasMore && nova[0].id > prev[prev.length - 1].id) { cursorPedido.current = null; setMessages(nova); setTemMais(true); setCarregouAnteriores(false); return; }
     if (!prev.length) setTemMais(msgData.hasMore);
     const porId = new Map(prev.map((m) => [m.id, m] as const));
     for (const m of nova) porId.set(m.id, m);
@@ -128,14 +129,17 @@ export function ConversaPainel({ convId }: { convId: number }) {
   };
   const carregarAnteriores = async () => {
     if (emVoo.current || !temMais || !messages.length) return;
+    const cursor = messages[0].id;
+    if (cursorPedido.current === cursor) return;           // o mesmo cursor já foi pedido (e as mensagens novas ainda não chegaram a este render)
+    cursorPedido.current = cursor;
     emVoo.current = true; erroRef.current = false; setACarregarAnteriores(true); setErroAnteriores(false);
     try {
-      const r = await getMessages(convId, { antes: messages[0].id, limite: 50 });
+      const r = await getMessages(convId, { antes: cursor, limite: 50 });
       medirAncora(); reporAncora.current = true;
       setMessages((prev) => { const porId = new Map(prev.map((m) => [m.id, m] as const)); for (const m of r.messages) if (!porId.has(m.id)) porId.set(m.id, m); return [...porId.values()].sort((a, b) => a.id - b.id); });
       setTemMais(r.hasMore); setCarregouAnteriores(true);
     } catch {
-      erroRef.current = true; setErroAnteriores(true);
+      erroRef.current = true; setErroAnteriores(true); cursorPedido.current = null;   // «Tentar novamente» repete o mesmo cursor de propósito
     } finally {
       emVoo.current = false; setACarregarAnteriores(false);
     }
