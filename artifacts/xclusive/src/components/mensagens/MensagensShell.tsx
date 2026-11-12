@@ -56,6 +56,26 @@ export function MensagensShell({ convId }: { convId: number }) {
     const primeira = await carregarMais();
     if (primeira !== null) { setFocarId(primeira); setAviso(`Foram carregadas mais conversas (a partir da posição ${antes + 1}).`); }
   };
+  // Âncora de leitura: a primeira conversa visível e a sua distância ao topo. Quando a lista muda por cima (uma conversa com mensagem nova sobe ao
+  // topo no poll de 30 s) repõe-se essa distância, para a pessoa que está a ler mais abaixo não ver a lista saltar. No topo não se compensa.
+  const ancora = useRef<{ id: number; topo: number } | null>(null);
+  const medirAncora = () => {
+    const el = listaRef.current; if (!el) return;
+    const topoCaixa = el.getBoundingClientRect().top;
+    for (const a of Array.from(el.querySelectorAll<HTMLAnchorElement>('a[data-conversa]'))) {
+      const r = a.getBoundingClientRect();
+      if (r.bottom > topoCaixa + 1) { ancora.current = { id: Number(a.getAttribute('href')?.split('/').pop()), topo: r.top - topoCaixa }; return; }
+    }
+    ancora.current = null;
+  };
+  useLayoutEffect(() => {
+    const el = listaRef.current, a = ancora.current;
+    if (el && a && el.scrollTop > 4) {
+      const n = el.querySelector<HTMLAnchorElement>(`a[data-conversa][href$="/mensagens/${a.id}"]`);
+      if (n) { const dif = (n.getBoundingClientRect().top - el.getBoundingClientRect().top) - a.topo; if (Math.abs(dif) >= 1) el.scrollTop += dif; }
+    }
+    medirAncora();
+  }, [conversations]);
   // Depois de carregar, o foco vai para a primeira conversa nova (o botão desloca-se para baixo ou desaparece)
   useEffect(() => {
     if (focarId === null) return;
@@ -91,7 +111,7 @@ export function MensagensShell({ convId }: { convId: number }) {
         <div className="shrink-0 p-4 border-b border-border">
           <Input placeholder="Pesquisar..." aria-label="Pesquisar conversas" className="min-h-[44px] bg-secondary border-none" />
         </div>
-        <div ref={listaRef} onKeyDown={aoTeclar} data-testid="mensagens-lista-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+        <div ref={listaRef} onKeyDown={aoTeclar} onScroll={medirAncora} data-testid="mensagens-lista-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
           {isLoading && <div className="p-6 text-center text-sm text-muted-foreground">A carregar…</div>}
           {isError && <div role="alert" className="p-6 text-center text-sm text-muted-foreground">Não foi possível carregar as conversas.</div>}
           {!isLoading && !isError && (conversations?.length ?? 0) === 0 && <div className="p-6 text-center text-sm text-muted-foreground">Ainda não tens conversas.</div>}

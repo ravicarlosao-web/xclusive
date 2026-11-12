@@ -7,8 +7,8 @@ import { customFetch, type Conversation } from '@workspace/api-client-react';
  *  - CABEÇA: as 20 mais recentes, pedida a GET /api/conversations?cursor=&limite=20. É a única parte que se atualiza sozinha (poll de 30 s, quando `poll`).
  *  - EXTRAS: as páginas seguintes, guardadas à parte na cache (chave `CHAVE_EXTRAS`) e NUNCA recarregadas pelo poll: o poll não apaga o que já foi
  *    carregado nem faz saltar a lista. Uma conversa com atividade nova sobe sozinha para a cabeça; a cópia antiga nos extras fica escondida (união por id).
- *  - CONTINUIDADE: se a cabeça nova não se sobrepõe ao que já se conhecia (mais de uma página de conversas com atividade entre dois polls) pode haver um
- *    buraco entre a cabeça e os extras; então os extras são descartados e a pessoa volta a carregar mais (nunca fica uma conversa escondida).
+ *  - CONTINUIDADE (ver `reconciliar`): as conversas empurradas para fora da cabeça passam para os extras; se a cabeça nova não tem nenhuma conversa
+ *    conhecida e inalterada (mais de uma página de atividade entre dois polls) os extras são descartados e a pessoa volta a carregar mais.
  *  - Os extras ficam na cache do React Query: o `queryClient.clear()` do logout apaga-os com tudo o resto (nunca passam de uma conta para outra).
  * O parâmetro `cursor` não está no cliente OpenAPI gerado (ver BUGS.md): usa-se o customFetch com tipos locais.
  */
@@ -30,7 +30,15 @@ const EXTRAS_VAZIOS: Extras = { itens: [], cursor: null, iniciado: false, versao
 
 const pedir = (cursor: string) => customFetch<RespostaLista>(`/api/conversations?cursor=${encodeURIComponent(cursor)}&limite=${POR_PAGINA}`);
 
-/** Cabeça + reconciliação com os extras (a regra de continuidade). Exportada para os testes. */
+/**
+ * Reconciliação da cabeça nova com os extras (a regra de continuidade). Exportada para os testes.
+ *  - Uma conversa com atividade nova sobe SEMPRE ao topo (atividade = agora). Por isso, se a cabeça nova tem pelo menos uma conversa conhecida e SEM
+ *    alterações (mesma última mensagem), todas as que subiram estão na cabeça e nada ficou escondido: os extras mantêm-se.
+ *  - As conversas que a cabeça antiga tinha e a nova já não tem foram empurradas para baixo (não desapareceram): passam para o início dos extras,
+ *    senão ficavam num buraco entre a cabeça e os extras.
+ *  - Se nenhuma conversa da cabeça nova é conhecida e inalterada (mais de uma página com atividade entre dois polls), pode haver conversas que subiram e
+ *    ficaram fora da cabeça: os extras são descartados e a pessoa volta a carregar mais.
+ */
 export function reconciliar(qc: QueryClient, nova: RespostaLista): void {
   const antes = qc.getQueryData<RespostaLista>(CHAVE_CABECA);
   const extras = qc.getQueryData<Extras>(CHAVE_EXTRAS) ?? EXTRAS_VAZIOS;
@@ -38,9 +46,16 @@ export function reconciliar(qc: QueryClient, nova: RespostaLista): void {
   const descartar = () => qc.setQueryData<Extras>(CHAVE_EXTRAS, { ...EXTRAS_VAZIOS, versao: extras.versao + 1 });
   if (nova.proximoCursor === null) { descartar(); return; }   // a cabeça já tem a lista toda
   if (!nova.conversas.length) return;
-  const conhecidas = new Set<number>([...(antes?.conversas ?? []), ...extras.itens].map((c) => c.id));
-  const maisAntiga = nova.conversas[nova.conversas.length - 1];
-  if (!conhecidas.has(maisAntiga.id)) descartar();
+  const copias = new Map<number, Conversation>();
+  for (const c of extras.itens) copias.set(c.id, c);
+  for (const c of antes?.conversas ?? []) copias.set(c.id, c);
+  const semAlteracoes = nova.conversas.some((c) => { const k = copias.get(c.id); return !!k && (k.ultimaMensagem?.id ?? null) === (c.ultimaMensagem?.id ?? null); });
+  if (!semAlteracoes) { descartar(); return; }
+  const novasIds = new Set(nova.conversas.map((c) => c.id));
+  const empurradas = (antes?.conversas ?? []).filter((c) => !novasIds.has(c.id));
+  if (!empurradas.length) return;
+  const idsEmpurradas = new Set(empurradas.map((c) => c.id));
+  qc.setQueryData<Extras>(CHAVE_EXTRAS, { ...extras, itens: [...empurradas, ...extras.itens.filter((c) => !idsEmpurradas.has(c.id))] });
 }
 
 /** Tira dos extras as conversas que cumprem `quais` (p. ex. a que acabou de ser bloqueada). */
