@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, pgEnum, varchar, numeric, check, integer, index, uniqueIndex, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -177,8 +177,8 @@ export const userGoogleIdentitiesTable = pgTable("user_google_identities", {
   ligadoEm: timestamp("ligado_em", { withTimezone: true }).notNull().defaultNow(),
   ultimoLoginEm: timestamp("ultimo_login_em", { withTimezone: true }),
 }, (t) => [
-  uniqueIndex("user_google_identities_user_uq").on(t.userId),
-  uniqueIndex("user_google_identities_sub_uq").on(t.googleSub),
+  unique("user_google_identities_user_uq").on(t.userId),
+  unique("user_google_identities_sub_uq").on(t.googleSub),
 ]);
 
 /**
