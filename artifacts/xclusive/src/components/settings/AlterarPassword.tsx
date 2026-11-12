@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { customFetch } from '@workspace/api-client-react';
+import { changePassword } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,11 +29,7 @@ export function AlterarPassword() {
     if (nova !== confirmar) { setErro('As palavras-passe novas não coincidem.'); return; }
     setAEnviar(true);
     try {
-      await customFetch('/api/auth/alterar-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordAtual: atual, novaPassword: nova }),
-      });
+      await changePassword({ passwordAtual: atual, novaPassword: nova });
       toast({ title: 'Palavra-passe alterada', description: 'Por segurança, as sessões foram terminadas. Entra de novo com a nova palavra-passe.' });
       await logout();
     } catch (err) {

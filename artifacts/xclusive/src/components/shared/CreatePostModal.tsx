@@ -468,7 +468,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
         data: {
           legenda: textoConteudo.trim(),
           localizacao: textoLocalizacao.trim() || undefined,
-          tipo: 'texto' as any,
+          tipo: 'texto',
           media: [],
           exclusivo: textoExclusivo,
           precoDesbloqueio: precoNumerico,
@@ -491,7 +491,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   // ── Submit: enquete (post de texto com opções; sem media nem pergunta +18) ──
   function handleSubmitEnquete(d: DadosEnquete) {
     createPost(
-      { data: { tipo: 'texto' as any, legenda: d.pergunta, enquete: { opcoes: d.opcoes, duracaoDias: d.duracaoDias, audiencia: d.audiencia } } },
+      { data: { tipo: 'texto', legenda: d.pergunta, enquete: { opcoes: d.opcoes, duracaoDias: d.duracaoDias, audiencia: d.audiencia } } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/feed'] });

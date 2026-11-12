@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { customFetch, type Conversation } from '@workspace/api-client-react';
+import { getConversations, type Conversation, type ConversationsPage } from '@workspace/api-client-react';
 
 /**
  * Lista de conversas com «carregar mais» (paginação por cursor = posição (última atividade, id) da última conversa recebida).
@@ -10,14 +10,14 @@ import { customFetch, type Conversation } from '@workspace/api-client-react';
  *  - CONTINUIDADE (ver `reconciliar`): as conversas empurradas para fora da cabeça passam para os extras; se a cabeça nova não tem nenhuma conversa
  *    conhecida e inalterada (mais de uma página de atividade entre dois polls) os extras são descartados e a pessoa volta a carregar mais.
  *  - Os extras ficam na cache do React Query: o `queryClient.clear()` do logout apaga-os com tudo o resto (nunca passam de uma conta para outra).
- * O parâmetro `cursor` não está no cliente OpenAPI gerado (ver BUGS.md): usa-se o customFetch com tipos locais.
+ * Usa o cliente OpenAPI gerado (getConversations com `cursor`). A resposta do spec é `oneOf` (array no modo antigo, envelope com `cursor`): estreita-se com Array.isArray.
  */
 export const CHAVE_CABECA = ['/api/conversations', 'lista'] as const;   // começa por /api/conversations: as invalidações existentes (bloqueio) apanham-na
 export const CHAVE_EXTRAS = ['conversas-extras'] as const;
 export const POR_PAGINA = 20;
 const POLL_MS = 30_000;
 
-interface RespostaLista { conversas: Conversation[]; proximoCursor: string | null }
+type RespostaLista = ConversationsPage;
 export interface Extras {
   itens: Conversation[];
   /** Cursor da página seguinte; null = não há mais. Só vale se `iniciado`; antes disso usa-se o cursor da cabeça. */
@@ -28,7 +28,11 @@ export interface Extras {
 }
 const EXTRAS_VAZIOS: Extras = { itens: [], cursor: null, iniciado: false, versao: 0 };
 
-const pedir = (cursor: string) => customFetch<RespostaLista>(`/api/conversations?cursor=${encodeURIComponent(cursor)}&limite=${POR_PAGINA}`);
+const pedir = async (cursor: string): Promise<RespostaLista> => {
+  const r = await getConversations({ cursor, limite: POR_PAGINA });
+  if (Array.isArray(r)) throw new Error('Resposta inesperada de /api/conversations: veio o modo antigo (array) em vez do envelope.');   // com `cursor` o servidor responde sempre com o envelope
+  return r;
+};
 
 /**
  * Reconciliação da cabeça nova com os extras (a regra de continuidade). Exportada para os testes.

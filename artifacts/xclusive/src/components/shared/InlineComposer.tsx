@@ -52,7 +52,7 @@ export function InlineComposer({ user, onOpenWithFiles, onAbrirEnquete }: Inline
   function handleSubmit() {
     if (!canSubmit) return;
     createPost(
-      { data: { legenda: texto.trim(), tipo: 'texto' as any, media: [] } },
+      { data: { legenda: texto.trim(), tipo: 'texto', media: [] } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/feed'] });

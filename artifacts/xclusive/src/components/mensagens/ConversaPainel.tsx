@@ -23,7 +23,7 @@ import {
   getGetConversationsQueryKey,
   getGetUnreadConversationsCountQueryKey,
 } from '@workspace/api-client-react';
-import { customFetch, type Message } from '@workspace/api-client-react';
+import { getMessages, type Message } from '@workspace/api-client-react';
 import { useConversas, zerarNaoLidasNosExtras } from '@/hooks/useConversas';
 import { useNovasMensagens, type RespostaDepois } from '@/hooks/useNovasMensagens';
 import { useQueryClient } from '@tanstack/react-query';
@@ -130,7 +130,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
     if (emVoo.current || !temMais || !messages.length) return;
     emVoo.current = true; erroRef.current = false; setACarregarAnteriores(true); setErroAnteriores(false);
     try {
-      const r = await customFetch<{ messages: Message[]; hasMore: boolean }>(`/api/conversations/${convId}/messages?antes=${messages[0].id}&limite=50`);
+      const r = await getMessages(convId, { antes: messages[0].id, limite: 50 });
       medirAncora(); reporAncora.current = true;
       setMessages((prev) => { const porId = new Map(prev.map((m) => [m.id, m] as const)); for (const m of r.messages) if (!porId.has(m.id)) porId.set(m.id, m); return [...porId.values()].sort((a, b) => a.id - b.id); });
       setTemMais(r.hasMore); setCarregouAnteriores(true);
