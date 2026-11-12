@@ -2,6 +2,7 @@ import { createContext, useContext, ReactNode, useEffect, useState, useCallback 
 import { useLocation } from 'wouter';
 import {
   UserProfile,
+  CurrentUser,
   LoginInput,
   RegisterInput,
   useGetMe,
@@ -314,7 +315,7 @@ function getCurrentMockUser(): MockUser | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
-  user: UserProfile | null;
+  user: CurrentUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   /** Há token guardado mas a API não respondeu (429, 5xx, rede) depois das tentativas: a sessão mantém-se e não se vai para o login. */
@@ -328,6 +329,8 @@ interface AuthContextType {
   ganhos: number | null;
   login: (data: LoginInput) => Promise<void>;
   register: (data: RegisterInput & { pais?: string; telefone?: string; tipoConta?: string }) => Promise<void>;
+  /** Inicia a sessão com uma resposta {token, user} já obtida (login ou conclusão da conta com o Google): o mesmo que o login normal faz depois da resposta. */
+  entrarComToken: (token: string, user: CurrentUser, destino: string) => void;
   logout: () => Promise<void>;
   setToken: (token: string | null) => void;
   /** Update the current user's account type locally (mock + optimistic). Used by KYC flow. */
@@ -1045,6 +1048,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
   }, [isMockToken, mockUser, apiUser, queryClient]);
 
+  const entrarComToken = (novoToken: string, novoUser: CurrentUser, destino: string) => {
+    setIsMockMode(false);
+    setToken(novoToken);
+    queryClient.setQueryData(['/api/auth/me'], novoUser);
+    setLocation(destino);
+  };
+
   const logout = async () => {
     try {
       if (isMockToken) {
@@ -1085,6 +1095,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ganhos,
       login,
       register,
+      entrarComToken,
       logout,
       setToken,
       updateTipoConta,

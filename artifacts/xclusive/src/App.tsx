@@ -12,6 +12,7 @@ import { useTema } from '@/hooks/useTema';
 // Pages
 import Login from '@/pages/login';
 import Register from '@/pages/register';
+import GoogleConcluir from '@/pages/google-concluir';
 import Home from '@/pages/home';
 import Profile from '@/pages/profile';
 import NotFound from '@/pages/not-found';
@@ -138,6 +139,7 @@ function Router() {
     <Switch>
       <Route path="/" component={EntradaRoute} />
       <Route path="/login">{(params) => <PublicOnlyRoute component={Login} path="/login" />}</Route>
+      <Route path="/google/concluir">{() => <PublicOnlyRoute component={GoogleConcluir} path="/google/concluir" />}</Route>
       <Route path="/registo">{(params) => <PublicOnlyRoute component={Register} path="/registo" />}</Route>
       {/* Páginas legais: públicas (abrem com ou sem sessão) */}
       <Route path="/termos" component={Termos} />
