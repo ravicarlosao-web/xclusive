@@ -247,6 +247,18 @@ const sendMessageLimiter = rateLimit({
   keyGenerator: userIdKey,
 });
 
+// Poll da conversa aberta (GET /conversations/:id/messages?depois=…): 90 por minuto por utilizador, à parte do limite global (que também conta).
+// Só actua nos pedidos com «depois»: a leitura normal da conversa não é afectada. Com o poll de 5 s (12/min por separador) cabem 7 separadores.
+const pollMensagensLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 90,
+  message: { error: "Demasiados pedidos. Abranda e tenta novamente." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userIdKey,
+  skip: (req) => (req as any).query?.depois === undefined,
+});
+
 // Limiter global para utilizadores autenticados — 300 req/min por userId.
 // Defesa de profundidade: cobre endpoints não cobertos pelos limiters específicos.
 const globalAuthLimiter = rateLimit({
@@ -290,6 +302,7 @@ app.delete("/api/users/:username/follow", followLimiter);
 app.post("/api/posts", createPostLimiter);
 app.post("/api/posts/:id/enquete/voto", votoLimiter);
 app.post(["/api/conversations", "/api/conversations/:id/messages"], sendMessageLimiter);
+app.get("/api/conversations/:id/messages", pollMensagensLimiter);
 app.use("/api", globalAuthLimiter);             // limiter global autenticado (defesa de profundidade)
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
