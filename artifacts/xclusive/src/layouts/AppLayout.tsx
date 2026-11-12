@@ -16,7 +16,7 @@ import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
 import { Mais18Card } from '@/components/shared/Mais18';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
-import { useGetConversations, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
+import { useGetUnreadConversationsCount, getGetUnreadConversationsCountQueryKey, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
 // Rotas em que a página faz scroll no documento (o rodapé fica no fim). As de altura fixa / ecrã inteiro ficam de fora.
 // O /home saiu da lista (o feed tem o seu próprio desenho): o rodapé legal está nas Definições, em "Mais" → Definições.
@@ -31,17 +31,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const queryEnabled = !!user && !isMockMode;
 
-  const { data: conversations } = useGetConversations({
-    query: { queryKey: ['conversations'], enabled: queryEnabled, refetchInterval: 30_000 },
+  // Badge das mensagens: contagem do servidor (todas as conversas, não só as 20 carregadas na lista). Mesmo critério da lista: só as recebidas por mim.
+  const { data: unreadConversas } = useGetUnreadConversationsCount({
+    query: { queryKey: getGetUnreadConversationsCountQueryKey(), enabled: queryEnabled, refetchInterval: 30_000 },
   });
   const { data: unreadNotifs } = useGetUnreadNotificationsCount({
     query: { queryKey: ['unreadNotifs'], enabled: queryEnabled, refetchInterval: 30_000 },
   });
 
-  const unreadMessageCount = conversations?.reduce(
-    (total, conversation) => total + (conversation.totalNaoLidas ?? 0),
-    0,
-  ) ?? 0;
+  const unreadMessageCount = unreadConversas?.count ?? 0;
   const msgBadge = unreadMessageCount > 0 ? unreadMessageCount : undefined;
   const notifBadge = (unreadNotifs?.count ?? 0) > 0 ? unreadNotifs!.count : undefined;
 

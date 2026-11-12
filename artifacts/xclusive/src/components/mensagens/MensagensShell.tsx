@@ -4,7 +4,7 @@ import { ChevronDown, Edit } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGetConversations } from '@workspace/api-client-react';
+import { useConversas } from '@/hooks/useConversas';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { ConversaPainel } from './ConversaPainel';
@@ -34,7 +34,10 @@ let scrollListaGuardado = 0;
  */
 export function MensagensShell({ convId }: { convId: number }) {
   const { user } = useAuth();
-  const { data: conversations, isLoading, isError } = useGetConversations();
+  // Cabeça (20 mais recentes, com poll de 30 s) + páginas extra de «Carregar mais» (que o poll não apaga nem faz saltar)
+  const { conversas: conversations, isLoading, isError, podeMais, aCarregarMais, erroMais, carregarMais, chegouAoFim } = useConversas({ poll: true });
+  const [aviso, setAviso] = useState('');
+  const [focarId, setFocarId] = useState<number | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
   const listaRef = useRef<HTMLDivElement>(null);
   const aberta = convId > 0;
@@ -47,6 +50,18 @@ export function MensagensShell({ convId }: { convId: number }) {
     const el = listaRef.current;
     return () => { if (el) scrollListaGuardado = el.scrollTop; };
   }, []);
+
+  const aoCarregarMais = async () => {
+    const antes = conversations?.length ?? 0;
+    const primeira = await carregarMais();
+    if (primeira !== null) { setFocarId(primeira); setAviso(`Foram carregadas mais conversas (a partir da posição ${antes + 1}).`); }
+  };
+  // Depois de carregar, o foco vai para a primeira conversa nova (o botão desloca-se para baixo ou desaparece)
+  useEffect(() => {
+    if (focarId === null) return;
+    const el = listaRef.current?.querySelector<HTMLAnchorElement>(`a[data-conversa][href$="/mensagens/${focarId}"]`);
+    if (el) { el.focus(); setFocarId(null); }
+  }, [focarId, conversations]);
 
   // Setas ↑/↓ movem o foco entre as conversas
   const aoTeclar = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -109,6 +124,20 @@ export function MensagensShell({ convId }: { convId: number }) {
               </Link>
             );
           })}
+          {!isLoading && !isError && (conversations?.length ?? 0) > 0 && (podeMais || chegouAoFim) && (
+            <div className="p-3 text-center" data-testid="conversas-mais-area">
+              {erroMais && <p role="alert" className="pb-2 text-sm text-muted-foreground">Não foi possível carregar mais conversas.</p>}
+              {podeMais ? (
+                <button type="button" onClick={() => void aoCarregarMais()} disabled={aCarregarMais} aria-busy={aCarregarMais} data-testid="conversas-carregar-mais"
+                  className="min-h-[44px] rounded-full border border-border px-5 py-2 text-sm font-semibold transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
+                  {aCarregarMais ? 'A carregar…' : erroMais ? 'Tentar novamente' : 'Carregar mais conversas'}
+                </button>
+              ) : (
+                <p className="py-2 text-sm text-muted-foreground" data-testid="conversas-fim">Não há mais conversas.</p>
+              )}
+            </div>
+          )}
+          <div role="status" aria-live="polite" className="sr-only" data-testid="conversas-aviso">{aviso}</div>
         </div>
       </aside>
 

@@ -8,6 +8,7 @@ import {
 import {
   AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { limparExtras, removerDosExtras } from '@/hooks/useConversas';
 
 /** Texto de erro do servidor (campo `error`), ou o genérico. */
 export function textoErroServidor(e: unknown, generico: string): string {
@@ -24,7 +25,9 @@ export function useBloqueio() {
   const bloquear = useBlockUser();
   const desbloquear = useUnblockUser();
 
-  const atualizar = async (username: string) => {
+  const atualizar = async (username: string, bloqueou: boolean) => {
+    // «Carregar mais» (páginas extra, que não se recarregam sozinhas): bloquear tira já a conversa; desbloquear descarta-as (a conversa volta numa posição que não se sabe)
+    if (bloqueou) removerDosExtras(queryClient, (c) => c.participantes.some((p) => p.username === username)); else limparExtras(queryClient);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['conversations'] }),
       // lista, contadores e mensagens (as chaves começam todas por /api/conversations)
@@ -36,8 +39,8 @@ export function useBloqueio() {
 
   return {
     pendente: bloquear.isPending || desbloquear.isPending,
-    bloquear: async (username: string) => { await bloquear.mutateAsync({ username }); await atualizar(username); },
-    desbloquear: async (username: string) => { await desbloquear.mutateAsync({ username }); await atualizar(username); },
+    bloquear: async (username: string) => { await bloquear.mutateAsync({ username }); await atualizar(username, true); },
+    desbloquear: async (username: string) => { await desbloquear.mutateAsync({ username }); await atualizar(username, false); },
   };
 }
 

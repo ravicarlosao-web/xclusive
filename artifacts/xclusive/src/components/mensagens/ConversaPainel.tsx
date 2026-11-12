@@ -16,7 +16,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   useGetMessages,
   useSendMessage,
-  useGetConversations,
   useGetUserProfile,
   getGetUserProfileQueryKey,
   useMarkConversationRead,
@@ -25,6 +24,7 @@ import {
   getGetUnreadConversationsCountQueryKey,
 } from '@workspace/api-client-react';
 import { customFetch, type Message } from '@workspace/api-client-react';
+import { useConversas, zerarNaoLidasNosExtras } from '@/hooks/useConversas';
 import { useNovasMensagens, type RespostaDepois } from '@/hooks/useNovasMensagens';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -72,7 +72,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
   const [naoEnviado, setNaoEnviado] = useState<string | null>(null);
 
   // Dados da conversa (para obter o parceiro)
-  const { data: conversations } = useGetConversations();
+  const { conversas: conversations } = useConversas();
   const conv = conversations?.find(c => c.id === convId);
   const parceiroDaLista = conv?.participantes.find(p => p.username !== user?.username)
     ?? conv?.participantes[0];
@@ -177,9 +177,9 @@ export function ConversaPainel({ convId }: { convId: number }) {
     mutation: {
       onSuccess: () => {
         // O layout usa esta chave manual para o badge global de mensagens.
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
         queryClient.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetUnreadConversationsCountQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetUnreadConversationsCountQueryKey() });   // badge global
+        zerarNaoLidasNosExtras(queryClient, convId);   // conversa carregada em «carregar mais»: os extras não se recarregam sozinhos
       },
     },
   });
