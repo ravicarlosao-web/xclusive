@@ -22,30 +22,67 @@ const sendMessageSchema = z.object({
 const router = Router();
 
 const CONVERSATIONS_MAX_LIMIT = 50;
+const CONVERSATIONS_DEFAULT_LIMIT = 20;
+const ID_MAX = 2147483647;
 
-// Lista de conversas (paginada), ordenada pela ÚLTIMA ATIVIDADE (mensagem mais recente; uma conversa ainda sem mensagens conta pela
-// data de criação), com desempate pelo id da conversa: a ordem é determinística, por isso a paginação não repete nem salta conversas.
+// Lista de conversas, ordenada pela ÚLTIMA ATIVIDADE (mensagem mais recente; uma conversa ainda sem mensagens conta pela data de criação),
+// com desempate pelo id da conversa: a ordem é determinística. Dois modos:
+//  - legado (sem `cursor`): `page`/`limit`, devolve um array simples (mantém-se para clientes antigos);
+//  - cursor (com `cursor`, vazio na primeira página): `limite` (20 por omissão, máximo 50), devolve { conversas, proximoCursor }. O cursor é a posição
+//    (atividade, id) da última conversa devolvida e a página seguinte é «tudo o que vem DEPOIS dessa posição» (keyset): ao contrário do OFFSET, uma
+//    mensagem nova a reordenar a lista não repete nem salta conversas. Os filtros de visibilidade são os mesmos nos dois modos.
+const CURSOR_ATIVIDADE_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?$/;
+function lerCursorConversas(raw: string): { t: string; id: number } | null {
+  try {
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(raw)) return null;
+    const o = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { t?: unknown; id?: unknown };
+    if (typeof o.t !== "string" || !CURSOR_ATIVIDADE_RE.test(o.t) || typeof o.id !== "number" || !Number.isInteger(o.id) || o.id < 1 || o.id > ID_MAX) return null;
+    const d = new Date(`${o.t.slice(0, 10)}T${o.t.slice(11, 19)}Z`);   // data/hora impossíveis (mês 13…) não chegam à base de dados
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 19).replace("T", " ") !== o.t.slice(0, 19) || d.getUTCFullYear() < 1970) return null;
+    return { t: o.t, id: o.id };
+  } catch { return null; }
+}
+
 router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const userId = req.userId!;
-  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
-  const limit = Math.min(CONVERSATIONS_MAX_LIMIT, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
-  const offset = (page - 1) * limit;
+  const modoCursor = req.query.cursor !== undefined;
+  let cursor: { t: string; id: number } | null = null;
+  let limit: number, offset = 0;
+  if (modoCursor) {
+    const { cursor: cursorQ, limite: limiteQ } = req.query;
+    if (typeof cursorQ !== "string") { res.status(400).json({ error: "Cursor inválido." }); return; }
+    if (cursorQ !== "") { cursor = lerCursorConversas(cursorQ); if (!cursor) { res.status(400).json({ error: "Cursor inválido." }); return; } }
+    limit = CONVERSATIONS_DEFAULT_LIMIT;
+    if (limiteQ !== undefined) {
+      if (typeof limiteQ !== "string" || !/^[1-9]\d{0,9}$/.test(limiteQ)) { res.status(400).json({ error: "Limite inválido." }); return; }
+      limit = Math.min(CONVERSATIONS_MAX_LIMIT, Number(limiteQ));
+    }
+  } else {
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+    limit = Math.min(CONVERSATIONS_MAX_LIMIT, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+    offset = (page - 1) * limit;
+  }
+  const atividade = sql`GREATEST(ul.criado_em, c.criado_em)`;
+  const depoisDoCursor = cursor ? sql`AND (${atividade}, c.id) < (${cursor.t}::timestamp, ${cursor.id}::int)` : sql``;
 
   const ordenadas = await db.execute(sql`
-    SELECT c.id AS id, c.tipo AS tipo, c.criado_em AS criado_em
+    SELECT c.id AS id, c.tipo AS tipo, c.criado_em AS criado_em, ${atividade}::text AS atividade
     FROM conversation_participants cp
     JOIN conversations c ON c.id = cp.conversation_id
     LEFT JOIN LATERAL (SELECT m.criado_em FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) ul ON true
     WHERE cp.utilizador_id = ${userId}
       AND ${semParticipanteInativo(sql`c.id`)}
       AND ${semBloqueadoPorMim(userId, sql`c.id`)}
-    ORDER BY GREATEST(ul.criado_em, c.criado_em) DESC, c.id DESC
-    LIMIT ${limit} OFFSET ${offset}`);
-  const convs = (ordenadas.rows as { id: number; tipo: "privada" | "grupo"; criado_em: Date }[]);
+      ${depoisDoCursor}
+    ORDER BY ${atividade} DESC, c.id DESC
+    LIMIT ${modoCursor ? limit + 1 : limit} OFFSET ${offset}`);   // +1: sabe-se se há mais sem uma segunda consulta
+  const todas = (ordenadas.rows as { id: number; tipo: "privada" | "grupo"; criado_em: Date; atividade: string }[]);
+  const haMais = modoCursor && todas.length > limit;
+  const convs = haMais ? todas.slice(0, limit) : todas;
   const conversationIds = convs.map((c) => c.id);
 
   if (conversationIds.length === 0) {
-    res.json([]);
+    res.json(modoCursor ? { conversas: [], proximoCursor: null } : []);
     return;
   }
 
@@ -97,7 +134,9 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res): Promise
     };
   });
 
-  res.json(result);
+  if (!modoCursor) { res.json(result); return; }
+  const ultima = convs[convs.length - 1];
+  res.json({ conversas: result, proximoCursor: haMais ? Buffer.from(JSON.stringify({ t: ultima.atividade, id: ultima.id })).toString("base64url") : null });
 });
 
 // Criar conversa (ou devolver a existente)
@@ -213,7 +252,6 @@ async function verificarParticipante(conversationId: number, userId: number): Pr
 
 const MENSAGENS_LIMITE_PADRAO = 50;
 const MENSAGENS_LIMITE_MAX = 100;
-const ID_MAX = 2147483647;
 
 /** Formato público de uma mensagem da conversa (a mesma regra em todas as páginas: retiradas ocultas, gorjeta só com o valor). */
 function formatarMensagem(m: typeof messagesTable.$inferSelect, u: typeof usersTable.$inferSelect, valorGorjeta: string | null) {

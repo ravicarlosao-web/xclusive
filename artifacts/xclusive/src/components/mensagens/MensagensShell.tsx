@@ -4,7 +4,7 @@ import { ChevronDown, Edit } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGetConversations } from '@workspace/api-client-react';
+import { useConversas } from '@/hooks/useConversas';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { ConversaPainel } from './ConversaPainel';
@@ -34,7 +34,10 @@ let scrollListaGuardado = 0;
  */
 export function MensagensShell({ convId }: { convId: number }) {
   const { user } = useAuth();
-  const { data: conversations, isLoading, isError } = useGetConversations();
+  // Cabeça (20 mais recentes, com poll de 30 s) + páginas extra de «Carregar mais» (que o poll não apaga nem faz saltar)
+  const { conversas: conversations, isLoading, isError, podeMais, aCarregarMais, erroMais, carregarMais, chegouAoFim } = useConversas({ poll: true });
+  const [aviso, setAviso] = useState('');
+  const [focarId, setFocarId] = useState<number | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
   const listaRef = useRef<HTMLDivElement>(null);
   const aberta = convId > 0;
@@ -47,6 +50,38 @@ export function MensagensShell({ convId }: { convId: number }) {
     const el = listaRef.current;
     return () => { if (el) scrollListaGuardado = el.scrollTop; };
   }, []);
+
+  const aoCarregarMais = async () => {
+    const antes = conversations?.length ?? 0;
+    const primeira = await carregarMais();
+    if (primeira !== null) { setFocarId(primeira); setAviso(`Foram carregadas mais conversas (a partir da posição ${antes + 1}).`); }
+  };
+  // Âncora de leitura: a primeira conversa visível e a sua distância ao topo. Quando a lista muda por cima (uma conversa com mensagem nova sobe ao
+  // topo no poll de 30 s) repõe-se essa distância, para a pessoa que está a ler mais abaixo não ver a lista saltar. No topo não se compensa.
+  const ancora = useRef<{ id: number; topo: number } | null>(null);
+  const medirAncora = () => {
+    const el = listaRef.current; if (!el) return;
+    const topoCaixa = el.getBoundingClientRect().top;
+    for (const a of Array.from(el.querySelectorAll<HTMLAnchorElement>('a[data-conversa]'))) {
+      const r = a.getBoundingClientRect();
+      if (r.bottom > topoCaixa + 1) { ancora.current = { id: Number(a.getAttribute('href')?.split('/').pop()), topo: r.top - topoCaixa }; return; }
+    }
+    ancora.current = null;
+  };
+  useLayoutEffect(() => {
+    const el = listaRef.current, a = ancora.current;
+    if (el && a && el.scrollTop > 4) {
+      const n = el.querySelector<HTMLAnchorElement>(`a[data-conversa][href$="/mensagens/${a.id}"]`);
+      if (n) { const dif = (n.getBoundingClientRect().top - el.getBoundingClientRect().top) - a.topo; if (Math.abs(dif) >= 1) el.scrollTop += dif; }
+    }
+    medirAncora();
+  }, [conversations]);
+  // Depois de carregar, o foco vai para a primeira conversa nova (o botão desloca-se para baixo ou desaparece)
+  useEffect(() => {
+    if (focarId === null) return;
+    const el = listaRef.current?.querySelector<HTMLAnchorElement>(`a[data-conversa][href$="/mensagens/${focarId}"]`);
+    if (el) { el.focus(); setFocarId(null); }
+  }, [focarId, conversations]);
 
   // Setas ↑/↓ movem o foco entre as conversas
   const aoTeclar = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -76,7 +111,7 @@ export function MensagensShell({ convId }: { convId: number }) {
         <div className="shrink-0 p-4 border-b border-border">
           <Input placeholder="Pesquisar..." aria-label="Pesquisar conversas" className="min-h-[44px] bg-secondary border-none" />
         </div>
-        <div ref={listaRef} onKeyDown={aoTeclar} data-testid="mensagens-lista-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+        <div ref={listaRef} onKeyDown={aoTeclar} onScroll={medirAncora} data-testid="mensagens-lista-scroll" className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
           {isLoading && <div className="p-6 text-center text-sm text-muted-foreground">A carregar…</div>}
           {isError && <div role="alert" className="p-6 text-center text-sm text-muted-foreground">Não foi possível carregar as conversas.</div>}
           {!isLoading && !isError && (conversations?.length ?? 0) === 0 && <div className="p-6 text-center text-sm text-muted-foreground">Ainda não tens conversas.</div>}
@@ -109,6 +144,20 @@ export function MensagensShell({ convId }: { convId: number }) {
               </Link>
             );
           })}
+          {!isLoading && !isError && (conversations?.length ?? 0) > 0 && (podeMais || chegouAoFim) && (
+            <div className="p-3 text-center" data-testid="conversas-mais-area">
+              {erroMais && <p role="alert" className="pb-2 text-sm text-muted-foreground">Não foi possível carregar mais conversas.</p>}
+              {podeMais ? (
+                <button type="button" onClick={() => void aoCarregarMais()} disabled={aCarregarMais} aria-busy={aCarregarMais} data-testid="conversas-carregar-mais"
+                  className="min-h-[44px] rounded-full border border-border px-5 py-2 text-sm font-semibold transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
+                  {aCarregarMais ? 'A carregar…' : erroMais ? 'Tentar novamente' : 'Carregar mais conversas'}
+                </button>
+              ) : (
+                <p className="py-2 text-sm text-muted-foreground" data-testid="conversas-fim">Não há mais conversas.</p>
+              )}
+            </div>
+          )}
+          <div role="status" aria-live="polite" className="sr-only" data-testid="conversas-aviso">{aviso}</div>
         </div>
       </aside>
 
