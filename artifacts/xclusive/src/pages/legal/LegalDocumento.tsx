@@ -2,7 +2,8 @@ import { Fragment, type ReactNode } from 'react';
 import type { BlocoLegal, DocumentoLegal, RunLegal } from './tipos';
 import { resolverTemplate, type LegalConfig } from './resolver';
 
-const REGEX_VERSAO = /^\d{1,2} de [a-zç]+ de \d{4} • Versão \d+(\.\d+)*$/;
+// v1.1: «22 de outubro de 2026 • Versão 1.1»; v2.x: «Versão 2.2 • Data de entrada em vigor: a definir na publicação» (ou uma data).
+const REGEX_VERSAO = /^(\d{1,2} de [a-zç]+ de \d{4} • Versão \d+(\.\d+)*|Versão \d+(\.\d+)* • Data de entrada em vigor: .+)$/;
 
 type Marcas = {
   /** data-testid da ligação mailto: (por omissão "legal-email"). */

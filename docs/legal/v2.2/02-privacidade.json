@@ -1,0 +1,557 @@
+{
+  "documento": "privacidade",
+  "origem": {
+    "ficheiro": "originais/02-privacidade.docx",
+    "sha256": "fd2ef755057f54af5fb4330863042872eae139d6c5d0919dc452d9afc0e3d040"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Política de Privacidade",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.2 • Data de entrada em vigor: a definir na publicação",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "1. Responsável pelo tratamento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é o responsável pelo tratamento dos dados pessoais tratados através da plataforma Xclusive (xclusive.ao)."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contacto de privacidade: legal@xclusive.ao."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "2. Dados recolhidos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação e contacto: nome, pseudónimo, endereço de email e, quando aplicável, identificador da conta Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conta e utilização: credenciais, subscrições, aquisições, gorjetas, bilhetes, mensagens, sondagens, avatar, banner e registos de acesso."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Técnicos: endereço IP, user-agent, dispositivo, navegador, sistema operativo, sessões, cookies e dados de segurança."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC de criadores: nome completo, data de nascimento, tipo, número e país de emissão do documento de identificação, imagem do documento, selfie e verificação de vivacidade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados bancários de criadores: IBAN, nome do titular da conta e instituição bancária."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Pagamentos: método, carregamentos, compras, gorjetas, bilhetes, comissões, levantamentos e registos antifraude."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive não recolhe, neste momento, número de telefone, morada ou comprovativo de morada."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "3. Início de sessão com Google"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Quando o utilizador escolhe “Continuar com o Google”, abre-se uma janela de autenticação da Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive recebe da Google o nome, o endereço de email e o identificador da conta Google associada."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Na criação de conta com Google, o nome recebido é guardado como nome de exibição; o identificador e o email da conta Google são guardados para identificação e recuperação da conta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Ao ligar uma conta Google a uma conta Xclusive existente, a Xclusive guarda apenas o identificador e o email da conta Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive não recebe nem armazena a palavra-passe da conta Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A base legal é a execução do contrato de prestação do serviço e o consentimento do utilizador para a ligação da conta Google, quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador pode desligar a conta Google nas Definições. A desligação não elimina automaticamente a conta Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "4. Subprocessadores de email"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive utiliza fornecedores de envio de email para mensagens transacionais, confirmações de registo, recuperação de palavra-passe, avisos de segurança, pagamentos e comunicações contratuais."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Estes fornecedores atuam como subprocessadores, apenas segundo instruções da Xclusive e com medidas de segurança adequadas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem processar endereço de email, nome, identificador de conta, assunto e conteúdo necessário ao envio da comunicação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A lista atualizada de subprocessadores está disponível mediante pedido ou será publicada nesta Política."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "5. Moderação e mensagens privadas"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A equipa de moderação pode aceder a excertos preservados de mensagens privadas exclusivamente quando exista denúncia."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O acesso é registado na plataforma, mediante consulta de moderação, e limitado ao necessário para análise da denúncia."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Fora da plataforma, a Xclusive pode disponibilizar informação a autoridade competente mediante ordem, pedido formal ou obrigação legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não é permitida a utilização de mensagens privadas para fins comerciais não autorizados ou divulgação a terceiros, salvo obrigação legal ou necessidade de investigação."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "6. Partilha e transferências internacionais"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os dados podem ser partilhados com prestadores de alojamento, armazenamento em nuvem, email, segurança, antifraude, pagamentos, suporte e consultores, apenas na medida necessária."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive utiliza serviços alojados fora de Angola, incluindo Google, fornecedores de email e serviços de alojamento/armazenamento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As transferências internacionais ocorrem com salvaguardas contratuais, medidas técnicas e organizacionais adequadas e apenas para finalidades compatíveis com esta Política."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados podem ser comunicados a bancos, entidades de pagamento, autoridade tributária, autoridades judiciárias, policiais, UIF ou entidades de proteção de crianças, quando legalmente exigido."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "7. Conservação e eliminação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conta ativa: enquanto durar a relação contratual."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Listagens, publicações e elementos de perfil: enquanto publicados ou até remoção pelo criador ou moderação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Denúncias, provas e evidências de moderação: conservadas durante a investigação e por 5 anos após o encerramento do caso, salvo obrigação legal, litígio ou necessidade de conservação de prova."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contas encerradas: após o pedido, a conta fica inativa durante 30 dias para arrependimento. Após esse período, e resolvidas as pendências, os dados pessoais são eliminados ou anonimizados até 180 dias após o lançamento da plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Até à implementação da eliminação automática, os dados das contas encerradas são isolados, com acesso restrito e sem utilização para novas finalidades."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Transações, faturação e contabilidade: 5 anos, ou prazo fiscal mais longo aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC, consentimentos e aceites legais: 5 anos após encerramento definitivo, salvo investigação, litígio ou obrigação legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Endereço IP e user-agent dos aceites legais: 24 meses."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo suspeito de envolver menores: preservação segura até conclusão da investigação e comunicação às autoridades."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "8. Direitos dos titulares"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os direitos de acesso, retificação, limitação, oposição e, quando aplicável, eliminação são exercidos por email para legal@xclusive.ao."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O pedido deve conter identificação suficiente do titular e descrição do pedido."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive responde no prazo máximo de 30 dias, prorrogável por mais 30 dias em casos complexos, com comunicação ao titular."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não existe, neste momento, exportação automática de dados; a resposta é prestada por email."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados necessários a cumprimento legal, segurança, prevenção de fraude, litígio ou proteção de menores podem ser conservados."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Reclamação à Agência de Proteção de Dados, quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "9. Segurança"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As imagens do KYC são armazenadas em repositório privado, com ligações assinadas e temporárias."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Existe controlo de acessos e registo de auditoria das consultas de moderação a mensagens privadas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os dados bancários — IBAN, titular e banco — são armazenados na base de dados da plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive aplica medidas técnicas e organizacionais adequadas à natureza dos dados e ao risco do tratamento, incluindo controlo de acessos, registo de auditoria e ligações assinadas temporárias para documentos KYC."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "10. Menores"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Plataforma exclusiva para maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Perante menor identificado: suspensão, remoção, conservação segura de prova e comunicação às autoridades quando exigido."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Quadro — O que mudou e porquê"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Removidos marcadores de denominação social, sede e NIF."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Data de entrada em vigor deixada para preenchimento na publicação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Eliminação de contas encerradas fixada em até 180 dias após o lançamento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Removidas obrigações internas de implementação e formação; o texto público descreve apenas medidas existentes."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Mantida a descrição real do armazenamento de dados bancários e das medidas de segurança disponíveis."
+        }
+      ]
+    }
+  ]
+}

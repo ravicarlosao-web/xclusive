@@ -5,7 +5,7 @@ import { LEGAL_PAGES, type LegalDocKey } from '@/pages/legal/useLegalDocs';
 
 // Nomes, na frase de aceite, dos 5 documentos (a rota de cada um vem de LEGAL_PAGES).
 const DOCS_ACEITE: { key: LegalDocKey; nome: string }[] = [
-  { key: 'termos', nome: 'Termos de Serviço' },
+  { key: 'termos', nome: 'Termos e Condições de Utilização' },
   { key: 'privacidade', nome: 'Política de Privacidade' },
   { key: 'conteudo', nome: 'Política de Conteúdo' },
   { key: 'direitosAutor', nome: 'Política de Direitos de Autor' },
@@ -51,7 +51,9 @@ export function BlocoConsentimento({ control }: { control: Control<any> }) {
       </FormControl>
       <div className="space-y-1 leading-none">
         <FormLabel className="text-sm font-normal text-muted-foreground">
-          Aceito a utilização de cookies e de armazenamento local no meu dispositivo, estritamente necessários ao funcionamento da plataforma (manter a sessão iniciada, guardar as minhas preferências e garantir a segurança), nos termos da{' '}
+          Aceito a utilização de{' '}
+          <a href={rotaDoc('cookies')} target="_blank" rel="noopener noreferrer" data-testid="cookies-ligacao" className="text-primary hover:underline">cookies</a>{' '}
+          e de armazenamento local no meu dispositivo, estritamente necessários ao funcionamento da plataforma (manter a sessão iniciada, guardar as minhas preferências e garantir a segurança), nos termos da{' '}
           <a href={rotaDoc('privacidade')} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Política de Privacidade</a>.
         </FormLabel>
         <FormMessage />

@@ -1,0 +1,733 @@
+{
+  "documento": "termos",
+  "origem": {
+    "ficheiro": "originais/01-termos.docx",
+    "sha256": "04526060cf9bd566f27b3c972957003078f59a92a96f4738a62b40cf39a0ddcf"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Termos e Condições de Utilização",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.2 • Data de entrada em vigor: a definir na publicação",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Objeto e aceitação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os presentes Termos e Condições de Utilização (“Termos”) regulam o acesso e a utilização da plataforma Xclusive (xclusive.ao), operada pela Xclusive (“Xclusive”)."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Ao criar uma conta, aceder à plataforma, efetuar um carregamento, subscrever um criador, desbloquear uma publicação, adquirir um bilhete, enviar uma gorjeta, participar numa sondagem ou utilizar mensagens privadas, o utilizador aceita integralmente estes Termos, a Política de Privacidade, a Política de Cookies, a Política de Conteúdo, a Política de Reembolsos e Pagamentos e a Política de Direitos de Autor."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive dispõe ainda de regras internas sobre prevenção e resposta a situações envolvendo menores, conservação e apagamento de dados e consentimento de terceiros, aplicáveis à operação da plataforma e disponíveis mediante pedido."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive regista, para cada utilizador, a versão dos documentos aceites, a data e a hora da aceitação."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Idade mínima, verificação e transmissões"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O acesso é reservado a pessoas singulares maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador declara ter idade igual ou superior a 18 anos e capacidade jurídica para celebrar o contrato."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A verificação de identidade (KYC) é obrigatória para criadores, para acesso a funcionalidades de monetização, levantamento ou publicação de conteúdo e para iniciar transmissões em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Para os restantes utilizadores, a verificação de identidade é recomendada e pode ser exigida pela Xclusive quando exista suspeita de menoridade, fraude, violação das políticas ou obrigação legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode exigir prova de idade e identidade. A recusa, falsidade ou impossibilidade de verificação determina suspensão, remoção de conteúdo e, quando aplicável, comunicação às autoridades competentes."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conta, email e recuperação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A criação de conta pode ser feita mediante email e palavra-passe ou através do início de sessão com a conta Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A verificação do endereço de email é obrigatória para criadores e recomendada para os restantes utilizadores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As contas criadas através do início de sessão com a Google são consideradas verificadas quanto ao endereço de email associado à conta Google."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O email verificado é o canal de contacto do criador para comunicações contratuais, segurança, pagamentos, suspensões, pedidos de informação e avisos relevantes."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador deve manter acesso ao email verificado. Em caso de perda de acesso, deve enviar um pedido manual para legal@xclusive.ao, indicando os dados da conta e disponibilizando os elementos de verificação de identidade solicitados."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive analisa o pedido manualmente e pode suspender pagamentos, levantamentos e funcionalidades sensíveis até confirmar a titularidade da conta e a nova titularidade do email."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A alteração do endereço de email não está disponível de momento. Quando venha a ser disponibilizada, será sujeita a verificação de identidade e medidas adicionais de segurança."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Saldo, pagamentos e comissão"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os utilizadores carregam saldo em Kwanzas (AOA) para a carteira Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O saldo destina-se a subscrições, desbloqueio de publicações pagas, gorjetas e bilhetes de transmissão em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O saldo não constitui depósito bancário, não rende juros e não é transferível entre utilizadores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A comissão da Xclusive aplicável é a taxa em vigor no momento do pagamento e pode ser definida de forma geral ou específica para um determinado criador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A taxa aplicável a um criador pode ser alterada pela Xclusive mediante comunicação por email para o endereço verificado e/ou aviso na plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A alteração aplica-se apenas a pagamentos efetuados após a entrada em vigor da nova taxa."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Gorjetas e bilhetes de transmissão"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A gorjeta é um pagamento voluntário, discricionário e não reembolsável do utilizador ao criador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A gorjeta não constitui compra de conteúdo, serviço específico, direito de acesso futuro, participação societária, crédito, depósito ou qualquer outra contraprestação contratual garantida."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A gorjeta é registada na plataforma, com data, valor, utilizador e criador destinatário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A comissão da Xclusive é deduzida antes do crédito do montante líquido na carteira do criador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Nas gorjetas enviadas através de mensagens privadas, o valor mínimo é de 50 Kz, o valor máximo é de 100 000 Kz por gorjeta e aplica-se um limite acumulado de 300 000 Kz por janela contínua de 24 horas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Nas gorjetas associadas a publicações, o valor máximo é de 10 000 000 Kz por gorjeta, sem limite diário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Nas gorjetas associadas a transmissões em direto, o valor máximo é de 10 000 000 Kz por gorjeta, sem limite diário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Nos bilhetes de transmissão em direto, o valor máximo é de 100 000 Kz por bilhete."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode alterar, suspender ou reduzir estes limites por motivos de segurança, prevenção de fraude, prevenção de branqueamento de capitais, cumprimento legal ou disponibilidade de pagamentos."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Prevenção de branqueamento de capitais"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive aplica medidas de prevenção de fraude, branqueamento de capitais, financiamento do terrorismo e financiamento da proliferação de armas de destruição em massa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem ser aplicados limites de transação, verificações adicionais de identidade, análise de padrões de utilização, revisão manual, retenção de fundos e suspensão de conta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Perante suspeita fundada de operação ilícita, a Xclusive pode recusar ou suspender a operação, conservar os elementos relevantes e comunicar às autoridades competentes nos termos da lei aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador não deve utilizar a plataforma para dissimular a origem de fundos, realizar transações em nome de terceiros sem autorização ou contornar controlos antifraude."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Bloqueios entre utilizadores"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O bloqueio entre utilizadores, em qualquer dos sentidos, impede mensagens diretas, novas conversas, seguir a conta, comentar, subscrever ou renovar subscrições, enviar gorjetas e entrar em transmissões em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O bloqueio não remove o acesso já pago a conteúdo adquirido antes do bloqueio, durante o período efetivamente pago."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O bloqueio não afeta a visibilidade pública do perfil nem o direito de qualquer utilizador apresentar denúncia."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O bloqueio não cancela automaticamente uma subscrição já paga nem dá direito a reembolso pelo período já decorrido, salvo obrigação legal ou decisão da Xclusive em caso de fraude."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 8.º — Mensagens privadas"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As mensagens privadas destinam-se a comunicação entre criadores e fãs subscritores ou utilizadores autorizados."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibido enviar conteúdo ilegal, não consentido, envolvendo menores, violento, coercivo, difamatório, fraudulento, malware, phishing, spam ou conteúdo que viole a Política de Conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Imagens enviadas em mensagens privadas devem respeitar os mesmos requisitos de consentimento, maioridade e legalidade aplicáveis ao conteúdo publicado."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode aceder a excertos preservados de mensagens privadas quando exista denúncia ou quando receba ordem, pedido formal ou obrigação legal de autoridade competente, tratada fora da plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O acesso é registado e limitado ao necessário. As mensagens podem ser conservadas pelo período necessário à prestação do serviço, segurança, resolução de disputas e cumprimento de obrigações legais."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 9.º — Sondagens, avatar e banner"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "As sondagens permitem recolher opiniões dos utilizadores. A participação é voluntária e os resultados podem ser agregados e exibidos na plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibido manipular sondagens, utilizar contas falsas, bots, automação abusiva ou qualquer meio para distorcer resultados."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O avatar e o banner são conteúdos visíveis no perfil e devem respeitar a Política de Conteúdo, direitos de terceiros e regras de maioridade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode remover, substituir ou desativar avatar, banner, sondagem ou outro elemento do perfil em caso de violação."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 10.º — Conteúdo e licenças"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador mantém a titularidade do conteúdo e concede à Xclusive licença não exclusiva, mundial e limitada ao necessário para alojar, reproduzir, exibir, distribuir, moderar, processar pagamentos e promover o conteúdo na plataforma."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador adquire apenas acesso pessoal, não exclusivo e não transferível ao conteúdo desbloqueado."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibida descarga, gravação, redistribuição, revenda ou partilha não autorizada de conteúdo pago."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 11.º — Suspensão, encerramento e arrependimento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode remover conteúdo, restringir funcionalidades, suspender contas, reter pagamentos ou encerrar contas por violação destes Termos, das políticas aplicáveis, risco jurídico, fraude, suspeita de menor ou obrigação legal."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O utilizador pode solicitar o encerramento da conta a qualquer momento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Após o pedido, existe um período de 30 dias para reversão do encerramento, mediante acesso à conta e confirmação da titularidade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O encerramento definitivo pode ficar condicionado à resolução de pendências da conta, incluindo pagamentos, disputas, investigações, verificação de identidade ou obrigações legais."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O encerramento não extingue pagamentos devidos, obrigações de conservação legal, investigações em curso ou responsabilidades anteriores."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 12.º — Reembolsos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Aplicam-se a Política de Reembolsos e Pagamentos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Em regra, gorjetas, subscrições utilizadas, publicações desbloqueadas e transmissões assistidas não são reembolsáveis, salvo obrigação legal, erro manifesto, cobrança duplicada ou falha técnica imputável à Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 13.º — Responsabilidade e limitação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A plataforma é fornecida conforme disponível, sem garantia de disponibilidade ininterrupta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dentro dos limites legais, exclui-se responsabilidade por danos indiretos, lucros cessantes e perda de dados, salvo dolo, negligência grave ou dever legal imperativo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive não é parte nas relações pessoais, contratuais ou financeiras entre criadores e subscritores, além da intermediação técnica e de pagamento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 14.º — Lei aplicável e foro"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Aplica-se a lei da República de Angola."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O foro competente é o da comarca de Luanda, salvo competência legal imperativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contacto: legal@xclusive.ao."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Quadro — O que mudou e porquê"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Removidos marcadores de denominação social, sede e NIF; a operadora passa a ser identificada apenas como “Xclusive”."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Data de entrada em vigor deixada para preenchimento na publicação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Eliminação de contas encerradas fixada em até 180 dias após o lançamento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Incluído o limite acumulado de 300 000 Kz por janela contínua de 24 horas nas gorjetas em mensagens."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Criado limite para gorjetas em transmissões em direto: 10 000 000 Kz por gorjeta, alinhado com gorjetas em publicações."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bloqueio reformulado: impede mensagens, novas conversas, seguir, comentar, subscrever/renovar, gorjetas e entrada em transmissões; mantém acesso já pago, visibilidade pública do perfil e denúncia."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC passa a ser obrigatório para iniciar transmissões em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Lista de documentos aceites limitada aos documentos publicados no site; regras internas sobre menores, retenção e consentimento deixaram de constar como documentos aceites."
+        }
+      ]
+    }
+  ]
+}

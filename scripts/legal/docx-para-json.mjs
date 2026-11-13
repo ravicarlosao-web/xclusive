@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Converte os .docx do advogado (docs/legal/v1.1/originais) em JSON fiel à estrutura do documento
+// Converte os .docx do advogado (docs/legal/<pasta>/originais) em JSON fiel à estrutura do documento
 // (título, subtítulo, linha de versão, artigos, parágrafos, listas, tabelas, negrito/itálico) e aplica SÓ as
-// alterações decididas pelo dono, listadas em docs/legal/v1.1/alteracoes.json. Sem dependências externas.
+// alterações decididas pelo dono, listadas em docs/legal/<pasta>/alteracoes.json. Sem dependências externas.
+// Cada documento tem a sua `pasta` (a versão em vigor): v2.2 para termos, privacidade e cookies; v1.1 para os restantes (até chegarem os v2.3).
 //
-//   node scripts/legal/docx-para-json.mjs            -> escreve docs/legal/v1.1/*.json
+//   node scripts/legal/docx-para-json.mjs            -> escreve docs/legal/<pasta>/*.json
 //   node scripts/legal/docx-para-json.mjs --raiz D   -> usa D como raiz do repositório
 import fs from "node:fs";
 import path from "node:path";
@@ -12,20 +13,21 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 /**
- * Documentos públicos da v1.1: ficheiro original, ficheiro JSON e chave (a mesma de LEGAL_DOCS no servidor).
+ * Documentos públicos: pasta da versão em vigor, ficheiro original, ficheiro JSON e chave (a mesma de LEGAL_DOCS no servidor).
  * `camposEmBranco`: documento-formulário (07) cujos `[..]` são campos a preencher por quem o usa: só nele são aceites.
  * `descarregar`: cópia pública do .docx original (botão "Descarregar"): tem de ser byte a byte igual ao original.
- * `semLegalDocs`: documento que não faz parte do aceite (não tem chave em LEGAL_DOCS); a versão/data confere com a dos Termos.
- * Os documentos internos (08, 09 e 10) NÃO estão aqui nem no repositório: ver docs/legal/v1.1/LEIA-ME.md.
+ * `semLegalDocs`: documento que não faz parte do aceite (não tem chave em LEGAL_DOCS); a versão/data confere com a do documento `confereCom` (da mesma pasta).
+ * Os documentos internos (08, 09 e 10 da v1.1) NÃO estão aqui nem no repositório: ver docs/legal/v1.1/LEIA-ME.md.
  */
 export const DOCUMENTOS = [
-  { chave: "termos", docx: "01-termos.docx", json: "01-termos.json" },
-  { chave: "privacidade", docx: "02-privacidade.docx", json: "02-privacidade.json" },
-  { chave: "conteudo", docx: "03-politica-de-conteudo.docx", json: "03-politica-de-conteudo.json" },
-  { chave: "direitosAutor", docx: "04-direitos-de-autor.docx", json: "04-direitos-de-autor.json" },
-  { chave: "reembolsos", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
-  { chave: "criadoras", docx: "06-termos-criadoras.docx", json: "06-termos-criadoras.json" },
-  { chave: "consentimento", docx: "07-consentimento-terceiros.docx", json: "07-consentimento-terceiros.json", camposEmBranco: true, semLegalDocs: true, descarregar: "artifacts/xclusive/public/documentos/modelo-consentimento-terceiros.docx" },
+  { chave: "termos", pasta: "v2.2", docx: "01-termos.docx", json: "01-termos.json" },
+  { chave: "privacidade", pasta: "v2.2", docx: "02-privacidade.docx", json: "02-privacidade.json" },
+  { chave: "cookies", pasta: "v2.2", docx: "03-politica-de-cookies.docx", json: "03-politica-de-cookies.json" },
+  { chave: "conteudo", pasta: "v1.1", docx: "03-politica-de-conteudo.docx", json: "03-politica-de-conteudo.json" },
+  { chave: "direitosAutor", pasta: "v1.1", docx: "04-direitos-de-autor.docx", json: "04-direitos-de-autor.json" },
+  { chave: "reembolsos", pasta: "v1.1", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
+  { chave: "criadoras", pasta: "v1.1", docx: "06-termos-criadoras.docx", json: "06-termos-criadoras.json" },
+  { chave: "consentimento", pasta: "v1.1", confereCom: "conteudo", docx: "07-consentimento-terceiros.docx", json: "07-consentimento-terceiros.json", camposEmBranco: true, semLegalDocs: true, descarregar: "artifacts/xclusive/public/documentos/modelo-consentimento-terceiros.docx" },
 ];
 
 // ── Leitura de .docx (zip) sem dependências ──────────────────────────────────
@@ -144,10 +146,18 @@ export function gerarDocumento(docxBuf, chave, nomeDocx, entradas) {
   return { documento: chave, origem: { ficheiro: `originais/${nomeDocx}`, sha256: crypto.createHash("sha256").update(docxBuf).digest("hex") }, blocos };
 }
 
+/** Alterações do dono, de todas as pastas em uso. Uma entrada de um documento que passou a outra pasta (substituído por uma versão nova) já não se aplica e é ignorada. */
 export function lerManifesto(raiz) {
-  const m = JSON.parse(fs.readFileSync(path.join(raiz, "docs/legal/v1.1/alteracoes.json"), "utf8"));
-  const ids = new Set(); for (const e of m.alteracoes) { if (ids.has(e.id)) throw new Error(`Manifesto: id repetido "${e.id}".`); ids.add(e.id); }
-  return m.alteracoes;
+  const todas = []; const ids = new Set();
+  for (const pasta of [...new Set(DOCUMENTOS.map((d) => d.pasta))]) {
+    const m = JSON.parse(fs.readFileSync(path.join(raiz, "docs/legal", pasta, "alteracoes.json"), "utf8"));
+    for (const e of m.alteracoes) {
+      if (!DOCUMENTOS.some((d) => d.pasta === pasta && d.chave === e.documento)) continue;
+      if (ids.has(e.id)) throw new Error(`Manifesto: id repetido "${e.id}".`);
+      ids.add(e.id); todas.push(e);
+    }
+  }
+  return todas;
 }
 
 function principal() {
@@ -155,11 +165,11 @@ function principal() {
   const raiz = i >= 0 ? path.resolve(process.argv[i + 1]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const entradas = lerManifesto(raiz); const usadas = new Set();
   for (const d of DOCUMENTOS) {
-    const buf = fs.readFileSync(path.join(raiz, "docs/legal/v1.1/originais", d.docx));
+    const buf = fs.readFileSync(path.join(raiz, "docs/legal", d.pasta, "originais", d.docx));
     const doc = gerarDocumento(buf, d.chave, d.docx, entradas);
     for (const b of doc.blocos) if (b.alterado) usadas.add(b.alterado);
     for (const e of entradas) if (e.documento === d.chave && e.acao === "remover") usadas.add(e.id);
-    fs.writeFileSync(path.join(raiz, "docs/legal/v1.1", d.json), JSON.stringify(doc, null, 2) + "\n");
+    fs.writeFileSync(path.join(raiz, "docs/legal", d.pasta, d.json), JSON.stringify(doc, null, 2) + "\n");
     console.log(`${d.json}: ${doc.blocos.length} blocos`);
   }
   const falta = entradas.filter((e) => !usadas.has(e.id)); if (falta.length) throw new Error(`Entradas do manifesto não aplicadas: ${falta.map((e) => e.id).join(", ")}`);

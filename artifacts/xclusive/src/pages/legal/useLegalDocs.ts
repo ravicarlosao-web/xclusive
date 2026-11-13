@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { validarConfig, type LegalConfig } from './resolver';
 
-export type LegalDocKey = 'termos' | 'privacidade' | 'conteudo' | 'direitosAutor' | 'reembolsos' | 'criadoras';
+export type LegalDocKey = 'termos' | 'privacidade' | 'cookies' | 'conteudo' | 'direitosAutor' | 'reembolsos' | 'criadoras';
 /** Páginas legais públicas: as chaves de LEGAL_DOCS e o Modelo de Consentimento de Terceiros (não faz parte do aceite). */
 export type PaginaLegalKey = LegalDocKey | 'consentimento';
 export type LegalDocInfo = { versao: string; atualizadoEm: string };
@@ -10,8 +10,9 @@ export type LegalDocs = Record<LegalDocKey, LegalDocInfo>;
 /** Páginas legais: rota, título e chave no servidor (fonte única das versões: GET /api/auth/legal-versions). */
 /** `curto`: nome curto para o rodapé e listas compactas. */
 export const LEGAL_PAGES: { key: LegalDocKey; path: string; titulo: string; curto: string }[] = [
-  { key: 'termos', path: '/termos', titulo: 'Termos de Serviço', curto: 'Termos de Serviço' },
+  { key: 'termos', path: '/termos', titulo: 'Termos e Condições de Utilização', curto: 'Termos e Condições' },
   { key: 'privacidade', path: '/privacidade', titulo: 'Política de Privacidade', curto: 'Política de Privacidade' },
+  { key: 'cookies', path: '/cookies', titulo: 'Política de Cookies', curto: 'Política de Cookies' },
   { key: 'conteudo', path: '/politica-de-conteudo', titulo: 'Política de Conteúdo', curto: 'Política de Conteúdo' },
   { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor (DMCA)', curto: 'Direitos de Autor' },
   { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos', curto: 'Reembolsos' },
