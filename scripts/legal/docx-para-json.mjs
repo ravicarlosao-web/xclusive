@@ -2,7 +2,7 @@
 // Converte os .docx do advogado (docs/legal/<pasta>/originais) em JSON fiel à estrutura do documento
 // (título, subtítulo, linha de versão, artigos, parágrafos, listas, tabelas, negrito/itálico) e aplica SÓ as
 // alterações decididas pelo dono, listadas em docs/legal/<pasta>/alteracoes.json. Sem dependências externas.
-// Cada documento tem a sua `pasta` (a versão em vigor): v2.2 para termos, privacidade e cookies; v1.1 para os restantes (até chegarem os v2.3).
+// Cada documento tem a sua `pasta` (a versão em vigor): v2.2 para termos, privacidade e cookies; v2.3 para conteúdo, reembolsos, direitos de autor e criadoras; v1.1 só para o Modelo de Consentimento de Terceiros.
 //
 //   node scripts/legal/docx-para-json.mjs            -> escreve docs/legal/<pasta>/*.json
 //   node scripts/legal/docx-para-json.mjs --raiz D   -> usa D como raiz do repositório
@@ -16,18 +16,18 @@ import { fileURLToPath } from "node:url";
  * Documentos públicos: pasta da versão em vigor, ficheiro original, ficheiro JSON e chave (a mesma de LEGAL_DOCS no servidor).
  * `camposEmBranco`: documento-formulário (07) cujos `[..]` são campos a preencher por quem o usa: só nele são aceites.
  * `descarregar`: cópia pública do .docx original (botão "Descarregar"): tem de ser byte a byte igual ao original.
- * `semLegalDocs`: documento que não faz parte do aceite (não tem chave em LEGAL_DOCS); a versão/data confere com a do documento `confereCom` (da mesma pasta).
+ * `semLegalDocs`: documento que não faz parte do aceite (não tem chave em LEGAL_DOCS); a versão/data da sua linha confere com `versaoFixa` (o Modelo de Consentimento de Terceiros fica na v1.1).
  * Os documentos internos (08, 09 e 10 da v1.1) NÃO estão aqui nem no repositório: ver docs/legal/v1.1/LEIA-ME.md.
  */
 export const DOCUMENTOS = [
   { chave: "termos", pasta: "v2.2", docx: "01-termos.docx", json: "01-termos.json" },
   { chave: "privacidade", pasta: "v2.2", docx: "02-privacidade.docx", json: "02-privacidade.json" },
   { chave: "cookies", pasta: "v2.2", docx: "03-politica-de-cookies.docx", json: "03-politica-de-cookies.json" },
-  { chave: "conteudo", pasta: "v1.1", docx: "03-politica-de-conteudo.docx", json: "03-politica-de-conteudo.json" },
-  { chave: "direitosAutor", pasta: "v1.1", docx: "04-direitos-de-autor.docx", json: "04-direitos-de-autor.json" },
-  { chave: "reembolsos", pasta: "v1.1", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
-  { chave: "criadoras", pasta: "v1.1", docx: "06-termos-criadoras.docx", json: "06-termos-criadoras.json" },
-  { chave: "consentimento", pasta: "v1.1", confereCom: "conteudo", docx: "07-consentimento-terceiros.docx", json: "07-consentimento-terceiros.json", camposEmBranco: true, semLegalDocs: true, descarregar: "artifacts/xclusive/public/documentos/modelo-consentimento-terceiros.docx" },
+  { chave: "conteudo", pasta: "v2.3", docx: "04-politica-de-conteudo.docx", json: "04-politica-de-conteudo.json" },
+  { chave: "reembolsos", pasta: "v2.3", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
+  { chave: "direitosAutor", pasta: "v2.3", docx: "06-direitos-de-autor.docx", json: "06-direitos-de-autor.json" },
+  { chave: "criadoras", pasta: "v2.3", docx: "12-termos-criadoras.docx", json: "12-termos-criadoras.json" },
+  { chave: "consentimento", pasta: "v1.1", versaoFixa: { versao: "1.1", data: "2026-10-22" }, docx: "07-consentimento-terceiros.docx", json: "07-consentimento-terceiros.json", camposEmBranco: true, semLegalDocs: true, descarregar: "artifacts/xclusive/public/documentos/modelo-consentimento-terceiros.docx" },
 ];
 
 // ── Leitura de .docx (zip) sem dependências ──────────────────────────────────

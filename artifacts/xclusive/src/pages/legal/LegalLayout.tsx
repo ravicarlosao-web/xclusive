@@ -12,7 +12,7 @@ import { textoResolvido, type LegalConfig } from './resolver';
  * Se esses dados falharem, mostra um erro claro e NUNCA o texto com buracos.
  */
 /** Config neutra para documentos SEM tokens (verificado no build): nunca é lida, só satisfaz o tipo. */
-const CFG_SEM_TOKENS: LegalConfig = { empresaNome: '', empresaNif: null, empresaSede: null, emailLegal: '', minimoLevantamento: 0, prazoLevantamentoMin: 0, prazoLevantamentoMax: 0 };
+const CFG_SEM_TOKENS: LegalConfig = { empresaNome: '', empresaNif: null, empresaSede: null, emailLegal: '', minimoLevantamento: 0, prazoLevantamentoMin: 0, prazoLevantamentoMax: 0, paginaLevantamentos: '/' };
 
 /**
  * `semTokens`: documento sem {{..}} (o Modelo de Consentimento): renderiza logo, sem esperar pelo legal-config e sem

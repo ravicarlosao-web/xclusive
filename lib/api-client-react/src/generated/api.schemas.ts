@@ -62,8 +62,10 @@ export interface LegalConfig {
   minimoLevantamento: number;
   /** Prazo normal de levantamento, mínimo, em dias úteis. */
   prazoLevantamentoMin: number;
-  /** Prazo normal de levantamento, máximo, em dias úteis. */
+  /** Prazo normal de levantamento, máximo, em dias úteis (hoje coincide com o mínimo, 4 dias úteis após a aprovação do pedido). */
   prazoLevantamentoMax: number;
+  /** Caminho da página onde a criadora vê o levantamento mínimo em vigor e pede o levantamento (área de monetização das Definições). */
+  paginaLevantamentos: string;
 }
 
 export type UserProfileTipoConta = typeof UserProfileTipoConta[keyof typeof UserProfileTipoConta];

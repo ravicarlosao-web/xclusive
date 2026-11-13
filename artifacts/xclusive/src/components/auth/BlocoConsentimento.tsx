@@ -3,25 +3,27 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { Checkbox } from '@/components/ui/checkbox';
 import { LEGAL_PAGES, type LegalDocKey } from '@/pages/legal/useLegalDocs';
 
-// Nomes, na frase de aceite, dos 5 documentos (a rota de cada um vem de LEGAL_PAGES).
+// Nomes, na frase de aceite, dos 6 documentos da lista de documentos aceites (documento «Respostas Escritas» v2.2, n.º 2), pela mesma ordem; a rota de cada um vem de LEGAL_PAGES.
+// Os documentos internos (Procedimento sobre Menores, Retenção e Apagamento de Dados, Modelo de Consentimento de Terceiros) NÃO fazem parte da lista. Os Termos para Criadoras são aceites à parte, ao tornar-se criadora.
 const DOCS_ACEITE: { key: LegalDocKey; nome: string }[] = [
   { key: 'termos', nome: 'Termos e Condições de Utilização' },
   { key: 'privacidade', nome: 'Política de Privacidade' },
+  { key: 'cookies', nome: 'Política de Cookies' },
   { key: 'conteudo', nome: 'Política de Conteúdo' },
-  { key: 'direitosAutor', nome: 'Política de Direitos de Autor' },
-  { key: 'reembolsos', nome: 'Política de Reembolsos' },
+  { key: 'reembolsos', nome: 'Política de Reembolsos e Pagamentos' },
+  { key: 'direitosAutor', nome: 'Política de Direitos de Autor e Pedidos de Retirada' },
 ];
 const rotaDoc = (key: LegalDocKey) => LEGAL_PAGES.find((p) => p.key === key)!.path;
 
 /**
- * Bloco de consentimento do registo (o MESMO texto, escrito com o advogado): aceite dos 5 documentos legais, cookies/armazenamento local e declaração de
+ * Bloco de consentimento do registo (o MESMO texto, escrito com o advogado): aceite dos 6 documentos legais, cookies/armazenamento local e declaração de
  * maioridade. Usado pelo registo e pelo ecrã de conclusão da conta criada com o Google. O formulário tem de ter os campos `documentos`, `cookies` e `maioridade`.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function BlocoConsentimento({ control }: { control: Control<any> }) {
   return (
     <>
-  {/* Aceite dos 5 documentos legais: obrigatório (uma só caixa, cada nome liga à sua página) */}
+  {/* Aceite dos 6 documentos legais: obrigatório (uma só caixa, cada nome liga à sua página) */}
   <FormField control={control} name="documentos" render={({ field }) => (
     <FormItem className="flex flex-row items-center space-x-3 space-y-0 min-h-[44px]">
       <FormControl>
