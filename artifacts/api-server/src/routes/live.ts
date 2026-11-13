@@ -189,7 +189,8 @@ router.post("/live/:streamId/end", requireAuth, async (req: AuthRequest, res): P
 
 // ── POST /api/live/:streamId/tip ──────────────────────────────────────────
 const liveTipSchema = z.object({
-  valor: z.number().int().positive("O valor deve ser superior a zero"),
+  // Máximo por gorjeta numa live: o mesmo das gorjetas em publicações (routes/gorjeta.ts), sem limite diário.
+  valor: z.number().int().positive("O valor deve ser superior a zero").max(10_000_000, "Valor demasiado elevado"),
   mensagem: z.string().max(255).optional(),
   /** Chave de idempotência (opcional): a mesma chave devolve a gorjeta original sem nova cobrança. */
   chave: chaveOpcional,

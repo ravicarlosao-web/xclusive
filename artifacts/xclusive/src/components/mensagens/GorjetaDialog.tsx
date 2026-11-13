@@ -9,10 +9,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
 import { cn } from '@/lib/utils';
+import { LIMITES_GORJETA, textoLimitesMensagem } from '@/lib/limitesGorjeta';
 
-/** Limites do backend (lib/gorjetaMensagem.ts). */
-const MIN_KZ = 50;
-const MAX_KZ = 100_000;
+/** Limites do backend (lib/gorjetaMensagem.ts): ver também lib/limitesGorjeta.ts. */
+const MIN_KZ = LIMITES_GORJETA.mensagem.min;
+const MAX_KZ = LIMITES_GORJETA.mensagem.max;
 const MENSAGEM_MAX = 255;
 const PRESETS = [50, 100, 200, 500, 1000, 2000];
 
@@ -133,6 +134,7 @@ export function GorjetaDialog({ aberto, onFechar, convId, criador }: {
             <Input id="gorjeta-livre" data-testid="gorjeta-livre" inputMode="numeric" autoComplete="off" placeholder={`${MIN_KZ} a ${kz(MAX_KZ)}`} value={livre} disabled={aEnviar}
               aria-invalid={erroValor !== null} aria-describedby="gorjeta-valor-erro" className="min-h-[44px]"
               onChange={(e) => { setLivre(e.target.value); setSelecionado(null); mudou(); }} />
+            <p data-testid="gorjeta-limites" className="text-xs text-muted-foreground">{textoLimitesMensagem()}</p>
             <p id="gorjeta-valor-erro" role="alert" aria-live="polite" data-testid="gorjeta-valor-erro" className="min-h-[1rem] text-xs text-destructive">{erroValor ?? ''}</p>
           </div>
 
