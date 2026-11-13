@@ -45,6 +45,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getFreshAuthToken } from '@workspace/api-client-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { LIMITES_GORJETA, kzLimite, textoLimiteBilhete, textoLimiteLive } from '@/lib/limitesGorjeta';
 import {
   connectOvenWebrtcViewer,
   isWebrtcViewerSupported,
@@ -1008,6 +1009,7 @@ function LiveTicketGate({
           <p className="text-xs text-foreground/70 leading-relaxed">
             Esta live já começou. O bilhete tem o preço inteiro e dá acesso até ao fim.
           </p>
+          <p data-testid="live-bilhete-limite" className="text-xs text-foreground/60">{textoLimiteBilhete()}</p>
 
           {insuficiente && (
             <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-left text-xs text-red-700 dark:text-red-300">
@@ -1244,7 +1246,7 @@ export default function LivePage() {
 
   async function handleSendTip() {
     const valor = Number(tipValor);
-    if (!valor || valor <= 0 || !streamId) return;
+    if (!valor || valor <= 0 || valor > LIMITES_GORJETA.live.max || !streamId) return;
 
     setSendingTip(true);
     try {
@@ -1760,10 +1762,15 @@ export default function LivePage() {
                 id="tip-valor"
                 type="number"
                 min="1"
+                max={LIMITES_GORJETA.live.max}
                 placeholder="Ex: 500"
                 value={tipValor}
                 onChange={(e) => { setTipValor(e.target.value); tipChave.current = novaChaveGorjeta(); }}
               />
+              <p data-testid="live-tip-limites" className="text-xs text-muted-foreground">{textoLimiteLive()}</p>
+              {Number(tipValor) > LIMITES_GORJETA.live.max && (
+                <p className="text-xs text-destructive">O valor máximo é {kzLimite(LIMITES_GORJETA.live.max)} Kz.</p>
+              )}
             </div>
 
             {/* Atalhos rápidos */}
@@ -1801,7 +1808,7 @@ export default function LivePage() {
             </Button>
             <Button
               onClick={handleSendTip}
-              disabled={!tipValor || Number(tipValor) <= 0 || sendingTip}
+              disabled={!tipValor || Number(tipValor) <= 0 || Number(tipValor) > LIMITES_GORJETA.live.max || sendingTip}
               className="gap-2 bg-gradient-to-r from-amber-700 dark:from-amber-500 to-orange-700 dark:to-orange-500 hover:from-amber-800 dark:hover:from-amber-600 hover:to-orange-800 dark:hover:to-orange-600 border-0"
             >
               {sendingTip ? (

@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Coins, Wallet, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LIMITES_GORJETA, kzLimite, textoLimitePublicacao } from '@/lib/limitesGorjeta';
 
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
@@ -44,6 +45,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
   const canSend =
     effectiveAmount !== null &&
     effectiveAmount > 0 &&
+    effectiveAmount <= LIMITES_GORJETA.publicacao.max &&
     (saldo === null || effectiveAmount <= saldo);
 
   const handleClose = () => {
@@ -169,6 +171,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     <Input
                       type="number"
                       min={1}
+                      max={LIMITES_GORJETA.publicacao.max}
                       placeholder="Ex: 750"
                       value={custom}
                       onChange={e => { setCustom(e.target.value); setSelected(null); chave.current = novaChave(); }}
@@ -176,6 +179,10 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">Kz</span>
                   </div>
+                  <p data-testid="tip-limites" className="text-xs text-muted-foreground mt-1">{textoLimitePublicacao()}</p>
+                  {effectiveAmount !== null && effectiveAmount > LIMITES_GORJETA.publicacao.max && (
+                    <p className="text-xs text-destructive mt-1">O valor máximo é {kzLimite(LIMITES_GORJETA.publicacao.max)} Kz.</p>
+                  )}
                   {saldo !== null && effectiveAmount !== null && effectiveAmount > saldo && (
                     <p className="text-xs text-destructive mt-1">Saldo insuficiente — tens {saldo.toLocaleString('pt-PT')} Kz.</p>
                   )}
