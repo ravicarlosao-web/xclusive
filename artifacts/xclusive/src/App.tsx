@@ -34,6 +34,7 @@ import LivePublishTest from '@/pages/live-publish-test';
 import IrEmDireto from '@/pages/ir-em-direto';
 import Termos from '@/pages/legal/termos';
 import Privacidade from '@/pages/legal/privacidade';
+import Cookies from '@/pages/legal/cookies';
 import PoliticaConteudo from '@/pages/legal/politica-de-conteudo';
 import DireitosAutor from '@/pages/legal/direitos-de-autor';
 import Reembolsos from '@/pages/legal/reembolsos';
@@ -144,6 +145,7 @@ function Router() {
       {/* Páginas legais: públicas (abrem com ou sem sessão) */}
       <Route path="/termos" component={Termos} />
       <Route path="/privacidade" component={Privacidade} />
+      <Route path="/cookies" component={Cookies} />
       <Route path="/politica-de-conteudo" component={PoliticaConteudo} />
       <Route path="/direitos-de-autor" component={DireitosAutor} />
       <Route path="/reembolsos" component={Reembolsos} />

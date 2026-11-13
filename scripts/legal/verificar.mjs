@@ -17,7 +17,7 @@ import { DOCUMENTOS, gerarDocumento, lerManifesto, lerZip, textoDeRuns } from ".
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const i = process.argv.indexOf("--raiz");
 const RAIZ = i >= 0 ? path.resolve(process.argv[i + 1]) : path.resolve(aqui, "..", "..");
-const LEGAL = path.join(RAIZ, "docs/legal/v1.1"), PAGINAS = path.join(RAIZ, "artifacts/xclusive/src/pages/legal"), AUTH = path.join(RAIZ, "artifacts/api-server/src/routes/auth.ts");
+const pastaDe = (d) => path.join(RAIZ, "docs/legal", d.pasta), PAGINAS = path.join(RAIZ, "artifacts/xclusive/src/pages/legal"), AUTH = path.join(RAIZ, "artifacts/api-server/src/routes/auth.ts");
 const falhas = []; let verificacoes = 0;
 const ok = (cond, msg) => { verificacoes++; if (!cond) falhas.push(msg); };
 
@@ -61,8 +61,8 @@ const MESES = { janeiro: 1, fevereiro: 2, março: 3, abril: 4, maio: 5, junho: 6
 const usadas = new Set();
 for (const d of DOCUMENTOS) {
   const etiqueta = `${d.json}`;
-  const buf = fs.readFileSync(path.join(LEGAL, "originais", d.docx));
-  let commitado; try { commitado = JSON.parse(fs.readFileSync(path.join(LEGAL, d.json), "utf8")); } catch (e) { falhas.push(`${etiqueta}: JSON ilegível (${e.message}).`); continue; }
+  const buf = fs.readFileSync(path.join(pastaDe(d), "originais", d.docx));
+  let commitado; try { commitado = JSON.parse(fs.readFileSync(path.join(pastaDe(d), d.json), "utf8")); } catch (e) { falhas.push(`${etiqueta}: JSON ilegível (${e.message}).`); continue; }
   // 1. regerado == commitado
   let regerado; try { regerado = gerarDocumento(buf, d.chave, d.docx, manifesto); } catch (e) { falhas.push(`${etiqueta}: ${e.message}`); continue; }
   ok(JSON.stringify(regerado) === JSON.stringify(commitado), `${etiqueta}: o JSON não é igual ao regerado do .docx + manifesto (edição à mão ou desatualizado). Corre: node scripts/legal/docx-para-json.mjs`);
@@ -98,9 +98,12 @@ for (const d of DOCUMENTOS) {
   // 4. versão e data
   const sub = commitado.blocos.find((b) => b.tipo === "subtitulo"); const linha = sub ? textoDeRuns(sub.runs).split("\n").pop() : "";
   const m = /^(\d{1,2}) de ([a-zç]+) de (\d{4}) • Versão (\d+(?:\.\d+)*)$/.exec(linha);
-  ok(!!m, `${etiqueta}: não encontrei a linha "<data> • Versão X" no documento.`);
-  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = legalDocs[d.semLegalDocs ? "termos" : d.chave];
-    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.semLegalDocs ? "termos" : d.chave}".`);
+  // v2.x: «Versão X • Data de entrada em vigor: a definir na publicação» (ou dd/mm/aaaa). A data de entrada em vigor não é a de LEGAL_DOCS: só se confere a versão.
+  const n = /^Versão (\d+(?:\.\d+)*) • Data de entrada em vigor: (a definir na publicação|\d{2}\/\d{2}\/\d{4})$/.exec(linha);
+  ok(!!m || !!n, `${etiqueta}: não encontrei a linha "<data> • Versão X" nem "Versão X • Data de entrada em vigor: …" no documento.`);
+  if (n) { const ld = legalDocs[d.chave]; ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`); if (ld) ok(ld.versao === n[1], `${etiqueta}: versão do documento (${n[1]}) ≠ LEGAL_DOCS (${ld.versao}).`); }
+  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = legalDocs[d.semLegalDocs ? (d.confereCom ?? "termos") : d.chave];
+    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.semLegalDocs ? (d.confereCom ?? "termos") : d.chave}".`);
     if (ld) { ok(ld.versao === m[4], `${etiqueta}: versão do documento (${m[4]}) ≠ LEGAL_DOCS (${ld.versao}).`); ok(ld.data === data, `${etiqueta}: data do documento (${data}) ≠ LEGAL_DOCS (${ld.data}).`); } }
 }
 for (const e of manifesto) ok(usadas.has(e.id), `Manifesto: a entrada "${e.id}" não foi aplicada.`);
@@ -117,4 +120,4 @@ for (const [n, esp] of [[5000, "5.000 Kz"], [999, "999 Kz"], [1234567, "1.234.56
 ok((() => { try { R.validarConfig({ empresaNome: "x" }); return false; } catch { return true; } })(), "validarConfig aceitou uma configuração incompleta.");
 
 if (falhas.length) { console.error(`\n✖ Textos legais: ${falhas.length} problema(s) em ${verificacoes} verificações:\n` + falhas.map((f) => "  - " + f).join("\n") + "\n"); process.exit(1); }
-console.log(`✔ Textos legais v1.1: ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);
+console.log(`✔ Textos legais (v2.2 e v1.1): ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);

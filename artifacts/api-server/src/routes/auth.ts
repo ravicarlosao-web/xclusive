@@ -52,10 +52,12 @@ const router = Router();
 // ── Documentos legais ────────────────────────────────────────────────────────
 // Versões VIGENTES. Quando o texto jurídico mudar, o advogado/dev altera a versão e a data aqui:
 // o registo passa a exigir o aceite da nova versão e as páginas legais mostram-na.
-// (As versões 1.1 são as dos documentos do advogado, de 22 de outubro de 2026: ver as páginas /termos, /privacidade, ...)
+// (Termos, Privacidade e Cookies: v2.2 do advogado (docs/legal/v2.2); os restantes, v1.1 de 22 de outubro de 2026, até chegarem os v2.3. `atualizadoEm` é a data da versão; a data de entrada em vigor dos textos é «a definir na publicação».)
 export const LEGAL_DOCS = {
-  termos:          { versao: "1.1", atualizadoEm: "2026-10-22" },
-  privacidade:     { versao: "1.1", atualizadoEm: "2026-10-22" },
+  termos:          { versao: "2.2", atualizadoEm: "2026-11-13" },
+  privacidade:     { versao: "2.2", atualizadoEm: "2026-11-13" },
+  // Política de Cookies (v2.2): tem página pública e versão própria; o aceite de cookies no registo continua a ser o booleano `cookies` (sem versão por utilizador).
+  cookies:         { versao: "2.2", atualizadoEm: "2026-11-13" },
   conteudo:        { versao: "1.1", atualizadoEm: "2026-10-22" },
   direitosAutor:   { versao: "1.1", atualizadoEm: "2026-10-22" },
   reembolsos:      { versao: "1.1", atualizadoEm: "2026-10-22" },
