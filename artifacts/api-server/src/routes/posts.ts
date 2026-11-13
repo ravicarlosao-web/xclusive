@@ -16,6 +16,7 @@ import { postsComInfracaoAtiva } from "../lib/infracoesMais18";
 import { getCommissionRate, CommissionNotConfiguredError } from "../lib/commission";
 import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
 import { lerFeed, lerFiltro } from "../lib/feed";
+import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { erroSeguro } from "../lib/erroSeguro";
 import { criarEnquete, validarNovaEnquete, lerEnquetesEmLote, votar, EnqueteErro, MSG_ENQUETE } from "../lib/enquetes";
 
@@ -393,6 +394,9 @@ router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), a
   const userId = req.userId!;
   const { texto, comentarioPaiId } = req.body;
   if (!(await postInteragivel(id, userId))) { res.status(404).json({ error: "Não encontrado" }); return; }
+  // Par bloqueado (em qualquer dos sentidos) com o autor do post: a mesma resposta de um post que não existe; nada é gravado.
+  const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id));
+  if (post && await bloqueadoEntre(userId, post.autorId)) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   const [comment] = await db.insert(commentsTable).values({
     postId: id,
@@ -404,7 +408,6 @@ router.post("/posts/:id/comments", requireAuth, validate(createCommentSchema), a
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
   // Notificar o autor do post (se não for o próprio)
-  const [post] = await db.select({ autorId: postsTable.autorId }).from(postsTable).where(eq(postsTable.id, id));
   if (post && post.autorId !== userId) {
     await db.insert(notificationsTable).values({
       destinatarioId: post.autorId,
