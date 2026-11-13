@@ -11,6 +11,7 @@ import { validate } from "../lib/validate";
 import { getIO } from "../lib/socket";
 import { getCommissionRate, calcComissao, CommissionNotConfiguredError } from "../lib/commission";
 import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
+import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { ChaveReutilizadaError, chaveOpcional, foiViolacaoDaChave, hashPedidoGorjeta, lerCompraPorChave, lerTipDaCompra } from "../lib/idempotenciaGorjeta";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
 import { liveStartSchema } from "../lib/liveTicket";
@@ -85,6 +86,11 @@ router.post("/live/start", requireAuth, async (req: AuthRequest, res): Promise<v
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, creatorId)).limit(1);
     if (user?.tipoConta !== "criador") {
       res.status(403).json({ error: "Apenas criadores podem iniciar transmissões ao vivo." });
+      return;
+    }
+    // Como em posts.ts: uma criadora com o KYC por aprovar não monetiza (nem por live, bilhetes ou gorjetas).
+    if (!user.verificado) {
+      res.status(403).json({ error: "A tua conta de criador ainda está pendente de aprovação. Aguarda a revisão do administrador antes de iniciares transmissões." });
       return;
     }
 
@@ -215,6 +221,11 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
     }
     // Gorjeta numa live +18 que o remetente não vê: 404 ANTES de qualquer cobrança.
     if (liveBloqueada(await lerVisualizador(senderId), stream)) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    // Par bloqueado (em qualquer dos sentidos) com a criadora: como uma live que não existe, ANTES de qualquer cobrança.
+    if (await bloqueadoEntre(senderId, stream.criadorId)) {
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
@@ -451,6 +462,11 @@ router.get("/live/:streamId/playback", requireAuth, async (req: AuthRequest, res
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
+    // Par bloqueado (em qualquer dos sentidos) com a criadora: não se entra, como numa live que não existe.
+    if (await bloqueadoEntre(req.userId!, stream.criadorId)) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
     // Live +18 que este utilizador não vê (leitura direta): 403 com código.
     if (liveBloqueada(await lerVisualizador(req.userId), stream)) { res.status(403).json({ error: MSG_CONTEUDO_MAIS18, codigo: CODIGO_CONTEUDO_MAIS18 }); return; }
     if (stream.status !== "ao_vivo") {
@@ -529,6 +545,11 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
     }
     // Bilhete de uma live +18 que o comprador não vê: 404 ANTES de qualquer cobrança.
     if (liveBloqueada(await lerVisualizador(buyerId), stream0)) {
+      res.status(404).json({ error: "Live não encontrada." });
+      return;
+    }
+    // Par bloqueado (em qualquer dos sentidos) com a criadora: como uma live que não existe, ANTES de qualquer cobrança.
+    if (await bloqueadoEntre(buyerId, stream0.criadorId)) {
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }

@@ -15,6 +15,7 @@ import { bloqueiosDeEncerramento, encerrarConta, EncerramentoErro, JANELA_DIAS, 
 import { desligarSockets } from "../lib/suspensao";
 import { utilizadorAtivo } from "../lib/encerramento";
 import { erroSeguro } from "../lib/erroSeguro";
+import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { lerPostsDoAutor } from "../lib/feed";
 import { identificadorBloqueado, MSG_PEDIDO_RECUSADO } from "../lib/banimento";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
@@ -669,6 +670,8 @@ router.post("/users/:username/follow", requireAuth, async (req: AuthRequest, res
   const [target] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   // Conta inexistente OU inativa (encerrada, banida, suspensa): a mesma resposta (não revela que a conta existe) e nada é gravado.
   if (!target || !target.ativo || target.id === userId) { res.status(400).json({ error: "Inválido" }); return; }
+  // Par bloqueado (em qualquer dos sentidos): a mesma resposta de uma conta inexistente ou inativa; nada é gravado.
+  if (await bloqueadoEntre(userId, target.id)) { res.status(400).json({ error: "Inválido" }); return; }
 
   const [existing] = await db.select().from(followsTable).where(and(eq(followsTable.seguidorId, userId), eq(followsTable.seguidoId, target.id)));
   if (!existing) {

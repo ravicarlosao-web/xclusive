@@ -9,6 +9,7 @@ import { lerVisualizador, bloqueadoMais18 } from "../lib/conteudoMais18";
 import { postVisivel } from "../lib/takedown";
 import { getCommissionRate, CommissionNotConfiguredError } from "../lib/commission";
 import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo";
+import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { ChaveReutilizadaError, chaveOpcional, compraParaResposta, foiViolacaoDaChave, hashPedidoGorjeta, lerCompraPorChave } from "../lib/idempotenciaGorjeta";
 
 const router = Router();
@@ -64,6 +65,8 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
     // Conteúdo +18 que o remetente não vê: 404 ANTES de qualquer cobrança.
     if (bloqueadoMais18(await lerVisualizador(senderId), post)) { res.status(404).json({ error: "Post não encontrado." }); return; }
     if (post.autorId === senderId) { res.status(400).json({ error: "Não podes dar gorjeta ao teu próprio post." }); return; }
+    // Par bloqueado (em qualquer dos sentidos): a mesma resposta de um post que não existe, ANTES de qualquer cobrança.
+    if (await bloqueadoEntre(senderId, post.autorId)) { res.status(404).json({ error: "Post não encontrado." }); return; }
 
     const purchase = await db.transaction(async (tx) => {
       // 1. Bloquear as linhas do remetente e do criador (FOR UPDATE, por id crescente) para serializar pedidos concorrentes

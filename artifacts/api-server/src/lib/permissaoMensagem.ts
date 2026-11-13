@@ -78,6 +78,16 @@ export async function permissaoMensagem(remetenteId: number, opcoes: { destinata
   return permitido ? { ...base, estado: "ok", pode: true } : { ...base, estado: "regra", pode: false };
 }
 
+/**
+ * Há bloqueio entre a e b, em qualquer dos sentidos? (a mesma tabela `user_blocks` do EXISTS de permissaoMensagem.)
+ * Para as rotas de dinheiro e de interação que recusam um par bloqueado: chamar logo a seguir a ler o alvo e ANTES de cobrar,
+ * e responder como se o alvo não existisse (o bloqueio nunca se revela). Contas de administração não têm linhas em user_blocks.
+ */
+export async function bloqueadoEntre(a: number, b: number, q: Executor = db): Promise<boolean> {
+  const r = await q.execute(sql`SELECT EXISTS (SELECT 1 FROM user_blocks WHERE (blocker_id = ${a} AND blocked_id = ${b}) OR (blocker_id = ${b} AND blocked_id = ${a})) AS bloqueado`);
+  return !!(r.rows[0] as { bloqueado?: unknown } | undefined)?.bloqueado;
+}
+
 /** Texto (pt-PT) de recusa pela regra. */
 export function textoRegra(p: Pick<PermissaoMensagem, "regra" | "destinatarioUsername">): string {
   const quem = p.destinatarioUsername ? `@${p.destinatarioUsername}` : "esta conta";
