@@ -51,8 +51,9 @@ function RootRedirect() {
 }
 
 function Router() {
-  const { user, isAuthenticated } = useAdminAuth();
+  const { user, isAuthenticated, isInitialized } = useAdminAuth();
   const [localizacao] = useLocation();
+  if (!isInitialized) return null;   // sessão local ainda a carregar: não mostrar o menu (nem fazer pedidos) antes de saber se a troca é obrigatória
   // Troca de palavra-passe obrigatória: nada mais é mostrado (nem menu nem páginas) até a troca estar concluída.
   if (isAuthenticated && user?.trocaPasswordObrigatoria && localizacao !== '/login') return <TrocarPassword obrigatoria />;
   return (

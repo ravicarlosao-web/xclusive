@@ -35,7 +35,7 @@ export function instalarSessaoExpirada(): void {
             const u = JSON.parse(localStorage.getItem('admin_user') || 'null');
             if (u) localStorage.setItem('admin_user', JSON.stringify({ ...u, trocaPasswordObrigatoria: true }));
           } catch { /* sessão local ilegível: o formulário abre na mesma pelo reload */ }
-          window.location.href = import.meta.env.BASE_URL + 'trocar-password';
+          if (!window.location.pathname.endsWith('/trocar-password')) window.location.href = import.meta.env.BASE_URL + 'trocar-password';   // já no formulário: não recarrega (sem ciclo)
         }
       }
     }
