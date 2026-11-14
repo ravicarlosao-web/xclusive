@@ -1,0 +1,397 @@
+{
+  "documento": "criadoras",
+  "origem": {
+    "ficheiro": "originais/12-termos-criadoras.docx",
+    "sha256": "d20eacc5143e8b89f50e9dc66ea4d5f5f106718957887ce0999e885d1bf0964c"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Termos para Criadoras",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.3 • Data de entrada em vigor: a definir na publicação",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Objeto e natureza"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Regula a utilização da plataforma Xclusive (xclusive.ao) por criadores de conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive é uma rede social de conteúdo privado, destinada exclusivamente a maiores de 18 anos, que permite a publicação, partilha e monetização de conteúdo criado pelos próprios utilizadores, incluindo conteúdo de natureza íntima ou para maiores de 18 anos, desde que lícito, consentido e conforme as presentes políticas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive fornece infraestrutura, carteira, moderação e processamento de pagamentos; a Criadora mantém a titularidade do conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Admissão, KYC e email verificado"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Apenas pessoas singulares maiores de 18 anos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "KYC obrigatório antes da monetização, publicação e início de transmissões em direto: nome completo, data de nascimento, tipo, número e país de emissão do documento, imagem do documento, selfie e verificação de vivacidade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Dados bancários: IBAN, titular e banco."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O email verificado é o canal de contacto. A perda de acesso exige pedido manual por email para legal@xclusive.ao, com verificação de identidade."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Até confirmação, podem ser suspensos pagamentos e levantamentos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A alteração de email não está disponível de momento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conteúdo, mensagens e perfil"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Criadora é responsável pelo conteúdo, mensagens privadas, imagens, avatar, banner e sondagens."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Garante maioridade, consentimento livre e Modelo de Consentimento de Terceiros quando aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Proibido conteúdo ilegal, não consentido, difamatório, infrator ou envolvendo menores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "É proibida a utilização da plataforma para divulgação ou publicidade de conteúdo proibido por lei angolana."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Comissão, gorjetas e pagamentos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A comissão aplicável é a taxa em vigor no momento do pagamento e pode ser definida de forma geral ou específica para um determinado criador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A alteração é comunicada por email para o endereço verificado e/ou aviso na plataforma, aplicando-se apenas a pagamentos posteriores."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjetas em mensagens: mínimo 50 Kz; máximo 100 000 Kz por gorjeta; limite acumulado de 300 000 Kz por janela contínua de 24 horas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjetas em publicações e transmissões em direto: máximo 10 000 000 Kz por gorjeta, sem limite diário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bilhetes de transmissão em direto: máximo 100 000 Kz por bilhete. Os bilhetes apenas podem ser adquiridos enquanto a transmissão estiver ativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento mínimo: o valor em vigor, indicado na página de levantamentos, na área de monetização."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Prazo de pagamento: até 4 dias úteis após a aprovação do pedido de levantamento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento manual por transferência bancária, após KYC e validação bancária."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Prevenção de branqueamento"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode aplicar limites, verificações adicionais, revisão manual, retenção de fundos e suspensão de conta."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Perante suspeita fundada, pode comunicar às autoridades competentes e conservar prova."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Bloqueios e interações"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O bloqueio, em qualquer dos sentidos, impede mensagens, novas conversas, seguir, comentar, subscrever ou renovar, gorjetas e entrada em transmissões em direto."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Mantém-se o acesso já pago ao conteúdo, a visibilidade pública do perfil e a possibilidade de denúncia."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não cancela automaticamente subscrição já paga nem dá direito a reembolso pelo período decorrido, salvo obrigação legal ou decisão da Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Suspensão e cessação"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Suspensão por violação das políticas ou risco jurídico/financeiro."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Cessação a qualquer momento pela Criadora."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Após pedido, existe período de 30 dias para reversão; o encerramento definitivo pode depender da resolução de pendências."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Encerramento não afeta pagamentos devidos, conservação legal ou responsabilidades anteriores."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 8.º — Fiscalidade"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Criadora responde pelas suas obrigações fiscais e contributivas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive pode comunicar informação exigida por autoridade competente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 9.º — Lei aplicável"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Lei angolana; foro de Luanda, salvo competência imperativa."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Quadro — O que mudou e porquê"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento mínimo passa a ser indicado na página de levantamentos, na área de monetização."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bilhetes de transmissão apenas adquiríveis com transmissão ativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Coerência com Política de Reembolsos v2.3 quanto a limites de gorjetas e bilhetes."
+        }
+      ]
+    }
+  ]
+}

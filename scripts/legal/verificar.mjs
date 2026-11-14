@@ -39,7 +39,7 @@ const TOKENS_OK = new Set(["EMPRESA_NOME", "EMPRESA_NIF", "EMPRESA_SEDE", "EMAIL
 for (const e of manifesto) for (const t of [...(e.resultado ?? "").matchAll(/\{\{\??([A-Z_]+)\}\}/g)].map((m) => m[1])) ok(TOKENS_OK.has(t), `Manifesto "${e.id}": token desconhecido {{${t}}}.`);
 
 // ── configurações de teste (NIF/sede vazios, só um, ambos) ──
-const BASE = { empresaNome: "ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS", emailLegal: "legal@xclusive.ao", minimoLevantamento: 5000, prazoLevantamentoMin: 5, prazoLevantamentoMax: 10 };
+const BASE = { empresaNome: "ORIGEM - COMÉRCIO E PRESTAÇÃO DE SERVIÇOS", emailLegal: "legal@xclusive.ao", minimoLevantamento: 5000, prazoLevantamentoMin: 4, prazoLevantamentoMax: 4, paginaLevantamentos: "/definicoes/monetizacao" };
 const CONFIGS = [
   { nome: "NIF e sede vazios", cfg: { ...BASE, empresaNif: null, empresaSede: null } },
   { nome: "só sede", cfg: { ...BASE, empresaNif: null, empresaSede: "Rua de Teste 1, Luanda, Angola" } },
@@ -58,7 +58,7 @@ const authSrc = fs.readFileSync(AUTH, "utf8"); const legalDocs = {};
 for (const m of authSrc.matchAll(/(\w+):\s*\{\s*versao:\s*"([^"]+)",\s*atualizadoEm:\s*"([^"]+)"\s*\}/g)) legalDocs[m[1]] = { versao: m[2], data: m[3] };
 const MESES = { janeiro: 1, fevereiro: 2, março: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
 
-const usadas = new Set();
+const usadas = new Set(); const textosDosDocs = {};
 for (const d of DOCUMENTOS) {
   const etiqueta = `${d.json}`;
   const buf = fs.readFileSync(path.join(pastaDe(d), "originais", d.docx));
@@ -76,7 +76,7 @@ for (const d of DOCUMENTOS) {
     usadas.add(e.id);
     if (e.acao === "remover") esperado.splice(idx[0], 1); else esperado[idx[0]] = e.resultado;
   }
-  const doJson = commitado.blocos.filter((b) => b.tipo !== "tabela").map((b) => textoDeRuns(b.runs));
+  const doJson = commitado.blocos.filter((b) => b.tipo !== "tabela").map((b) => textoDeRuns(b.runs)); textosDosDocs[d.chave] = doJson;
   ok(doJson.length === esperado.length && doJson.every((t, k) => t === esperado[k]), `${etiqueta}: o texto do JSON difere do .docx + manifesto${(() => { const k = doJson.findIndex((t, n) => t !== esperado[n]); return k >= 0 ? ` (1.ª diferença no parágrafo ${k + 1})` : ` (nº de parágrafos ${doJson.length} ≠ ${esperado.length})`; })()}.`);
   // 3. resolução com cada configuração
   for (const { nome, cfg } of CONFIGS) {
@@ -102,11 +102,31 @@ for (const d of DOCUMENTOS) {
   const n = /^Versão (\d+(?:\.\d+)*) • Data de entrada em vigor: (a definir na publicação|\d{2}\/\d{2}\/\d{4})$/.exec(linha);
   ok(!!m || !!n, `${etiqueta}: não encontrei a linha "<data> • Versão X" nem "Versão X • Data de entrada em vigor: …" no documento.`);
   if (n) { const ld = legalDocs[d.chave]; ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`); if (ld) ok(ld.versao === n[1], `${etiqueta}: versão do documento (${n[1]}) ≠ LEGAL_DOCS (${ld.versao}).`); }
-  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = legalDocs[d.semLegalDocs ? (d.confereCom ?? "termos") : d.chave];
-    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.semLegalDocs ? (d.confereCom ?? "termos") : d.chave}".`);
+  if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = d.versaoFixa ? { versao: d.versaoFixa.versao, data: d.versaoFixa.data } : legalDocs[d.chave];
+    ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`);
     if (ld) { ok(ld.versao === m[4], `${etiqueta}: versão do documento (${m[4]}) ≠ LEGAL_DOCS (${ld.versao}).`); ok(ld.data === data, `${etiqueta}: data do documento (${data}) ≠ LEGAL_DOCS (${ld.data}).`); } }
 }
 for (const e of manifesto) ok(usadas.has(e.id), `Manifesto: a entrada "${e.id}" não foi aplicada.`);
+
+// 6. Lista de documentos aceites no registo = os 6 do documento «Respostas Escritas» (n.º 2); os internos não entram.
+const SRC = path.join(RAIZ, "artifacts/xclusive/src");
+const bloco = fs.readFileSync(path.join(SRC, "components/auth/BlocoConsentimento.tsx"), "utf8");
+const aceites = [...(/const DOCS_ACEITE[^=]*=\s*\[([\s\S]*?)\n\];/.exec(bloco)?.[1] ?? "").matchAll(/key:\s*'(\w+)'/g)].map((m) => m[1]);
+ok(aceites.join() === ["termos", "privacidade", "cookies", "conteudo", "reembolsos", "direitosAutor"].join(), `BlocoConsentimento: a lista de documentos aceites tem de ser, por esta ordem, termos, privacidade, cookies, conteudo, reembolsos, direitosAutor (tem: ${aceites.join(", ") || "nada"}).`);
+for (const interno of ["menores", "retencao", "consentimento", "criadoras"]) ok(!aceites.includes(interno), `BlocoConsentimento: «${interno}» não pode estar na lista de documentos aceites do registo.`);
+for (const chave of aceites) ok(!!legalDocs[chave], `LEGAL_DOCS não tem a chave «${chave}» da lista de documentos aceites.`);
+
+// 7. Dados factuais do legal-config (prazo e página de levantamentos) = o que os textos publicados dizem
+const prazoMin = /PRAZO_LEVANTAMENTO_MIN_DIAS\s*=\s*(\d+)/.exec(authSrc)?.[1], prazoMax = /PRAZO_LEVANTAMENTO_MAX_DIAS\s*=\s*(\d+)/.exec(authSrc)?.[1], pagina = /PAGINA_LEVANTAMENTOS\s*=\s*"([^"]+)"/.exec(authSrc)?.[1];
+ok(!!prazoMin && prazoMin === prazoMax, `auth.ts: o prazo de levantamento do legal-config tem de ter mínimo e máximo iguais (hoje ${prazoMin}–${prazoMax}).`);
+for (const chave of ["reembolsos", "criadoras"]) {
+  const t = (textosDosDocs[chave] ?? []).join("\n");
+  const m = /até (\d+) dias úteis após a aprovação do pedido de levantamento/.exec(t);
+  ok(!!m && m[1] === prazoMin, `${chave}: o prazo de pagamento do texto (${m?.[1] ?? "não encontrado"} dias úteis) tem de ser o do legal-config (${prazoMin}).`);
+  ok(/indicado na página de levantamentos, na área de monetização/.test(t), `${chave}: o texto deixou de dizer «indicado na página de levantamentos, na área de monetização».`);
+}
+const appSrc = fs.readFileSync(path.join(SRC, "App.tsx"), "utf8");
+ok(!!pagina && new RegExp(`path="${(pagina ?? "").replace(/\//g, "\\/")}"[^\\n]*Monetization|Monetization[^\\n]*path="${(pagina ?? "").replace(/\//g, "\\/")}"`).test(appSrc), `App.tsx: a página de levantamentos do legal-config (${pagina}) tem de ser a rota de Monetization.`);
 
 // 5. nada do texto antigo nas páginas / LEGAL_DOCS
 for (const f of fs.readdirSync(PAGINAS).filter((x) => /\.(tsx?|ts)$/.test(x) && x !== "resolver.ts")) {
@@ -120,4 +140,4 @@ for (const [n, esp] of [[5000, "5.000 Kz"], [999, "999 Kz"], [1234567, "1.234.56
 ok((() => { try { R.validarConfig({ empresaNome: "x" }); return false; } catch { return true; } })(), "validarConfig aceitou uma configuração incompleta.");
 
 if (falhas.length) { console.error(`\n✖ Textos legais: ${falhas.length} problema(s) em ${verificacoes} verificações:\n` + falhas.map((f) => "  - " + f).join("\n") + "\n"); process.exit(1); }
-console.log(`✔ Textos legais (v2.2 e v1.1): ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);
+console.log(`✔ Textos legais (v2.3, v2.2 e v1.1): ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);

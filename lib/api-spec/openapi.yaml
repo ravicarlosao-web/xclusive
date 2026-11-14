@@ -1780,7 +1780,7 @@ components:
 
     LegalConfig:
       type: object
-      required: [empresaNome, empresaNif, empresaSede, emailLegal, minimoLevantamento, prazoLevantamentoMin, prazoLevantamentoMax]
+      required: [empresaNome, empresaNif, empresaSede, emailLegal, minimoLevantamento, prazoLevantamentoMin, prazoLevantamentoMax, paginaLevantamentos]
       properties:
         empresaNome:
           type: string
@@ -1802,7 +1802,10 @@ components:
           description: Prazo normal de levantamento, mínimo, em dias úteis.
         prazoLevantamentoMax:
           type: integer
-          description: Prazo normal de levantamento, máximo, em dias úteis.
+          description: Prazo normal de levantamento, máximo, em dias úteis (hoje coincide com o mínimo, 4 dias úteis após a aprovação do pedido).
+        paginaLevantamentos:
+          type: string
+          description: Caminho da página onde a criadora vê o levantamento mínimo em vigor e pede o levantamento (área de monetização das Definições).
 
     CurrentUser:
       description: >-

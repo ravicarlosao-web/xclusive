@@ -14,8 +14,8 @@ export const LEGAL_PAGES: { key: LegalDocKey; path: string; titulo: string; curt
   { key: 'privacidade', path: '/privacidade', titulo: 'Política de Privacidade', curto: 'Política de Privacidade' },
   { key: 'cookies', path: '/cookies', titulo: 'Política de Cookies', curto: 'Política de Cookies' },
   { key: 'conteudo', path: '/politica-de-conteudo', titulo: 'Política de Conteúdo', curto: 'Política de Conteúdo' },
-  { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor (DMCA)', curto: 'Direitos de Autor' },
-  { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos', curto: 'Reembolsos' },
+  { key: 'reembolsos', path: '/reembolsos', titulo: 'Política de Reembolsos e Pagamentos', curto: 'Reembolsos e Pagamentos' },
+  { key: 'direitosAutor', path: '/direitos-de-autor', titulo: 'Direitos de Autor e Pedidos de Retirada', curto: 'Direitos de Autor' },
   { key: 'criadoras', path: '/termos-criadoras', titulo: 'Termos para Criadoras', curto: 'Termos para Criadoras' },
 ];
 

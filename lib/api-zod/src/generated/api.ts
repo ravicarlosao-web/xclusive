@@ -260,7 +260,8 @@ export const GetLegalConfigResponse = zod.object({
   "emailLegal": zod.string().describe('Email de contacto legal (env LEGAL_EMAIL).'),
   "minimoLevantamento": zod.number().describe('Mínimo de levantamento em Kz (platform_settings.min_withdrawal_amount).'),
   "prazoLevantamentoMin": zod.int().describe('Prazo normal de levantamento, mínimo, em dias úteis.'),
-  "prazoLevantamentoMax": zod.int().describe('Prazo normal de levantamento, máximo, em dias úteis.')
+  "prazoLevantamentoMax": zod.int().describe('Prazo normal de levantamento, máximo, em dias úteis (hoje coincide com o mínimo, 4 dias úteis após a aprovação do pedido).'),
+  "paginaLevantamentos": zod.string().describe('Caminho da página onde a criadora vê o levantamento mínimo em vigor e pede o levantamento (área de monetização das Definições).')
 })
 
 

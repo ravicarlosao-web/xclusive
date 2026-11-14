@@ -13,6 +13,8 @@ export type LegalConfig = {
   minimoLevantamento: number;
   prazoLevantamentoMin: number;
   prazoLevantamentoMax: number;
+  /** Caminho da página de levantamentos (área de monetização); dado factual do legal-config. */
+  paginaLevantamentos: string;
 };
 
 export type Segmento = { tipo: 'texto' | 'email'; t: string };
@@ -35,7 +37,8 @@ export function validarConfig(cfg: unknown): LegalConfig {
   const opcional = (v: unknown) => v === null || typeof v === 'string';
   const numero = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   if (!c || !texto(c.empresaNome) || !texto(c.emailLegal) || !opcional(c.empresaNif) || !opcional(c.empresaSede)
-    || !numero(c.minimoLevantamento) || !numero(c.prazoLevantamentoMin) || !numero(c.prazoLevantamentoMax)) {
+    || !numero(c.minimoLevantamento) || !numero(c.prazoLevantamentoMin) || !numero(c.prazoLevantamentoMax)
+    || !texto(c.paginaLevantamentos) || !String(c.paginaLevantamentos).startsWith('/')) {
     throw new Error('Configuração dos textos legais inválida ou incompleta.');
   }
   return c as LegalConfig;

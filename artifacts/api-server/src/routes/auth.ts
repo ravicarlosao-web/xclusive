@@ -52,17 +52,17 @@ const router = Router();
 // ── Documentos legais ────────────────────────────────────────────────────────
 // Versões VIGENTES. Quando o texto jurídico mudar, o advogado/dev altera a versão e a data aqui:
 // o registo passa a exigir o aceite da nova versão e as páginas legais mostram-na.
-// (Termos, Privacidade e Cookies: v2.2 do advogado (docs/legal/v2.2); os restantes, v1.1 de 22 de outubro de 2026, até chegarem os v2.3. `atualizadoEm` é a data da versão; a data de entrada em vigor dos textos é «a definir na publicação».)
+// (Termos, Privacidade e Cookies: v2.2 do advogado (docs/legal/v2.2); Conteúdo, Reembolsos, Direitos de Autor e Criadoras: v2.3 (docs/legal/v2.3). `atualizadoEm` é a data da versão; a data de entrada em vigor dos textos é «a definir na publicação».)
 export const LEGAL_DOCS = {
   termos:          { versao: "2.2", atualizadoEm: "2026-11-13" },
   privacidade:     { versao: "2.2", atualizadoEm: "2026-11-13" },
   // Política de Cookies (v2.2): tem página pública e versão própria; o aceite de cookies no registo continua a ser o booleano `cookies` (sem versão por utilizador).
   cookies:         { versao: "2.2", atualizadoEm: "2026-11-13" },
-  conteudo:        { versao: "1.1", atualizadoEm: "2026-10-22" },
-  direitosAutor:   { versao: "1.1", atualizadoEm: "2026-10-22" },
-  reembolsos:      { versao: "1.1", atualizadoEm: "2026-10-22" },
-  // Termos para Criadoras: aceites na ativação de criadora, NÃO no registo (o registo só exige as 5 chaves acima).
-  criadoras:       { versao: "1.1", atualizadoEm: "2026-10-22" },
+  conteudo:        { versao: "2.3", atualizadoEm: "2026-11-13" },
+  direitosAutor:   { versao: "2.3", atualizadoEm: "2026-11-13" },
+  reembolsos:      { versao: "2.3", atualizadoEm: "2026-11-13" },
+  // Termos para Criadoras: aceites na ativação de criadora, NÃO no registo (o registo só exige as 5 chaves de versão acima: termos, privacidade, conteudo, direitosAutor e reembolsos; a Política de Cookies é o booleano `cookies`).
+  criadoras:       { versao: "2.3", atualizadoEm: "2026-11-13" },
 } as const;
 
 /** Idade mínima para criar conta (plataforma de conteúdo adulto). */
@@ -133,9 +133,11 @@ router.get("/auth/legal-versions", (_req, res): void => {
   res.json(LEGAL_DOCS);
 });
 
-/** Prazo normal de levantamento, em dias úteis (texto da Política de Reembolsos e Pagamentos). */
-const PRAZO_LEVANTAMENTO_MIN_DIAS = 5;
-const PRAZO_LEVANTAMENTO_MAX_DIAS = 10;
+/** Prazo de pagamento do levantamento, em dias úteis após a aprovação do pedido: 4 (Política de Reembolsos e Pagamentos v2.3, art. 6.º, e Termos para Criadoras v2.3, art. 4.º). Mínimo e máximo coincidem. */
+const PRAZO_LEVANTAMENTO_MIN_DIAS = 4;
+const PRAZO_LEVANTAMENTO_MAX_DIAS = 4;
+/** Onde a criadora vê o levantamento mínimo em vigor e pede o levantamento (área de monetização das Definições). */
+const PAGINA_LEVANTAMENTOS = "/definicoes/monetizacao";
 
 /** Valor de uma variável de ambiente sem espaços; null se não existir ou estiver vazia. */
 function lerEnvOpcional(nome: string): string | null {
@@ -159,6 +161,7 @@ router.get("/auth/legal-config", async (req, res): Promise<void> => {
       minimoLevantamento,
       prazoLevantamentoMin: PRAZO_LEVANTAMENTO_MIN_DIAS,
       prazoLevantamentoMax: PRAZO_LEVANTAMENTO_MAX_DIAS,
+      paginaLevantamentos: PAGINA_LEVANTAMENTOS,
     });
   } catch (err) {
     (req as any).log?.warn(erroSeguro(err), "Legal-config: falha ao ler o mínimo de levantamento");

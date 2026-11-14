@@ -1,0 +1,237 @@
+{
+  "documento": "direitosAutor",
+  "origem": {
+    "ficheiro": "originais/06-direitos-de-autor.docx",
+    "sha256": "c51df9571fd414fddd27804992069f0ee34ffcf0b87e5d77dfcff8e6e041b5ab"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Direitos de Autor e Pedidos de Retirada",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.3 • Data de entrada em vigor: a definir na publicação",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Respeito pelos direitos de autor"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive respeita direitos de autor e conexos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador responde pela titularidade ou autorização necessária para publicar o conteúdo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Quem pode apresentar pedido"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O titular dos direitos ou mandatário devidamente autorizado."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Conteúdo do pedido"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação do requerente e mandatário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Identificação da obra e do conteúdo infrator."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Descrição do direito violado e fundamentação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Declaração de boa-fé e de exatidão das informações."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Assinatura e contactos."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Envio e prazo"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Enviar para legal@xclusive.ao com assunto “Pedido de retirada — Direitos de Autor”."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Acusação de receção e decisão, em regra, em até sete dias úteis, prorrogável em casos complexos."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo aparentemente infrator pode ser removido ou desativado provisoriamente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Contranotificação e reposição"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A contranotificação e a eventual reposição do conteúdo são processos manuais."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O criador afetado deve enviar a contranotificação por email para legal@xclusive.ao, com identificação da conta, do conteúdo e da fundamentação."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive analisa o pedido e comunica a decisão por email."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A reposição só ocorre se a contranotificação for considerada válida e não existir ordem judicial, acordo entre as partes ou necessidade de conservação probatória."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Reincidência pode determinar suspensão ou encerramento."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Falsas notificações"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Notificações falsas ou de má-fé podem gerar responsabilidade civil e criminal."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Quadro — O que mudou e porquê"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Contranotificação e reposição passam a ser descritas como processos manuais por email."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Removida a referência a reposição automática."
+        }
+      ]
+    }
+  ]
+}

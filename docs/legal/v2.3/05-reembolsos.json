@@ -1,0 +1,309 @@
+{
+  "documento": "reembolsos",
+  "origem": {
+    "ficheiro": "originais/05-reembolsos.docx",
+    "sha256": "6d68df130dd019ce16acada7600a16b2b9581e1637ec5d300b9d53d0c7946209"
+  },
+  "blocos": [
+    {
+      "tipo": "titulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Política de Reembolsos e Pagamentos",
+          "b": true
+        }
+      ]
+    },
+    {
+      "tipo": "subtitulo",
+      "alinhamento": "centro",
+      "runs": [
+        {
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.3 • Data de entrada em vigor: a definir na publicação",
+          "i": true
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 1.º — Saldo"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Carregamentos em Kwanzas para a carteira Xclusive."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Uso exclusivo para subscrições, publicações pagas, gorjetas e bilhetes."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Sem juros, transferência entre utilizadores ou natureza de depósito bancário."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 2.º — Subscrições"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Acesso durante o período adquirido."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Renovação sempre manual; sem cobrança recorrente."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 3.º — Compras, gorjetas e transmissões"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Desbloqueio dá acesso pessoal, não exclusivo e não transferível."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjeta é pagamento voluntário, discricionário e não reembolsável."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bilhete dá acesso à transmissão em direto para a qual foi adquirido. Os bilhetes apenas podem ser adquiridos enquanto a transmissão estiver ativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjetas em mensagens: mínimo 50 Kz, máximo 100 000 Kz por gorjeta e limite acumulado de 300 000 Kz por janela contínua de 24 horas."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Gorjetas em publicações e transmissões em direto: máximo 10 000 000 Kz por gorjeta, sem limite diário."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Bilhetes de transmissão em direto: máximo 100 000 Kz por bilhete."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 4.º — Reembolsos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Não existe mecanismo automático de reembolso. Os pedidos são analisados e processados manualmente pela Xclusive, após pedido enviado por email para legal@xclusive.ao."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem ser considerados para reembolso: cobrança duplicada comprovada, erro manifesto de cobrança, falha técnica imputável à Xclusive ou fraude comprovada contra o utilizador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "O pedido deve ser enviado para legal@xclusive.ao no prazo máximo de 14 dias a contar do pagamento ou da ocorrência, com comprovativo e descrição do problema."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A Xclusive analisa o pedido e comunica a decisão por email. O reembolso, quando aprovado, é processado manualmente por saldo na plataforma ou pelo método de pagamento original, conforme tecnicamente possível."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Os bilhetes de transmissão em direto apenas podem ser adquiridos enquanto a transmissão estiver ativa; por isso, não se aplica a hipótese de transmissão cancelada antes do início."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 5.º — Sem direito a reembolso"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Conteúdo já acedido, subscrição utilizada, gorjeta enviada, transmissão assistida, insatisfação subjetiva, violação dos Termos, fraude ou pedido fora do prazo."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 6.º — Levantamentos"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento por transferência bancária manual."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento mínimo: o valor em vigor, indicado na página de levantamentos, na área de monetização."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Prazo de pagamento: até 4 dias úteis após a aprovação do pedido de levantamento."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Exige KYC e validação bancária."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Podem ser retidos valores por fraude, estorno, conteúdo ilegal, denúncia ou ordem legal."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Artigo 7.º — Comissão"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "A comissão aplicável é a taxa em vigor no momento do pagamento e pode ser definida de forma geral ou específica para um determinado criador."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Alterável mediante comunicação por email verificado e/ou aviso na plataforma, aplicando-se apenas a pagamentos posteriores."
+        }
+      ]
+    },
+    {
+      "tipo": "artigo",
+      "runs": [
+        {
+          "t": "Quadro — O que mudou e porquê"
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Esclarecido que os reembolsos são analisados e processados manualmente, mediante pedido por email."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Removida a hipótese de transmissão cancelada antes do início, porque os bilhetes só podem ser adquiridos com a transmissão ativa."
+        }
+      ]
+    },
+    {
+      "tipo": "p",
+      "runs": [
+        {
+          "t": "Levantamento mínimo passa a ser indicado na página de levantamentos, na área de monetização."
+        }
+      ]
+    }
+  ]
+}
