@@ -8,6 +8,7 @@ Uma plataforma de monetização para criadores de conteúdo em Angola, Moçambiq
   - `artifacts/xclusive: web` — frontend web principal (Vite dev server, porta 19285)
   - `artifacts/api-server: API Server` — backend Express API (porta 8080)
   - `artifacts/admin: web` — painel de administração (Vite dev server, porta 23744)
+    Só se constrói/serve com `ADMIN_BASE_PATH` (caminho secreto, fora do repositório; ver README).
   - `artifacts/mockup-sandbox: Component Preview Server` — pré-visualização de design no canvas
 - `pnpm run typecheck` — typecheck completo em todos os packages
 - `pnpm run build` — typecheck + build de todos os packages
