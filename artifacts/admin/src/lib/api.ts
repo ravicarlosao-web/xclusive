@@ -46,6 +46,13 @@ export const adminApi = {
   changePassword: (atual: string, nova: string, confirmacao: string) =>
     adminFetchMsg('/admin/auth/password', { method: 'POST', body: JSON.stringify({ atual, nova, confirmacao }) }),
 
+  /** Administradores (só superadmin; o servidor recusa os outros com 403). A palavra-passe gerada vem UMA vez na resposta de criar/redefinir e nunca se guarda. */
+  getAdministradores: () => adminFetchMsg('/admin/administradores'),
+  criarAdministrador: (data: { email: string; username: string; modo: 'escrever' | 'gerar'; password?: string }) =>
+    adminFetchMsg('/admin/administradores', { method: 'POST', body: JSON.stringify(data) }),
+  redefinirPasswordAdministrador: (id: number, data: { modo: 'escrever' | 'gerar'; password?: string }) =>
+    adminFetchMsg('/admin/administradores/' + id + '/redefinir-password', { method: 'POST', body: JSON.stringify(data) }),
+
   getDashboardKpis: () => adminFetch('/admin/dashboard/kpis'),
   getDashboardCharts: () => adminFetch('/admin/dashboard/charts'),
   getActivityFeed: () => adminFetch('/admin/dashboard/activity-feed'),
