@@ -1,0 +1,6 @@
+{
+  "descricao": "ÚNICO valor de origem da data de entrada em vigor dos 7 documentos publicados (Termos e Condições, Privacidade, Cookies, Conteúdo, Reembolsos e Pagamentos, Direitos de Autor, Termos para Criadoras). O gerador (scripts/legal/docx-para-json.mjs) substitui, em cada um deles e SÓ nele, a frase «Data de entrada em vigor: a definir na publicação» por «Data de entrada em vigor: <data>»; nenhuma outra palavra muda. scripts/legal/verificar.mjs confere os JSON, o .docx original e o atualizadoEm de LEGAL_DOCS (auth.ts) com esta data. Para mudar a data: editar `data` aqui, correr `node scripts/legal/docx-para-json.mjs` e pôr o mesmo dia (AAAA-MM-DD) em `atualizadoEm` de LEGAL_DOCS.",
+  "frase_original": "Data de entrada em vigor: a definir na publicação",
+  "data": "15/11/2026",
+  "autorizacao": "Autorização escrita do advogado, transmitida pelo dono do produto: substituir APENAS a frase original pela mesma frase com a data 15/11/2026, nos 7 documentos publicados; nenhuma outra palavra, cláusula, numeração, remissão ou versão muda. Os documentos internos (Menores, Retenção, Consentimento de Terceiros) ficam como estão."
+}
