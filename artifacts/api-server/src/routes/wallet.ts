@@ -6,6 +6,8 @@ import {
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { z } from "zod/v4";
+import { lerConfigTopup, formatarNib, MSG_METODO_INDISPONIVEL } from "../lib/topupConfig.js";
+import { randomInt } from "node:crypto";
 import { requireAuth, requireCreator, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { emailLegal } from "../lib/encerramento";
@@ -119,9 +121,34 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
 
 const topupSchema = z.object({
   amount: z.number({ error: "Valor deve ser um número" }).min(500, "Valor mínimo: 500 Kz"),
-  reference: z.string().min(5).max(20),
+  reference: z.string().min(5).max(20).optional(),   // compatibilidade com clientes antigos; o ecrã novo não a mostra nem a envia: o servidor gera a referência interna
   comprovantivoBase64: z.string().optional(),
   comprovantivoNome: z.string().max(255).optional(),
+});
+
+/** Referência INTERNA do pedido (conciliação no admin): «XCL-» + 8 caracteres sem ambíguos, gerada no servidor; o utilizador já não a vê. */
+const ALFABETO_REF = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const gerarReferenciaInterna = (): string => `XCL-${Array.from({ length: 8 }, () => ALFABETO_REF[randomInt(ALFABETO_REF.length)]).join("")}`;
+
+/**
+ * GET /api/wallet/topup/config
+ * O que o ecrã de carregamento mostra: os dados bancários vêm da BD (platform_settings), nunca do código; o carregamento manual só está disponível com NIB e titular válidos;
+ * os métodos automáticos (Multicaixa Express e Referência) ficam «Brevemente» até a definição topup_metodos_automaticos_ativos ser ligada.
+ */
+router.get("/wallet/topup/config", requireAuth, async (_req: AuthRequest, res): Promise<void> => {
+  try {
+    const c = await lerConfigTopup();
+    const manualDisponivel = !!c.nib && !!c.titular;
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      manual: { disponivel: manualDisponivel, ...(manualDisponivel ? { nib: c.nib, nibFormatado: formatarNib(c.nib!), titular: c.titular } : {}) },
+      gpo: { ativo: c.automaticos, rotulo: c.automaticos ? null : "Brevemente" },
+      ref: { ativo: c.automaticos, rotulo: c.automaticos ? null : "Brevemente" },
+    });
+  } catch (err) {
+    _req.log?.error({ err }, "Erro ao ler a configuração de carregamento");
+    res.status(500).json({ error: "Erro ao obter os dados de carregamento." });
+  }
 });
 
 /**
@@ -136,10 +163,17 @@ router.post("/wallet/topup", requireAuth, async (req: AuthRequest, res): Promise
     return;
   }
 
-  const { amount, reference, comprovantivoBase64, comprovantivoNome } = parsed.data;
+  const { amount, comprovantivoBase64, comprovantivoNome } = parsed.data;
   const userId = req.userId!;
 
   try {
+    // Sem dados bancários na BD o carregamento manual não está disponível (o utilizador não saberia para onde transferir).
+    const cfg = await lerConfigTopup();
+    if (!cfg.nib || !cfg.titular) {
+      res.status(503).json({ error: "O carregamento por transferência não está disponível de momento. Tenta mais tarde.", codigo: "dados_bancarios_indisponiveis" });
+      return;
+    }
+    const reference = parsed.data.reference ?? gerarReferenciaInterna();
     // Verificar referência duplicada
     const [existing] = await db
       .select({ id: topupRequestsTable.id })
@@ -174,7 +208,7 @@ router.post("/wallet/topup", requireAuth, async (req: AuthRequest, res): Promise
     // Pedidos em paralelo com a mesma referência: a leitura prévia deixa passar vários e o índice único recusa os restantes (23505).
     const e = err as { code?: string; cause?: { code?: string } } | null;
     if ((e?.code ?? e?.cause?.code) === "23505") { res.status(409).json({ error: "Pedido com esta referência já foi submetido." }); return; }
-    req.log?.error({ err }, "Erro ao submeter carregamento");
+    req.log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao submeter carregamento");
     res.status(500).json({ error: "Erro ao submeter pedido de carregamento." });
   }
 });
@@ -196,6 +230,8 @@ const gpoSchema = z.object({
  * O utilizador aprova no telemóvel — confirmação chega via webhook.
  */
 router.post("/wallet/topup/appypay/gpo", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  // Métodos automáticos «Brevemente»: o servidor recusa mesmo por pedido direto (a definição topup_metodos_automaticos_ativos liga-os).
+  if (!(await lerConfigTopup()).automaticos) { res.status(403).json({ error: MSG_METODO_INDISPONIVEL, codigo: "metodo_indisponivel" }); return; }
   const parsed = gpoSchema.safeParse(req.body);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message ?? "Dados inválidos.";
@@ -285,6 +321,8 @@ const refSchema = z.object({
  * O saldo é creditado automaticamente via webhook quando o utilizador pagar.
  */
 router.post("/wallet/topup/appypay/ref", requireAuth, async (req: AuthRequest, res): Promise<void> => {
+  // Métodos automáticos «Brevemente»: o servidor recusa mesmo por pedido direto (a definição topup_metodos_automaticos_ativos liga-os).
+  if (!(await lerConfigTopup()).automaticos) { res.status(403).json({ error: MSG_METODO_INDISPONIVEL, codigo: "metodo_indisponivel" }); return; }
   const parsed = refSchema.safeParse(req.body);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message ?? "Dados inválidos.";

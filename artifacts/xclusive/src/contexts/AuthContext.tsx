@@ -62,9 +62,6 @@ function marcarContaSuspensa() {
 const MOCK_KEY = import.meta.env.DEV ? 'xclusive_mock_users' : ''; // produção: sem chaves mock
 const MOCK_SESSION_KEY = import.meta.env.DEV ? 'xclusive_mock_session' : ''; // produção: sem chaves mock
 
-/** IBAN da plataforma Xclusive para receber carregamentos */
-export const XCLUSIVE_IBAN = 'AO06 0040 0000 1234 5678 9012 3';
-export const XCLUSIVE_IBAN_RAW = 'AO06004000001234567890123';
 
 export type WithdrawalStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'pago' | 'retido';
 export interface WithdrawalItem {
@@ -339,7 +336,7 @@ interface AuthContextType {
   /** `chave`: chave de idempotência opcional (a mesma chave nunca cobra duas vezes); um 409 «chave_reutilizada» chega como erro com `codigo`. */
   sendTip: (creatorUsername: string, amount: number, postId?: number, chave?: string) => Promise<void>;
   /** Submete pedido de carregamento (fica pendente até aprovação do admin) */
-  topUp: (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
+  topUp: (amount: number, comprovantivoBase64?: string, comprovantivoNome?: string) => Promise<void>;
   /** Desbloqueia conteúdo PPV. Lança erro se saldo insuficiente. */
   unlockPost: (postId: number, creatorUsername: string, preco: number) => Promise<void>;
   /**
@@ -705,7 +702,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSaldo(freshUsers[freshSenderIdx].saldo);
   }, [token, isMockToken, fetchApiWallet]);
 
-  const topUp = useCallback(async (amount: number, reference: string, comprovantivoBase64?: string, comprovantivoNome?: string) => {
+  const topUp = useCallback(async (amount: number, comprovantivoBase64?: string, comprovantivoNome?: string) => {
     if (!Number.isFinite(amount) || amount < 500) {
       throw new Error('Valor mínimo de carregamento: 500 Kz.');
     }
@@ -720,7 +717,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Authorization: `Bearer ${token}`,
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ amount, reference, comprovantivoBase64, comprovantivoNome }),
+        body: JSON.stringify({ amount, comprovantivoBase64, comprovantivoNome }),   // a referência interna é gerada no servidor
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -736,6 +733,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = freshUsers.find(u => u.id === session.userId);
     if (!user) throw new Error('Utilizador não encontrado.');
     // Regista o pedido como pendente — o admin aprova manualmente
+    const reference = `XCL-${Math.floor(100000 + Math.random() * 900000)}`;   // só no modo de desenvolvimento (mock); em produção a referência interna é gerada no servidor
     const reqs = _getTopUpRequests();
     // Evita pedidos duplicados com a mesma referência
     if (reqs.some(r => r.reference === reference)) {

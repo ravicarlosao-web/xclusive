@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth, XCLUSIVE_IBAN } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X, Smartphone, CreditCard, Receipt, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,12 @@ const PRESET_AMOUNTS = [1000, 2500, 5000, 10000, 25000, 50000];
 
 type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success';
 
+interface TopUpConfig {
+  manual: { disponivel: boolean; nib?: string; nibFormatado?: string; titular?: string };
+  gpo: { ativo: boolean; rotulo: string | null };
+  ref: { ativo: boolean; rotulo: string | null };
+}
+
 export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const { topUp, saldo } = useAuth();
   const [step, setStep] = useState<Step>('amount');
@@ -25,18 +31,30 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   
   // States for manual flow
   const [copiedIban, setCopiedIban] = useState(false);
-  const [reference] = useState(() => {
-    const rand = Math.floor(100000 + Math.random() * 900000);
-    return `XCL-${rand}`;
-  });
+  // Dados bancários e disponibilidade dos métodos: vêm do servidor (BD), nunca do código. A referência do pedido é interna (gerada no servidor) e o utilizador já não a vê.
+  const [config, setConfig] = useState<TopUpConfig | null>(null);
+  const [configErro, setConfigErro] = useState(false);
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // States for AppyPay flows
-  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref'>('gpo');
+  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref'>('manual');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [refData, setRefData] = useState<{ entity: string; referenceNumber: string; dueDate: string } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let vivo = true;
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const token = localStorage.getItem('xclusive_token');
+    setConfigErro(false);
+    fetch(`${base}/api/wallet/topup/config`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((c: TopUpConfig) => { if (vivo) setConfig(c); })
+      .catch(() => { if (vivo) { setConfig(null); setConfigErro(true); } });
+    return () => { vivo = false; };
+  }, [open]);
 
   const selectedAmount = amount !== '' ? amount : (customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0);
 
@@ -48,7 +66,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setLoading(false);
     setPdfBase64(null);
     setPdfName('');
-    setPaymentMethod('gpo');
+    setPaymentMethod('manual');
     setPhoneNumber('');
     setRefData(null);
   }
@@ -86,7 +104,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setError('');
     setLoading(true);
     try {
-      await topUp(selectedAmount, reference, pdfBase64, pdfName);
+      await topUp(selectedAmount, pdfBase64, pdfName);
       setStep('success');
     } catch (e: any) {
       setError(e.message || 'Erro ao processar pedido.');
@@ -148,18 +166,20 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   }
 
   function handleMethodContinue() {
+    if ((paymentMethod === 'gpo' && !ativoGpo) || (paymentMethod === 'ref' && !ativoRef) || (paymentMethod === 'manual' && !ativoManual)) { setError('Este método não está disponível de momento.'); return; }
     if (paymentMethod === 'gpo') setStep('gpo_phone');
     else if (paymentMethod === 'ref') handleRefSubmit();
     else setStep('transfer'); // manual
   }
 
   function copyIban() {
-    navigator.clipboard.writeText(XCLUSIVE_IBAN).then(() => {
+    navigator.clipboard.writeText(config?.manual.nib ?? '').then(() => {
       setCopiedIban(true);
       setTimeout(() => setCopiedIban(false), 2000);
     });
   }
 
+  const ativoGpo = !!config?.gpo.ativo, ativoRef = !!config?.ref.ativo, ativoManual = !!config?.manual.disponivel;
   const isAmountValid = selectedAmount >= 500;
 
   return (
@@ -244,12 +264,16 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
 
             <div className="space-y-3 mb-6">
               <button
-                onClick={() => setPaymentMethod('gpo')}
+                onClick={() => ativoGpo && setPaymentMethod('gpo')}
+                disabled={!ativoGpo}
+                aria-disabled={!ativoGpo}
+                data-testid="metodo-gpo"
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'gpo'
                     ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
-                    : "border-border bg-secondary/30 hover:border-border/80"
+                    : "border-border bg-secondary/30 hover:border-border/80",
+                  !ativoGpo && "opacity-60 cursor-not-allowed"
                 )}
               >
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shrink-0 p-1 border border-border/50">
@@ -257,7 +281,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Multicaixa Express</h3>
-                  <p className="text-xs text-muted-foreground">Aprovação imediata no telemóvel</p>
+                  {ativoGpo ? <p className="text-xs text-muted-foreground">Aprovação imediata no telemóvel</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-gpo">{config?.gpo.rotulo ?? 'Brevemente'}</p>}
                 </div>
                 <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'gpo' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
                   {paymentMethod === 'gpo' && <Check className="w-3 h-3 text-black" />}
@@ -265,12 +289,16 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </button>
 
               <button
-                onClick={() => setPaymentMethod('ref')}
+                onClick={() => ativoRef && setPaymentMethod('ref')}
+                disabled={!ativoRef}
+                aria-disabled={!ativoRef}
+                data-testid="metodo-ref"
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'ref'
                     ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
-                    : "border-border bg-secondary/30 hover:border-border/80"
+                    : "border-border bg-secondary/30 hover:border-border/80",
+                  !ativoRef && "opacity-60 cursor-not-allowed"
                 )}
               >
                 <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center shrink-0 p-1 border border-border/50">
@@ -278,7 +306,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Pagamento por Referência</h3>
-                  <p className="text-xs text-muted-foreground">Paga no ATM ou Homebanking</p>
+                  {ativoRef ? <p className="text-xs text-muted-foreground">Paga no ATM ou Homebanking</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-ref">{config?.ref.rotulo ?? 'Brevemente'}</p>}
                 </div>
                 <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'ref' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
                   {paymentMethod === 'ref' && <Check className="w-3 h-3 text-black" />}
@@ -286,12 +314,16 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </button>
 
               <button
-                onClick={() => setPaymentMethod('manual')}
+                onClick={() => ativoManual && setPaymentMethod('manual')}
+                disabled={!ativoManual}
+                aria-disabled={!ativoManual}
+                data-testid="metodo-manual"
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'manual'
                     ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
-                    : "border-border bg-secondary/30 hover:border-border/80"
+                    : "border-border bg-secondary/30 hover:border-border/80",
+                  !ativoManual && "opacity-60 cursor-not-allowed"
                 )}
               >
                 <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'manual' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
@@ -299,7 +331,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Transferência Manual</h3>
-                  <p className="text-xs text-muted-foreground">Envio de comprovativo (mais lento)</p>
+                  <p className="text-xs text-muted-foreground" data-testid="manual-descricao">{ativoManual ? 'Envio de comprovativo (mais lento)' : configErro ? 'Não foi possível carregar os dados. Tenta mais tarde.' : config ? 'Indisponível de momento' : 'A carregar…'}</p>
                 </div>
                 <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'manual' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
                   {paymentMethod === 'manual' && <Check className="w-3 h-3 text-black" />}
@@ -454,13 +486,13 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <div className="bg-secondary/60 border border-border rounded-xl p-4 space-y-3 mb-5">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Beneficiário</p>
-                <p className="text-sm font-bold">Xclusive Platform, Lda.</p>
+                <p className="text-sm font-bold" data-testid="transfer-titular">{config?.manual.titular}</p>
               </div>
               <div className="h-px bg-border" />
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">IBAN</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">NIB</p>
                 <div className="flex items-center justify-between gap-2">
-                  <code className="text-sm font-bold font-mono tracking-wider">{XCLUSIVE_IBAN}</code>
+                  <code className="text-sm font-bold font-mono tracking-wider" data-testid="transfer-nib">{config?.manual.nibFormatado}</code>
                   <button
                     onClick={copyIban}
                     className="shrink-0 p-1.5 rounded-lg bg-background border border-border hover:bg-secondary transition-colors"
@@ -468,11 +500,6 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                     {copiedIban ? <Check className="w-4 h-4 text-green-700 dark:text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
                   </button>
                 </div>
-              </div>
-              <div className="h-px bg-border" />
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Referência (obrigatória)</p>
-                <p className="text-sm font-bold font-mono text-primary">{reference}</p>
               </div>
               <div className="h-px bg-border" />
               <div>
@@ -574,8 +601,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <p className="text-muted-foreground mb-4">
               O teu pedido de carregamento de{' '}
               <span className="font-bold text-foreground">{selectedAmount.toLocaleString('pt-PT')} Kz</span>{' '}
-              foi registado com a referência{' '}
-              <span className="font-bold font-mono text-primary">{reference}</span>.
+              foi registado.
             </p>
             <div className="w-full bg-secondary/60 border border-border rounded-xl p-3 mb-6 text-left">
               <p className="text-xs text-muted-foreground leading-relaxed">
