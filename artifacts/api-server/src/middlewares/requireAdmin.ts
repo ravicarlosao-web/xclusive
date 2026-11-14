@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, usersTable, revokedTokensTable } from "@workspace/db";
 import { verifyToken, emitidoAntesDaAlteracao } from "../lib/auth.js";
 
@@ -12,6 +12,8 @@ export interface AdminRequest extends Request {
 }
 
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
+/** Inatividade máxima de uma sessão de admin: sem pedidos durante este tempo, o token deixa de valer (o painel volta ao login). */
+export const INATIVIDADE_ADMIN_MIN = 10;
 
 /**
  * Middleware que protege todas as rotas /api/admin/*.
@@ -19,7 +21,9 @@ const ADMIN_ROLES = new Set(["admin", "superadmin"]);
  *  2. a role do token é de administração;
  *  3. a cada pedido confirma na BD que o utilizador existe, está ativo, não está encerrado nem banido e que a role ATUAL é
  *     admin ou superadmin (um admin despromovido, suspenso ou banido perde o acesso ao pedido seguinte);
- *  4. o token (jti) não está em revoked_tokens (o mesmo mecanismo de sessões revogadas dos utilizadores).
+ *  4. o token (jti) não está em revoked_tokens (o mesmo mecanismo de sessões revogadas dos utilizadores);
+ *  5. os tokens emitidos pelo login de admin (marca `adm`) têm uma linha em admin_sessoes e expiram por inatividade (INATIVIDADE_ADMIN_MIN);
+ *     a mesma instrução confirma e renova o último uso (no máximo uma escrita por 30 s). Tokens sem a marca não são afetados.
  * A role usada pelas rotas (adminRole) é a da BD, não a do token. Falha de BD = negar (fail-closed, 503).
  */
 export async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction): Promise<void> {
@@ -31,7 +35,7 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
     return;
   }
 
-  let payload: { userId: number; username: string; role?: string; type?: string; jti?: string };
+  let payload: { userId: number; username: string; role?: string; type?: string; jti?: string; adm?: boolean };
   try {
     payload = verifyToken(authHeader.slice(7)) as typeof payload;
   } catch {
@@ -60,6 +64,14 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
     if (revogados[0]) {
       res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
       return;
+    }
+    if (payload.adm === true) {
+      const viva = await db.execute(sql`update admin_sessoes set ultimo_uso = case when ultimo_uso <= now() - interval '30 seconds' then now() else ultimo_uso end
+        where jti = ${payload.jti ?? ""} and user_id = ${payload.userId} and expira_em > now() and ultimo_uso > now() - make_interval(mins => ${INATIVIDADE_ADMIN_MIN}) returning 1`);
+      if (viva.rows.length === 0) {
+        res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
+        return;
+      }
     }
     const conta = contas[0];
     // Palavra-passe alterada depois de este token ter sido emitido.
