@@ -19,3 +19,22 @@ export function problemaDaPasswordAdmin(p: string, { email, username }: { email:
   if (/^(.)\1+$/.test(p) || "abcdefghijklmnopqrstuvwxyz0123456789".includes(l) || "9876543210zyxwvutsrqponmlkjihgfedcba".includes(l)) return "A palavra-passe é demasiado óbvia (sequência).";
   return null;
 }
+
+/**
+ * Palavra-passe inicial gerada pelo sistema (superadmin a criar/redefinir um admin): 20 caracteres aleatórios (crypto.randomInt), sem caracteres ambíguos
+ * (l, 1, I, O, 0), com pelo menos uma minúscula, uma maiúscula, um dígito e um símbolo, e que passa SEMPRE as regras de problemaDaPasswordAdmin.
+ * Só existe em memória: é devolvida UMA vez ao superadmin e nunca é guardada, registada nem recuperável (na BD fica só o hash).
+ */
+import { randomInt } from "node:crypto";
+const MINUSCULAS = "abcdefghijkmnopqrstuvwxyz", MAIUSCULAS = "ABCDEFGHJKLMNPQRSTUVWXYZ", DIGITOS = "23456789", SIMBOLOS = "-_!#%+=";
+export function gerarPasswordAdmin(ctx: { email: string; username: string }): string {
+  const todos = MINUSCULAS + MAIUSCULAS + DIGITOS + SIMBOLOS;
+  for (let tentativa = 0; tentativa < 50; tentativa++) {
+    const c = [MINUSCULAS, MAIUSCULAS, DIGITOS, SIMBOLOS].map((g) => g[randomInt(g.length)]);
+    while (c.length < 20) c.push(todos[randomInt(todos.length)]);
+    for (let i = c.length - 1; i > 0; i--) { const j = randomInt(i + 1); [c[i], c[j]] = [c[j], c[i]]; }   // Fisher–Yates com crypto.randomInt
+    const p = c.join("");
+    if (!problemaDaPasswordAdmin(p, ctx)) return p;
+  }
+  throw new Error("Não foi possível gerar uma palavra-passe válida");
+}

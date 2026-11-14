@@ -12,7 +12,7 @@
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
 import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH, hashPassword } from "../lib/auth.js";
-import { problemaDaPasswordAdmin } from "../lib/regrasPassword.js";
+import { problemaDaPasswordAdmin, gerarPasswordAdmin } from "../lib/regrasPassword.js";
 import { chaveConta, chaveIp, segundosBloqueado, registarFalha, limparFalhasConta } from "../lib/adminLogin.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
@@ -298,6 +298,101 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
 });
 
 router.use("/admin", rateLimit, requireAdmin);
+
+// ── Administradores (SÓ superadmin): listar, criar e redefinir a palavra-passe inicial de um admin ──────────────────────────────────────────────
+// Tudo passa por requireAdmin (sessão de admin, inatividade, troca obrigatória) e o role vem da BD (req.adminRole). O role criado é SEMPRE «admin»; só se atua sobre
+// contas «admin» (nunca superadmin nem a própria). A palavra-passe inicial é escrita pelo superadmin ou gerada pelo sistema; a gerada vai UMA vez na resposta (no-store)
+// e nunca é guardada, registada nem recuperável. Nem a palavra-passe nem o hash entram em respostas (exceto essa) nem no audit_log.
+const soSuperadmin = (req: AdminRequest, res: any, acao: string): boolean => {
+  if (req.adminRole === "superadmin") return true;
+  res.status(403).json({ error: `Apenas o superadmin pode ${acao}.` });
+  return false;
+};
+
+/** Resolve a palavra-passe inicial do pedido: «escrever» (valida as regras) ou «gerar». Devolve a mensagem de erro (400) ou a palavra-passe e se foi gerada. */
+function passwordInicialDoPedido(body: any, ctx: { email: string; username: string }): { erro: string; codigo: string } | { password: string; gerada: boolean } {
+  const modo = body?.modo;
+  if (modo === "gerar") return { password: gerarPasswordAdmin(ctx), gerada: true };
+  if (modo === "escrever") {
+    const p = body?.password;
+    if (typeof p !== "string" || p === "") return { erro: "Indica a palavra-passe inicial.", codigo: "password_em_falta" };
+    const problema = problemaDaPasswordAdmin(p, ctx);
+    return problema ? { erro: problema, codigo: "password_fraca" } : { password: p, gerada: false };
+  }
+  return { erro: "Escolhe como definir a palavra-passe inicial: «escrever» ou «gerar».", codigo: "modo_invalido" };
+}
+
+router.get("/admin/administradores", async (req: AdminRequest, res): Promise<void> => {
+  if (!soSuperadmin(req, res, "ver a lista de administradores")) return;
+  try {
+    const linhas = await db.select({
+      id: usersTable.id, username: usersTable.username, email: usersTable.email, role: usersTable.role, ativo: usersTable.ativo,
+      criadoEm: usersTable.criadoEm, trocaPasswordPendente: usersTable.trocaPasswordObrigatoria,
+    }).from(usersTable).where(inArray(usersTable.role, ["admin", "superadmin"])).orderBy(usersTable.id);
+    await logAudit(req, "administradores_lista_vista", "platform", null, { total: linhas.length });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ data: linhas });
+  } catch (err) {
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao listar administradores");
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
+
+router.post("/admin/administradores", async (req: AdminRequest, res): Promise<void> => {
+  if (!soSuperadmin(req, res, "criar administradores")) return;
+  const { email, username, role } = req.body ?? {};
+  if (role !== undefined && role !== "admin") { res.status(400).json({ error: "Só é possível criar administradores (role «admin»): a criação de superadmin não existe por aqui.", codigo: "role_invalido" }); return; }
+  const emailN = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (emailN.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailN)) { res.status(400).json({ error: "Email inválido.", codigo: "email_invalido" }); return; }
+  const usernameN = typeof username === "string" ? username.trim().toLowerCase() : "";
+  if (usernameN.length < 3 || usernameN.length > 50 || !/^[a-z0-9_]+$/.test(usernameN)) { res.status(400).json({ error: "Nome de utilizador inválido (3 a 50 caracteres: letras, números e _).", codigo: "username_invalido" }); return; }
+  try {
+    const inicial = passwordInicialDoPedido(req.body, { email: emailN, username: usernameN });
+    if ("erro" in inicial) { res.status(400).json({ error: inicial.erro, codigo: inicial.codigo }); return; }
+    const [dup] = (await db.execute(sql`select (select count(*) from users where lower(email) = ${emailN})::int as por_email, (select count(*) from users where lower(username) = ${usernameN})::int as por_username`)).rows as { por_email: number; por_username: number }[];
+    if (dup.por_email > 0) { res.status(409).json({ error: "Já existe uma conta com este email.", codigo: "email_existente" }); return; }
+    if (dup.por_username > 0) { res.status(409).json({ error: "Já existe uma conta com este nome de utilizador.", codigo: "username_existente" }); return; }
+    const hash = await hashPassword(inicial.password);
+    const novo = await db.transaction(async (tx) => {
+      // role fixo «admin»; nasce com a troca obrigatória, sem email verificado e fora do fluxo de registo (sem aceites legais nem Google), como o criar-admin.mjs
+      const [u] = await tx.insert(usersTable).values({ username: usernameN, email: emailN, passwordHash: hash, nomeExibicao: usernameN, role: "admin", trocaPasswordObrigatoria: true }).returning({ id: usersTable.id });
+      await auditNaTransacao(tx, req, "admin_criado_painel", "user", u.id, { role: "admin", modo: inicial.gerada ? "gerada" : "escrita", trocaObrigatoria: true });
+      return u;
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.status(201).json({ id: novo.id, username: usernameN, email: emailN, role: "admin", trocaPasswordObrigatoria: true, ...(inicial.gerada ? { passwordGerada: inicial.password } : {}) });
+  } catch (err: any) {
+    if (err?.code === "23505" || err?.cause?.code === "23505") { res.status(409).json({ error: "O email ou o nome de utilizador foram ocupados entretanto.", codigo: "duplicado" }); return; }
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao criar administrador");
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
+
+router.post("/admin/administradores/:id/redefinir-password", async (req: AdminRequest, res): Promise<void> => {
+  if (!soSuperadmin(req, res, "redefinir a palavra-passe de um administrador")) return;
+  const alvoId = idDe(req.params.id);
+  if (!alvoId) { res.status(400).json({ error: "Identificador inválido." }); return; }
+  try {
+    const [alvo] = await db.select({ id: usersTable.id, role: usersTable.role, email: usersTable.email, username: usersTable.username }).from(usersTable).where(eq(usersTable.id, alvoId)).limit(1);
+    if (!alvo || (alvo.role !== "admin" && alvo.role !== "superadmin")) { res.status(404).json({ error: "Administrador não encontrado." }); return; }
+    if (alvo.id === req.adminId) { res.status(403).json({ error: "A tua própria palavra-passe altera-se em «Alterar palavra-passe».", codigo: "propria_conta" }); return; }
+    if (alvo.role !== "admin") { res.status(403).json({ error: "Não se redefine a palavra-passe de um superadmin.", codigo: "alvo_superadmin" }); return; }
+    const inicial = passwordInicialDoPedido(req.body, { email: alvo.email.trim().toLowerCase(), username: alvo.username });
+    if ("erro" in inicial) { res.status(400).json({ error: inicial.erro, codigo: inicial.codigo }); return; }
+    const hash = await hashPassword(inicial.password);
+    await db.transaction(async (tx) => {
+      // password_alterada_em invalida os tokens e os refresh tokens do admin; as sessões de admin apagam-se; a troca volta a ser obrigatória
+      await tx.update(usersTable).set({ passwordHash: hash, passwordAlteradaEm: new Date(), trocaPasswordObrigatoria: true }).where(and(eq(usersTable.id, alvo.id), eq(usersTable.role, "admin")));
+      await tx.execute(sql`delete from admin_sessoes where user_id = ${alvo.id}`);
+      await auditNaTransacao(tx, req, "admin_senha_redefinida", "user", alvo.id, { modo: inicial.gerada ? "gerada" : "escrita", trocaObrigatoria: true, sessoesInvalidadas: true });
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, id: alvo.id, trocaPasswordObrigatoria: true, ...(inicial.gerada ? { passwordGerada: inicial.password } : {}) });
+  } catch (err) {
+    (req as any).log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao redefinir a palavra-passe de um administrador");
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
 
 // ── Troca da própria palavra-passe (admin) ───────────────────────────────────
 // Exige a atual (falhas contam no bloqueio do login de admin: mesma conta e mesmo IP, sem canal paralelo), recusa nova igual à atual, aplica as regras de

@@ -24,6 +24,7 @@ import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
 import AuditLog from '@/pages/audit-log/index';
 import TrocarPassword from '@/pages/conta/trocar-password';
+import Administradores from '@/pages/administradores/index';
 import TopUps from '@/pages/topups/index';
 
 const queryClient = new QueryClient();
@@ -79,6 +80,7 @@ function Router() {
             <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
             <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
             <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
+            <Route path="/administradores"><ProtectedRoute component={Administradores} /></Route>
             <Route path="/trocar-password"><ProtectedRoute component={TrocarPassword} /></Route>
             <Route>
               <div className="flex h-full items-center justify-center text-muted-foreground">
