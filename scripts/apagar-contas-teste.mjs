@@ -14,6 +14,7 @@
 //    ou compras/subscrições/gorjetas com contas FORA da lista (apagá-los alteraria o histórico de outra conta); referências por tratar a contas administrativas.
 //  - Bloqueios com opção: --incluir-financeiro (a conta tem movimentos financeiros ou saldo: compras, subscrições, carregamentos, levantamentos, gorjetas) e
 //    --incluir-auditoria-propria (a conta é autora de linhas do audit_log, que apontam para ela e impedem o apagamento).
+//  - Também apaga os likes (de outras contas) que apontam para o conteúdo das contas apagadas (a tabela não tem chave estrangeira; a aplicação também os apaga com o post).
 //  - Ficheiros (Bunny): este script NÃO os apaga nem usa chaves; lista as chaves relativas (sem URL, sem segredos) para tu os apagares: --lista-ficheiros <caminho> grava-as num ficheiro.
 //  - Liga à base de dados pela configuração que a aplicação já usa (@workspace/db: DATABASE_URL / .env); não imprime a ligação nem segredos.
 import fs from "node:fs";
@@ -113,7 +114,7 @@ try {
     for (const r of (await q(fora(a, b, tabela), [ids])).rows) { const dentro = ids.includes(r.a) ? r.a : r.b; dur(dentro, `tem ${r.n} ${rotulo} com uma conta FORA da lista (${ids.includes(r.a) ? "outra parte" : "a outra parte"} não está na lista)`); }
   }
   for (const r of (await q("select lt.user_id as a, ls.criador_id as b, count(*)::int as n from live_tickets lt join live_streams ls on ls.id = lt.live_id where (lt.user_id = any($1) and ls.criador_id <> all($1)) or (ls.criador_id = any($1) and lt.user_id <> all($1)) group by 1, 2", [ids])).rows) dur(ids.includes(r.a) ? r.a : r.b, `tem ${r.n} bilhetes de live com uma conta FORA da lista`);
-  for (const r of (await q("select lt.remetente_id as a, ls.criador_id as b, count(*)::int as n from live_tips lt join live_streams ls on ls.id = lt.live_id where (lt.remetente_id = any($1) and ls.criador_id <> all($1)) or (ls.criador_id = any($1) and lt.remetente_id <> all($1)) group by 1, 2", [ids])).rows) dur(ids.includes(r.a) ? r.a : r.b, `tem ${r.n} gorjetas de live com uma conta FORA da lista`);
+  for (const r of (await q("select lt.remetente_id as a, ls.criador_id as b, count(*)::int as n from live_tips lt join live_streams ls on ls.id = lt.stream_id where (lt.remetente_id = any($1) and ls.criador_id <> all($1)) or (ls.criador_id = any($1) and lt.remetente_id <> all($1)) group by 1, 2", [ids])).rows) dur(ids.includes(r.a) ? r.a : r.b, `tem ${r.n} gorjetas de live com uma conta FORA da lista`);
 
   // bloqueios com opção
   const fin = (await q(`select u.id,
@@ -157,6 +158,9 @@ try {
   for (const c of contas) {
     await q("savepoint conta");
     try {
+      // likes são polimórficos (alvo_tipo/alvo_id, sem chave estrangeira): a aplicação apaga os likes de um post com o post; aqui apagam-se os que apontam para conteúdo desta conta
+      await q("delete from likes where alvo_tipo = 'post' and alvo_id in (select id from posts where autor_id = $1)", [c.id]);
+      await q("delete from likes where alvo_tipo in ('comentario', 'comment') and alvo_id in (select id from comments where autor_id = $1 or post_id in (select id from posts where autor_id = $1))", [c.id]);
       await q("delete from account_closures where user_id = $1", [c.id]);
       await q("delete from creator_terms_acceptances where user_id = $1", [c.id]);
       await q("delete from identifier_blocks where user_id = $1", [c.id]);
