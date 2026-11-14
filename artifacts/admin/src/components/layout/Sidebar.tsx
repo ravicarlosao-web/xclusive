@@ -52,12 +52,12 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
       <div className={cn("flex items-center h-16 border-b border-border px-4", collapsed ? "justify-center" : "justify-between")}>
         {!collapsed ? (
           <Link href="/dashboard" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-            <img src="/logo.png" alt="Xclusive" className="h-6 w-auto object-contain drop-shadow" />
+            <img src={import.meta.env.BASE_URL + 'logo.png'} alt="Xclusive" className="h-6 w-auto object-contain drop-shadow" />
             <span className="text-[10px] text-primary ml-1 px-1.5 py-0.5 rounded bg-primary/10 font-mono font-extrabold border border-primary/20">ADMIN</span>
           </Link>
         ) : (
           <div className="w-6 h-6 overflow-hidden flex items-center justify-start">
-            <img src="/logo.png" alt="Xclusive" className="h-6 max-w-none object-contain drop-shadow" />
+            <img src={import.meta.env.BASE_URL + 'logo.png'} alt="Xclusive" className="h-6 max-w-none object-contain drop-shadow" />
           </div>
         )}
       </div>

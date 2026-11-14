@@ -14,6 +14,8 @@ export interface AdminRequest extends Request {
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
 /** Inatividade máxima de uma sessão de admin: sem pedidos durante este tempo, o token deixa de valer (o painel volta ao login). */
 export const INATIVIDADE_ADMIN_MIN = 10;
+/** Código do 403 enquanto a troca de palavra-passe é obrigatória (o painel leva o admin ao formulário de troca). */
+export const CODIGO_TROCA_OBRIGATORIA = "troca_password_obrigatoria";
 
 /**
  * Middleware que protege todas as rotas /api/admin/*.
@@ -58,7 +60,7 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
       payload.jti
         ? db.select({ jti: revokedTokensTable.jti }).from(revokedTokensTable).where(eq(revokedTokensTable.jti, payload.jti)).limit(1)
         : Promise.resolve([] as { jti: string }[]),
-      db.select({ ativo: usersTable.ativo, role: usersTable.role, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm, passwordAlteradaEm: usersTable.passwordAlteradaEm })
+      db.select({ ativo: usersTable.ativo, role: usersTable.role, encerradaEm: usersTable.encerradaEm, banidaEm: usersTable.banidaEm, passwordAlteradaEm: usersTable.passwordAlteradaEm, trocaObrigatoria: usersTable.trocaPasswordObrigatoria })
         .from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1),
     ]);
     if (revogados[0]) {
@@ -89,6 +91,12 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
     }
     if (!ADMIN_ROLES.has(conta.role)) {
       res.status(403).json({ error: "Acesso negado — conta sem permissões de administrador" });
+      return;
+    }
+    // Troca de palavra-passe obrigatória: enquanto a marca estiver ativa, a sessão só serve para trocar a palavra-passe (POST /admin/auth/password).
+    // O logout do admin é local (o painel apaga a sessão) e o /auth/logout não passa por aqui; o login não passa por este middleware.
+    if (conta.trocaObrigatoria && !(req.method === "POST" && req.originalUrl.split("?")[0].replace(/\/+$/, "").endsWith("/admin/auth/password"))) {
+      res.status(403).json({ error: "Troca de palavra-passe obrigatória.", codigo: CODIGO_TROCA_OBRIGATORIA });
       return;
     }
     req.adminRole = conta.role;

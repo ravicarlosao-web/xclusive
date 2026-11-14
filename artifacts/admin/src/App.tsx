@@ -23,6 +23,7 @@ import MenorDetail from '@/pages/menores/[id]';
 import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
 import AuditLog from '@/pages/audit-log/index';
+import TrocarPassword from '@/pages/conta/trocar-password';
 import TopUps from '@/pages/topups/index';
 
 const queryClient = new QueryClient();
@@ -50,6 +51,10 @@ function RootRedirect() {
 }
 
 function Router() {
+  const { user, isAuthenticated } = useAdminAuth();
+  const [localizacao] = useLocation();
+  // Troca de palavra-passe obrigatória: nada mais é mostrado (nem menu nem páginas) até a troca estar concluída.
+  if (isAuthenticated && user?.trocaPasswordObrigatoria && localizacao !== '/login') return <TrocarPassword obrigatoria />;
   return (
     <Switch>
       <Route path="/login" component={Login} />
@@ -73,6 +78,7 @@ function Router() {
             <Route path="/broadcast"><ProtectedRoute component={Broadcast} /></Route>
             <Route path="/settings"><ProtectedRoute component={Settings} /></Route>
             <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
+            <Route path="/trocar-password"><ProtectedRoute component={TrocarPassword} /></Route>
             <Route>
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 Page not found

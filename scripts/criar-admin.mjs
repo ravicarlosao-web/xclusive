@@ -12,6 +12,7 @@
 //  - Recusa, sem alterar nada, se o email (qualquer conta, sem distinguir maiúsculas) ou o utilizador já existirem.
 //  - Conta criada: role «admin», ativa, nome de exibição = utilizador, SEM linhas de registo/consentimentos nem Google (não passa pelo registo de utilizadores).
 //    O email NÃO é marcado como verificado: o login de admin (POST /admin/auth/login) só exige role admin/superadmin, palavra-passe certa e conta ativa.
+//  - A conta nasce com a TROCA DE PALAVRA-PASSE OBRIGATÓRIA (troca_password_obrigatoria = true): no primeiro acesso o painel só deixa trocar a palavra-passe.
 //  - Regista a criação em audit_log (ação «admin_criado_script»; o autor é a própria conta nova, porque admin_id é obrigatório; sem a palavra-passe nem o hash).
 import readline from "node:readline";
 import bcrypt from "bcryptjs";
@@ -104,7 +105,7 @@ if (por_username > 0) { console.error("❌ Recusado: já existe uma conta com es
 console.log(confirmar ? "Criar administrador:" : "SIMULAÇÃO (nada será escrito). Faria o seguinte:");
 console.log(`  email        ${email}`);
 console.log(`  utilizador   ${username}`);
-console.log("  role         admin");
+console.log("  role         admin (troca de palavra-passe obrigatória no primeiro acesso)");
 console.log(`  base de dados ${destino}`);
 if (!confirmar) {
   console.log("  (o email e o utilizador estão livres; a palavra-passe seria pedida no terminal, sem eco, 2 vezes, mínimo 12 caracteres)");
@@ -126,7 +127,7 @@ const cliente = await pool.connect();
 try {
   await cliente.query("begin");
   const r = await cliente.query(
-    "insert into users (username, email, password_hash, nome_exibicao, role) values ($1, $2, $3, $4, 'admin') returning id",
+    "insert into users (username, email, password_hash, nome_exibicao, role, troca_password_obrigatoria) values ($1, $2, $3, $4, 'admin', true) returning id",
     [username, email, hash, username],
   );
   const id = r.rows[0].id;
@@ -135,7 +136,7 @@ try {
     [id, ACAO_AUDITORIA, JSON.stringify({ origem: "scripts/criar-admin.mjs", role: "admin" })],
   );
   await cliente.query("commit");
-  console.log(`✅ Administrador criado: id ${id}, ${email} (${username}), role admin.`);
+  console.log(`✅ Administrador criado: id ${id}, ${email} (${username}), role admin, troca de palavra-passe obrigatória.`);
 } catch (e) {
   try { await cliente.query("rollback"); } catch { /* ignora */ }
   if (e?.code === "23505") console.error("❌ Recusado: o email ou o utilizador foram ocupados entretanto. Nada foi alterado.");

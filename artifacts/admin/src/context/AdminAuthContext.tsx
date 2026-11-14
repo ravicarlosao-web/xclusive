@@ -6,6 +6,8 @@ interface AdminUser {
   name: string;
   email: string;
   avatar?: string;
+  /** true: a palavra-passe tem de ser trocada; o painel só mostra o formulário de troca. */
+  trocaPasswordObrigatoria?: boolean;
 }
 
 interface AdminAuthContextType {
@@ -14,6 +16,8 @@ interface AdminAuthContextType {
   user: AdminUser | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Depois de trocar a palavra-passe: guarda o token novo (a sessão antiga deixou de valer) e limpa a marca de troca obrigatória. */
+  aposTrocaPassword: (token: string) => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
@@ -53,6 +57,14 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(true);
   };
 
+  const aposTrocaPassword = (token: string) => {
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_login_time', Date.now().toString());
+    const atualizado = user ? { ...user, trocaPasswordObrigatoria: false } : null;
+    if (atualizado) localStorage.setItem('admin_user', JSON.stringify(atualizado));
+    setUser(atualizado);
+  };
+
   const logout = () => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
@@ -63,7 +75,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, isInitialized, user, login, logout }}>
+    <AdminAuthContext.Provider value={{ isAuthenticated, isInitialized, user, login, logout, aposTrocaPassword }}>
       {children}
     </AdminAuthContext.Provider>
   );

@@ -39,9 +39,10 @@ export function signRefreshToken(userId: number, username: string, role?: string
 export const ADMIN_TOKEN_TTL_SEGUNDOS = 15 * 60;
 
 /** Token de admin: igual ao de acesso, mais a marca `adm` (o jti é a chave da linha de admin_sessoes, para a expiração por inatividade). */
-export function signAdminToken(payload: Omit<JwtPayload, "jti" | "type">): { token: string; jti: string } {
+export function signAdminToken(payload: Omit<JwtPayload, "jti" | "type" | "iat" | "exp">, iat?: number): { token: string; jti: string } {
   const jti = randomUUID();
-  const token = jwt.sign({ ...payload, type: "access", jti, adm: true }, SECRET, { expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, algorithm: "HS256" });
+  // `iat` explícito só na troca de palavra-passe: o token novo tem de ser posterior ao segundo da alteração (senão a própria regra de «palavra-passe alterada» o recusava).
+  const token = jwt.sign({ ...payload, type: "access", jti, adm: true, ...(iat !== undefined ? { iat } : {}) }, SECRET, { expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, algorithm: "HS256" });
   return { token, jti };
 }
 
