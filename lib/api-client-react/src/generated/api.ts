@@ -92,6 +92,7 @@ import type {
   SubscriptionPlanInput,
   SubscriptionPlanUpdate,
   TipKeyConflict,
+  TopupConfig,
   UnreadCount,
   UserProfile,
   UserSummary,
@@ -1074,6 +1075,84 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetTopupConfigUrl = () => {
+
+
+
+
+  return `/api/wallet/topup/config`
+}
+
+/**
+ * O que o ecrã de carregamento mostra. Os dados bancários vêm da base de dados (platform_settings), nunca do código; sem NIB e titular válidos o carregamento manual não está disponível. Os métodos automáticos (Multicaixa Express e Referência) ficam «Brevemente» até serem ligados na base de dados; o servidor recusa-os (403, código metodo_indisponivel) por pedido direto. Sem cache.
+ * @summary Dados do carregamento manual e disponibilidade dos métodos
+ */
+export const getTopupConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<TopupConfig> => {
+
+  return customFetch<TopupConfig>(getGetTopupConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTopupConfigQueryKey = () => {
+    return [
+    `/api/wallet/topup/config`
+    ] as const;
+    }
+
+
+export const getGetTopupConfigQueryOptions = <TData = Awaited<ReturnType<typeof getTopupConfig>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTopupConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTopupConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTopupConfig>>> = ({ signal }) => getTopupConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTopupConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTopupConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getTopupConfig>>>
+export type GetTopupConfigQueryError = ErrorType<void>
+
+
+/**
+ * @summary Dados do carregamento manual e disponibilidade dos métodos
+ */
+
+export function useGetTopupConfig<TData = Awaited<ReturnType<typeof getTopupConfig>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTopupConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTopupConfigQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

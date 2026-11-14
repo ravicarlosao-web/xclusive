@@ -301,6 +301,28 @@ export const GetMeResponse = zod.object({
 
 
 /**
+ * O que o ecrã de carregamento mostra. Os dados bancários vêm da base de dados (platform_settings), nunca do código; sem NIB e titular válidos o carregamento manual não está disponível. Os métodos automáticos (Multicaixa Express e Referência) ficam «Brevemente» até serem ligados na base de dados; o servidor recusa-os (403, código metodo_indisponivel) por pedido direto. Sem cache.
+ * @summary Dados do carregamento manual e disponibilidade dos métodos
+ */
+export const GetTopupConfigResponse = zod.object({
+  "manual": zod.object({
+  "disponivel": zod.boolean(),
+  "nib": zod.string().optional().describe('21 dígitos, sem separadores (só quando disponível)'),
+  "nibFormatado": zod.string().optional().describe('Blocos de 4 dígitos e o último'),
+  "titular": zod.string().optional()
+}),
+  "gpo": zod.object({
+  "ativo": zod.boolean(),
+  "rotulo": zod.string().nullable().describe('«Brevemente» enquanto o método não está ativo')
+}),
+  "ref": zod.object({
+  "ativo": zod.boolean(),
+  "rotulo": zod.string().nullable().describe('«Brevemente» enquanto o método não está ativo')
+})
+})
+
+
+/**
  * Resposta SEMPRE igual (202) e imediata, exista ou não a conta: a existência da conta não se revela, nem pelo tempo. Se existir, é enviado um email com uma ligação de uso único.
  * @summary Pedir a recuperação da palavra-passe
  */
