@@ -11,7 +11,8 @@
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
-import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH } from "../lib/auth.js";
+import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH, hashPassword } from "../lib/auth.js";
+import { problemaDaPasswordAdmin } from "../lib/regrasPassword.js";
 import { chaveConta, chaveIp, segundosBloqueado, registarFalha, limparFalhasConta } from "../lib/adminLogin.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
@@ -285,6 +286,7 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
         email: user.email,
         role: user.role,
         avatarUrl: urlMedia(user.avatarUrl ?? null),
+        trocaPasswordObrigatoria: user.trocaPasswordObrigatoria,   // true: a sessão só serve para trocar a palavra-passe (o painel mostra só o formulário)
       },
       expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, // segundos: duração absoluta do token de admin (15 min)
     });
@@ -296,6 +298,66 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
 });
 
 router.use("/admin", rateLimit, requireAdmin);
+
+// ── Troca da própria palavra-passe (admin) ───────────────────────────────────
+// Exige a atual (falhas contam no bloqueio do login de admin: mesma conta e mesmo IP, sem canal paralelo), recusa nova igual à atual, aplica as regras de
+// criar-admin.mjs, guarda só o hash bcrypt (custo 12), limpa a marca de troca obrigatória, invalida TODAS as sessões anteriores (password_alterada_em +
+// admin_sessoes) e devolve um token novo para a sessão atual continuar. O 400 (nunca 401) evita que o painel trate a palavra-passe errada como sessão expirada.
+router.post("/admin/auth/password", async (req: AdminRequest, res): Promise<void> => {
+  const { atual, nova, confirmacao } = req.body ?? {};
+  if ([atual, nova, confirmacao].some((x) => typeof x !== "string" || x === "")) {
+    res.status(400).json({ error: "Palavra-passe atual, nova e confirmação são obrigatórias." });
+    return;
+  }
+  const ip = chaveIp(req.ip), log = (req as any).log;
+  const MSG_ATUAL = { error: "A palavra-passe atual está incorreta.", codigo: "password_atual_incorreta" };
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.adminId!)).limit(1);
+    if (!user) { res.status(401).json({ error: "Sessão terminada. Faz login novamente." }); return; }
+    const chave = chaveConta(user.email.trim().toLowerCase());
+    const bloq = await segundosBloqueado(chave, ip);
+    if (bloq.ip > 0) {
+      log?.warn({ motivo: "ip_bloqueado" }, "troca de palavra-passe de admin recusada");
+      res.setHeader("Retry-After", String(bloq.ip));
+      res.status(429).json({ error: "Demasiadas tentativas. Tente novamente mais tarde." });
+      return;
+    }
+    if (bloq.conta > 0) {   // conta bloqueada: igual a «atual errada», sem contar nem prolongar
+      await bcrypt.compare(atual, DUMMY_HASH);
+      log?.warn({ motivo: "conta_bloqueada" }, "troca de palavra-passe de admin recusada");
+      res.status(400).json(MSG_ATUAL);
+      return;
+    }
+    if (!(await bcrypt.compare(atual, user.passwordHash))) {
+      const rc = await registarFalha("conta", chave), ri = await registarFalha("ip", ip);
+      await auditLogin(user.id, "admin_senha_atual_errada", req.ip, { falhasSeguidas: rc.falhas });
+      if (rc.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "conta", minutos: rc.minutos, nivel: rc.nivel, origem: "troca_password" });
+      if (ri.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "ip", minutos: ri.minutos, nivel: ri.nivel, origem: "troca_password" });
+      log?.warn({ motivo: "atual_errada" }, "troca de palavra-passe de admin recusada");
+      res.status(400).json(MSG_ATUAL);
+      return;
+    }
+    if (nova !== confirmacao) { res.status(400).json({ error: "A confirmação não coincide com a nova palavra-passe.", codigo: "confirmacao_diferente" }); return; }
+    if (nova === atual) { res.status(400).json({ error: "A nova palavra-passe tem de ser diferente da atual.", codigo: "igual_a_atual" }); return; }
+    const problema = problemaDaPasswordAdmin(nova, { email: user.email.trim().toLowerCase(), username: user.username });
+    if (problema) { res.status(400).json({ error: problema, codigo: "password_fraca" }); return; }
+
+    const hash = await hashPassword(nova);
+    const alteradaEm = new Date();
+    const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role }, Math.floor(alteradaEm.getTime() / 1000) + 1);
+    await db.transaction(async (tx) => {
+      await tx.update(usersTable).set({ passwordHash: hash, passwordAlteradaEm: alteradaEm, trocaPasswordObrigatoria: false }).where(eq(usersTable.id, user.id));
+      await tx.execute(sql`delete from admin_sessoes where user_id = ${user.id}`);
+      await tx.execute(sql`insert into admin_sessoes (jti, user_id, expira_em) values (${jti}, ${user.id}, now() + make_interval(secs => ${ADMIN_TOKEN_TTL_SEGUNDOS}))`);
+      await tx.insert(auditLogTable).values({ adminId: user.id, action: "admin_senha_alterada", targetType: "user", targetId: user.id, details: { outrasSessoesInvalidadas: true, estavaObrigatoria: user.trocaPasswordObrigatoria }, ipAddress: req.ip ?? null });
+    });
+    await limparFalhasConta(chave);
+    res.json({ ok: true, token, expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS });
+  } catch (err) {
+    log?.error({ err: err instanceof Error ? err.name : "erro" }, "troca de palavra-passe de admin: erro interno");
+    if (!res.headersSent) res.status(503).json({ error: "Serviço temporariamente indisponível." });
+  }
+});
 
 // ────────────────────────────────────────────────────────────────────────────
 // DASHBOARD

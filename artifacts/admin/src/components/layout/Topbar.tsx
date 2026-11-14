@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAdminAuth } from '@/context/AdminAuthContext';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { KeyRound, LogOut, User as UserIcon } from 'lucide-react';
+import { useLocation } from 'wouter';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button';
 
 export function Topbar({ children }: { children?: React.ReactNode }) {
   const { user, logout } = useAdminAuth();
+  const [, setLocation] = useLocation();
 
   return (
     <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border bg-card/50 backdrop-blur z-20 sticky top-0">
@@ -51,6 +53,10 @@ export function Topbar({ children }: { children?: React.ReactNode }) {
             <DropdownMenuItem>
               <UserIcon className="mr-2 h-4 w-4" />
               <span>Perfil</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLocation('/trocar-password')} className="cursor-pointer">
+              <KeyRound className="mr-2 h-4 w-4" />
+              <span>Alterar palavra-passe</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">

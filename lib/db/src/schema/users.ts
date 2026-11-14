@@ -70,6 +70,8 @@ export const usersTable = pgTable("users", {
   quemPodeEscrever: varchar("quem_pode_escrever", { length: 24 }).notNull().default("todos"),
   /** Última alteração da palavra-passe: qualquer token (acesso ou refresh) emitido nesse segundo ou antes deixa de valer. NULL = nunca alterada. */
   passwordAlteradaEm: timestamp("password_alterada_em"),
+  /** Admin: a palavra-passe tem de ser trocada no próximo acesso (os endpoints de admin só aceitam a troca enquanto estiver ativa). */
+  trocaPasswordObrigatoria: boolean("troca_password_obrigatoria").notNull().default(false),
   /** Quando o email da conta foi verificado (exigido para pedir para ser criador). NULL = não verificado; sem preenchimento retroativo. Mudar o email tem de a repor a NULL. */
   emailVerificadoEm: timestamp("email_verificado_em", { withTimezone: true }),
   /**

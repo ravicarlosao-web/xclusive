@@ -30,8 +30,9 @@ async function adminFetchMsg(path: string, options?: RequestInit) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const e = new Error(json?.error || `HTTP ${res.status}`) as Error & { status?: number };
+    const e = new Error(json?.error || `HTTP ${res.status}`) as Error & { status?: number; codigo?: string };
     e.status = res.status;
+    e.codigo = json?.codigo;
     throw e;
   }
   return json;
@@ -40,6 +41,10 @@ async function adminFetchMsg(path: string, options?: RequestInit) {
 export const adminApi = {
   login: (email: string, password: string) =>
     adminFetchMsg('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+
+  /** Troca da própria palavra-passe. Nunca se guarda nada destes valores (só viajam no corpo do pedido). */
+  changePassword: (atual: string, nova: string, confirmacao: string) =>
+    adminFetchMsg('/admin/auth/password', { method: 'POST', body: JSON.stringify({ atual, nova, confirmacao }) }),
 
   getDashboardKpis: () => adminFetch('/admin/dashboard/kpis'),
   getDashboardCharts: () => adminFetch('/admin/dashboard/charts'),
