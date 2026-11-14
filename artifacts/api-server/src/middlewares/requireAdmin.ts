@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { eq, sql } from "drizzle-orm";
 import { db, usersTable, revokedTokensTable } from "@workspace/db";
 import { verifyToken, emitidoAntesDaAlteracao } from "../lib/auth.js";
+import { sessaoAdminViva, INATIVIDADE_ADMIN_MIN } from "../lib/adminSessao.js";
+export { INATIVIDADE_ADMIN_MIN };
 
 export interface AdminRequest extends Request {
   adminId?: number;
@@ -12,8 +14,6 @@ export interface AdminRequest extends Request {
 }
 
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
-/** Inatividade máxima de uma sessão de admin: sem pedidos durante este tempo, o token deixa de valer (o painel volta ao login). */
-export const INATIVIDADE_ADMIN_MIN = 10;
 /** Código do 403 enquanto a troca de palavra-passe é obrigatória (o painel leva o admin ao formulário de troca). */
 export const CODIGO_TROCA_OBRIGATORIA = "troca_password_obrigatoria";
 
@@ -24,8 +24,8 @@ export const CODIGO_TROCA_OBRIGATORIA = "troca_password_obrigatoria";
  *  3. a cada pedido confirma na BD que o utilizador existe, está ativo, não está encerrado nem banido e que a role ATUAL é
  *     admin ou superadmin (um admin despromovido, suspenso ou banido perde o acesso ao pedido seguinte);
  *  4. o token (jti) não está em revoked_tokens (o mesmo mecanismo de sessões revogadas dos utilizadores);
- *  5. os tokens emitidos pelo login de admin (marca `adm`) têm uma linha em admin_sessoes e expiram por inatividade (INATIVIDADE_ADMIN_MIN);
- *     a mesma instrução confirma e renova o último uso (no máximo uma escrita por 30 s). Tokens sem a marca não são afetados.
+ *  5. SÓ tokens do login de admin (marca `adm` + linha viva em admin_sessoes, com expiração e inatividade de INATIVIDADE_ADMIN_MIN) dão acesso;
+ *     tokens do login normal, mesmo de contas admin, recebem 401 «sessão terminada» (lib/adminSessao.ts).
  * A role usada pelas rotas (adminRole) é a da BD, não a do token. Falha de BD = negar (fail-closed, 503).
  */
 export async function requireAdmin(req: AdminRequest, res: Response, next: NextFunction): Promise<void> {
@@ -67,13 +67,11 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
       res.status(401).json({ error: "Sessão terminada. Faz login novamente." });
       return;
     }
-    if (payload.adm === true) {
-      const viva = await db.execute(sql`update admin_sessoes set ultimo_uso = case when ultimo_uso <= now() - interval '30 seconds' then now() else ultimo_uso end
-        where jti = ${payload.jti ?? ""} and user_id = ${payload.userId} and expira_em > now() and ultimo_uso > now() - make_interval(mins => ${INATIVIDADE_ADMIN_MIN}) returning 1`);
-      if (viva.rows.length === 0) {
-        res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
-        return;
-      }
+    // O poder de admin só vem do LOGIN DE ADMIN: o token tem de levar a marca `adm` e ter uma sessão viva em admin_sessoes (inatividade e expiração aplicadas).
+    // Um token do login normal, mesmo de uma conta admin, recebe a mesma resposta de uma sessão inválida (o login normal dessas contas não é afetado).
+    if (payload.adm !== true || !(await sessaoAdminViva(payload.jti, payload.userId))) {
+      res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
+      return;
     }
     const conta = contas[0];
     // Palavra-passe alterada depois de este token ter sido emitido.

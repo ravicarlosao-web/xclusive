@@ -14,6 +14,7 @@ import { bloquearUtilizadores, comissaoParaCobranca } from "../lib/bloqueioSaldo
 import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { ChaveReutilizadaError, chaveOpcional, foiViolacaoDaChave, hashPedidoGorjeta, lerCompraPorChave, lerTipDaCompra } from "../lib/idempotenciaGorjeta";
 import { userHasLiveAccess, liveIdsWithAccess, isAdminRole } from "../lib/liveAccess";
+import { pedidoComSessaoAdmin } from "../lib/adminSessao";
 import { liveStartSchema } from "../lib/liveTicket";
 import { signViewerToken, verifyViewerToken, buildWebrtcViewerUrl, isViewerTokenConfigured } from "../lib/liveViewerToken";
 import { logger } from "../lib/logger";
@@ -159,7 +160,9 @@ router.post("/live/:streamId/end", requireAuth, async (req: AuthRequest, res): P
 
     // Apenas o próprio criador ou um admin podem terminar
     const [user] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
-    if (stream.criadorId !== req.userId && user?.role !== "admin" && user?.role !== "superadmin") {
+    // O poder de admin (terminar a live de outra pessoa) só vale com um token do LOGIN DE ADMIN (sessão viva em admin_sessoes), não com o do login normal.
+    const adminComSessao = (user?.role === "admin" || user?.role === "superadmin") && await pedidoComSessaoAdmin(req.headers.authorization);
+    if (stream.criadorId !== req.userId && !adminComSessao) {
       res.status(403).json({ error: "Não tens permissões para terminar esta live." });
       return;
     }
