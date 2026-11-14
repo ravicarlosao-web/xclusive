@@ -141,8 +141,35 @@ export function aplicarManifesto(blocos, entradas) {
   return resultado;
 }
 
-export function gerarDocumento(docxBuf, chave, nomeDocx, entradas) {
-  const itens = lerDocx(docxBuf); const blocos = aplicarManifesto(estruturar(itens), entradas.filter((e) => e.documento === chave));
+/** A frase do advogado cuja substituição pela data está autorizada (docs/legal/data-entrada-em-vigor.json). */
+export const FRASE_DATA_POR_FIXAR = "Data de entrada em vigor: a definir na publicação";
+
+/** Data de entrada em vigor (DD/MM/AAAA): o ÚNICO valor de origem, igual para os 7 documentos publicados. */
+export function lerDataEntradaEmVigor(raiz) {
+  const j = JSON.parse(fs.readFileSync(path.join(raiz, "docs/legal/data-entrada-em-vigor.json"), "utf8"));
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(j.data ?? "");
+  const d = m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+  if (!m || d.getUTCDate() !== +m[1] || d.getUTCMonth() !== +m[2] - 1) throw new Error(`data-entrada-em-vigor.json: «${j.data}» não é uma data DD/MM/AAAA válida.`);
+  if (j.frase_original !== FRASE_DATA_POR_FIXAR) throw new Error("data-entrada-em-vigor.json: a frase original não é a autorizada.");
+  return j.data;
+}
+
+/** Troca, SÓ nessa frase (dentro do mesmo run, preservando o formato), «a definir na publicação» pela data. Tem de haver exatamente uma ocorrência no documento. */
+export function aplicarDataEntradaEmVigor(blocos, data, chave) {
+  let n = 0;
+  const resultado = blocos.map((b) => {
+    if (b.tipo === "tabela") return b;
+    let mudou = false;
+    const runs = b.runs.map((r) => { if (!r.t.includes(FRASE_DATA_POR_FIXAR)) return r; n++; mudou = true; return { ...r, t: r.t.replace(FRASE_DATA_POR_FIXAR, `Data de entrada em vigor: ${data}`) }; });
+    return mudou ? { ...b, runs, alterado: "data-entrada-em-vigor" } : b;
+  });
+  if (n !== 1) throw new Error(`${chave}: a frase «${FRASE_DATA_POR_FIXAR}» foi encontrada ${n} vez(es) (tem de ser exatamente 1).`);
+  return resultado;
+}
+
+export function gerarDocumento(docxBuf, chave, nomeDocx, entradas, data = null) {
+  const itens = lerDocx(docxBuf); let blocos = aplicarManifesto(estruturar(itens), entradas.filter((e) => e.documento === chave));
+  if (data) blocos = aplicarDataEntradaEmVigor(blocos, data, chave);
   return { documento: chave, origem: { ficheiro: `originais/${nomeDocx}`, sha256: crypto.createHash("sha256").update(docxBuf).digest("hex") }, blocos };
 }
 
@@ -163,10 +190,10 @@ export function lerManifesto(raiz) {
 function principal() {
   const i = process.argv.indexOf("--raiz");
   const raiz = i >= 0 ? path.resolve(process.argv[i + 1]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const entradas = lerManifesto(raiz); const usadas = new Set();
+  const entradas = lerManifesto(raiz); const usadas = new Set(); const data = lerDataEntradaEmVigor(raiz);
   for (const d of DOCUMENTOS) {
     const buf = fs.readFileSync(path.join(raiz, "docs/legal", d.pasta, "originais", d.docx));
-    const doc = gerarDocumento(buf, d.chave, d.docx, entradas);
+    const doc = gerarDocumento(buf, d.chave, d.docx, entradas, d.semLegalDocs ? null : data);
     for (const b of doc.blocos) if (b.alterado) usadas.add(b.alterado);
     for (const e of entradas) if (e.documento === d.chave && e.acao === "remover") usadas.add(e.id);
     fs.writeFileSync(path.join(raiz, "docs/legal", d.pasta, d.json), JSON.stringify(doc, null, 2) + "\n");

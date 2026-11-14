@@ -35,6 +35,15 @@ function paragrafosDocx(buf) {
 }
 
 const manifesto = lerManifesto(RAIZ);
+// ── data de entrada em vigor: UM valor de origem (docs/legal/data-entrada-em-vigor.json), lido aqui SEM usar o gerador ──
+const FRASE_POR_FIXAR = "Data de entrada em vigor: a definir na publicação";
+let DATA_VIGOR = null, DATA_VIGOR_ISO = null;
+try {
+  const j = JSON.parse(fs.readFileSync(path.join(RAIZ, "docs/legal/data-entrada-em-vigor.json"), "utf8")); const dm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(j.data ?? ""); const dt = dm ? new Date(Date.UTC(+dm[3], +dm[2] - 1, +dm[1])) : null;
+  ok(!!dm && dt.getUTCDate() === +dm[1] && dt.getUTCMonth() === +dm[2] - 1, `data-entrada-em-vigor.json: «${j.data}» não é uma data DD/MM/AAAA válida.`);
+  ok(j.frase_original === FRASE_POR_FIXAR, "data-entrada-em-vigor.json: a frase original não é a autorizada («Data de entrada em vigor: a definir na publicação»).");
+  if (dm) { DATA_VIGOR = j.data; DATA_VIGOR_ISO = `${dm[3]}-${dm[2]}-${dm[1]}`; }
+} catch (e) { falhas.push(`data-entrada-em-vigor.json: ilegível (${e.message}).`); }
 const TOKENS_OK = new Set(["EMPRESA_NOME", "EMPRESA_NIF", "EMPRESA_SEDE", "EMAIL_LEGAL", "MINIMO_LEVANTAMENTO", "PRAZO_MIN", "PRAZO_MAX"]);
 for (const e of manifesto) for (const t of [...(e.resultado ?? "").matchAll(/\{\{\??([A-Z_]+)\}\}/g)].map((m) => m[1])) ok(TOKENS_OK.has(t), `Manifesto "${e.id}": token desconhecido {{${t}}}.`);
 
@@ -64,11 +73,16 @@ for (const d of DOCUMENTOS) {
   const buf = fs.readFileSync(path.join(pastaDe(d), "originais", d.docx));
   let commitado; try { commitado = JSON.parse(fs.readFileSync(path.join(pastaDe(d), d.json), "utf8")); } catch (e) { falhas.push(`${etiqueta}: JSON ilegível (${e.message}).`); continue; }
   // 1. regerado == commitado
-  let regerado; try { regerado = gerarDocumento(buf, d.chave, d.docx, manifesto); } catch (e) { falhas.push(`${etiqueta}: ${e.message}`); continue; }
+  let regerado; try { regerado = gerarDocumento(buf, d.chave, d.docx, manifesto, d.semLegalDocs ? null : DATA_VIGOR); } catch (e) { falhas.push(`${etiqueta}: ${e.message}`); continue; }
   ok(JSON.stringify(regerado) === JSON.stringify(commitado), `${etiqueta}: o JSON não é igual ao regerado do .docx + manifesto (edição à mão ou desatualizado). Corre: node scripts/legal/docx-para-json.mjs`);
   for (const b of commitado.blocos) if (b.alterado) usadas.add(b.alterado);
   // 2. texto do JSON == texto do .docx com SÓ o manifesto (extração independente)
   let esperado = paragrafosDocx(buf);
+  if (!d.semLegalDocs) {   // a ÚNICA alteração fora do manifesto: a frase da data (exatamente 1 parágrafo; nenhuma outra palavra)
+    const ix = esperado.map((t, k) => t.includes(FRASE_POR_FIXAR) ? k : -1).filter((k) => k >= 0);
+    ok(ix.length === 1, `${etiqueta}: a frase «${FRASE_POR_FIXAR}» tem de existir exatamente 1 vez no .docx (encontrei ${ix.length}).`);
+    if (ix.length === 1 && DATA_VIGOR) esperado[ix[0]] = esperado[ix[0]].replace(FRASE_POR_FIXAR, `Data de entrada em vigor: ${DATA_VIGOR}`);
+  }
   for (const e of manifesto.filter((x) => x.documento === d.chave)) {
     const idx = esperado.map((t, k) => t === e.original ? k : -1).filter((k) => k >= 0);
     ok(idx.length === 1, `${etiqueta}: manifesto "${e.id}" não corresponde a exatamente 1 parágrafo do .docx.`);
@@ -99,9 +113,13 @@ for (const d of DOCUMENTOS) {
   const sub = commitado.blocos.find((b) => b.tipo === "subtitulo"); const linha = sub ? textoDeRuns(sub.runs).split("\n").pop() : "";
   const m = /^(\d{1,2}) de ([a-zç]+) de (\d{4}) • Versão (\d+(?:\.\d+)*)$/.exec(linha);
   // v2.x: «Versão X • Data de entrada em vigor: a definir na publicação» (ou dd/mm/aaaa). A data de entrada em vigor não é a de LEGAL_DOCS: só se confere a versão.
-  const n = /^Versão (\d+(?:\.\d+)*) • Data de entrada em vigor: (a definir na publicação|\d{2}\/\d{2}\/\d{4})$/.exec(linha);
+  const n = /^Versão (\d+(?:\.\d+)*) • Data de entrada em vigor: (.+)$/.exec(linha);
   ok(!!m || !!n, `${etiqueta}: não encontrei a linha "<data> • Versão X" nem "Versão X • Data de entrada em vigor: …" no documento.`);
-  if (n) { const ld = legalDocs[d.chave]; ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`); if (ld) ok(ld.versao === n[1], `${etiqueta}: versão do documento (${n[1]}) ≠ LEGAL_DOCS (${ld.versao}).`); }
+  if (n) {
+    const ld = legalDocs[d.chave]; ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`);
+    ok(n[2] === DATA_VIGOR, `${etiqueta}: a data de entrada em vigor do documento («${n[2]}») tem de ser exatamente a de origem («${DATA_VIGOR}»).`);
+    if (ld) { ok(ld.versao === n[1], `${etiqueta}: versão do documento (${n[1]}) ≠ LEGAL_DOCS (${ld.versao}).`); ok(ld.data === DATA_VIGOR_ISO, `${etiqueta}: atualizadoEm de LEGAL_DOCS (${ld.data}) ≠ data de entrada em vigor (${DATA_VIGOR_ISO}).`); }
+  }
   if (m) { const data = `${m[3]}-${String(MESES[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`; const ld = d.versaoFixa ? { versao: d.versaoFixa.versao, data: d.versaoFixa.data } : legalDocs[d.chave];
     ok(!!ld, `${etiqueta}: LEGAL_DOCS não tem a chave "${d.chave}".`);
     if (ld) { ok(ld.versao === m[4], `${etiqueta}: versão do documento (${m[4]}) ≠ LEGAL_DOCS (${ld.versao}).`); ok(ld.data === data, `${etiqueta}: data do documento (${data}) ≠ LEGAL_DOCS (${ld.data}).`); } }

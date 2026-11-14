@@ -11,4 +11,5 @@ o resto da v1.1 fica nas pastas só como histórico (já não é gerado nem impo
   Apagamento de Dados e Modelo de Consentimento de Terceiros (internos, disponíveis mediante pedido). Os Termos para Criadoras são aceites à parte, ao tornar-se criadora.
 - Dados factuais: o levantamento mínimo é o valor em vigor (`GET /auth/legal-config`, de `platform_settings.min_withdrawal_amount`), o prazo de pagamento é de 4 dias úteis após a
   aprovação do pedido e a página de levantamentos é `/definicoes/monetizacao`. `scripts/legal/verificar.mjs` confere o prazo e a página dos textos com o código.
-- «Data de entrada em vigor: a definir na publicação» fica no texto até à publicação; `node scripts/pre-lancamento.mjs` (repositório de testes) falha enquanto existir.
+- Data de entrada em vigor: a ÚNICA alteração ao texto do advogado fora do manifesto é a frase «Data de entrada em vigor: a definir na publicação» → «Data de entrada em vigor: <data>», com a data de `../data-entrada-em-vigor.json`
+  (autorização escrita do advogado; valor único para os 7 documentos publicados); `node scripts/pre-lancamento.mjs` (repositório de testes) falha se a frase voltar.

@@ -20,10 +20,11 @@
       "alinhamento": "centro",
       "runs": [
         {
-          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.2 • Data de entrada em vigor: a definir na publicação",
+          "t": "Xclusive (xclusive.ao) — Versão final para publicação\nVersão 2.2 • Data de entrada em vigor: 15/11/2026",
           "i": true
         }
-      ]
+      ],
+      "alterado": "data-entrada-em-vigor"
     },
     {
       "tipo": "artigo",

@@ -52,17 +52,17 @@ const router = Router();
 // ── Documentos legais ────────────────────────────────────────────────────────
 // Versões VIGENTES. Quando o texto jurídico mudar, o advogado/dev altera a versão e a data aqui:
 // o registo passa a exigir o aceite da nova versão e as páginas legais mostram-na.
-// (Termos, Privacidade e Cookies: v2.2 do advogado (docs/legal/v2.2); Conteúdo, Reembolsos, Direitos de Autor e Criadoras: v2.3 (docs/legal/v2.3). `atualizadoEm` é a data da versão; a data de entrada em vigor dos textos é «a definir na publicação».)
+// (Termos, Privacidade e Cookies: v2.2 do advogado (docs/legal/v2.2); Conteúdo, Reembolsos, Direitos de Autor e Criadoras: v2.3 (docs/legal/v2.3). `atualizadoEm` é a data de entrada em vigor dos textos (15/11/2026, a de docs/legal/data-entrada-em-vigor.json: scripts/legal/verificar.mjs confere as duas).)
 export const LEGAL_DOCS = {
-  termos:          { versao: "2.2", atualizadoEm: "2026-11-13" },
-  privacidade:     { versao: "2.2", atualizadoEm: "2026-11-13" },
+  termos:          { versao: "2.2", atualizadoEm: "2026-11-15" },
+  privacidade:     { versao: "2.2", atualizadoEm: "2026-11-15" },
   // Política de Cookies (v2.2): tem página pública e versão própria; o aceite de cookies no registo continua a ser o booleano `cookies` (sem versão por utilizador).
-  cookies:         { versao: "2.2", atualizadoEm: "2026-11-13" },
-  conteudo:        { versao: "2.3", atualizadoEm: "2026-11-13" },
-  direitosAutor:   { versao: "2.3", atualizadoEm: "2026-11-13" },
-  reembolsos:      { versao: "2.3", atualizadoEm: "2026-11-13" },
+  cookies:         { versao: "2.2", atualizadoEm: "2026-11-15" },
+  conteudo:        { versao: "2.3", atualizadoEm: "2026-11-15" },
+  direitosAutor:   { versao: "2.3", atualizadoEm: "2026-11-15" },
+  reembolsos:      { versao: "2.3", atualizadoEm: "2026-11-15" },
   // Termos para Criadoras: aceites na ativação de criadora, NÃO no registo (o registo só exige as 5 chaves de versão acima: termos, privacidade, conteudo, direitosAutor e reembolsos; a Política de Cookies é o booleano `cookies`).
-  criadoras:       { versao: "2.3", atualizadoEm: "2026-11-13" },
+  criadoras:       { versao: "2.3", atualizadoEm: "2026-11-15" },
 } as const;
 
 /** Idade mínima para criar conta (plataforma de conteúdo adulto). */
