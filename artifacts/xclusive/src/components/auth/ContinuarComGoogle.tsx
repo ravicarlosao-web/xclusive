@@ -4,7 +4,6 @@ import { Loader2 } from 'lucide-react';
 import { googleLogin, type CurrentUser } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleIdentity } from '@/hooks/useGoogleIdentity';
-import { TextoAdvogado } from '@/components/auth/TextoAdvogado';
 
 /** Chave (por separador) com o nome que a Google devolveu, para pré-visualizar no passo de conclusão. */
 export const CHAVE_GOOGLE_NOME = 'xclusive_google_nome';
@@ -76,8 +75,6 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
         {estado === 'erro-script' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-script">Não foi possível carregar o botão do Google. Entra com o email e a palavra-passe ou tenta mais tarde.</p>}
         {estado === 'erro-rede' && <p role="status" className="text-center text-sm text-muted-foreground" data-testid="google-erro-rede">Não foi possível preparar o botão do Google. Recarrega a página para tentar de novo.</p>}
         {erro && <p role="alert" className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm text-foreground" data-testid="google-erro">{erro}</p>}
-        <TextoAdvogado id="avisoJuntoAoBotao" className="text-center text-xs text-muted-foreground" />
-        <TextoAdvogado id="scriptECookies" className="text-center text-xs text-muted-foreground" />
       </>)}
     </div>
   );
