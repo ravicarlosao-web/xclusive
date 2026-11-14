@@ -28,6 +28,7 @@ Os quatro workflows geridos arrancam automaticamente:
 - **Frontend web** — `artifacts/xclusive: web` (porta 19285)
 - **API backend** — `artifacts/api-server: API Server` (porta 8080)
 - **Admin panel** — `artifacts/admin: web` (porta 23744)
+  O painel só se constrói/serve com `ADMIN_BASE_PATH` definida (caminho secreto, só o segmento: minúsculas, números e hífens, 16 a 64 caracteres; ex.: `openssl rand -hex 16`); fica em `/<ADMIN_BASE_PATH>/`. Sem a variável não há painel (nunca cai em `/admin`). O valor real fica só fora do repositório.
 - **Mockup sandbox** — `artifacts/mockup-sandbox: Component Preview Server` (porta 8081)
 
 ## Contas de teste (password: `password123`)

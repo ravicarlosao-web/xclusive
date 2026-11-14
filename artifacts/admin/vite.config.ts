@@ -7,7 +7,18 @@ import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
 const rawPort = process.env.PORT_ADMIN || '23744';
 const port = Number(rawPort);
-const basePath = process.env.BASE_PATH || '/';
+
+// Caminho de acesso ao painel: SECRETO e definido fora do repositório (variável ADMIN_BASE_PATH, só o segmento, sem barras).
+// Sem a variável, ou com formato inválido, o painel NÃO se constrói nem se serve (falha fechada): nunca cai em /admin.
+// Formato: só letras minúsculas, números e hífens, 16 a 64 caracteres. Gerar, por exemplo, com: openssl rand -hex 16
+const segmentoAdmin = process.env.ADMIN_BASE_PATH;
+if (segmentoAdmin === undefined || segmentoAdmin === '') {
+  throw new Error('ADMIN_BASE_PATH não está definida: o painel de admin não se constrói nem se serve sem o caminho secreto (defina-a fora do repositório).');
+}
+if (!/^[a-z0-9-]{16,64}$/.test(segmentoAdmin)) {
+  throw new Error('ADMIN_BASE_PATH inválida: só letras minúsculas, números e hífens, com 16 a 64 caracteres (sem barras).');
+}
+const basePath = `/${segmentoAdmin}/`;
 
 export default defineConfig({
   base: basePath,
