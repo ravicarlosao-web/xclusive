@@ -35,6 +35,16 @@ export function signRefreshToken(userId: number, username: string, role?: string
   return { token, jti };
 }
 
+/** Duração ABSOLUTA do token de admin (sem refresh nem renovação): 15 min. Constante própria para não depender do token de utilizador. */
+export const ADMIN_TOKEN_TTL_SEGUNDOS = 15 * 60;
+
+/** Token de admin: igual ao de acesso, mais a marca `adm` (o jti é a chave da linha de admin_sessoes, para a expiração por inatividade). */
+export function signAdminToken(payload: Omit<JwtPayload, "jti" | "type">): { token: string; jti: string } {
+  const jti = randomUUID();
+  const token = jwt.sign({ ...payload, type: "access", jti, adm: true }, SECRET, { expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, algorithm: "HS256" });
+  return { token, jti };
+}
+
 /** @deprecated Usar signAccessToken. Mantido para compatibilidade. */
 export const signToken = signAccessToken;
 

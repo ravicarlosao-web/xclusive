@@ -11,7 +11,8 @@
 
 import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
-import { signToken, DUMMY_HASH } from "../lib/auth.js";
+import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH } from "../lib/auth.js";
+import { chaveConta, chaveIp, segundosBloqueado, registarFalha, limparFalhasConta } from "../lib/adminLogin.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
   db,
@@ -169,22 +170,6 @@ function rateLimit(req: AdminRequest, res: any, next: any) {
   next();
 }
 
-const loginCounts = new Map<string, { count: number; resetAt: number }>();
-function loginLimiter(req: AdminRequest, res: any, next: any) {
-  const ip = req.ip ?? "unknown";
-  const now = Date.now();
-  const entry = loginCounts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    loginCounts.set(ip, { count: 1, resetAt: now + 15 * 60_000 });
-    return next();
-  }
-  entry.count++;
-  if (entry.count > 5) {
-    return void res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente em 15 minutos." });
-  }
-  next();
-}
-
 // ── Signed media proxy ───────────────────────────────────────────────────────
 
 router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
@@ -218,52 +203,96 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise
 
 // ── Login ────────────────────────────────────────────────────────────────────
 
-router.post("/admin/auth/login", loginLimiter, async (req, res): Promise<void> => {
+/** Auditoria do login de admin (só contas de admin existentes: audit_log.admin_id é obrigatório). Nunca leva palavra-passe nem hash. */
+async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>): Promise<void> {
+  await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: adminId, details, ipAddress: ip ?? null });
+}
+
+router.post("/admin/auth/login", async (req, res): Promise<void> => {
   const { email, password } = req.body ?? {};
   if (!email || !password) {
     res.status(400).json({ error: "Email e password são obrigatórios" });
     return;
   }
+  const RECUSA = { error: "Credenciais inválidas" };   // a MESMA resposta para conta inexistente, palavra-passe errada e conta bloqueada
   // lower(users.email) = email recebido em minúsculas: funciona com emails guardados com maiúsculas (nunca bloqueia uma conta existente).
   const emailN = String(email).trim().toLowerCase();
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(sql`lower(${usersTable.email}) = ${emailN}`)
-    .orderBy(usersTable.id)
-    .limit(1);
+  const ip = chaveIp(req.ip), chave = chaveConta(emailN);
+  const log = (req as any).log;
+  try {
+    const bloq = await segundosBloqueado(chave, ip);
+    if (bloq.ip > 0) {
+      // IP bloqueado (independente da conta: não revela nada sobre contas). Só registo interno: sem escrever na auditoria por pedido.
+      log?.warn({ motivo: "ip_bloqueado", segundos: bloq.ip }, "login de admin recusado");
+      res.setHeader("Retry-After", String(bloq.ip));
+      res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente mais tarde." });
+      return;
+    }
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${emailN}`)
+      .orderBy(usersTable.id)
+      .limit(1);
+    const eAdmin = !!user && (user.role === "admin" || user.role === "superadmin");
 
-  if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
-    // Conta inexistente ou sem papel de admin: corre o bcrypt na mesma (custo igual) para o tempo não revelar que o email existe.
-    await bcrypt.compare(String(password), DUMMY_HASH);
-    res.status(401).json({ error: "Credenciais inválidas" });
-    return;
+    // Falha de credenciais: conta (mesmo inexistente) e IP; auditoria só se a conta é de admin. O motivo exato fica só no registo interno.
+    const falhou = async (motivo: "conta_inexistente" | "sem_papel_admin" | "password_errada" | "conta_bloqueada"): Promise<void> => {
+      log?.warn({ motivo }, "login de admin recusado");
+      if (motivo === "conta_bloqueada") { res.status(401).json(RECUSA); return; }   // não conta: um bloqueio não se prolonga
+      const rc = await registarFalha("conta", chave), ri = await registarFalha("ip", ip);
+      if (eAdmin) {
+        await auditLogin(user.id, "admin_login_falhou", req.ip, { falhasSeguidas: rc.falhas });
+        if (rc.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "conta", minutos: rc.minutos, nivel: rc.nivel });
+        if (ri.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "ip", minutos: ri.minutos, nivel: ri.nivel });
+      }
+      if (rc.bloqueouAgora || ri.bloqueouAgora) log?.warn({ escopo: rc.bloqueouAgora ? "conta" : "ip", minutos: (rc.bloqueouAgora ? rc : ri).minutos }, "login de admin: bloqueio aplicado");
+      res.status(401).json(RECUSA);
+    };
+
+    if (!eAdmin) {
+      // Conta inexistente ou sem papel de admin: corre o bcrypt na mesma (custo igual) para o tempo não revelar que o email existe.
+      await bcrypt.compare(String(password), DUMMY_HASH);
+      await falhou(user ? "sem_papel_admin" : "conta_inexistente");
+      return;
+    }
+    if (bloq.conta > 0) {
+      // Conta bloqueada: a palavra-passe certa também é recusada. bcrypt na mesma (tempo igual).
+      await bcrypt.compare(String(password), DUMMY_HASH);
+      await falhou("conta_bloqueada");
+      return;
+    }
+    const passwordOk = await bcrypt.compare(String(password), user.passwordHash);
+    if (!passwordOk) { await falhou("password_errada"); return; }
+    // Conta suspensa, encerrada ou banida: SÓ depois de a palavra-passe estar certa, e SEM token (mesmas mensagens do login normal).
+    if (!user.ativo) {
+      if (user.banidaEm) { res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA }); return; }
+      if (user.encerradaEm) { res.status(403).json({ error: await mensagemContaEncerrada(db, user.id), codigo: CODIGO_CONTA_ENCERRADA }); return; }
+      res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
+      return;
+    }
+    const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role });
+    await db.execute(sql`delete from admin_sessoes where expira_em <= now()`);
+    await db.execute(sql`insert into admin_sessoes (jti, user_id, expira_em) values (${jti}, ${user.id}, now() + make_interval(secs => ${ADMIN_TOKEN_TTL_SEGUNDOS}))`);
+    await limparFalhasConta(chave);
+    await auditLogin(user.id, "admin_login_ok", req.ip, { role: user.role });
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        nomeExibicao: user.nomeExibicao ?? user.username,
+        email: user.email,
+        role: user.role,
+        avatarUrl: urlMedia(user.avatarUrl ?? null),
+      },
+      expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, // segundos: duração absoluta do token de admin (15 min)
+    });
+  } catch (err) {
+    // Falha da BD (ou das tabelas de proteção por aplicar): nega (fail-closed), sem detalhes.
+    log?.error({ err: err instanceof Error ? err.name : "erro" }, "login de admin: erro interno (a negar)");
+    if (!res.headersSent) res.status(503).json({ error: "Serviço temporariamente indisponível." });
   }
-  const passwordOk = await bcrypt.compare(String(password), user.passwordHash);
-  if (!passwordOk) {
-    res.status(401).json({ error: "Credenciais inválidas" });
-    return;
-  }
-  // Conta suspensa, encerrada ou banida: SÓ depois de a palavra-passe estar certa, e SEM token (mesmas mensagens do login normal).
-  if (!user.ativo) {
-    if (user.banidaEm) { res.status(403).json({ error: MSG_CONTA_BANIDA, codigo: CODIGO_CONTA_ENCERRADA }); return; }
-    if (user.encerradaEm) { res.status(403).json({ error: await mensagemContaEncerrada(db, user.id), codigo: CODIGO_CONTA_ENCERRADA }); return; }
-    res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
-    return;
-  }
-  const token = signToken({ userId: user.id, username: user.username, role: user.role });
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      username: user.username,
-      nomeExibicao: user.nomeExibicao ?? user.username,
-      email: user.email,
-      role: user.role,
-      avatarUrl: urlMedia(user.avatarUrl ?? null),
-    },
-    expiresIn: 900, // segundos: igual à duração real do JWT de acesso (15 min)
-  });
 });
 
 router.use("/admin", rateLimit, requireAdmin);
