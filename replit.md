@@ -14,6 +14,7 @@ Uma plataforma de monetização para criadores de conteúdo em Angola, Moçambiq
 - `pnpm --filter @workspace/api-spec run codegen` — regenera hooks e schemas Zod a partir do spec OpenAPI
 - `pnpm --filter @workspace/db run push` — aplica mudanças de schema à DB (só dev)
 - `pnpm --filter @workspace/scripts run seed` — insere as contas de teste (idempotente)
+- `pnpm --filter @workspace/scripts exec tsx criar-admin.mjs <email> [<utilizador>]` — simulação da criação de um admin (nada é escrito); com `--confirmar` cria-o (role `admin`, nunca `superadmin`; a palavra-passe é pedida no terminal, sem eco, 2 vezes, mín. 12)
 - Env necessário: `DATABASE_URL` (Postgres, já provisionado), `SESSION_SECRET` (JWT signing, já definido)
 
 ### Armazenamento de media em produção

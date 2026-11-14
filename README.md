@@ -20,6 +20,8 @@ Xclusive permite que criadores partilhem conteúdo (fotos, vídeos, carrosséis 
 pnpm install
 pnpm --filter @workspace/db run push   # aplica schema na DB
 pnpm --filter @workspace/scripts run seed  # insere contas de teste
+pnpm --filter @workspace/scripts exec tsx criar-admin.mjs <email> [<utilizador>]              # cria um admin: simulação, não escreve nada
+pnpm --filter @workspace/scripts exec tsx criar-admin.mjs <email> [<utilizador>] --confirmar  # cria-o (role admin, nunca superadmin; palavra-passe pedida no terminal, sem eco)
 ```
 
 Os quatro workflows geridos arrancam automaticamente:
