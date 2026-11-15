@@ -23,6 +23,40 @@ interface TopUpRequest {
   adminNota?: string;
   temComprovativo?: boolean;
   comprovantivoNome?: string;
+  contaAtiva?: boolean;
+  contaEstado?: 'ativa' | 'suspensa' | 'encerrada' | 'banida';
+}
+
+const DIAS_AVISO = 7;
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/** Idade do pedido em dias inteiros. */
+function idadeDias(criadoEm: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(criadoEm).getTime()) / DIA_MS));
+}
+
+function textoIdade(criadoEm: string): string {
+  const d = idadeDias(criadoEm);
+  if (d >= 1) return `há ${d} dia${d === 1 ? '' : 's'}`;
+  const h = Math.max(0, Math.floor((Date.now() - new Date(criadoEm).getTime()) / (60 * 60 * 1000)));
+  return h >= 1 ? `há ${h} h` : 'há menos de 1 h';
+}
+
+/**
+ * Converte o comprovativo (data URL) num Blob application/pdf. Nunca se interpola o ficheiro nem o nome em HTML:
+ * o tipo é fixado aqui, por isso mesmo um conteúdo que não seja PDF nunca é tratado como HTML pelo browser.
+ */
+function blobDoComprovativo(dataUrl: string): Blob | null {
+  const m = /^data:application\/pdf;base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+  if (!m) return null;
+  try {
+    const bin = atob(m[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'application/pdf' });
+  } catch {
+    return null;
+  }
 }
 
 function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; onClose: () => void }) {
@@ -30,6 +64,18 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
   const [ficheiro, setFicheiro] = useState<string | null>(null);
   const [aCarregar, setACarregar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  // O Blob nasce do ficheiro validado e o URL é revogado ao trocar/fechar.
+  useEffect(() => {
+    setBlobUrl(null);
+    if (!ficheiro) return;
+    const blob = blobDoComprovativo(ficheiro);
+    if (!blob) { setErro('Comprovativo inválido: não é um PDF.'); return; }
+    const url = URL.createObjectURL(blob);
+    setBlobUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [ficheiro]);
 
   useEffect(() => {
     setFicheiro(null);
@@ -52,14 +98,8 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
   if (!request?.temComprovativo) return null;
 
   function openInNewTab() {
-    if (!request || !ficheiro) return;
-    const win = window.open();
-    if (win) {
-      win.document.write(
-        `<html><head><title>${request.comprovantivoNome ?? 'Comprovativo'}</title></head>` +
-        `<body style="margin:0"><embed src="${ficheiro}" type="application/pdf" width="100%" height="100%" /></body></html>`
-      );
-    }
+    if (!blobUrl) return;
+    window.open(blobUrl, '_blank', 'noopener,noreferrer');
   }
 
   return (
@@ -70,13 +110,13 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
             <div>
               <DialogTitle className="text-base font-semibold">Comprovativo</DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                <span className="font-mono text-primary">{request.reference}</span>
+                <span className="font-mono text-primary">#{request.id}</span>
                 {' · '}@{request.username}
                 {' · '}
                 <span className="font-bold">{request.amount.toLocaleString('pt-PT')} Kz</span>
               </p>
             </div>
-            <Button size="sm" variant="outline" onClick={openInNewTab} disabled={!ficheiro} className="gap-2 text-xs">
+            <Button size="sm" variant="outline" onClick={openInNewTab} disabled={!blobUrl} className="gap-2 text-xs">
               <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
             </Button>
           </div>
@@ -84,9 +124,10 @@ function PdfViewerDialog({ request, onClose }: { request: TopUpRequest | null; o
         <div className="flex-1 overflow-hidden">
           {aCarregar && <p className="p-6 text-sm text-muted-foreground" data-testid="comprovativo-a-carregar">A carregar o comprovativo…</p>}
           {erro && <p role="alert" className="p-6 text-sm text-destructive" data-testid="comprovativo-erro">{erro}</p>}
-          {ficheiro && (
+          {blobUrl && (
             <iframe
-              src={ficheiro}
+              src={blobUrl}
+              sandbox=""
               title="Comprovativo PDF"
               className="w-full h-full border-0"
             />
@@ -130,7 +171,10 @@ export default function TopUps() {
   const totalApproved = approved.reduce((s, r) => s + r.amount, 0);
 
   async function handleApprove(req: TopUpRequest) {
-    if (!confirm(`Aprovar carregamento de ${req.amount.toLocaleString('pt-PT')} Kz para @${req.username}?\n\nRef: ${req.reference}\n\nEsta ação adiciona o saldo imediatamente à conta do utilizador.`)) return;
+    const dias = idadeDias(req.criadoEm);
+    const aviso = dias > DIAS_AVISO ? `\n\nATENÇÃO: este pedido tem ${dias} dias. Confirma a data da transferência no extrato.` : '';
+    const contaAviso = req.contaAtiva === false ? `\n\nATENÇÃO: a conta está ${req.contaEstado ?? 'inativa'} — a aprovação será recusada.` : '';
+    if (!confirm(`Aprovar carregamento de ${req.amount.toLocaleString('pt-PT')} Kz para @${req.username}?\n\nPedido #${req.id}${aviso}${contaAviso}\n\nEsta ação adiciona o saldo imediatamente à conta do utilizador.`)) return;
 
     try {
       await adminApi.updateTopup(Number(req.id), { status: 'aprovado' });
@@ -142,7 +186,7 @@ export default function TopUps() {
   }
 
   async function handleReject(req: TopUpRequest) {
-    const nota = prompt(`Motivo da rejeição para @${req.username} (Ref: ${req.reference}):\n\nEste motivo fica registado internamente.`);
+    const nota = prompt(`Motivo da rejeição para @${req.username} (pedido #${req.id}):\n\nEste motivo fica registado internamente.`);
     if (nota === null) return; // cancelled
 
     try {
@@ -156,9 +200,9 @@ export default function TopUps() {
 
   const columns: Column<TopUpRequest>[] = [
     {
-      header: 'Referência',
+      header: 'Pedido',
       cell: (item) => (
-        <span className="font-mono text-xs font-bold text-primary tracking-wider">{item.reference}</span>
+        <span className="font-mono text-xs font-bold text-primary tracking-wider">#{item.id}</span>
       ),
     },
     {
@@ -167,6 +211,9 @@ export default function TopUps() {
         <div>
           <p className="font-medium text-sm">{item.nomeCompleto}</p>
           <p className="text-xs text-muted-foreground">@{item.username}</p>
+          {item.contaAtiva === false && (
+            <p className="text-xs font-semibold text-red-400" data-testid={`conta-estado-${item.id}`}>Conta {item.contaEstado ?? 'inativa'}</p>
+          )}
         </div>
       ),
     },
@@ -181,6 +228,14 @@ export default function TopUps() {
       cell: (item) => (
         <span className="text-muted-foreground text-sm">
           {format(new Date(item.criadoEm), 'dd MMM yyyy, HH:mm')}
+          {item.status === 'pendente' && (
+            <span
+              className={idadeDias(item.criadoEm) > DIAS_AVISO ? 'block text-xs font-semibold text-red-400' : 'block text-xs'}
+              data-testid={`idade-${item.id}`}
+            >
+              {textoIdade(item.criadoEm)}{idadeDias(item.criadoEm) > DIAS_AVISO ? ' · antigo' : ''}
+            </span>
+          )}
         </span>
       ),
     },
@@ -311,7 +366,7 @@ export default function TopUps() {
               {pending.length} pedido{pending.length > 1 ? 's' : ''} aguarda{pending.length === 1 ? '' : 'm'} verificação
             </p>
             <p className="text-xs text-muted-foreground">
-              Confirma no extrato bancário da Xclusive que a transferência chegou com a referência indicada antes de aprovar. O saldo é creditado imediatamente ao clicar em <strong className="text-foreground">Aprovar</strong>.
+              Confirma o valor e a data no extrato bancário e confere o comprovativo. O saldo é creditado imediatamente ao clicar em <strong className="text-foreground">Aprovar</strong>.
             </p>
           </div>
         </div>

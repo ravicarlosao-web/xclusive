@@ -88,7 +88,7 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
               <li>A tua conta fica inacessível e invisível de imediato, e a tua sessão termina em todos os dispositivos.</li>
               <li>Os dados que a lei obriga a conservar (transações, verificação de identidade, aceites, denúncias e registos de segurança) ficam retidos.</li>
               <li>O restante fica marcado para apagamento ao fim de {estado?.janelaDias ?? 30} dias. Durante esse prazo podes pedir a reabertura à equipa.</li>
-              <li>As tuas subscrições são canceladas, sem reembolso.{eCriadora ? ' As subscrições dos teus subscritores também são canceladas e eles são avisados.' : ''}</li>
+              <li>As tuas subscrições são canceladas.{eCriadora ? ' As subscrições dos teus subscritores também são canceladas e eles são avisados.' : ''}</li>
             </ul>
             {!estado && !erroCarregar && <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> A verificar a tua conta…</p>}
             {erroCarregar && <p role="alert" className="text-sm text-destructive" data-testid="encerrar-erro-carregar">Não foi possível verificar a tua conta. Tenta novamente daqui a pouco.</p>}
