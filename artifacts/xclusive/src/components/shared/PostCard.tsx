@@ -30,6 +30,17 @@ interface PostCardProps {
   variante?: 'feed' | 'cartao';
 }
 
+/** Altura máxima da media no feed: nunca mais alta do que o ecrã (vídeo 9:16 incluído). */
+export const ALTURA_MAX_MEDIA = 'min(80dvh, 720px)';
+/**
+ * Estilo da caixa da media: a proporção ORIGINAL (limitada a 9:16–16:9) e, se a altura passaria do máximo, a largura encolhe na mesma proporção e a
+ * caixa fica centrada. Assim a imagem/vídeo aparece inteiro (1:1, 4:5, 9:16, 16:9), sem recorte e sem barras.
+ */
+export function estiloMedia(proporcao: number, noFeed: boolean): React.CSSProperties {
+  const larguraMax = noFeed ? '100%' : 'calc(100% - 1.5rem)';
+  return { aspectRatio: proporcao, width: `min(${larguraMax}, calc(${ALTURA_MAX_MEDIA} * ${proporcao}))`, marginLeft: 'auto', marginRight: 'auto' };
+}
+
 export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 'cartao' }: PostCardProps) {
   const noFeed = variante === 'feed';
   const { user, isSubscribed, isPostUnlocked } = useAuth();
@@ -392,10 +403,10 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
           <div
             className={cn(
               "relative bg-secondary flex items-center justify-center overflow-hidden cursor-pointer select-none",
-              noFeed ? "w-full max-h-[520px]" : "mx-3 sm:mx-4 rounded-2xl w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)]",
+              noFeed ? "w-full" : "mx-3 sm:mx-4 rounded-2xl w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)]",
               !mediaAspect && (isVideo ? "aspect-video" : "aspect-[4/5] sm:aspect-square"),
             )}
-            style={mediaAspect ? { aspectRatio: mediaAspect } : undefined}
+            style={mediaAspect ? estiloMedia(mediaAspect, noFeed) : undefined}
             onClick={handleMediaClick}
           >
             {isLocked ? (
@@ -429,13 +440,13 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
             {post.media && post.media.length > 0 && post.media[0].url ? (
               isVideo ? (
                 <>
-                  <video ref={feedVideoRef} src={post.media[0].url} className="w-full h-full object-cover pointer-events-none" muted loop playsInline onLoadedMetadata={handleVideoMeta} />
+                  <video ref={feedVideoRef} src={post.media[0].url} className="w-full h-full object-contain pointer-events-none" muted loop playsInline onLoadedMetadata={handleVideoMeta} />
                   <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm rounded-full p-2 pointer-events-none">
                     <Play className="w-4 h-4 text-white fill-white" />
                   </div>
                 </>
               ) : (
-                <img src={post.media[0].url} alt="Post" className="w-full h-full object-cover" onLoad={handleImageLoad} />
+                <img src={post.media[0].url} alt="Post" className="w-full h-full object-contain" onLoad={handleImageLoad} />
               )
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-secondary to-background flex items-center justify-center">

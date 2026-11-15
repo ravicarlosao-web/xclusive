@@ -242,8 +242,11 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
     return () => clearInterval(interval);
   }, [uploadStage, isUploading]);
 
-  function handleClose() {
-    if (isUploading || isCreatingPost) return;
+  // Envio a decorrer (a enviar ou a processar): não se fecha. Nos ecrãs «concluída» e «erro» o envio já terminou e o modal pode fechar (X, Esc, clique fora, botão).
+  const aEnviarSemFim = isUploading && (uploadStage === 'uploading' || uploadStage === 'processing');
+  /** `forcar`: ignora as guardas (fecho automático e fecho pelo utilizador nos ecrãs «concluída»/«erro»). */
+  function handleClose(forcar = false) {
+    if (!forcar && (aEnviarSemFim || isCreatingPost)) return;
     mediaFiles.forEach(m => URL.revokeObjectURL(m.previewUrl));
     setStep('select');
     setMediaFiles([]);
@@ -443,7 +446,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
           queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
           toast.success('Publicação criada com sucesso!');
           setTimeout(() => {
-            handleClose();
+            handleClose(true);   // forçado: este fecho corre num closure antigo (isUploading/isCreatingPost de quando se carregou em Publicar)
           }, 800);
         },
         onError: (err: any) => {
@@ -513,7 +516,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
   const hasLongVideo = mediaFiles.some(isLongVideo);
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v && !isUploading && !isCreatingPost) handleClose(); }}>
+    <Dialog open={open} onOpenChange={v => { if (!v && !aEnviarSemFim && !isCreatingPost) handleClose(true); }}>
       <DialogContent
         className="p-0 overflow-hidden gap-0 border-border bg-card max-h-[calc(100dvh-1rem)]"
         style={{ maxWidth: isUploading ? '520px' : step === 'details' ? '860px' : '540px', width: '95vw' }}
@@ -544,7 +547,7 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                 </h2>
 
                 <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                  {uploadStage === 'done' && 'O teu vídeo já está disponível no feed do Xclusive.'}
+                  {uploadStage === 'done' && 'A tua publicação já está disponível no feed do Xclusive.'}
                   {uploadStage === 'error' && (uploadError || 'Não foi possível completar o envio.')}
                 </p>
               </>
@@ -580,6 +583,10 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   </div>
                 </div>
               </div>
+            )}
+
+            {uploadStage === 'done' && (
+              <Button className="w-full rounded-xl" onClick={() => handleClose(true)} data-testid="publicacao-fechar">Fechar</Button>
             )}
 
             {/* Action Buttons if Error */}
@@ -683,6 +690,9 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
                   <Button type="button" className="bg-primary hover:bg-primary/90 text-white rounded-xl h-10 px-6 font-semibold gap-2 pointer-events-none">
                     <Upload className="w-4 h-4" /> Selecionar ficheiros
                   </Button>
+                  <p className="text-xs text-muted-foreground max-w-sm" data-testid="formatos-recomendados">
+                    Formatos recomendados: 1:1 e 4:5 (Instagram), 16:9 e 1:1 (X), 9:16 (TikTok). A publicação aparece no feed com a proporção original, sem cortes.
+                  </p>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span>JPG · PNG · WEBP · MP4 · MOV</span>
                     <span>·</span>
@@ -881,6 +891,9 @@ export function CreatePostModal({ open, onClose, defaultStep, initialFiles }: Cr
             {/* ══════════════ STEP: PREVIEW ══════════════ */}
             {step === 'preview' && (
               <div className="flex flex-col">
+                <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border" data-testid="previsao-feed">
+                  Assim aparece no feed: com a proporção original, sem cortes.
+                </p>
                 <div className="relative w-full bg-black aspect-square flex items-center justify-center overflow-hidden">
                   <AnimatePresence mode="wait">
                     {current && (
