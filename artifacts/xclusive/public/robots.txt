@@ -10,6 +10,7 @@ Allow: /direitos-de-autor
 Allow: /reembolsos
 Allow: /termos-criadoras
 Allow: /modelo-consentimento
+Allow: /googleb842e010fcd2614c.html
 # Recursos que as páginas indexáveis precisam para desenhar (JS, CSS, ícones, imagens): sem eles o Google não vê o conteúdo.
 Allow: /assets/
 Allow: /*.png$
