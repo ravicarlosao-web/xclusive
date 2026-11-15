@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { CORPO_MAX } from "./lib/carregamento";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -333,6 +334,17 @@ app.post(
   ],
   gorjetaLimiter,
 );
+// Carregamento manual: 5 pedidos CRIADOS por hora e por utilizador (os recusados — validação, repetido, pendentes a mais — não gastam a quota).
+const topupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Demasiados pedidos de carregamento numa hora. Tenta novamente mais tarde." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+  keyGenerator: userIdKey,
+});
+app.post("/api/wallet/topup", topupLimiter);
 app.post("/api/users/:username/follow", followLimiter);
 app.delete("/api/users/:username/follow", followLimiter);
 app.post("/api/posts", createPostLimiter);
@@ -365,6 +377,8 @@ app.use(
 // para que o body chegue ao handler como Buffer intacto (bytes exactos enviados pelo OME).
 // Todas as outras rotas continuam a usar express.json() normalmente.
 app.use("/api/live/admission", express.raw({ type: "application/json", limit: "1mb" }));
+// O pedido de carregamento manual leva um comprovativo PDF (≤ ≈5 MB): corpo de 8 MB SÓ nesta rota (o resto continua com o limite global). Tem de vir ANTES do parser global.
+app.post("/api/wallet/topup", express.json({ limit: CORPO_MAX }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 app.use(cookieParser());
@@ -378,6 +392,11 @@ app.use("/api", router);
 // Nunca expõe stack traces ao cliente — apenas loga internamente.
 import type { ErrorRequestHandler } from "express";
 const globalErrorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  // Corpo acima do limite (ex.: comprovativo > 8 MB em /wallet/topup): recusa clara, não um erro interno.
+  if ((err as { status?: number })?.status === 413 || (err as { type?: string })?.type === "entity.too.large") {
+    if (!res.headersSent) res.status(413).json({ error: "O ficheiro é demasiado grande.", codigo: "corpo_demasiado_grande" });
+    return;
+  }
   (req as any).log?.error({ err }, "Erro não tratado");
   if (!res.headersSent) {
     res.status(500).json({ error: "Erro interno." });

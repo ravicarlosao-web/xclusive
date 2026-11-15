@@ -50,7 +50,7 @@ const ABERTA = ["pendente", "em_analise"] as const;
  */
 export async function bloqueiosDeEncerramento(q: Q, u: { id: number; saldo: string; ganhos: string }): Promise<Bloqueio[]> {
   const out: Bloqueio[] = [];
-  if (Number(u.saldo) > 0) out.push({ codigo: "saldo", mensagem: `Tens ${kz(u.saldo)} de saldo. Gasta-o ou pede o reembolso a ${emailLegal()} antes de encerrares.` });
+  if (Number(u.saldo) > 0) out.push({ codigo: "saldo", mensagem: `Tens ${kz(u.saldo)} de saldo. Antes de encerrares, gasta o saldo da tua carteira.` });
   if (Number(u.ganhos) > 0) out.push({ codigo: "ganhos", mensagem: `Tens ${kz(u.ganhos)} em ganhos por levantar. Levanta-os (ou contacta ${emailLegal()}) antes de encerrares.` });
 
   const [lev] = await q.select({ id: withdrawalRequestsTable.id }).from(withdrawalRequestsTable)

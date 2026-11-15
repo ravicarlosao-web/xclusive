@@ -1,3 +1,4 @@
+import { LIMITE_APROVACAO_ADMIN } from "../lib/carregamento";
 /**
  * Admin API routes — /api/admin/*
  *
@@ -2389,6 +2390,9 @@ router.get("/admin/topups", async (req, res) => {
         reference: topupRequestsTable.reference,
         status: topupRequestsTable.status,
         // O comprovativo (ficheiro em base64, pode ter MB) NÃO vem na lista: só o detalhe o devolve, auditado (GET /admin/topups/:id/comprovativo)
+        // Estado da conta (para o admin ver, antes de aprovar, se está inativa: nunca se aprova um carregamento a uma conta inativa)
+        contaAtiva: usersTable.ativo,
+        contaEstado: sql<string>`(case when ${usersTable.banidaEm} is not null then 'banida' when ${usersTable.encerradaEm} is not null then 'encerrada' when not ${usersTable.ativo} then 'suspensa' else 'ativa' end)`,
         temComprovativo: sql<boolean>`(${topupRequestsTable.comprovantivoBase64} is not null and length(${topupRequestsTable.comprovantivoBase64}) > 0)`,
         comprovantivoNome: topupRequestsTable.comprovantivoNome,
         processadoPor: topupRequestsTable.processadoPor,
@@ -2449,10 +2453,15 @@ router.get("/admin/topups/:id/comprovativo", requireAdmin, async (req: AdminRequ
  * a transacção actualiza apenas pedidos ainda pendentes e só depois credita
  * o utilizador, evitando crédito duplicado em cliques concorrentes.
  */
+class TopupHttpError extends Error {
+  constructor(msg: string, public readonly httpStatus: number, public readonly codigo: string) { super(msg); }
+}
+const kzTexto = (v: number) => `${v.toLocaleString("pt-PT")} Kz`;
+
 router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
   const id = Number(req.params.id);
   const status = req.body?.status;
-  const notas = typeof req.body?.notas === "string" ? req.body.notas.trim() : undefined;
+  const notas = typeof req.body?.notas === "string" ? req.body.notas.trim().slice(0, 500) : undefined;
 
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "ID inválido." });
@@ -2465,6 +2474,24 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
 
   try {
     const updated = await db.transaction(async (tx) => {
+      // 1. Bloqueia o pedido: dois PATCH em simultâneo não passam ambos (o 2.º vê o estado já decidido).
+      const [pedido] = await tx.select().from(topupRequestsTable).where(eq(topupRequestsTable.id, id)).limit(1).for("update");
+      if (!pedido || pedido.status !== "pendente") return null;
+      const valor = Number(pedido.amount);
+
+      // 2. Regras de quem decide (ANTES de mexer em nada).
+      if (pedido.userId === req.adminId) throw new TopupHttpError("Não podes aprovar nem rejeitar o teu próprio pedido de carregamento.", 403, "proprio_pedido");
+      if (status === "aprovado" && valor > LIMITE_APROVACAO_ADMIN && req.adminRole !== "superadmin") {
+        throw new TopupHttpError(`Carregamentos acima de ${kzTexto(LIMITE_APROVACAO_ADMIN)} só os pode aprovar um superadmin.`, 403, "acima_do_limite");
+      }
+
+      // 3. A conta é bloqueada (FOR UPDATE) antes de ler o saldo e de creditar; conta inativa não recebe créditos.
+      const [conta] = await tx.select({ saldo: usersTable.saldo, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, pedido.userId)).limit(1).for("update");
+      if (status === "aprovado" && (!conta || !conta.ativo)) {
+        throw new TopupHttpError("Esta conta está inativa (suspensa, encerrada ou banida): o carregamento não pode ser aprovado.", 409, "conta_inativa");
+      }
+
+      // 4. Decide o pedido (condicional: continua a exigir «pendente»).
       const [request] = await tx
         .update(topupRequestsTable)
         .set({
@@ -2473,28 +2500,29 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
           processadoEm: new Date(),
           ...(notas !== undefined ? { notas: notas || null } : {}),
         })
-        .where(and(
-          eq(topupRequestsTable.id, id),
-          eq(topupRequestsTable.status, "pendente"),
-        ))
+        .where(and(eq(topupRequestsTable.id, id), eq(topupRequestsTable.status, "pendente")))
         .returning();
-
       if (!request) return null;
 
+      // 5. Crédito: o valor vem SEMPRE da linha da BD.
+      let saldoAntes: number | null = null, saldoDepois: number | null = null;
       if (status === "aprovado") {
-        await tx
-          .update(usersTable)
-          .set({ saldo: sql`${usersTable.saldo} + ${request.amount}` })
-          .where(eq(usersTable.id, request.userId));
+        saldoAntes = Number(conta!.saldo);
+        const [c] = await tx.update(usersTable).set({ saldo: sql`${usersTable.saldo} + ${request.amount}` }).where(eq(usersTable.id, request.userId)).returning({ saldo: usersTable.saldo });
+        saldoDepois = Number(c.saldo);
       }
 
-      // Audit na MESMA transação (depois do pedido e do crédito): se falhar, o pedido volta a «pendente» e nada é creditado.
+      // 6. Auditoria (com saldo antes e depois) e notificação ao utilizador, na MESMA transação: se uma falhar, nada fica.
       await auditNaTransacao(tx, req, status === "aprovado" ? "topup_approved" : "topup_rejected", "topup", id, {
-        amount: Number(request.amount),
+        amount: valor,
         userId: request.userId,
         reference: request.reference,
         notas: notas ?? null,
+        ...(status === "aprovado" ? { before: { saldo: saldoAntes }, after: { saldo: saldoDepois } } : {}),
       });
+      await notificarSistema(tx, request.userId, status === "aprovado"
+        ? `O teu carregamento de ${kzTexto(valor)} foi aprovado. O saldo já está na tua carteira.`
+        : `O teu pedido de carregamento de ${kzTexto(valor)} não foi aprovado.${notas ? ` Motivo: ${notas.replace(/[.\s]+$/, "")}.` : ""}`);
 
       return request;
     });
@@ -2516,6 +2544,7 @@ router.patch("/admin/topups/:id", requireAdmin, async (req: AdminRequest, res): 
       criadoEm: updated.criadoEm.toISOString(),
     });
   } catch (err) {
+    if (err instanceof TopupHttpError) { res.status(err.httpStatus).json({ error: err.message, codigo: err.codigo }); return; }
     (req as any).log?.error({ err }, "Erro ao processar carregamento");
     res.status(500).json({ error: "Erro ao processar pedido de carregamento." });
   }

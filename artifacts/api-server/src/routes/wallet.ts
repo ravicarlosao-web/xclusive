@@ -13,6 +13,7 @@ import { validate } from "../lib/validate";
 import { emailLegal } from "../lib/encerramento";
 import { createGpoCharge, createRefCharge } from "../lib/appypay";
 import { paginacaoDe, MSG_PAGINACAO_INVALIDA } from "../lib/params";
+import { VALOR_MIN, VALOR_MAX, MAX_PENDENTES, JANELA_REPETIDO_MS, validarComprovativo } from "../lib/carregamento";
 
 const router = Router();
 
@@ -107,9 +108,8 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
       id: `t-${t.id}`,
       tipo: "carregamento" as const,
       amount: parseFloat(t.amount as string),
-      reference: t.reference,
       status: t.status,
-      descricao: `Ref: ${t.reference}`,
+      descricao: "Carregamento por transferência",
       criadoEm: t.criadoEm.toISOString(),
       credit: t.status === "aprovado",
       pendente: t.status === "pendente",
@@ -137,10 +137,12 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
 });
 
 const topupSchema = z.object({
-  amount: z.number({ error: "Valor deve ser um número" }).min(500, "Valor mínimo: 500 Kz"),
-  reference: z.string().min(5).max(20).optional(),   // compatibilidade com clientes antigos; o ecrã novo não a mostra nem a envia: o servidor gera a referência interna
+  // Valor: finito, entre 500 e 1 000 000 Kz e no máximo 2 decimais (500.999, 1e21, NaN, texto e negativos dão 400, nunca 500).
+  amount: z.number({ error: "Valor deve ser um número" }).finite("Valor inválido.").min(VALOR_MIN, "Valor mínimo: 500 Kz").max(VALOR_MAX, "Valor máximo: 1 000 000 Kz")
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, "O valor só pode ter até 2 casas decimais."),
+  // Qualquer outro campo (incluindo «reference») é ignorado: a referência interna é SEMPRE gerada no servidor.
   comprovantivoBase64: z.string().optional(),
-  comprovantivoNome: z.string().max(255).optional(),
+  comprovantivoNome: z.string().optional(),
 });
 
 /** Referência INTERNA do pedido (conciliação no admin): «XCL-» + 8 caracteres sem ambíguos, gerada no servidor; o utilizador já não a vê. */
@@ -183,6 +185,10 @@ router.post("/wallet/topup", requireAuth, async (req: AuthRequest, res): Promise
   const { amount, comprovantivoBase64, comprovantivoNome } = parsed.data;
   const userId = req.userId!;
 
+  // Comprovativo: só PDF («data:application/pdf;base64,…», ≤ ≈5 MB, começa por %PDF-) e nome seguro. O resto é 400 (o texto seria mostrado no painel do admin).
+  const comp = validarComprovativo(comprovantivoBase64, comprovantivoNome);
+  if (!comp.ok) { res.status(400).json({ error: comp.erro }); return; }
+
   try {
     // Sem dados bancários na BD o carregamento manual não está disponível (o utilizador não saberia para onde transferir).
     const cfg = await lerConfigTopup();
@@ -190,41 +196,37 @@ router.post("/wallet/topup", requireAuth, async (req: AuthRequest, res): Promise
       res.status(503).json({ error: "O carregamento por transferência não está disponível de momento. Tenta mais tarde.", codigo: "dados_bancarios_indisponiveis" });
       return;
     }
-    const reference = parsed.data.reference ?? gerarReferenciaInterna();
-    // Verificar referência duplicada
-    const [existing] = await db
-      .select({ id: topupRequestsTable.id })
-      .from(topupRequestsTable)
-      .where(eq(topupRequestsTable.reference, reference))
-      .limit(1);
 
-    if (existing) {
-      res.status(409).json({ error: "Pedido com esta referência já foi submetido." });
-      return;
+    // Referência interna SEMPRE gerada aqui (nunca a do cliente). Colisão (raríssima): volta a tentar.
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const reference = gerarReferenciaInterna();
+      try {
+        const resultado = await db.transaction(async (tx) => {
+          // Serializa os pedidos da mesma conta: a contagem e a deteção de repetição não se furam com pedidos em paralelo.
+          await tx.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
+          const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(topupRequestsTable)
+            .where(and(eq(topupRequestsTable.userId, userId), eq(topupRequestsTable.status, "pendente")));
+          if (n >= MAX_PENDENTES) return { erro: { s: 409, codigo: "pendentes_demais", msg: `Já tens ${MAX_PENDENTES} pedidos de carregamento pendentes. Aguarda que sejam tratados.` } } as const;
+          const [igual] = await tx.select({ id: topupRequestsTable.id }).from(topupRequestsTable)
+            .where(and(eq(topupRequestsTable.userId, userId), eq(topupRequestsTable.amount, amount.toFixed(2)), sql`${topupRequestsTable.criadoEm} > now() - (${JANELA_REPETIDO_MS / 1000} * interval '1 second')`)).limit(1);
+          if (igual) return { erro: { s: 409, codigo: "pedido_repetido", msg: "Já fizeste um pedido igual há poucos minutos. Aguarda que seja tratado." } } as const;
+          const [request] = await tx.insert(topupRequestsTable)
+            .values({ userId, amount: amount.toFixed(2), reference, comprovantivoBase64: comp.base64, comprovantivoNome: comp.nome, status: "pendente" })
+            .returning({ id: topupRequestsTable.id, status: topupRequestsTable.status, amount: topupRequestsTable.amount, criadoEm: topupRequestsTable.criadoEm });
+          return { request } as const;
+        });
+        if ("erro" in resultado && resultado.erro) { res.status(resultado.erro.s).json({ error: resultado.erro.msg, codigo: resultado.erro.codigo }); return; }
+        if (!("request" in resultado) || !resultado.request) throw new Error("sem pedido");
+        // A referência interna NÃO sai daqui (só o painel do admin a vê).
+        res.status(201).json({ request: { id: resultado.request.id, status: resultado.request.status, amount: Number(resultado.request.amount), criadoEm: resultado.request.criadoEm } });
+        return;
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } } | null;
+        if ((e?.code ?? e?.cause?.code) === "23505" && tentativa < 2) continue;
+        throw err;
+      }
     }
-
-    const [request] = await db
-      .insert(topupRequestsTable)
-      .values({
-        userId,
-        amount: amount.toString(),
-        reference,
-        comprovantivoBase64: comprovantivoBase64 ?? null,
-        comprovantivoNome: comprovantivoNome ?? null,
-        status: "pendente",
-      })
-      .returning({
-        id: topupRequestsTable.id,
-        reference: topupRequestsTable.reference,
-        status: topupRequestsTable.status,
-        criadoEm: topupRequestsTable.criadoEm,
-      });
-
-    res.status(201).json({ request });
   } catch (err) {
-    // Pedidos em paralelo com a mesma referência: a leitura prévia deixa passar vários e o índice único recusa os restantes (23505).
-    const e = err as { code?: string; cause?: { code?: string } } | null;
-    if ((e?.code ?? e?.cause?.code) === "23505") { res.status(409).json({ error: "Pedido com esta referência já foi submetido." }); return; }
     req.log?.error({ err: err instanceof Error ? err.name : "erro" }, "Erro ao submeter carregamento");
     res.status(500).json({ error: "Erro ao submeter pedido de carregamento." });
   }
