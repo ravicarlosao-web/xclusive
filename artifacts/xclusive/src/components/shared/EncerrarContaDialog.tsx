@@ -63,7 +63,7 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
         return;
       }
       if (r.status === 409 && Array.isArray(j?.bloqueios)) { setBloqueiosPost(j.bloqueios); setPasso(1); return; }
-      if (r.status === 403 && j?.codigo === 'password_incorreta') { setErro('A password está incorreta. Tenta novamente.'); return; }
+      if (r.status === 403 && j?.codigo === 'password_incorreta') { setErro('A palavra-passe está incorreta. Tenta novamente.'); return; }
       setErro(typeof j?.error === 'string' ? j.error : 'Não foi possível encerrar a conta. Tenta novamente.');
     } catch {
       setErro('Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente.');
@@ -116,10 +116,10 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
           <div data-testid="encerrar-passo-2" className="space-y-4">
             <DialogHeader>
               <DialogTitle>Confirma que queres encerrar</DialogTitle>
-              <DialogDescription>Passo 2 de 2: confirma com a tua password.</DialogDescription>
+              <DialogDescription>Passo 2 de 2: confirma com a tua palavra-passe.</DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              <Label htmlFor="encerrar-password">Password</Label>
+              <Label htmlFor="encerrar-password">Palavra-passe</Label>
               <Input id="encerrar-password" data-testid="encerrar-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <div className="flex items-start gap-3">

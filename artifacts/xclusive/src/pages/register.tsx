@@ -36,7 +36,7 @@ const registerSchema = z.object({
     .string()
     .min(3, 'Username deve ter pelo menos 3 caracteres')
     .regex(/^[a-zA-Z0-9_]+$/, 'Apenas letras, números e underscores'),
-  password: z.string().min(8, 'Password deve ter pelo menos 8 caracteres'),
+  password: z.string().min(8, 'A palavra-passe deve ter pelo menos 8 caracteres'),
   dataNascimento: z.string().min(1, 'Data de nascimento é obrigatória'),
   telefone: z.string().optional(),
   tipoConta: z.enum(['pessoal', 'criador']),
@@ -248,9 +248,9 @@ export default function Register() {
 
                 <FormField control={form.control} name="password" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>Palavra-passe</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Cria uma password segura" className="h-12 bg-secondary/50" {...field} />
+                      <Input type="password" placeholder="Cria uma palavra-passe segura" className="h-12 bg-secondary/50" {...field} />
                     </FormControl>
                     {watchPassword && (
                       <>

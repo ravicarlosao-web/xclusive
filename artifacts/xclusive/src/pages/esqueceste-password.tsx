@@ -86,7 +86,7 @@ export default function EsquecestePassword() {
                 <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
                   <Mail className="w-7 h-7 text-primary" />
                 </div>
-                <h1 className="text-3xl font-bold mb-2">Esqueceste a password?</h1>
+                <h1 className="text-3xl font-bold mb-2">Esqueceste a palavra-passe?</h1>
                 <p className="text-muted-foreground">
                   Insere o teu email e enviamos um link para recuperares o acesso à tua conta.
                 </p>
@@ -125,7 +125,7 @@ export default function EsquecestePassword() {
               </Form>
 
               <p className="text-center text-sm text-muted-foreground mt-6">
-                Lembras-te da password?{' '}
+                Lembras-te da palavra-passe?{' '}
                 <Link href="/login" className="text-primary hover:underline font-medium">
                   Entrar
                 </Link>
