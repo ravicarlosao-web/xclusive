@@ -9,13 +9,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { EMAIL_CONTACTO } from '@/lib/contactos';
 import { Loader2, FlaskConical } from 'lucide-react';
 import { AuthSplitLayout, AuthHeader } from '@/components/AuthSplitLayout';
 import { ContinuarComGoogle } from '@/components/auth/ContinuarComGoogle';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'Password é obrigatória'),
+  password: z.string().min(1, 'A palavra-passe é obrigatória'),
   lembrar: z.boolean().optional(),
 });
 
@@ -48,25 +49,11 @@ async function lerRegistosAbertos(): Promise<boolean | null> {
   }
 }
 
-/** E-mail de contacto (GET /api/reports/contact). Devolve null se falhar ou não tiver forma de e-mail. */
-async function lerEmailContacto(): Promise<string | null> {
-  try {
-    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/reports/contact`, { credentials: 'same-origin' });
-    if (!res.ok) return null;
-    const { email } = (await res.json()) as { email?: unknown };
-    return typeof email === 'string' && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ? email : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
   const [suspensa, setSuspensa] = useState<boolean>(() => lerFlagSuspensa());
   const [encerrada, setEncerrada] = useState<string | null>(() => lerMensagemEncerrada());
-  const [emailContacto, setEmailContacto] = useState<string | null>(null);
   // false = registos fechados pelo admin (null = ainda não sabemos / não foi possível ler: mostra o link normal)
   const [registosAbertos, setRegistosAbertos] = useState<boolean | null>(null);
 
@@ -79,7 +66,6 @@ export default function Login() {
   useEffect(() => {
     if (!suspensa) return;
     let vivo = true;
-    lerEmailContacto().then((e) => { if (vivo) setEmailContacto(e); });
     return () => { vivo = false; };
   }, [suspensa]);
 
@@ -131,11 +117,7 @@ export default function Login() {
             <div role="alert" data-testid="aviso-conta-suspensa" className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm text-foreground">
               <strong>A tua conta está suspensa.</strong>{' '}
               Se achas que é um engano, contacta{' '}
-              {emailContacto ? (
-                <a href={`mailto:${emailContacto}`} className="font-semibold text-primary underline" data-testid="aviso-suspensa-email">{emailContacto}</a>
-              ) : (
-                'o suporte'
-              )}
+              <a href={`mailto:${EMAIL_CONTACTO}`} className="font-semibold text-primary underline" data-testid="aviso-suspensa-email">{EMAIL_CONTACTO}</a>
               .
             </div>
           )}
@@ -162,13 +144,13 @@ export default function Login() {
                 render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between">
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel>Palavra-passe</FormLabel>
                       <Link href="/esqueceste-password" className="text-sm text-primary hover:underline">
-                        Esqueceste a password?
+                        Esqueceste a palavra-passe?
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" placeholder="A tua password" className="h-12 bg-secondary/50" {...field} />
+                      <Input type="password" placeholder="A tua palavra-passe" className="h-12 bg-secondary/50" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -255,7 +237,7 @@ export default function Login() {
                   </button>
                 ))}
               </div>
-              <p className="text-center text-[11px] text-muted-foreground">password: <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">password123</code></p>
+              <p className="text-center text-[11px] text-muted-foreground">palavra-passe: <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">password123</code></p>
             </div>
           )}
 

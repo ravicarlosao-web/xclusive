@@ -246,7 +246,7 @@ function makeMockToken(userId: number): string {
 async function mockLogin(data: LoginInput): Promise<{ token: string; user: UserProfile }> {
   const users = getMockUsers();
   const user = users.find(u => u.email === data.email && u._devPassword === data.password);
-  if (!user) throw new Error('Email ou password incorretos.');
+  if (!user) throw new Error('Email ou palavra-passe incorretos.');
   const token = makeMockToken(user.id);
   localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({ token, userId: user.id }));
   return { token, user: mockUserToProfile(user) };

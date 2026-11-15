@@ -46,7 +46,7 @@ export function AlterarPassword() {
   };
 
   if (!aberto) {
-    return <Button variant="outline" className="w-full justify-start text-left h-12" data-testid="alterar-password-abrir" onClick={() => setAberto(true)}>Alterar Password</Button>;
+    return <Button variant="outline" className="w-full justify-start text-left h-12" data-testid="alterar-password-abrir" onClick={() => setAberto(true)}>Alterar palavra-passe</Button>;
   }
   return (
     <form onSubmit={submeter} className="space-y-4 border border-border rounded-xl p-4" data-testid="alterar-password-form" noValidate>
