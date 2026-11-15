@@ -14,6 +14,7 @@ import { Router } from "express";
 import { requireAdmin, type AdminRequest } from "../middlewares/requireAdmin.js";
 import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH, hashPassword } from "../lib/auth.js";
 import { problemaDaPasswordAdmin, gerarPasswordAdmin } from "../lib/regrasPassword.js";
+import { alertarLoginAdmin, resumirDispositivo } from "../lib/alertaLoginAdmin.js";
 import { chaveConta, chaveIp, segundosBloqueado, registarFalha, limparFalhasConta } from "../lib/adminLogin.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
@@ -208,8 +209,9 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise
 // ── Login ────────────────────────────────────────────────────────────────────
 
 /** Auditoria do login de admin (só contas de admin existentes: audit_log.admin_id é obrigatório). Nunca leva palavra-passe nem hash. */
-async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>): Promise<void> {
-  await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: adminId, details, ipAddress: ip ?? null });
+async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>): Promise<number> {
+  const [r] = await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: adminId, details, ipAddress: ip ?? null }).returning({ id: auditLogTable.id });
+  return r.id;
 }
 
 router.post("/admin/auth/login", async (req, res): Promise<void> => {
@@ -279,7 +281,8 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
     await db.execute(sql`delete from admin_sessoes where expira_em <= now()`);
     await db.execute(sql`insert into admin_sessoes (jti, user_id, expira_em) values (${jti}, ${user.id}, now() + make_interval(secs => ${ADMIN_TOKEN_TTL_SEGUNDOS}))`);
     await limparFalhasConta(chave);
-    await auditLogin(user.id, "admin_login_ok", req.ip, { role: user.role });
+    const dispositivo = resumirDispositivo(req.headers["user-agent"]);
+    const auditId = await auditLogin(user.id, "admin_login_ok", req.ip, { role: user.role, dispositivo });
     res.json({
       token,
       user: {
@@ -293,6 +296,8 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
       },
       expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, // segundos: duração absoluta do token de admin (15 min)
     });
+    // A6: alerta por email DEPOIS de responder (nunca bloqueia nem falha o login; a função nunca lança). Só aqui: login com sucesso.
+    void alertarLoginAdmin({ adminId: user.id, email: user.email, ip: req.ip, dispositivo, auditId }).catch(() => {});
   } catch (err) {
     // Falha da BD (ou das tabelas de proteção por aplicar): nega (fail-closed), sem detalhes.
     log?.error({ err: err instanceof Error ? err.name : "erro" }, "login de admin: erro interno (a negar)");
