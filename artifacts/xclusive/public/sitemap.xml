@@ -1,3 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Intencionalmente vazio: o site não está aberto à indexação (index.html: noindex, nofollow). -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://xclusive.ao/</loc></url>
+  <url><loc>https://xclusive.ao/termos</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/privacidade</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/cookies</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/politica-de-conteudo</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/direitos-de-autor</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/reembolsos</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/termos-criadoras</loc><lastmod>2026-11-15</lastmod></url>
+  <url><loc>https://xclusive.ao/modelo-consentimento</loc><lastmod>2026-11-15</lastmod></url>
+</urlset>

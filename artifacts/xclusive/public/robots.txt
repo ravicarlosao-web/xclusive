@@ -1,13 +1,19 @@
+# Xclusive — só as páginas públicas indexáveis (inicial e legais) são permitidas; o resto não se rastreia.
+# As páginas privadas também levam <meta name="robots" content="noindex, nofollow"> (src/lib/robots.ts).
 User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /home
-Disallow: /mensagens
-Disallow: /notificacoes
-Disallow: /definicoes
-Disallow: /carteira
-Disallow: /onboarding
-Disallow: /tornar-criador
+Allow: /$
+Allow: /termos
+Allow: /privacidade
+Allow: /cookies
+Allow: /politica-de-conteudo
+Allow: /direitos-de-autor
+Allow: /reembolsos
+Allow: /termos-criadoras
+Allow: /modelo-consentimento
+# Recursos que as páginas indexáveis precisam para desenhar (JS, CSS, ícones, imagens): sem eles o Google não vê o conteúdo.
+Allow: /assets/
+Allow: /*.png$
+Allow: /*.ico$
+Disallow: /
 
-# Xclusive — Plataforma de conteúdo exclusivo para criadores angolanos
-# https://xclusive.ao
+Sitemap: https://xclusive.ao/sitemap.xml
