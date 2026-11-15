@@ -392,6 +392,11 @@ app.use("/api", router);
 // Nunca expõe stack traces ao cliente — apenas loga internamente.
 import type { ErrorRequestHandler } from "express";
 const globalErrorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  // Corpo acima do limite (ex.: comprovativo > 8 MB em /wallet/topup): recusa clara, não um erro interno.
+  if ((err as { status?: number })?.status === 413 || (err as { type?: string })?.type === "entity.too.large") {
+    if (!res.headersSent) res.status(413).json({ error: "O ficheiro é demasiado grande.", codigo: "corpo_demasiado_grande" });
+    return;
+  }
   (req as any).log?.error({ err }, "Erro não tratado");
   if (!res.headersSent) {
     res.status(500).json({ error: "Erro interno." });
