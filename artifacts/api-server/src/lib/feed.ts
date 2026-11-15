@@ -1,4 +1,5 @@
-import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { criadorPublicoSql } from "./contasPublicas";
 import {
   db, postsTable, postMediaTable, likesTable, savedPostsTable, commentsTable, usersTable, followsTable,
   subscriptionsTable, purchasesTable,
@@ -34,7 +35,8 @@ type Linha = typeof postsTable.$inferSelect;
 /** Posts ordenados e já filtrados para o separador pedido, com a contagem total. */
 async function paginaDoFeed(o: { userId: number; filtro: FiltroFeed; limit: number; offset: number }): Promise<{ posts: Linha[]; total: number }> {
   const visualizador = await lerVisualizador(o.userId);
-  const visivel = postVisivelPara(visualizador);
+  // REGRA ÚNICA (lib/contasPublicas.ts): o feed só mostra publicações de criadoras públicas (nunca contas admin); as do próprio visualizador ficam sempre.
+  const visivel = and(postVisivelPara(visualizador), or(eq(postsTable.autorId, o.userId), criadorPublicoSql(postsTable.autorId)));
   const total = sql<number>`count(*) over()::int`;
 
   if (o.filtro === "tudo") {

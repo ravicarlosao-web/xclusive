@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { eContaAdmin } from "../lib/contasPublicas";
 import { db, subscriptionPlansTable, subscriptionsTable, purchasesTable, usersTable, postsTable, followsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -241,12 +242,12 @@ router.get("/users/:username/subscription-plan", requireAuth, async (req: AuthRe
   const username = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
 
   const [user] = await db
-    .select({ id: usersTable.id, tipoSubscricao: usersTable.tipoSubscricao })
+    .select({ id: usersTable.id, tipoSubscricao: usersTable.tipoSubscricao, role: usersTable.role })
     .from(usersTable)
     .where(eq(usersTable.username, username))
     .limit(1);
 
-  if (!user) { res.status(404).json({ error: "Criador não encontrado." }); return; }
+  if (!user || eContaAdmin(user)) { res.status(404).json({ error: "Criador não encontrado." }); return; }
 
   // Conta gratuita: não há plano nem preço; o fã subscreve com { criadorId } (POST /subscriptions).
   if (user.tipoSubscricao === "gratuita") {
@@ -356,9 +357,9 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
       if (criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
 
       // O tipo da conta é lido AGORA: só vale para novas subscrições.
-      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, criadorId));
-      // Conta inativa (suspensa ou encerrada): não recebe subscrições.
-      if (!criador || !criador.ativo || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
+      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, criadorId));
+      // Conta inativa (suspensa ou encerrada) ou de administração: não recebe subscrições (como se não existisse).
+      if (!criador || !criador.ativo || eContaAdmin(criador) || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
       // Par bloqueado (em qualquer dos sentidos): como se o criador não existisse, antes de qualquer cobrança.
       if (await bloqueadoEntre(req.userId!, criadorId, tx)) throw new PaymentError("Criador não encontrado.", 404);
       if (gratuita && criador.tipoSubscricao !== "gratuita") throw new PaymentError("Este criador tem subscrição paga: escolhe um plano.", 409);

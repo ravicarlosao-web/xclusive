@@ -3,6 +3,7 @@ import { Router } from "express";
 import { db, usersTable, userMais18ChoicesTable, followsTable, postsTable, notificationsTable, likesTable, kycSubmissionsTable, creatorTermsAcceptancesTable } from "@workspace/db";
 import { eq, and, ne, sql, not, inArray, desc } from "drizzle-orm";
 import { z } from "zod/v4";
+import { criadoresPublicos, contaVisivel, eContaAdmin } from "../lib/contasPublicas";
 import { requireAuth, comparePassword, type AuthRequest } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { createStorageKey, deletePrivate, getMissingPrivateStorageEnv, isPrivateStorageConfigured, uploadPrivate, urlMedia, urlAvatarOuCapa } from "../lib/storage";
@@ -84,10 +85,10 @@ router.get("/users/suggestions", requireAuth, async (req: AuthRequest, res): Pro
   }
 
   const query = db.select().from(usersTable).limit(10);
-  // Contas inativas (suspensas, encerradas) não aparecem nas sugestões.
+  // REGRA ÚNICA (lib/contasPublicas.ts): só criadoras ativas e fora da administração (nunca fãs, suspensas, encerradas nem admins).
   const users = excludeIds.length > 0
-    ? await query.where(and(eq(usersTable.ativo, true), not(inArray(usersTable.id, excludeIds))))
-    : await query.where(eq(usersTable.ativo, true));
+    ? await query.where(and(criadoresPublicos(), not(inArray(usersTable.id, excludeIds))))
+    : await query.where(criadoresPublicos());
 
   // Seguidores ativos de cada sugestão: UMA agregação para todas (antes era uma consulta por utilizador).
   const contagens = users.length > 0
@@ -126,24 +127,10 @@ router.get(["/users/top-creators", "/creators/top"], requireAuth, async (req: Au
         tipoConta: usersTable.tipoConta,
       })
       .from(usersTable)
-      .where(and(eq(usersTable.tipoConta, "criador"), eq(usersTable.ativo, true)))
+      .where(criadoresPublicos())   // REGRA ÚNICA; sem «plano B» com outras contas: se não houver criadoras, a lista fica vazia
       .limit(20);
 
-    let candidateUsers = creators;
-    if (candidateUsers.length === 0) {
-      candidateUsers = await db
-        .select({
-          id: usersTable.id,
-          username: usersTable.username,
-          nomeExibicao: usersTable.nomeExibicao,
-          avatarUrl: usersTable.avatarUrl,
-          verificado: usersTable.verificado,
-          tipoConta: usersTable.tipoConta,
-        })
-        .from(usersTable)
-        .where(eq(usersTable.ativo, true))
-        .limit(20);
-    }
+    const candidateUsers = creators;
 
     if (candidateUsers.length === 0) {
       res.json([]);
@@ -624,8 +611,8 @@ router.get("/users/:username", requireAuth, async (req: AuthRequest, res): Promi
 
   const raw = Array.isArray(username) ? username[0] : username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  // Conta suspensa (inclui perfis retirados por denúncia): o perfil deixa de ser servido
-  if (!user || !user.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+  // Conta suspensa (inclui perfis retirados por denúncia) ou de administração: o perfil deixa de ser servido, igual a uma conta que não existe
+  if (!user || !user.ativo || eContaAdmin(user)) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
 
   const [{ seguidores }] = await db.select({ seguidores: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidoId, user.id), utilizadorAtivo(followsTable.seguidorId)));
   const [{ seguindo }] = await db.select({ seguindo: sql<number>`count(*)::int` }).from(followsTable).where(and(eq(followsTable.seguidorId, user.id), utilizadorAtivo(followsTable.seguidoId)));
@@ -669,7 +656,7 @@ router.post("/users/:username/follow", requireAuth, async (req: AuthRequest, res
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [target] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
   // Conta inexistente OU inativa (encerrada, banida, suspensa): a mesma resposta (não revela que a conta existe) e nada é gravado.
-  if (!target || !target.ativo || target.id === userId) { res.status(400).json({ error: "Inválido" }); return; }
+  if (!target || !target.ativo || eContaAdmin(target) || target.id === userId) { res.status(400).json({ error: "Inválido" }); return; }
   // Par bloqueado (em qualquer dos sentidos): a mesma resposta de uma conta inexistente ou inativa; nada é gravado.
   if (await bloqueadoEntre(userId, target.id)) { res.status(400).json({ error: "Inválido" }); return; }
 
@@ -705,13 +692,13 @@ router.delete("/users/:username/follow", requireAuth, async (req: AuthRequest, r
 router.get("/users/:username/followers", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!user || eContaAdmin(user)) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   if (!await canViewPrivateContent(user, req.userId)) {
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const followers = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidorId, usersTable.id)).where(and(eq(followsTable.seguidoId, user.id), eq(usersTable.ativo, true))).limit(50);
+  const followers = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidorId, usersTable.id)).where(and(eq(followsTable.seguidoId, user.id), contaVisivel())).limit(50);   // seguidores: os fãs são legítimos (quem segue a criadora), mas nunca contas de administração
   const users = followers.map(f => ({
     id: f.u.id,
     username: f.u.username,
@@ -730,13 +717,13 @@ router.get("/users/:username/followers", requireAuth, async (req: AuthRequest, r
 router.get("/users/:username/following", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!user || eContaAdmin(user)) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   if (!await canViewPrivateContent(user, req.userId)) {
     res.status(403).json({ error: "Esta conta é privada." }); return;
   }
 
-  const following = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidoId, usersTable.id)).where(and(eq(followsTable.seguidorId, user.id), eq(usersTable.ativo, true))).limit(50);
+  const following = await db.select({ u: usersTable }).from(followsTable).innerJoin(usersTable, eq(followsTable.seguidoId, usersTable.id)).where(and(eq(followsTable.seguidorId, user.id), criadoresPublicos())).limit(50);   // a seguir: REGRA ÚNICA (só criadoras ativas, nunca admins nem fãs)
   const users = following.map(f => ({
     id: f.u.id,
     username: f.u.username,
@@ -755,7 +742,7 @@ router.get("/users/:username/following", requireAuth, async (req: AuthRequest, r
 router.get("/users/:username/posts", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!user || eContaAdmin(user)) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   if (!await canViewPrivateContent(user, req.userId)) {
     res.status(403).json({ error: "Esta conta é privada." }); return;

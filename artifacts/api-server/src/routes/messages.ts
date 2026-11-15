@@ -1,3 +1,4 @@
+import { eContaAdmin } from "../lib/contasPublicas";
 import { Router, type Response } from "express";
 import { db, conversationsTable, conversationParticipantsTable, messagesTable, usersTable, messageTipsTable, reportsTable } from "@workspace/db";
 import { eq, and, sql, desc, asc, inArray, lt, gt } from "drizzle-orm";
@@ -149,8 +150,13 @@ router.post("/conversations", requireAuth, async (req: AuthRequest, res): Promis
   if (alvoId === userId) { res.status(400).json({ error: "Não podes iniciar uma conversa contigo próprio." }); return; }
 
   // Não se abre conversa com uma conta inativa (suspensa ou encerrada).
-  const [alvo] = await db.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, alvoId));
+  const [alvo] = await db.select({ ativo: usersTable.ativo, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, alvoId));
   if (!alvo || !alvo.ativo) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+  // Conta de administração: só ela abre conversas com utilizadores; ninguém abre uma com ela (igual a uma conta que não existe).
+  if (eContaAdmin(alvo)) {
+    const [eu] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
+    if (!eContaAdmin(eu)) { res.status(404).json({ error: "Utilizador não encontrado" }); return; }
+  }
 
   // Bloqueio em qualquer sentido: mesma resposta que a conta inativa (não revela o bloqueio).
   const perm = await permissaoMensagem(userId, { destinatarioId: alvoId });

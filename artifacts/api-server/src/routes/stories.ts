@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { criadorPublicoSql, eContaAdmin } from "../lib/contasPublicas";
 import { db, storiesTable, storyViewsTable, highlightsTable, highlightStoriesTable, usersTable, followsTable } from "@workspace/db";
 import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../lib/auth";
@@ -29,8 +30,8 @@ async function storiesVisiveis(userId: number | undefined, storyId?: number) {
   const visualizador = await lerVisualizador(userId);
   const unica = storyId === undefined ? undefined : eq(storiesTable.id, storyId);
   const allStories = authorIds.length > 0
-    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel(), storyPermitida(visualizador), unica)).orderBy(desc(storiesTable.criadoEm))
-    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel(), storyPermitida(visualizador), unica)).orderBy(desc(storiesTable.criadoEm)).limit(20);
+    ? await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), inArray(storiesTable.autorId, authorIds), storyVisivel(), storyPermitida(visualizador), unica, criadorPublicoSql(storiesTable.autorId))).orderBy(desc(storiesTable.criadoEm))
+    : await db.select().from(storiesTable).where(and(gt(storiesTable.expiraEm, now), storyVisivel(), storyPermitida(visualizador), unica, criadorPublicoSql(storiesTable.autorId))).orderBy(desc(storiesTable.criadoEm)).limit(20);
 
   // Filtrar stories de audiência restrita: "subscritores" só visível com subscrição ativa
   const stories: typeof allStories = [];
@@ -202,7 +203,7 @@ router.post("/highlights", requireAuth, async (req: AuthRequest, res): Promise<v
 router.get("/users/:username/highlights", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const raw = Array.isArray(req.params.username) ? req.params.username[0] : req.params.username;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.username, raw.toLowerCase()));
-  if (!user) { res.status(404).json({ error: "Não encontrado" }); return; }
+  if (!user || eContaAdmin(user)) { res.status(404).json({ error: "Não encontrado" }); return; }
 
   // Destaques: some o destaque se tiver alguma story +18 que este visualizador não pode ver.
   const vh = await lerVisualizador(req.userId);

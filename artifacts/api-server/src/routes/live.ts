@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { criadoresPublicos, idEContaAdmin } from "../lib/contasPublicas";
 import crypto from "node:crypto";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { db, usersTable, purchasesTable, liveStreamsTable, liveTipsTable, liveTicketsTable, notificationsTable } from "@workspace/db";
@@ -55,7 +56,7 @@ router.get("/live/active", requireAuth, async (req: AuthRequest, res): Promise<v
       })
       .from(liveStreamsTable)
       .innerJoin(usersTable, eq(usersTable.id, liveStreamsTable.criadorId))
-      .where(and(eq(liveStreamsTable.status, "ao_vivo"), liveVisivel(), livePermitida(visualizador)));
+      .where(and(eq(liveStreamsTable.status, "ao_vivo"), liveVisivel(), livePermitida(visualizador), criadoresPublicos()));   // REGRA ÚNICA: lives só de criadoras públicas
 
     const allowed = await liveIdsWithAccess(req.userId, activeStreams);
 
@@ -228,7 +229,7 @@ router.post("/live/:streamId/tip", requireAuth, validate(liveTipSchema), async (
       return;
     }
     // Par bloqueado (em qualquer dos sentidos) com a criadora: como uma live que não existe, ANTES de qualquer cobrança.
-    if (await bloqueadoEntre(senderId, stream.criadorId)) {
+    if (await bloqueadoEntre(senderId, stream.criadorId) || await idEContaAdmin(stream.criadorId)) {   // (conta de administração: igual)
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }
@@ -552,7 +553,7 @@ router.post("/live/:streamId/ticket", requireAuth, async (req: AuthRequest, res)
       return;
     }
     // Par bloqueado (em qualquer dos sentidos) com a criadora: como uma live que não existe, ANTES de qualquer cobrança.
-    if (await bloqueadoEntre(buyerId, stream0.criadorId)) {
+    if (await bloqueadoEntre(buyerId, stream0.criadorId) || await idEContaAdmin(stream0.criadorId)) {   // (conta de administração: igual)
       res.status(404).json({ error: "Live não encontrada." });
       return;
     }

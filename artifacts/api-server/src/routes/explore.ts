@@ -3,6 +3,7 @@ import { db, postsTable, usersTable, hashtagsTable } from "@workspace/db";
 import { sql, desc, and, eq } from "drizzle-orm";
 import { postVisivelPara, lerVisualizador } from "../lib/conteudoMais18";
 import { requireAuth, type AuthRequest } from "../lib/auth";
+import { criadoresPublicos, criadorPublicoSql } from "../lib/contasPublicas";
 import { formatarPostsEmLote } from "../lib/feed";
 import { erroSeguro } from "../lib/erroSeguro";
 import { urlMedia } from "../lib/storage";
@@ -26,7 +27,7 @@ router.get("/explore", requireAuth, async (req: AuthRequest, res): Promise<void>
       .from(postsTable)
       // Cast the enum to text so this route also works while older databases
       // still have a post_tipo enum without the newer "texto" value.
-      .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivelPara(visualizador)))
+      .where(and(sql`${postsTable.tipo}::text <> 'texto'`, postVisivelPara(visualizador), criadorPublicoSql(postsTable.autorId)))   // Explorar: só publicações de criadoras públicas (REGRA ÚNICA)
       .orderBy(desc(postsTable.criadoEm), desc(postsTable.id))
       .limit(limit)
       .offset(offset);
@@ -57,7 +58,7 @@ router.get("/search", requireAuth, async (req: AuthRequest, res): Promise<void> 
 
   if (type === "all" || type === "accounts") {
     const users = await db.select().from(usersTable)
-      .where(and(eq(usersTable.ativo, true), sql`(lower(${usersTable.username}) like ${pattern} OR lower(${usersTable.nomeExibicao}) like ${pattern})`))
+      .where(and(criadoresPublicos(), sql`(lower(${usersTable.username}) like ${pattern} OR lower(${usersTable.nomeExibicao}) like ${pattern})`))   // pesquisa: REGRA ÚNICA
       .limit(10);
 
     accounts = users.map(u => ({
