@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { idEContaAdmin } from "../lib/contasPublicas";
 import { db, purchasesTable, usersTable, postsTable, notificationsTable } from "@workspace/db";
 import { formatarKz } from "../lib/gorjetaMensagem";
 import { eq, and, sql, desc } from "drizzle-orm";
@@ -62,6 +63,8 @@ router.post("/posts/:postId/gorjeta", requireAuth, validate(gorjetaSchema), asyn
       .limit(1);
 
     if (!post) { res.status(404).json({ error: "Post não encontrado." }); return; }
+    // Post de uma conta de administração: não recebe gorjetas (como se o post não existisse), ANTES de qualquer cobrança.
+    if (await idEContaAdmin(post.autorId)) { res.status(404).json({ error: "Post não encontrado." }); return; }
     // Conteúdo +18 que o remetente não vê: 404 ANTES de qualquer cobrança.
     if (bloqueadoMais18(await lerVisualizador(senderId), post)) { res.status(404).json({ error: "Post não encontrado." }); return; }
     if (post.autorId === senderId) { res.status(400).json({ error: "Não podes dar gorjeta ao teu próprio post." }); return; }

@@ -46,13 +46,18 @@ export function SugestoesParaTi({ ativo, porPagina = 2 }: { ativo: boolean; porP
   const ir = (d: number) => setI((x) => (x + d + paginas) % paginas);
   const seta = 'flex h-[var(--cd-seta,32px)] w-[var(--cd-seta,32px)] items-center justify-center rounded-full text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
+  // Sem criadoras para sugerir (já carregou, sem erro): a secção não aparece (nada de título solto).
+  if (ativo && !isLoading && !isError && lista.length === 0) return null;
+
   return (
     <section aria-labelledby="sugestoes-titulo" className="cd-sug mb-[var(--cd-gap-a,20px)] shrink-0" data-testid="sugestoes-para-ti">
       <div className="mb-[var(--cd-hmb,12px)] flex items-center justify-between px-0.5">
         <h2 id="sugestoes-titulo" className="text-base font-bold tracking-tight text-foreground">Sugestões para ti</h2>
         <div className="flex items-center gap-1">
+          {paginas > 1 && (<>
           <button type="button" aria-label="Sugestões anteriores" disabled={paginas < 2} onClick={() => ir(-1)} data-testid="sugestao-anterior" className={seta}><ChevronLeft className="h-4 w-4" aria-hidden="true" /></button>
           <button type="button" aria-label="Sugestões seguintes" disabled={paginas < 2} onClick={() => ir(1)} data-testid="sugestao-seguinte" className={seta}><ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
+          </>)}
           <Link href="/explorar" className="ml-1 text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="sugestoes-ver-todas">Ver todas</Link>
         </div>
       </div>

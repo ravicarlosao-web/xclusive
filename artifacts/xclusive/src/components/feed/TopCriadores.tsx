@@ -39,6 +39,9 @@ export function TopCriadores({ ativo }: { ativo: boolean }) {
   });
   const criadores = (ativo && data ? data : []).slice(0, 5);
 
+  // Sem criadoras no ranking (já carregou, sem erro): a secção não aparece (nada de título solto).
+  if (ativo && !isLoading && !isError && criadores.length === 0) return null;
+
   return (
     <section aria-labelledby="top-criadores-titulo" className="cd-top mb-[var(--cd-gap-b,24px)] shrink-0" data-testid="top-criadores">
       <div className="mb-[var(--cd-hmb,12px)] flex items-center justify-between px-0.5">
