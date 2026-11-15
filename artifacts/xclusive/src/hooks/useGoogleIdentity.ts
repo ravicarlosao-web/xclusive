@@ -17,6 +17,9 @@ interface Gsi { accounts: { id: {
 } } }
 declare global { interface Window { google?: Gsi } }
 
+/** Tema do botão da Google: escuro no tema escuro (filled_black), claro no tema claro (outline). O estado real é a classe «dark» do <html>. */
+const temaDoBotao = (): 'filled_black' | 'outline' => (document.documentElement.classList.contains('dark') ? 'filled_black' : 'outline');
+
 export type EstadoGoogle = 'a-ver' | 'desligado' | 'a-carregar' | 'pronto' | 'erro-script' | 'erro-rede';
 
 let scriptPromessa: Promise<void> | null = null;
@@ -59,7 +62,21 @@ export function useGoogleIdentity(alvo: React.RefObject<HTMLElement | null>, aoC
       },
     });
     el.replaceChildren();
-    window.google.accounts.id.renderButton(el, { type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', shape: 'rectangular', logo_alignment: 'left', width: Math.min(400, Math.max(200, el.clientWidth || 320)), locale: 'pt-PT' });
+    window.google.accounts.id.renderButton(el, { type: 'standard', theme: temaDoBotao(), size: 'large', text: 'continue_with', shape: 'rectangular', logo_alignment: 'left', width: Math.min(400, Math.max(200, el.clientWidth || 320)), locale: 'pt-PT' });
+  }, [alvo]);
+
+  // Mudou o tema (claro/escuro) com o botão já desenhado: volta a desenhar SÓ o botão com o tema certo (sem novo nonce nem novo initialize).
+  useEffect(() => {
+    let ultimo = temaDoBotao();
+    const obs = new MutationObserver(() => {
+      const atual = temaDoBotao(); if (atual === ultimo) return; ultimo = atual;
+      const el = alvo.current;
+      if (!el || !window.google?.accounts?.id || el.childElementCount === 0) return;
+      el.replaceChildren();
+      window.google.accounts.id.renderButton(el, { type: 'standard', theme: atual, size: 'large', text: 'continue_with', shape: 'rectangular', logo_alignment: 'left', width: Math.min(400, Math.max(200, el.clientWidth || 320)), locale: 'pt-PT' });
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
   }, [alvo]);
 
   useEffect(() => {
