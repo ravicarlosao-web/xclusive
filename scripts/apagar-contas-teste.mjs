@@ -94,7 +94,8 @@ try {
   const cnt = async (sql, p = [ids]) => (await q(sql, p)).rows;
 
   // referências por chave estrangeira com RESTRICT / NO ACTION: as conhecidas tratam-se abaixo; qualquer outra é um bloqueio duro (não se adivinha)
-  const TRATADAS = new Set(["account_closures.user_id", "creator_terms_acceptances.user_id", "identifier_blocks.user_id", "infracoes_mais18.user_id", "withdrawal_requests.creator_id", "message_tips.criador_id", "message_tips.remetente_id", "audit_log.admin_id"]);
+  const TRATADAS = new Set(["account_closures.user_id", "creator_terms_acceptances.user_id", "identifier_blocks.user_id", "infracoes_mais18.user_id", "withdrawal_requests.creator_id", "message_tips.criador_id", "message_tips.remetente_id", "audit_log.admin_id",
+    "purchases.comprador_id", "purchases.vendedor_id", "subscriptions.subscritor_id", "subscriptions.criador_id", "live_tips.remetente_id", "live_tickets.user_id", "topup_requests.user_id", "ajustes_saldo.user_id"]);
   const fks = (await q("select c.conrelid::regclass::text as tabela, a.attname as coluna from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey) where c.contype = 'f' and c.confrelid = 'users'::regclass and c.confdeltype in ('r', 'a')")).rows;
   for (const { tabela, coluna } of fks) {
     if (/^menor_cases\./.test(`${tabela}.${coluna}`)) {
@@ -124,7 +125,8 @@ try {
       + (select count(*) from withdrawal_requests w where w.creator_id = u.id)::int
       + (select count(*) from message_tips m where m.remetente_id = u.id or m.criador_id = u.id)::int
       + (select count(*) from live_tips l where l.remetente_id = u.id)::int
-      + (select count(*) from live_tickets k where k.user_id = u.id)::int as n, (u.saldo <> 0 or u.ganhos <> 0) as saldo
+      + (select count(*) from live_tickets k where k.user_id = u.id)::int
+      + (select count(*) from ajustes_saldo j where j.user_id = u.id)::int as n, (u.saldo <> 0 or u.ganhos <> 0) as saldo
     from users u where u.id = any($1)`, [ids])).rows;
   if (!incluirFinanceiro) for (const r of fin) if (r.n > 0 || r.saldo) opcao.push({ conta: r.id, motivo: `tem movimentos financeiros (${r.n} linhas${r.saldo ? ", saldo ou ganhos ≠ 0" : ""}); para os apagar junto usa --incluir-financeiro` });
   const aud = (await q("select admin_id as id, count(*)::int as n from audit_log where admin_id = any($1) group by 1", [ids])).rows;
@@ -165,6 +167,14 @@ try {
       await q("delete from creator_terms_acceptances where user_id = $1", [c.id]);
       await q("delete from identifier_blocks where user_id = $1", [c.id]);
       await q("delete from infracoes_mais18 where user_id = $1", [c.id]);
+      // Linhas de dinheiro DESTA conta, por ordem (as chaves para users e para live_streams são RESTRICT: já não há cascata). Só chegam aqui com --incluir-financeiro e sem
+      // contas fora da lista (os bloqueios duros acima); tudo na transação da conta (savepoint): se algo falhar, nada desta conta é apagado.
+      await q("delete from live_tips where remetente_id = $1 or stream_id in (select id from live_streams where criador_id = $1)", [c.id]);
+      await q("delete from live_tickets where user_id = $1 or live_id in (select id from live_streams where criador_id = $1)", [c.id]);
+      await q("delete from subscriptions where subscritor_id = $1 or criador_id = $1", [c.id]);
+      await q("delete from purchases where comprador_id = $1 or vendedor_id = $1", [c.id]);
+      await q("delete from topup_requests where user_id = $1", [c.id]);
+      await q("delete from ajustes_saldo where user_id = $1", [c.id]);
       await q("delete from withdrawal_requests where creator_id = $1", [c.id]);
       if (incluirAuditoria) await q("delete from audit_log where admin_id = $1", [c.id]);
       await q("delete from users where id = $1", [c.id]);

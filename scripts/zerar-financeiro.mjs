@@ -22,6 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import { calcularContas } from "./financeiro-formula.mjs";
 
 const falha = (msg, codigo = 1) => { console.error(`❌ ${msg}`); process.exit(codigo); };
 const COM_VALOR = new Set(["--contas", "--snapshot", "--por", "--aprovadores"]), SIMPLES = new Set(["--confirmar", "--aceitar-diferenca", "--ajuda", "-h"]);
@@ -112,6 +113,7 @@ try {
     subscriptions: await sel("select id from subscriptions where subscritor_id = any($1) or criador_id = any($1)"),
     withdrawal_requests: await sel("select id from withdrawal_requests where creator_id = any($1) or processed_by = any($1) or retido_por = any($1)"),
     topup_requests: await sel("select id from topup_requests where user_id = any($1) or processado_por = any($1)"),
+    ajustes_saldo: await sel("select id from ajustes_saldo where user_id = any($1) or admin_id = any($1)"),
   };
   // gorjetas/bilhetes cuja compra está no âmbito, mesmo que as partes sejam outras (a trava abaixo trata-as)
   const extra = async (tab, col, ref) => (await q(`select id from ${tab} where ${col} = any($1) and not (id = any($2))`, [ID.purchases, ID[ref]])).rows.map((r) => r.id);
@@ -138,6 +140,8 @@ try {
     ["withdrawal_requests", "retido por", "select retido_por as c, count(*)::int n from withdrawal_requests where id = any($1) and retido_por is not null group by 1", true],
     ["topup_requests", "titular", "select user_id as c, count(*)::int n from topup_requests where id = any($1) group by 1", false],
     ["topup_requests", "aprovador", "select processado_por as c, count(*)::int n from topup_requests where id = any($1) and processado_por is not null group by 1", true],
+    ["ajustes_saldo", "conta ajustada", "select user_id as c, count(*)::int n from ajustes_saldo where id = any($1) group by 1", false],
+    ["ajustes_saldo", "admin do ajuste", "select admin_id as c, count(*)::int n from ajustes_saldo where id = any($1) group by 1", true],
   ];
   for (const [tabela, papel, sql, eAprovador] of partes) {
     for (const r of (await q(sql, [ID[tabela]])).rows) {
@@ -158,17 +162,7 @@ try {
   if (prot) await abortar(`TRAVA: ${prot} mensagem(ns) de gorjeta estão protegidas como prova (denunciadas ou retiradas). Nada foi alterado.`);
 
   // ── TRAVA 2: saldo e ganhos têm de bater com o que as linhas explicam ──
-  const dif = [];
-  for (const c of contas) {
-    const r = (await q(`select
-      (select coalesce(sum(amount),0) from topup_requests where user_id = $1 and status = 'aprovado')
-      - (select coalesce(sum(valor),0) from purchases where comprador_id = $1)
-      + (select coalesce(sum((details->>'valor')::numeric),0) from audit_log where action = 'balance_adjustment' and target_type = 'user' and target_id = $1) as saldo,
-      (select coalesce(sum(valor - comissao),0) from purchases where vendedor_id = $1)
-      - (select coalesce(sum(amount),0) from withdrawal_requests where creator_id = $1 and status::text <> 'rejeitado') as ganhos`, [c.id])).rows[0];
-    const ds = Number(c.saldo) - Number(r.saldo), dg = Number(c.ganhos) - Number(r.ganhos);
-    if (Math.abs(ds) > 0.005 || Math.abs(dg) > 0.005) dif.push({ c, ds, dg });
-  }
+  const dif = (await calcularContas(q, ids)).filter((c) => c.emDesvio).map((c) => ({ c: contas.find((x) => x.id === c.id), ds: c.difSaldo, dg: c.difGanhos }));
   if (dif.length) {
     const msg = dif.map((d) => `   - ${d.c.username}: saldo difere ${fmt(d.ds)} Kz, ganhos difere ${fmt(d.dg)} Kz (guardado vs explicado pelas linhas)`).join("\n");
     if (!opt["--aceitar-diferenca"]) { console.error(`❌ TRAVA: saldo/ganhos que as linhas não explicam. Nada foi alterado.\n${msg}\n   (--aceitar-diferenca ignora só esta trava.)`); await abortar("Aborta sem alterar nada."); }
@@ -186,6 +180,7 @@ try {
     ["subscriptions", ID.subscriptions.length, null],
     ["withdrawal_requests", ID.withdrawal_requests.length, await soma("withdrawal_requests", "amount", ID.withdrawal_requests)],
     ["topup_requests", ID.topup_requests.length, await soma("topup_requests", "amount", ID.topup_requests)],
+    ["ajustes_saldo", ID.ajustes_saldo.length, await soma("ajustes_saldo", "valor", ID.ajustes_saldo)],
     ["notifications (financeiras)", ID.notifications.length, null],
   ];
   console.log(`Contas: ${contas.map((c) => c.username).join(", ")}`);
@@ -208,7 +203,7 @@ try {
 
   // ── snapshot (0600, ficheiro novo) ANTES de apagar ──
   const dump = { geradoEm: new Date().toISOString(), contas: contas.map((c) => ({ id: c.id, username: c.username, saldo: c.saldo, ganhos: c.ganhos })), tabelas: {} };
-  for (const t of ["purchases", "message_tips", "messages", "live_tips", "live_tickets", "subscriptions", "withdrawal_requests", "topup_requests", "notifications"]) {
+  for (const t of ["purchases", "message_tips", "messages", "live_tips", "live_tickets", "subscriptions", "withdrawal_requests", "topup_requests", "ajustes_saldo", "notifications"]) {
     dump.tabelas[t] = (await q(`select to_jsonb(x) as r from ${t} x where id = any($1) order by id`, [ID[t]])).rows.map((r) => r.r);
   }
   try {
@@ -230,6 +225,7 @@ try {
   await del("purchases", ID.purchases);
   await del("withdrawal_requests", ID.withdrawal_requests);   // NO ACTION → users
   await del("topup_requests", ID.topup_requests);
+  await del("ajustes_saldo", ID.ajustes_saldo);
   await q("update users set saldo = 0, ganhos = 0 where id = any($1)", [ids]);
 
   // verificação final dentro da transação: tudo a zero, senão reverte
@@ -239,6 +235,7 @@ try {
     (select count(*)::int from subscriptions where subscritor_id = any($1) or criador_id = any($1)) +
     (select count(*)::int from withdrawal_requests where creator_id = any($1)) +
     (select count(*)::int from topup_requests where user_id = any($1)) +
+    (select count(*)::int from ajustes_saldo where user_id = any($1)) +
     (select count(*)::int from users where id = any($1) and (saldo <> 0 or ganhos <> 0)) as n`, [ids])).rows[0].n;
   if (resto) throw Object.assign(new Error("resto"), { code: "RESTO" });
 
