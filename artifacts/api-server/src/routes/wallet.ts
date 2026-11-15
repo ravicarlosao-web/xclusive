@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  db, usersTable, purchasesTable, topupRequestsTable,
+  db, usersTable, purchasesTable, topupRequestsTable, ajustesSaldoTable,
   withdrawalRequestsTable, creatorPayoutAccountsTable, platformSettingsTable, auditLogTable,
 } from "@workspace/db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
@@ -85,6 +85,14 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
       .orderBy(desc(topupRequestsTable.criadoEm))
       .limit(limit + offset);
 
+    // Ajustes manuais do admin ao saldo (linha neutra «Ajuste de saldo»; sem motivo, admin nem saldos: só data e valor)
+    const ajustes = await db
+      .select({ id: ajustesSaldoTable.id, valor: ajustesSaldoTable.valor, criadoEm: ajustesSaldoTable.criadoEm })
+      .from(ajustesSaldoTable)
+      .where(and(eq(ajustesSaldoTable.userId, userId), eq(ajustesSaldoTable.campo, "saldo")))
+      .orderBy(desc(ajustesSaldoTable.criadoEm))
+      .limit(limit + offset);
+
     // Mapear e combinar
     const purchaseTxs = purchases.map((p) => ({
       id: `p-${p.id}`,
@@ -108,7 +116,16 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
     }));
 
     // Combinar, ordenar por data e paginar
-    const all = [...purchaseTxs, ...topupTxs]
+    const ajusteTxs = ajustes.map((a) => ({
+      id: `a-${a.id}`,
+      tipo: "ajuste" as const,
+      amount: Math.abs(parseFloat(a.valor as string)),
+      descricao: "Ajuste de saldo",
+      criadoEm: a.criadoEm.toISOString(),
+      credit: parseFloat(a.valor as string) > 0,
+    }));
+
+    const all = [...purchaseTxs, ...topupTxs, ...ajusteTxs]
       .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
       .slice(offset, offset + limit);
 

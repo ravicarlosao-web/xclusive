@@ -34,6 +34,7 @@ import {
   topupRequestsTable,
   notificationsTable,
   infracoesMais18Table,
+  ajustesSaldoTable,
 } from "@workspace/db";
 import {
   eq,
@@ -101,10 +102,11 @@ async function auditNaTransacao(
   targetType: string | null,
   targetId: number | null,
   details: Record<string, unknown>,
-): Promise<void> {
-  await tx.insert(auditLogTable).values({
+): Promise<number> {
+  const [linha] = await tx.insert(auditLogTable).values({
     adminId: req.adminId!, action, targetType: targetType ?? undefined, targetId: targetId ?? undefined, details, ipAddress: req.ip ?? null,
-  });
+  }).returning({ id: auditLogTable.id });
+  return linha.id;
 }
 
 // ── Paginação helper ──────────────────────────────────────────────────────────
@@ -1461,8 +1463,13 @@ router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: 
       const novoSaldo = novoCent / 100;
       await tx.update(usersTable).set({ saldo: novoSaldo.toFixed(2) }).where(eq(usersTable.id, id));
       // Audit na MESMA transação (com a linha do criador ainda bloqueada): se falhar, o ajuste desfaz-se.
-      await auditNaTransacao(tx, req, "balance_adjustment", "user", id, {
+      const auditId = await auditNaTransacao(tx, req, "balance_adjustment", "user", id, {
         before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor, motivo: motivo ?? null,
+      });
+      // Linha financeira do ajuste (entra no extrato e na reconciliação), na MESMA transação do UPDATE do saldo: sem uma não há a outra.
+      await tx.insert(ajustesSaldoTable).values({
+        userId: id, campo: "saldo", valor: (valorCent / 100).toFixed(2), saldoAntes: saldoAnterior.toFixed(2), saldoDepois: novoSaldo.toFixed(2),
+        motivo: typeof motivo === "string" && motivo.trim() ? motivo.trim().slice(0, 500) : null, adminId: req.adminId!, auditId,
       });
       return { saldoAnterior, novoSaldo };
     });
@@ -1473,6 +1480,23 @@ router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: 
     res.json({ success: true, novoSaldo });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao ajustar saldo");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/** Histórico dos ajustes manuais de saldo de uma conta (linha financeira própria; mais recentes primeiro). Só leitura. */
+router.get("/admin/users/:id/ajustes-saldo", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  try {
+    const id = idDe(req.params.id);
+    if (id === null) return void res.status(400).json({ error: "ID inválido." });
+    const linhas = await db.select({
+      id: ajustesSaldoTable.id, campo: ajustesSaldoTable.campo, valor: ajustesSaldoTable.valor, saldoAntes: ajustesSaldoTable.saldoAntes,
+      saldoDepois: ajustesSaldoTable.saldoDepois, motivo: ajustesSaldoTable.motivo, adminUsername: usersTable.username, criadoEm: ajustesSaldoTable.criadoEm,
+    }).from(ajustesSaldoTable).innerJoin(usersTable, eq(usersTable.id, ajustesSaldoTable.adminId))
+      .where(eq(ajustesSaldoTable.userId, id)).orderBy(desc(ajustesSaldoTable.criadoEm), desc(ajustesSaldoTable.id)).limit(100);
+    res.json({ data: linhas.map((l) => ({ ...l, valor: Number(l.valor), saldoAntes: Number(l.saldoAntes), saldoDepois: Number(l.saldoDepois), criadoEm: l.criadoEm.toISOString() })) });
+  } catch (err) {
+    (req as any).log?.error({ err }, "Erro ao listar ajustes de saldo");
     res.status(500).json({ error: "Erro interno." });
   }
 });

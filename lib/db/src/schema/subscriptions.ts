@@ -17,8 +17,8 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
 
 export const subscriptionsTable = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
-  subscriitorId: integer("subscritor_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  criadorId: integer("criador_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  subscriitorId: integer("subscritor_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  criadorId: integer("criador_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   planoId: integer("plano_id").references(() => subscriptionPlansTable.id, { onDelete: "set null" }),
   estado: subscriptionEstadoEnum("estado").notNull().default("ativa"),
   inicioEm: timestamp("inicio_em").notNull().defaultNow(),
@@ -37,8 +37,8 @@ export const subscriptionsTable = pgTable("subscriptions", {
 
 export const purchasesTable = pgTable("purchases", {
   id: serial("id").primaryKey(),
-  compradorId: integer("comprador_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  vendedorId: integer("vendedor_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  compradorId: integer("comprador_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  vendedorId: integer("vendedor_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   tipo: purchaseTipoEnum("tipo").notNull(),
   valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
   /**
