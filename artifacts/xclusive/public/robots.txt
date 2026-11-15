@@ -11,6 +11,8 @@ Allow: /reembolsos
 Allow: /termos-criadoras
 Allow: /modelo-consentimento
 Allow: /googleb842e010fcd2614c.html
+# As páginas legais pedem este endpoint PÚBLICO (dados da empresa que preenchem o texto) para se desenharem; sem ele o Google vê «Não foi possível carregar este documento». SÓ este: o resto da API continua fechado.
+Allow: /api/auth/legal-config$
 # Recursos que as páginas indexáveis precisam para desenhar (JS, CSS, ícones, imagens): sem eles o Google não vê o conteúdo.
 Allow: /assets/
 Allow: /*.png$
