@@ -91,6 +91,7 @@ export const adminApi = {
     return res.blob();
   },
   getCreatorPlans: (id: number) => adminFetch('/admin/creators/' + id + '/plans'),
+  getAjustesSaldo: (id: number) => adminFetch('/admin/users/' + id + '/ajustes-saldo'),
   adjustBalance: (id: number, data: any) =>
     adminFetch('/admin/creators/' + id + '/balance-adjustment', { method: 'POST', body: JSON.stringify(data) }),
 

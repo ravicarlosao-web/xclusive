@@ -225,6 +225,7 @@ export default function UserDetail() {
                     <p className="text-3xl font-bold text-primary">{user.saldo?.toLocaleString()} Kz</p>
                   </CardContent>
                 </Card>
+                <AjustesSaldo userId={id} />
               </div>
             ) : (
               <div className="text-center py-10 text-muted-foreground">
@@ -239,5 +240,34 @@ export default function UserDetail() {
         </div>
       </Tabs>
     </div>
+  );
+}
+
+/** Ajustes manuais de saldo da conta (linha financeira própria; só leitura). */
+function AjustesSaldo({ userId }: { userId: number }) {
+  const { data, isLoading } = useQuery({ queryKey: ['ajustes-saldo', userId], queryFn: () => adminApi.getAjustesSaldo(userId) });
+  const linhas: any[] = data?.data ?? [];
+  return (
+    <Card className="bg-muted/30" data-testid="ajustes-saldo">
+      <CardHeader className="pb-2"><CardTitle className="text-sm">Ajustes de saldo</CardTitle></CardHeader>
+      <CardContent>
+        {isLoading ? <p className="text-sm text-muted-foreground">A carregar…</p> : linhas.length === 0 ? <p className="text-sm text-muted-foreground">Sem ajustes.</p> : (
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-muted-foreground"><th className="py-1">Data</th><th>Valor</th><th>Saldo (antes → depois)</th><th>Admin</th><th>Motivo</th></tr></thead>
+            <tbody>
+              {linhas.map((l) => (
+                <tr key={l.id} className="border-t border-border">
+                  <td className="py-1">{format(new Date(l.criadoEm), 'dd MMM yyyy, HH:mm')}</td>
+                  <td className={l.valor >= 0 ? 'text-green-700 dark:text-green-400' : ''}>{l.valor > 0 ? '+' : ''}{l.valor.toLocaleString()} Kz</td>
+                  <td>{l.saldoAntes.toLocaleString()} → {l.saldoDepois.toLocaleString()}</td>
+                  <td>{l.adminUsername}</td>
+                  <td>{l.motivo ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

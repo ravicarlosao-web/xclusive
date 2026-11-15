@@ -12,6 +12,7 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
@@ -167,7 +168,7 @@ export type InfracaoMais18 = typeof infracoesMais18Table.$inferSelect;
 
 export const topupRequestsTable = pgTable("topup_requests", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   reference: varchar("reference", { length: 20 }).notNull().unique(),
   /**
@@ -209,3 +210,34 @@ export const platformSettingsTable = pgTable("platform_settings", {
 });
 
 export type PlatformSetting = typeof platformSettingsTable.$inferSelect;
+
+// ─── ajustes_saldo ───────────────────────────────────────────────────────────
+
+/**
+ * Movimentos de AJUSTE manual do admin (linha financeira própria, que entra no extrato e na reconciliação).
+ * Escrita na MESMA transação do UPDATE do saldo/ganhos; o audit_log continua a registar a ação (audit_id), mas o audit_log pode ser
+ * apagado e esta tabela não: por isso é ela (e não o audit_log) que entra na fórmula do saldo.
+ * RESTRICT: nem a conta ajustada nem o admin podem ser apagados enquanto existirem ajustes.
+ * Começa VAZIA (sem backfill dos ajustes antigos do audit_log: o financeiro foi zerado antes de existir esta tabela).
+ */
+export const ajustesSaldoTable = pgTable("ajustes_saldo", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  /** O que foi ajustado: 'saldo' (carteira do fã/criador) ou 'ganhos'. Hoje a rota de admin só ajusta o saldo. */
+  campo: varchar("campo", { length: 10 }).notNull(),
+  /** Valor COM SINAL (crédito > 0, débito < 0), em Kz. */
+  valor: numeric("valor", { precision: 12, scale: 2 }).notNull(),
+  saldoAntes: numeric("saldo_antes", { precision: 12, scale: 2 }).notNull(),
+  saldoDepois: numeric("saldo_depois", { precision: 12, scale: 2 }).notNull(),
+  motivo: text("motivo"),
+  adminId: integer("admin_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  /** Linha do audit_log da mesma ação (SET NULL se o audit_log for apagado: o ajuste fica). */
+  auditId: integer("audit_id").references(() => auditLogTable.id, { onDelete: "set null" }),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+}, (t) => [
+  check("ajustes_saldo_campo_chk", sql`${t.campo} in ('saldo', 'ganhos')`),
+  check("ajustes_saldo_valor_chk", sql`${t.valor} <> 0`),
+  index("ajustes_saldo_user_idx").on(t.userId, t.criadoEm),
+]);
+
+export type AjusteSaldo = typeof ajustesSaldoTable.$inferSelect;

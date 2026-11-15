@@ -35,8 +35,8 @@ export const liveStreamsTable = pgTable("live_streams", {
 
 export const liveTipsTable = pgTable("live_tips", {
   id: serial("id").primaryKey(),
-  streamId: integer("stream_id").notNull().references(() => liveStreamsTable.id, { onDelete: "cascade" }),
-  remetenteId: integer("remetente_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  streamId: integer("stream_id").notNull().references(() => liveStreamsTable.id, { onDelete: "restrict" }),
+  remetenteId: integer("remetente_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   valor: integer("valor").notNull(), // Valor em centavos / inteiro
   mensagem: text("mensagem"),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
@@ -45,8 +45,8 @@ export const liveTipsTable = pgTable("live_tips", {
 // Bilhete de acesso a uma live paga. Um por (live, utilizador).
 export const liveTicketsTable = pgTable("live_tickets", {
   id: serial("id").primaryKey(),
-  liveId: integer("live_id").notNull().references(() => liveStreamsTable.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  liveId: integer("live_id").notNull().references(() => liveStreamsTable.id, { onDelete: "restrict" }),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
   comissao: numeric("comissao", { precision: 10, scale: 2 }).notNull().default("0"),
   purchaseId: integer("purchase_id").references(() => purchasesTable.id, { onDelete: "set null" }),

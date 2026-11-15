@@ -41,6 +41,7 @@ const TX_META: Record<string, { icon: React.FC<any>; color: string; label: strin
   ppv:          { icon: Unlock,        color: 'text-amber-800 dark:text-amber-400',  label: 'Desbloqueio'   },
   subscricao:   { icon: Sparkles,      color: 'text-primary',    label: 'Subscrição'    },
   levantamento: { icon: TrendingDown,  color: 'text-blue-700 dark:text-blue-400',   label: 'Levantamento'  },
+  ajuste:       { icon: RefreshCw,     color: 'text-muted-foreground',                label: 'Ajuste de saldo' },
 };
 
 // ─── Hook para transações reais ───────────────────────────────────────────────
