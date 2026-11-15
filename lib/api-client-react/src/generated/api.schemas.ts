@@ -5,6 +5,30 @@
  * Xclusive API
  * OpenAPI spec version: 0.1.0
  */
+export type TopupConfigManual = {
+  disponivel: boolean;
+  /** 21 dígitos, sem separadores (só quando disponível) */
+  nib?: string;
+  /** Blocos de 4 dígitos e o último */
+  nibFormatado?: string;
+  titular?: string;
+};
+
+export interface TopupMetodo {
+  ativo: boolean;
+  /**
+     * «Brevemente» enquanto o método não está ativo
+     * @nullable
+     */
+  rotulo: string | null;
+}
+
+export interface TopupConfig {
+  manual: TopupConfigManual;
+  gpo: TopupMetodo;
+  ref: TopupMetodo;
+}
+
 export interface HealthStatus {
   status: string;
 }

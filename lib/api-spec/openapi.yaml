@@ -18,6 +18,7 @@ tags:
   - name: notifications
   - name: highlights
   - name: creator
+  - name: wallet
 
 paths:
   /healthz:
@@ -327,6 +328,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Não autenticado
+
+  /wallet/topup/config:
+    get:
+      operationId: getTopupConfig
+      tags: [wallet]
+      summary: Dados do carregamento manual e disponibilidade dos métodos
+      description: >-
+        O que o ecrã de carregamento mostra. Os dados bancários vêm da base de dados (platform_settings), nunca do código; sem NIB e titular válidos o
+        carregamento manual não está disponível. Os métodos automáticos (Multicaixa Express e Referência) ficam «Brevemente» até serem ligados na base de dados;
+        o servidor recusa-os (403, código metodo_indisponivel) por pedido direto. Sem cache.
+      responses:
+        "200":
+          description: Configuração do carregamento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupConfig"
         "401":
           description: Não autenticado
 
@@ -1726,6 +1746,28 @@ paths:
 
 components:
   schemas:
+    TopupConfig:
+      type: object
+      required: [manual, gpo, ref]
+      properties:
+        manual:
+          type: object
+          required: [disponivel]
+          properties:
+            disponivel: { type: boolean }
+            nib: { type: string, description: "21 dígitos, sem separadores (só quando disponível)" }
+            nibFormatado: { type: string, description: "Blocos de 4 dígitos e o último" }
+            titular: { type: string }
+        gpo:
+          $ref: "#/components/schemas/TopupMetodo"
+        ref:
+          $ref: "#/components/schemas/TopupMetodo"
+    TopupMetodo:
+      type: object
+      required: [ativo, rotulo]
+      properties:
+        ativo: { type: boolean }
+        rotulo: { type: [string, "null"], description: "«Brevemente» enquanto o método não está ativo" }
     HealthStatus:
       type: object
       properties:
