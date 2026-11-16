@@ -48,7 +48,12 @@ export function dataHoraLuanda(d: Date): string {
   return `${p.day}/${p.month}/${p.year}, ${p.hour}:${p.minute} (hora de Luanda)`;
 }
 
-export function emailLoginAdmin(a: { quando: Date; ip: string; dispositivo: string; novoIp: boolean; novoDispositivo: boolean }): { assunto: string; texto: string } {
+export type MetodoSegundoPasso = "totp" | "recuperacao" | null;
+
+export function emailLoginAdmin(a: { quando: Date; ip: string; dispositivo: string; novoIp: boolean; novoDispositivo: boolean; segundoPasso?: MetodoSegundoPasso }): { assunto: string; texto: string } {
+  const passo = a.segundoPasso === "totp" ? "Verificação em dois passos: concluída com o código da aplicação de autenticação."
+    : a.segundoPasso === "recuperacao" ? "Verificação em dois passos: concluída com um CÓDIGO DE RECUPERAÇÃO."
+    : "Verificação em dois passos: não ativa nesta conta.";
   const marca = a.novoIp && a.novoDispositivo ? "IP novo e dispositivo novo: nunca usados nas sessões anteriores desta conta."
     : a.novoIp ? "IP novo: nunca usado nas sessões anteriores desta conta."
     : a.novoDispositivo ? "Dispositivo novo: nunca usado nas sessões anteriores desta conta."
@@ -56,12 +61,12 @@ export function emailLoginAdmin(a: { quando: Date; ip: string; dispositivo: stri
   const legal = emailLegal();
   return {
     assunto: (a.novoIp || a.novoDispositivo) ? "Novo início de sessão na administração da Xclusive (IP ou dispositivo novo)" : "Novo início de sessão na administração da Xclusive",
-    texto: `Olá,\n\nFoi iniciada uma sessão na administração da Xclusive com a tua conta.\n\nData e hora: ${dataHoraLuanda(a.quando)}\nEndereço IP: ${a.ip}\nNavegador: ${a.dispositivo}\n${marca}\n\n`
+    texto: `Olá,\n\nFoi iniciada uma sessão na administração da Xclusive com a tua conta.\n\nData e hora: ${dataHoraLuanda(a.quando)}\nEndereço IP: ${a.ip}\nNavegador: ${a.dispositivo}\n${marca}\n${passo}\n\n`
       + `Se foste tu, não precisas de fazer nada. Se não reconheces este acesso, avisa de imediato um superadmin e contacta ${legal}.\n\n—\nXclusive · ${legal}`,
   };
 }
 
-export interface PedidoAlerta { adminId: number; email: string; ip: string | undefined; dispositivo: string; auditId: number; quando?: Date }
+export interface PedidoAlerta { adminId: number; email: string; ip: string | undefined; dispositivo: string; auditId: number; quando?: Date; segundoPasso?: MetodoSegundoPasso }
 
 /** Envia (ou não, se passou o limite) o alerta e regista o resultado. Nunca lança. */
 export async function alertarLoginAdmin(p: PedidoAlerta): Promise<"enviado" | "falhou" | "limitado" | "erro"> {
@@ -78,7 +83,7 @@ export async function alertarLoginAdmin(p: PedidoAlerta): Promise<"enviado" | "f
         and criado_em > now() - make_interval(days => ${ALERTA_JANELA_NOVO_DIAS})`)).rows as { mesmo_ip: boolean | null; mesmo_dispositivo: boolean | null }[];
     const novoIp = antes?.mesmo_ip !== true, novoDispositivo = antes?.mesmo_dispositivo !== true;
 
-    const m = emailLoginAdmin({ quando: p.quando ?? new Date(), ip, dispositivo: p.dispositivo, novoIp, novoDispositivo });
+    const m = emailLoginAdmin({ quando: p.quando ?? new Date(), ip, dispositivo: p.dispositivo, novoIp, novoDispositivo, segundoPasso: p.segundoPasso ?? null });
     const r = await enviarEmail({ para: p.email, assunto: m.assunto, texto: m.texto });
     await db.insert(auditLogTable).values({
       adminId: p.adminId, action: r.ok ? ACAO_ENVIADO : ACAO_FALHOU, targetType: "user", targetId: p.adminId, ipAddress: p.ip?.slice(0, 45) ?? null,

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { verifyToken } from "./auth.js";
+import { totpAtivo } from "./adminTotp.js";
 
 /** Inatividade máxima de uma sessão de admin: sem pedidos durante este tempo, o token deixa de valer (o painel volta ao login). */
 export const INATIVIDADE_ADMIN_MIN = 10;
@@ -20,7 +21,9 @@ export async function sessaoAdminViva(jti: string | undefined, userId: number): 
 export async function pedidoComSessaoAdmin(authorization: string | undefined): Promise<boolean> {
   if (!authorization?.startsWith("Bearer ")) return false;
   try {
-    const p = verifyToken(authorization.slice(7)) as { userId: number; jti?: string; type?: string; adm?: boolean };
-    return p.type === "access" && p.adm === true && (await sessaoAdminViva(p.jti, p.userId));
+    const p = verifyToken(authorization.slice(7)) as { userId: number; jti?: string; type?: string; adm?: boolean; mfa?: boolean };
+    if (!(p.type === "access" && p.adm === true && (await sessaoAdminViva(p.jti, p.userId)))) return false;
+    // A4a: conta com TOTP ativo só tem poder de admin com a marca «mfa» (passou o 2.º passo).
+    return p.mfa === true || !(await totpAtivo(p.userId));
   } catch { return false; }
 }

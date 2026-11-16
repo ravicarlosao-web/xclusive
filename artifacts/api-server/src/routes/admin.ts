@@ -16,6 +16,11 @@ import { signAdminToken, ADMIN_TOKEN_TTL_SEGUNDOS, DUMMY_HASH, hashPassword } fr
 import { problemaDaPasswordAdmin, gerarPasswordAdmin } from "../lib/regrasPassword.js";
 import { alertarLoginAdmin, resumirDispositivo } from "../lib/alertaLoginAdmin.js";
 import { chaveConta, chaveIp, segundosBloqueado, registarFalha, limparFalhasConta } from "../lib/adminLogin.js";
+import { totpAtivo, totpObrigatorio, verificarSegundoPasso } from "../lib/adminTotp.js";
+import { totpDisponivel, TotpIndisponivelError, TotpCifraError } from "../lib/totpCripto.js";
+import { assinarPreAuth, lerPreAuth, preAuthJaUsado, consumirPreAuth, PREAUTH_TTL_SEGUNDOS } from "../lib/totpPreAuth.js";
+import { avisarTotp } from "../lib/alertaTotpAdmin.js";
+import { registarRotasTotp } from "./adminTotp.js";
 import { signMediaUrl, verifyMediaUrl } from "../lib/media.js";
 import {
   db,
@@ -209,9 +214,36 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise
 // ── Login ────────────────────────────────────────────────────────────────────
 
 /** Auditoria do login de admin (só contas de admin existentes: audit_log.admin_id é obrigatório). Nunca leva palavra-passe nem hash. */
-async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>): Promise<number> {
-  const [r] = await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: adminId, details, ipAddress: ip ?? null }).returning({ id: auditLogTable.id });
+async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>, alvoId?: number): Promise<number> {
+  const [r] = await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: alvoId ?? adminId, details, ipAddress: ip ?? null }).returning({ id: auditLogTable.id });
   return r.id;
+}
+
+/** Cria a sessão de admin (token + linha em admin_sessoes) e responde com o utilizador. `mfa`: a sessão passou o 2.º passo. Só chamada com a identidade já provada. */
+async function abrirSessaoAdmin(req: any, res: any, user: any, opcoes: { mfa: boolean; via?: "totp" | "recuperacao"; ativacaoNecessaria?: boolean }): Promise<void> {
+  const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role, ...(opcoes.mfa ? { mfa: true } : {}) });
+  await db.execute(sql`delete from admin_sessoes where expira_em <= now()`);
+  await db.execute(sql`insert into admin_sessoes (jti, user_id, expira_em) values (${jti}, ${user.id}, now() + make_interval(secs => ${ADMIN_TOKEN_TTL_SEGUNDOS}))`);
+  await limparFalhasConta(chaveConta(String(user.email).trim().toLowerCase()));
+  const dispositivo = resumirDispositivo(req.headers["user-agent"]);
+  const auditId = await auditLogin(user.id, "admin_login_ok", req.ip, { role: user.role, dispositivo, ...(opcoes.mfa ? { mfa: true } : {}) });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      nomeExibicao: user.nomeExibicao ?? user.username,
+      email: user.email,
+      role: user.role,
+      avatarUrl: urlMedia(user.avatarUrl ?? null),
+      trocaPasswordObrigatoria: user.trocaPasswordObrigatoria,   // true: a sessão só serve para trocar a palavra-passe (o painel mostra só o formulário)
+    },
+    expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, // segundos: duração absoluta do token de admin (15 min)
+    ...(opcoes.ativacaoNecessaria ? { totpAtivacaoNecessaria: true } : {}),
+  });
+  // A6: alerta por email DEPOIS de responder (nunca bloqueia nem falha o login; a função nunca lança). Só aqui: login com sucesso.
+  void alertarLoginAdmin({ adminId: user.id, email: user.email, ip: req.ip, dispositivo, auditId, segundoPasso: opcoes.mfa ? (opcoes.via ?? "totp") : null }).catch(() => {});
 }
 
 router.post("/admin/auth/login", async (req, res): Promise<void> => {
@@ -277,27 +309,16 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
       res.status(403).json({ error: MSG_CONTA_SUSPENSA, codigo: CODIGO_CONTA_SUSPENSA });
       return;
     }
-    const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role });
-    await db.execute(sql`delete from admin_sessoes where expira_em <= now()`);
-    await db.execute(sql`insert into admin_sessoes (jti, user_id, expira_em) values (${jti}, ${user.id}, now() + make_interval(secs => ${ADMIN_TOKEN_TTL_SEGUNDOS}))`);
-    await limparFalhasConta(chave);
-    const dispositivo = resumirDispositivo(req.headers["user-agent"]);
-    const auditId = await auditLogin(user.id, "admin_login_ok", req.ip, { role: user.role, dispositivo });
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        nomeExibicao: user.nomeExibicao ?? user.username,
-        email: user.email,
-        role: user.role,
-        avatarUrl: urlMedia(user.avatarUrl ?? null),
-        trocaPasswordObrigatoria: user.trocaPasswordObrigatoria,   // true: a sessão só serve para trocar a palavra-passe (o painel mostra só o formulário)
-      },
-      expiresIn: ADMIN_TOKEN_TTL_SEGUNDOS, // segundos: duração absoluta do token de admin (15 min)
-    });
-    // A6: alerta por email DEPOIS de responder (nunca bloqueia nem falha o login; a função nunca lança). Só aqui: login com sucesso.
-    void alertarLoginAdmin({ adminId: user.id, email: user.email, ip: req.ip, dispositivo, auditId }).catch(() => {});
+    // A4a: conta com TOTP ativo → NENHUMA sessão ainda: devolve só um pré-token de curta duração (finalidade exclusiva «totp», não serve como sessão em nenhuma rota).
+    // As falhas de palavra-passe NÃO se limpam aqui (senão a palavra-passe certa repunha a contagem das falhas de TOTP): limpam-se no fim do 2.º passo.
+    if (await totpAtivo(user.id)) {
+      if (!totpDisponivel()) { res.status(503).json({ error: "Serviço temporariamente indisponível." }); return; }
+      const pre = assinarPreAuth(user.id);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ totpNecessario: true, preAuth: pre.token, expiresIn: PREAUTH_TTL_SEGUNDOS });
+      return;
+    }
+    await abrirSessaoAdmin(req, res, user, { mfa: false, ativacaoNecessaria: await totpObrigatorio() });
   } catch (err) {
     // Falha da BD (ou das tabelas de proteção por aplicar): nega (fail-closed), sem detalhes.
     log?.error({ err: err instanceof Error ? err.name : "erro" }, "login de admin: erro interno (a negar)");
@@ -305,7 +326,57 @@ router.post("/admin/auth/login", async (req, res): Promise<void> => {
   }
 });
 
+/**
+ * 2.º passo do login (A4a): pré-token + código TOTP OU código de recuperação. Fora do guard (ainda não há sessão). O pré-token é de uso único (consumido ANTES de verificar o código).
+ * A mesma resposta genérica para código errado, expirado, repetido, pré-token inválido ou usado. As falhas contam para o bloqueio A3 (conta e IP), tal como as da palavra-passe.
+ */
+router.post("/admin/auth/login/totp", async (req, res): Promise<void> => {
+  const RECUSA = { error: "Código inválido ou expirado." };
+  const ip = chaveIp(req.ip), log = (req as any).log;
+  const { preAuth, codigo, recuperacao } = req.body ?? {};
+  try {
+    if (!totpDisponivel()) { res.status(503).json({ error: "Serviço temporariamente indisponível." }); return; }
+    const pre = lerPreAuth(preAuth);
+    const [user] = pre ? await db.select().from(usersTable).where(eq(usersTable.id, pre.userId)).limit(1) : [];
+    const chave = user ? chaveConta(String(user.email).trim().toLowerCase()) : "";
+    const bloq = await segundosBloqueado(chave || "-", ip);
+    if (bloq.ip > 0) { res.setHeader("Retry-After", String(bloq.ip)); res.status(429).json({ error: "Demasiadas tentativas de login. Tente novamente mais tarde." }); return; }
+    const falha = async (motivo: string): Promise<void> => {
+      log?.warn({ motivo }, "2.º passo do login de admin recusado");
+      const ri = await registarFalha("ip", ip);
+      let rc: { bloqueouAgora: boolean; minutos?: number; nivel?: number; falhas: number } | null = null;
+      if (user) {
+        rc = await registarFalha("conta", chave);
+        await auditLogin(user.id, "admin_totp_falhou", req.ip, { falhasSeguidas: rc.falhas, via: recuperacao !== undefined ? "recuperacao" : "totp" });
+        if (rc.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "conta", minutos: rc.minutos, nivel: rc.nivel, origem: "totp" });
+        if (ri.bloqueouAgora) await auditLogin(user.id, "admin_login_bloqueado", req.ip, { escopo: "ip", minutos: ri.minutos, nivel: ri.nivel, origem: "totp" });
+      }
+      res.status(401).json(RECUSA);
+    };
+    if (!pre || !user) { await falha("pre_auth_invalido"); return; }
+    if (await preAuthJaUsado(pre.jti)) { await falha("pre_auth_usado"); return; }
+    if (bloq.conta > 0) { res.status(401).json(RECUSA); return; }   // conta bloqueada: não conta (o bloqueio não se prolonga)
+    if (!(await consumirPreAuth(pre))) { await falha("pre_auth_usado"); return; }
+    if (!(user.role === "admin" || user.role === "superadmin") || !user.ativo || !(await totpAtivo(user.id))) { res.status(401).json(RECUSA); return; }
+    const r = await verificarSegundoPasso(user.id, recuperacao !== undefined ? { recuperacao } : { codigo });
+    if (!r.ok) { await falha("codigo_errado"); return; }
+    const dispositivo = resumirDispositivo(req.headers["user-agent"]);
+    await auditLogin(user.id, "admin_totp_login_ok", req.ip, { via: r.via, dispositivo });
+    if (r.via === "recuperacao") {
+      await auditLogin(user.id, "admin_totp_recuperacao_usada", req.ip, { restantes: r.restantes ?? null, dispositivo });
+      void avisarTotp({ adminId: user.id, email: user.email, evento: "recuperacao_usada", ip: req.ip, dispositivo }).catch(() => {});
+    }
+    await abrirSessaoAdmin(req, res, user, { mfa: true, via: r.via });
+  } catch (err) {
+    if (err instanceof TotpIndisponivelError || err instanceof TotpCifraError) log?.error({ codigo: "totp_indisponivel" }, "2.º passo do login de admin: TOTP indisponível (a negar)");
+    else log?.error({ err: err instanceof Error ? err.name : "erro" }, "2.º passo do login de admin: erro interno (a negar)");
+    if (!res.headersSent) res.status(503).json({ error: "Serviço temporariamente indisponível." });
+  }
+});
+
 router.use("/admin", rateLimit, requireAdmin);
+
+registarRotasTotp(router, { auditLogin });
 
 // ── Administradores (SÓ superadmin): listar, criar e redefinir a palavra-passe inicial de um admin ──────────────────────────────────────────────
 // Tudo passa por requireAdmin (sessão de admin, inatividade, troca obrigatória) e o role vem da BD (req.adminRole). O role criado é SEMPRE «admin»; só se atua sobre
@@ -447,7 +518,7 @@ router.post("/admin/auth/password", async (req: AdminRequest, res): Promise<void
 
     const hash = await hashPassword(nova);
     const alteradaEm = new Date();
-    const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role }, Math.floor(alteradaEm.getTime() / 1000) + 1);
+    const { token, jti } = signAdminToken({ userId: user.id, username: user.username, role: user.role, ...((await totpAtivo(user.id)) ? { mfa: true } : {}) }, Math.floor(alteradaEm.getTime() / 1000) + 1);
     await db.transaction(async (tx) => {
       await tx.update(usersTable).set({ passwordHash: hash, passwordAlteradaEm: alteradaEm, trocaPasswordObrigatoria: false }).where(eq(usersTable.id, user.id));
       await tx.execute(sql`delete from admin_sessoes where user_id = ${user.id}`);

@@ -14,3 +14,4 @@ export * from "./live";
 export * from "./menores";
 export * from "./emailTokens";
 export * from "./adminLogin";
+export * from "./adminTotp";

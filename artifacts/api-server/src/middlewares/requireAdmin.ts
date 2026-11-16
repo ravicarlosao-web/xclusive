@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, usersTable, revokedTokensTable } from "@workspace/db";
 import { verifyToken, emitidoAntesDaAlteracao } from "../lib/auth.js";
 import { sessaoAdminViva, INATIVIDADE_ADMIN_MIN } from "../lib/adminSessao.js";
+import { totpAtivo, totpObrigatorio } from "../lib/adminTotp.js";
 export { INATIVIDADE_ADMIN_MIN };
 
 export interface AdminRequest extends Request {
@@ -16,6 +17,9 @@ export interface AdminRequest extends Request {
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
 /** Código do 403 enquanto a troca de palavra-passe é obrigatória (o painel leva o admin ao formulário de troca). */
 export const CODIGO_TROCA_OBRIGATORIA = "troca_password_obrigatoria";
+/** Modo obrigatório ligado e a conta ainda sem TOTP: a sessão só serve para ativar (rotas /admin/totp/estado|iniciar|confirmar). */
+export const CODIGO_ATIVACAO_TOTP_OBRIGATORIA = "ativacao_totp_obrigatoria";
+const ROTAS_ATIVACAO_TOTP = new Set(["/admin/totp/estado", "/admin/totp/iniciar", "/admin/totp/confirmar", "/admin/auth/password"]);
 
 /**
  * Middleware que protege todas as rotas /api/admin/*.
@@ -37,7 +41,7 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
     return;
   }
 
-  let payload: { userId: number; username: string; role?: string; type?: string; jti?: string; adm?: boolean };
+  let payload: { userId: number; username: string; role?: string; type?: string; jti?: string; adm?: boolean; mfa?: boolean };
   try {
     payload = verifyToken(authHeader.slice(7)) as typeof payload;
   } catch {
@@ -96,6 +100,20 @@ export async function requireAdmin(req: AdminRequest, res: Response, next: NextF
     if (conta.trocaObrigatoria && !(req.method === "POST" && req.originalUrl.split("?")[0].replace(/\/+$/, "").endsWith("/admin/auth/password"))) {
       res.status(403).json({ error: "Troca de palavra-passe obrigatória.", codigo: CODIGO_TROCA_OBRIGATORIA });
       return;
+    }
+    // A4a — dois passos: uma conta com TOTP ativo só entra com uma sessão que passou o 2.º passo (marca `mfa` no token). Em TODAS as rotas de admin (este middleware é o único ponto).
+    const comTotp = await totpAtivo(payload.userId);
+    if (comTotp && payload.mfa !== true) {
+      res.status(401).json({ error: "Sessão terminada. Faz login novamente.", codigo: "sessao_terminada" });
+      return;
+    }
+    // Modo obrigatório: sem TOTP, a sessão (restrita) só serve para o ativar.
+    if (!comTotp && (await totpObrigatorio())) {
+      const rota = req.originalUrl.split("?")[0].replace(/\/+$/, "").replace(/^.*?(\/admin\/)/, "$1");
+      if (!ROTAS_ATIVACAO_TOTP.has(rota)) {
+        res.status(403).json({ error: "Ativa a verificação em dois passos para continuar.", codigo: CODIGO_ATIVACAO_TOTP_OBRIGATORIA });
+        return;
+      }
     }
     req.adminRole = conta.role;
   } catch (err) {
