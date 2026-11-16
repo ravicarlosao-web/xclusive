@@ -1,3 +1,4 @@
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 /** Shared localStorage helpers for top-up requests (no React — safe for Fast Refresh) */
 
 export const MOCK_TOPUP_KEY = 'xclusive_topup_requests';
@@ -20,9 +21,9 @@ export interface TopUpRequest {
 }
 
 export function getTopUpRequests(): TopUpRequest[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_TOPUP_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(lerLocal(MOCK_TOPUP_KEY) || '[]'); } catch { return []; }
 }
 
 export function saveTopUpRequests(reqs: TopUpRequest[]) {
-  localStorage.setItem(MOCK_TOPUP_KEY, JSON.stringify(reqs));
+  escreverLocal(MOCK_TOPUP_KEY, JSON.stringify(reqs));
 }

@@ -1,3 +1,4 @@
+import { lerLocal } from '@/lib/armazenamento';
 /**
  * Envia UMA imagem pelo upload existente (POST /api/upload, os mesmos limites e validações do servidor) e devolve o URL canónico
  * (a guardar, absoluto) e o URL assinado para mostrar já. Usado pelo avatar (Definições) e pelo banner (perfil).
@@ -6,7 +7,7 @@ export async function enviarImagem(file: File): Promise<{ url: string; urlVisual
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
   const formData = new FormData();
   formData.append('files', file);
-  const token = localStorage.getItem('xclusive_token');
+  const token = lerLocal('xclusive_token');
   const res = await fetch(`${base}/api/upload`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},

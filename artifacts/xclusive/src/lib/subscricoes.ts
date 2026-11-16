@@ -1,4 +1,5 @@
 import { getFreshAuthToken } from '@workspace/api-client-react';
+import { lerLocal } from '@/lib/armazenamento';
 
 /** Estado efetivo calculado pelo servidor (GET /subscriptions/me). */
 export type SubEstado = 'ativa' | 'cancelada' | 'expirada';
@@ -52,7 +53,7 @@ export class SubscricaoError extends Error {
 /** Sessão de demonstração (modo mock): estas funções novas só existem com a API real. */
 export function ehSessaoMock(): boolean {
   if (!import.meta.env.DEV) return false; // produção: não há sessão mock
-  try { return (localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_'); } catch { return false; }
+  try { return (lerLocal('xclusive_token') ?? '').startsWith('mock_token_'); } catch { return false; }
 }
 
 /** fetch autenticado à API; lança SubscricaoError com a mensagem do servidor. */

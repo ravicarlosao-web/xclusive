@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { googleLogin, type CurrentUser } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleIdentity } from '@/hooks/useGoogleIdentity';
+import { escreverSessao } from '@/lib/armazenamento';
 
 /** Chave (por separador) com o nome que a Google devolveu, para pré-visualizar no passo de conclusão. */
 export const CHAVE_GOOGLE_NOME = 'xclusive_google_nome';
@@ -34,7 +35,7 @@ export function ContinuarComGoogle({ contexto, aoContaEncerrada, aoContaSuspensa
     try {
       const r = await googleLogin({ credential });
       if ('precisaCompletar' in r) {
-        try { sessionStorage.setItem(CHAVE_GOOGLE_NOME, r.nome ?? ''); } catch { /* sem armazenamento */ }
+        try { escreverSessao(CHAVE_GOOGLE_NOME, r.nome ?? ''); } catch { /* sem armazenamento */ }
         setLocation('/google/concluir');
         return;
       }

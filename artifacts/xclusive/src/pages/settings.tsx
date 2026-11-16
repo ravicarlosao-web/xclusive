@@ -24,6 +24,7 @@ import { QuemPodeEscrever, ContasBloqueadas } from '@/components/mensagens/Priva
 import { useTema } from '@/hooks/useTema';
 import { cn } from '@/lib/utils';
 import { enviarImagem } from '@/lib/uploadImagem';
+import { InstalarAppDefinicoes } from '@/components/shared/PwaAvisos';
 
 const SECCOES = [
   { id: 'profile', rotulo: 'Editar Perfil', Icone: User, testid: undefined },
@@ -123,6 +124,8 @@ export default function Settings() {
       className="flex justify-center w-full max-w-screen-xl mx-auto gap-12 px-0 sm:px-4 md:pr-1.5">
       <div className="w-full min-w-0 max-w-[640px] shrink sm:border-x sm:border-border min-h-[100dvh]">
         <FeedHeader titulo="Definições" semMenu />
+
+        {!largo && <InstalarAppDefinicoes />}
 
         {!largo && (
           <TabsList aria-label="Secções das Definições" data-testid="definicoes-pilulas"

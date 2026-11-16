@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 
 /**
  * Barreira 18+ para visitantes SEM sessão (plataforma de conteúdo adulto).
@@ -15,14 +16,14 @@ const STORAGE_KEY = 'xclusive_idade_18';
 const PATHS_SEM_BARREIRA = ['/termos', '/privacidade', '/cookies', '/politica-de-conteudo', '/direitos-de-autor', '/reembolsos', '/termos-criadoras', '/modelo-consentimento'];
 
 function lerEscolha(): boolean {
-  try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+  try { return lerLocal(STORAGE_KEY) === '1'; } catch { return false; }
 }
 /** A idade já foi confirmada neste browser? (usado pela rota "/" para ir direto ao login) */
 export function idadeJaConfirmada(): boolean {
   return lerEscolha();
 }
 function guardarEscolha(): void {
-  try { localStorage.setItem(STORAGE_KEY, '1'); } catch { /* sem armazenamento: vale só nesta visita */ }
+  try { escreverLocal(STORAGE_KEY, '1'); } catch { /* sem armazenamento: vale só nesta visita */ }
 }
 
 export function AgeGate() {

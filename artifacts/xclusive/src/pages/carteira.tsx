@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { lerLocal } from '@/lib/armazenamento';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ const TX_META: Record<string, { icon: React.FC<any>; color: string; label: strin
 
 function useWalletTransactions(enabled: boolean) {
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-  const token = localStorage.getItem('xclusive_token');
+  const token = lerLocal('xclusive_token');
 
   return useQuery<ApiTransaction[]>({
     queryKey: ['/api/wallet/transactions'],
@@ -124,7 +125,7 @@ export default function Carteira() {
   const { saldo, user, isMockMode, getTransactionHistory, refreshSaldo } = useAuth();
   const [topUpOpen, setTopUpOpen] = useState(false);
 
-  const isMockToken = import.meta.env.DEV && (localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_');
+  const isMockToken = import.meta.env.DEV && (lerLocal('xclusive_token') ?? '').startsWith('mock_token_');
   const useRealApi = !isMockToken && !!user;
 
   // Transações reais (modo API)

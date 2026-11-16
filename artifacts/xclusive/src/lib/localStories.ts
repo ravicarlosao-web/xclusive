@@ -1,4 +1,5 @@
 import { Story } from '@workspace/api-client-react';
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 
 /**
  * Local-only stories for the current session (DB-less / mock mode).
@@ -20,7 +21,7 @@ interface StoredLocalStory {
 
 function readAll(): StoredLocalStory[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(LOCAL_STORIES_KEY) || '[]') as StoredLocalStory[];
+    const raw = JSON.parse(lerLocal(LOCAL_STORIES_KEY) || '[]') as StoredLocalStory[];
     const cutoff = Date.now() - STORY_TTL_MS;
     return raw.filter(s => new Date(s.criadoEm).getTime() > cutoff);
   } catch {
@@ -29,7 +30,7 @@ function readAll(): StoredLocalStory[] {
 }
 
 function writeAll(stories: StoredLocalStory[]) {
-  localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(stories));
+  escreverLocal(LOCAL_STORIES_KEY, JSON.stringify(stories));
 }
 
 export function getLocalStoriesForUser(userId: number): StoredLocalStory[] {
@@ -77,13 +78,13 @@ export function localStoryToStory(s: StoredLocalStory, autor: Story['autor']): S
 // ─── Viewed tracking (so the pink "unseen" ring turns gray after viewing) ───
 
 function readViewed(): number[] {
-  try { return JSON.parse(localStorage.getItem(VIEWED_STORIES_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(lerLocal(VIEWED_STORIES_KEY) || '[]'); } catch { return []; }
 }
 
 export function markStoryViewed(storyId: number) {
   const viewed = readViewed();
   if (!viewed.includes(storyId)) {
-    localStorage.setItem(VIEWED_STORIES_KEY, JSON.stringify([...viewed, storyId]));
+    escreverLocal(VIEWED_STORIES_KEY, JSON.stringify([...viewed, storyId]));
   }
 }
 
