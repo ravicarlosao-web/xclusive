@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAdminAuth } from '@/context/AdminAuthContext';
-import { UserPlus, KeyRound, Copy } from 'lucide-react';
+import { UserPlus, KeyRound, Copy, ShieldOff } from 'lucide-react';
 
 type Modo = 'escrever' | 'gerar';
 interface Admin { id: number; username: string; email: string; role: string; ativo: boolean; criadoEm: string; trocaPasswordPendente: boolean }
@@ -54,8 +54,26 @@ export default function Administradores() {
   const [erro, setErro] = useState('');
   const [gerada, setGerada] = useState<{ quem: string; password: string } | null>(null);
   const [copiada, setCopiada] = useState(false);
+  // Repor o TOTP de outro admin (só superadmin): pede o código TOTP do próprio superadmin; o código nunca se guarda.
+  const [reporTotp, setReporTotp] = useState<Admin | null>(null);
+  const [codigoRepor, setCodigoRepor] = useState('');
+  const [erroRepor, setErroRepor] = useState('');
+  const [aReporTotp, setAReporTotp] = useState(false);
+  const [reposto, setReposto] = useState<string | null>(null);
+  const fecharRepor = () => { setReporTotp(null); setCodigoRepor(''); setErroRepor(''); };
+  const submeterRepor = async (evt: React.FormEvent) => {
+    evt.preventDefault();
+    if (!reporTotp) return;
+    setErroRepor(''); setAReporTotp(true);
+    try {
+      await adminApi.reporTotpAdministrador(reporTotp.id, codigoRepor.replace(/\s+/g, ''));
+      setReposto(reporTotp.username); fecharRepor();
+      queryClient.invalidateQueries({ queryKey: ['administradores'] });
+    } catch (e: any) { setErroRepor(e?.message || 'Não foi possível repor a verificação em dois passos.'); }
+    finally { setCodigoRepor(''); setAReporTotp(false); }
+  };
 
-  useEffect(() => () => { setGerada(null); }, []);   // sair da página apaga-a
+  useEffect(() => () => { setGerada(null); setCodigoRepor(''); }, []);   // sair da página apaga-a
   const limpar = () => { setEmail(''); setUsername(''); setModo('gerar'); setPassword(''); setErro(''); };
 
   const { data, isLoading } = useQuery({ queryKey: ['administradores'], queryFn: adminApi.getAdministradores, enabled: souSuperadmin() });
@@ -90,7 +108,10 @@ export default function Administradores() {
     { header: 'Criado em', cell: (a) => <span className="text-muted-foreground text-sm whitespace-nowrap">{format(new Date(a.criadoEm), 'dd MMM yyyy, HH:mm')}</span> },
     { header: 'Troca de palavra-passe', cell: (a) => a.trocaPasswordPendente ? <Badge variant="outline" className="border-amber-500 text-amber-500">Pendente</Badge> : <span className="text-muted-foreground text-sm">—</span> },
     { header: '', cell: (a) => a.role === 'admin' && a.id !== user?.id ? (
-        <Button size="sm" variant="outline" onClick={() => { limpar(); setRedefinir(a); }}><KeyRound className="mr-1 h-3.5 w-3.5" />Redefinir palavra-passe</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => { limpar(); setRedefinir(a); }}><KeyRound className="mr-1 h-3.5 w-3.5" />Redefinir palavra-passe</Button>
+          <Button size="sm" variant="outline" onClick={() => { setErroRepor(''); setCodigoRepor(''); setReporTotp(a); }}><ShieldOff className="mr-1 h-3.5 w-3.5" />Repor TOTP</Button>
+        </div>
       ) : null },
   ];
 
@@ -133,6 +154,39 @@ export default function Administradores() {
             {erro && <p role="alert" className="text-sm text-destructive">{erro}</p>}
             <DialogFooter><Button type="button" variant="ghost" onClick={() => { setRedefinir(null); limpar(); }}>Cancelar</Button><Button type="submit" disabled={redefinirM.isPending}>Redefinir</Button></DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reporTotp} onOpenChange={(o) => { if (!o) fecharRepor(); }}>
+        <DialogContent>
+          <form onSubmit={submeterRepor} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Repor a verificação em dois passos</DialogTitle>
+              <DialogDescription>
+                Remove a verificação em dois passos de <strong>{reporTotp?.username}</strong>. Essa conta fica sem sessões e é notificada por email. Para confirmar, introduza um código da SUA aplicação de autenticação.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="codigo-repor" className="text-xs uppercase tracking-wider text-muted-foreground">O seu código de 6 dígitos</Label>
+              <Input id="codigo-repor" name="codigo-repor" type="text" inputMode="numeric" pattern="[0-9 ]*" autoComplete="one-time-code" maxLength={7} required autoFocus spellCheck={false}
+                value={codigoRepor} onChange={(e) => setCodigoRepor(e.target.value.replace(/[^0-9 ]/g, ''))} placeholder="000000"
+                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" className="bg-background/50 border-border h-11 font-mono text-center text-lg tracking-[0.4em]" />
+            </div>
+            {erroRepor && <p role="alert" className="text-sm text-destructive">{erroRepor}</p>}
+            <DialogFooter><Button type="button" variant="ghost" onClick={fecharRepor}>Cancelar</Button><Button type="submit" variant="destructive" disabled={aReporTotp}>Repor TOTP</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reposto} onOpenChange={(o) => { if (!o) setReposto(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verificação em dois passos reposta</DialogTitle>
+            <DialogDescription data-testid="resultado-repor">
+              A verificação em dois passos de <strong>{reposto}</strong> foi removida. Essa conta ficou sem sessões e será notificada por email; volta a entrar só com a palavra-passe até a ativar de novo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter><Button onClick={() => setReposto(null)}>Fechar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

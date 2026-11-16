@@ -1,8 +1,8 @@
 # Verificação em dois passos (TOTP) dos admins — A4a (só servidor)
 
-> # ⚠️ NÃO LIGAR O MODO OBRIGATÓRIO ANTES DO A4b
-> A chave `admin_totp_obrigatorio` (tabela `platform_settings`) vem **DESLIGADA** (ausente = desligado). O painel **ainda não tem interface** de TOTP (isso é o A4b): com o modo ligado, um admin sem TOTP
-> só consegue ativá-lo pela API, e **ficaria trancado fora do painel**. Não ligar, nem «para testar», até o A4b estar em produção.
+> # ⚠️ ESTADO DO MODO OBRIGATÓRIO
+> A interface do painel (A4b, página «Segurança» e passo do código no login) já existe, mas a chave `admin_totp_obrigatorio` (tabela `platform_settings`) **continua DESLIGADA por defeito** (ausente = desligado).
+> **Só se liga depois de TODOS os admins terem TOTP** (ver «Ligar o modo obrigatório» abaixo): ligado, quem não tiver TOTP fica preso na página de ativação e não faz mais nada. **Não há interruptor no painel: liga-se por SQL.**
 
 ## O que é
 Contas `admin` e `superadmin` podem ter TOTP (RFC 6238: SHA-1, 6 dígitos, 30 s, janela ±1 passo; biblioteca `otpauth` 9.6.0). Sem interface no painel: tudo pela API (`/api/admin/totp/*`) e pelo script de emergência.
@@ -31,7 +31,36 @@ Contas `admin` e `superadmin` podem ter TOTP (RFC 6238: SHA-1, 6 dígitos, 30 s,
    - `GET /api/admin/totp/estado` (com sessão) → `{"ativo":false,"pendente":false,"codigosRestantes":0,"obrigatorio":false,"disponivel":true}`.
    - Ativar numa conta de teste (`POST /api/admin/totp/iniciar` com a palavra-passe; ler o segredo/URI na aplicação de autenticação; `POST /api/admin/totp/confirmar` com o código; guardar os códigos de recuperação), terminar sessão e confirmar que o login pede o 2.º passo.
 7. **Reverter**: (a) código: redeploy da versão anterior (as tabelas novas ficam, não atrapalham); (b) dados: `psql "$DATABASE_URL" -f lib/db/src/migrations-reversao/reverter_admin_totp.sql` (apaga as 2 tabelas; mostra antes quantas linhas tinham); (c) ou voltar ao ramo Neon `pre-totp`.
-8. **Modo obrigatório: NÃO ligar antes do A4b** (ver o aviso no topo).
+8. **Modo obrigatório**: fica desligado; só se liga seguindo a secção «Ligar o modo obrigatório».
+
+## Ligar o modo obrigatório (só quando todos os admins já tiverem TOTP)
+1. **Consulta prévia — admins sem TOTP ativo** (a lista TEM de ficar vazia, ou aceitar conscientemente que essas contas só poderão ativar):
+   ```sql
+   select u.id, u.username, u.email, u.role
+   from users u
+   left join admin_totp t on t.user_id = u.id and t.ativado_em is not null
+   where u.role in ('admin','superadmin') and u.ativo and t.id is null
+   order by u.id;
+   ```
+   Cada um destes admins ativa em «Segurança» (menu lateral ou menu da conta) com a aplicação de autenticação no telemóvel. Peça a todos para guardarem os códigos de recuperação.
+2. **Teste de saída**: confirme que há pelo menos DOIS superadmins com TOTP e que sabe usar o script de reposição (abaixo).
+3. **Ligar** (no `psql` da base de produção):
+   ```sql
+   insert into platform_settings (key, value) values ('admin_totp_obrigatorio', '{"value": true}')
+   on conflict (key) do update set value = excluded.value, updated_at = now();
+   ```
+   Efeito imediato (sem reiniciar): quem tem TOTP não nota nada; quem não tem, no próximo pedido fica só com a página de ativação até concluir; ninguém consegue desativar o TOTP.
+4. **Desligar em emergência** (por exemplo, se muitos admins ficarem presos):
+   ```sql
+   delete from platform_settings where key = 'admin_totp_obrigatorio';
+   ```
+   (Também desliga qualquer valor que não seja exatamente `{"value": true}`.) Efeito imediato.
+
+## Quem perdeu o telemóvel
+1. **Tem códigos de recuperação**: no login escolha «Usar um código de recuperação» e introduza um (cada um só funciona uma vez; o servidor avisa a conta por email). Depois, em «Segurança», gere códigos novos e **configure a aplicação de autenticação no telemóvel novo**: desative o TOTP (palavra-passe + código) e ative-o de novo, ou peça uma reposição.
+2. **Não tem códigos nem telemóvel — é um admin normal**: um superadmin faz «Repor TOTP» na página «Administradores» (pede o código TOTP do próprio superadmin). O admin fica sem sessões, é avisado por email, entra só com a palavra-passe e ativa de novo.
+3. **Não tem códigos nem telemóvel — é um superadmin** (ou não há outro superadmin): só pelo servidor, com o script `admin-totp-repor.mjs <utilizador>` (secção «Reposição de emergência»). Com o modo obrigatório ligado, a conta fica na página de ativação no login seguinte.
+4. Depois de qualquer reposição, confirme a identidade da pessoa por outro canal antes de lhe entregar o acesso (a reposição por superadmin e por script ficam na auditoria).
 
 ## Reposição de emergência
 - **Um superadmin repõe outro admin** (nunca a si próprio; precisa do SEU código TOTP nesse momento): `POST /api/admin/administradores/:id/totp/repor` com `{"codigo":"123456"}`. Fica na auditoria, o admin afetado recebe um email e as sessões dele terminam.

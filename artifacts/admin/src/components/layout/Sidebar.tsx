@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, 
   Flag, TrendingUp, Wallet, Bell, Settings, ClipboardList,
-  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent, ShieldAlert, UserCog
+  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent, ShieldAlert, UserCog, Smartphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/administradores', label: 'Administradores', icon: UserCog },
     { href: '/settings', label: 'Definições', icon: Settings },
     { href: '/audit-log', label: 'Audit Log', icon: ClipboardList },
+    { href: '/seguranca', label: 'Segurança', icon: Smartphone },
   ].filter((item) => souSuperadmin() || !['/broadcast', '/settings', '/administradores'].includes(item.href));   // um admin simples não pode usar Broadcast, Definições nem Administradores
 
   return (
