@@ -54,7 +54,8 @@ sudo grep -c 'limiting requests' /var/log/nginx/error.log
 
 ## 7. O que acontece a quem é limitado
 - O Nginx responde 429 e **a aplicação nem vê o pedido**: não conta como falha de login, não bloqueia a conta nem o IP, não gera registo de auditoria. É só esperar uns segundos e repetir.
-- O painel de admin mostra o erro (um aviso/toast de falha, o ecrã não parte) e volta a funcionar ao repetir a ação ou na próxima atualização automática (testado: suite `nginx-limites`).
+- O painel de admin não parte (testado com o Nginx real, suite `nginx-limites`): as páginas de dados (ex.: Utilizadores) repetem sozinhas o pedido e carregam logo que o saldo reabastece (segundos); Carregamentos e o dashboard voltam a atualizar sozinhos; o **login** mostra o aviso «Erro de Autenticação — HTTP 429» com o formulário utilizável (basta esperar uns segundos e voltar a carregar em Entrar).
+  O texto «HTTP 429» é o do painel actual (não se mexeu no painel); se quiseres uma mensagem em português, é uma alteração à parte no painel ou um `error_page 429` com corpo JSON no site.
 
 ## 8. Ajustar (se der falsos 429 ao uso normal)
 Vê `sudo grep 'limiting requests' /var/log/nginx/error.log | tail` (o IP e o pedido aparecem). Sobe `rate=` na zona e o `burst=` na linha `limit_req` (ficheiro do passo 2 e passo 3), `nginx -t && systemctl reload nginx`.
