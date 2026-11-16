@@ -24,6 +24,7 @@ import Broadcast from '@/pages/broadcast/index';
 import Settings from '@/pages/settings/index';
 import AuditLog from '@/pages/audit-log/index';
 import TrocarPassword from '@/pages/conta/trocar-password';
+import Seguranca from '@/pages/conta/seguranca';
 import Administradores from '@/pages/administradores/index';
 import TopUps from '@/pages/topups/index';
 
@@ -57,6 +58,8 @@ function Router() {
   if (!isInitialized) return null;   // sessão local ainda a carregar: não mostrar o menu (nem fazer pedidos) antes de saber se a troca é obrigatória
   // Troca de palavra-passe obrigatória: nada mais é mostrado (nem menu nem páginas) até a troca estar concluída.
   if (isAuthenticated && user?.trocaPasswordObrigatoria && localizacao !== '/login') return <TrocarPassword obrigatoria />;
+  // Modo obrigatório (servidor): sem TOTP, só a página de ativação, sem menu nem outras páginas, até estar concluída.
+  if (isAuthenticated && user?.totpAtivacaoNecessaria && localizacao !== '/login') return <Seguranca obrigatoria />;
   return (
     <Switch>
       <Route path="/login" component={Login} />
@@ -82,6 +85,7 @@ function Router() {
             <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
             <Route path="/administradores"><ProtectedRoute component={Administradores} /></Route>
             <Route path="/trocar-password"><ProtectedRoute component={TrocarPassword} /></Route>
+            <Route path="/seguranca"><ProtectedRoute component={Seguranca} /></Route>
             <Route>
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 Page not found

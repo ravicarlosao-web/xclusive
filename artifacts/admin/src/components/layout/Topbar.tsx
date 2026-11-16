@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAdminAuth } from '@/context/AdminAuthContext';
-import { KeyRound, LogOut, User as UserIcon } from 'lucide-react';
+import { KeyRound, LogOut, Smartphone, User as UserIcon } from 'lucide-react';
 import { useLocation } from 'wouter';
 import {
   DropdownMenu,
@@ -57,6 +57,10 @@ export function Topbar({ children }: { children?: React.ReactNode }) {
             <DropdownMenuItem onClick={() => setLocation('/trocar-password')} className="cursor-pointer">
               <KeyRound className="mr-2 h-4 w-4" />
               <span>Alterar palavra-passe</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLocation('/seguranca')} className="cursor-pointer">
+              <Smartphone className="mr-2 h-4 w-4" />
+              <span>Segurança (dois passos)</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">

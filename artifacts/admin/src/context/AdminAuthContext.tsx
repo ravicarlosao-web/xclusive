@@ -8,14 +8,25 @@ interface AdminUser {
   avatar?: string;
   /** true: a palavra-passe tem de ser trocada; o painel só mostra o formulário de troca. */
   trocaPasswordObrigatoria?: boolean;
+  role?: string;
+  /** true (modo obrigatório): sem TOTP, o painel só mostra a página de ativação até estar concluída. */
+  totpAtivacaoNecessaria?: boolean;
 }
+
+/** Resultado do passo 1 do login: ou a sessão ficou aberta, ou o servidor pede o 2.º passo (o pré-token vive só em memória do ecrã de login). */
+export type ResultadoLogin = { totpNecessario: false } | { totpNecessario: true; preAuth: string; expiresIn: number };
 
 interface AdminAuthContextType {
   isAuthenticated: boolean;
   isInitialized: boolean;
   user: AdminUser | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<ResultadoLogin>;
+  /** 2.º passo do login (TOTP ou código de recuperação). Só aqui a sessão fica aberta. */
+  loginTotp: (preAuth: string, entrada: { codigo: string } | { recuperacao: string }) => Promise<void>;
   logout: () => void;
+  /** Depois de ativar o TOTP: guarda o token novo (as outras sessões terminaram). Em modo obrigatório a marca só cai em `concluirAtivacaoObrigatoria` (para o ecrã dos códigos não desaparecer). */
+  aposAtivarTotp: (token: string) => void;
+  concluirAtivacaoObrigatoria: () => void;
   /** Depois de trocar a palavra-passe: guarda o token novo (a sessão antiga deixou de valer) e limpa a marca de troca obrigatória. */
   aposTrocaPassword: (token: string) => void;
 }
@@ -48,13 +59,37 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setIsInitialized(true);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const data = await adminApi.login(email, password);
+  const abrirSessao = (data: any) => {
+    const utilizador = data.totpAtivacaoNecessaria ? { ...data.user, totpAtivacaoNecessaria: true } : data.user;
     localStorage.setItem('admin_token', data.token);
-    localStorage.setItem('admin_user', JSON.stringify(data.user));
+    localStorage.setItem('admin_user', JSON.stringify(utilizador));
     localStorage.setItem('admin_login_time', Date.now().toString());
-    setUser(data.user);
+    setUser(utilizador);
     setIsAuthenticated(true);
+  };
+
+  const login = async (email: string, password: string): Promise<ResultadoLogin> => {
+    const data = await adminApi.login(email, password);
+    // Conta com TOTP: ainda NÃO há sessão (nem token) — só o pré-token, que nunca se guarda em armazenamento.
+    if (data.totpNecessario) return { totpNecessario: true, preAuth: data.preAuth, expiresIn: data.expiresIn ?? 300 };
+    abrirSessao(data);
+    return { totpNecessario: false };
+  };
+
+  const loginTotp = async (preAuth: string, entrada: { codigo: string } | { recuperacao: string }) => {
+    abrirSessao(await adminApi.loginTotp(preAuth, entrada));
+  };
+
+  const aposAtivarTotp = (token: string) => {
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_login_time', Date.now().toString());
+  };
+
+  const concluirAtivacaoObrigatoria = () => {
+    if (!user) return;
+    const atualizado = { ...user, totpAtivacaoNecessaria: false };
+    localStorage.setItem('admin_user', JSON.stringify(atualizado));
+    setUser(atualizado);
   };
 
   const aposTrocaPassword = (token: string) => {
@@ -75,7 +110,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, isInitialized, user, login, logout, aposTrocaPassword }}>
+    <AdminAuthContext.Provider value={{ isAuthenticated, isInitialized, user, login, loginTotp, logout, aposTrocaPassword, aposAtivarTotp, concluirAtivacaoObrigatoria }}>
       {children}
     </AdminAuthContext.Provider>
   );
