@@ -6,6 +6,7 @@ import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AgeGate, idadeJaConfirmada } from '@/components/shared/AgeGate';
+import { PwaAvisos } from '@/components/shared/PwaAvisos';
 import { RobotsMeta } from '@/components/shared/RobotsMeta';
 import { useEffect } from 'react';
 import { useTema } from '@/hooks/useTema';
@@ -194,6 +195,7 @@ function App() {
           <AuthProvider>
             <Router />
             <AgeGate />
+            <PwaAvisos />
           </AuthProvider>
         </WouterRouter>
         <Toaster />
