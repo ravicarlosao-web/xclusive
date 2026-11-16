@@ -1,8 +1,8 @@
-// Textos legais (do advogado: v2.2 termos, privacidade e cookies; v2.3 conteúdo, reembolsos, direitos de autor e criadoras; v1.1 só o Modelo de Consentimento), gerados a partir dos .docx por scripts/legal/docx-para-json.mjs.
+// Textos legais (do advogado: v2.2.1 termos, privacidade e cookies; v2.3 conteúdo, reembolsos, direitos de autor e criadoras; v1.1 só o Modelo de Consentimento), gerados a partir dos .docx por scripts/legal/docx-para-json.mjs.
 // NÃO editar os JSON à mão: scripts/legal/verificar.mjs (corre no build) falha se divergirem do .docx + manifesto.
-import termos from '../../../../../docs/legal/v2.2/01-termos.json';
-import privacidade from '../../../../../docs/legal/v2.2/02-privacidade.json';
-import cookies from '../../../../../docs/legal/v2.2/03-politica-de-cookies.json';
+import termos from '../../../../../docs/legal/v2.2.1/01-termos.json';
+import privacidade from '../../../../../docs/legal/v2.2.1/02-privacidade.json';
+import cookies from '../../../../../docs/legal/v2.2.1/03-politica-de-cookies.json';
 import conteudo from '../../../../../docs/legal/v2.3/04-politica-de-conteudo.json';
 import reembolsos from '../../../../../docs/legal/v2.3/05-reembolsos.json';
 import direitosAutor from '../../../../../docs/legal/v2.3/06-direitos-de-autor.json';

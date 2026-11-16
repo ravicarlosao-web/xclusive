@@ -37,11 +37,14 @@ function paragrafosDocx(buf) {
 const manifesto = lerManifesto(RAIZ);
 // ── data de entrada em vigor: UM valor de origem (docs/legal/data-entrada-em-vigor.json), lido aqui SEM usar o gerador ──
 const FRASE_POR_FIXAR = "Data de entrada em vigor: a definir na publicação";
+const FRASE_MARCADOR = "Data de entrada em vigor: [dia do lançamento público]";   // v2.2.1: marcador do advogado, mapeado para a MESMA data
+const FRASES_POR_FIXAR = [FRASE_POR_FIXAR, FRASE_MARCADOR];
 let DATA_VIGOR = null, DATA_VIGOR_ISO = null;
 try {
   const j = JSON.parse(fs.readFileSync(path.join(RAIZ, "docs/legal/data-entrada-em-vigor.json"), "utf8")); const dm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(j.data ?? ""); const dt = dm ? new Date(Date.UTC(+dm[3], +dm[2] - 1, +dm[1])) : null;
   ok(!!dm && dt.getUTCDate() === +dm[1] && dt.getUTCMonth() === +dm[2] - 1, `data-entrada-em-vigor.json: «${j.data}» não é uma data DD/MM/AAAA válida.`);
   ok(j.frase_original === FRASE_POR_FIXAR, "data-entrada-em-vigor.json: a frase original não é a autorizada («Data de entrada em vigor: a definir na publicação»).");
+  ok(j.frase_original_v2_2_1 === FRASE_MARCADOR, "data-entrada-em-vigor.json: a frase do marcador da v2.2.1 não é a autorizada («Data de entrada em vigor: [dia do lançamento público]»).");
   if (dm) { DATA_VIGOR = j.data; DATA_VIGOR_ISO = `${dm[3]}-${dm[2]}-${dm[1]}`; }
 } catch (e) { falhas.push(`data-entrada-em-vigor.json: ilegível (${e.message}).`); }
 const TOKENS_OK = new Set(["EMPRESA_NOME", "EMPRESA_NIF", "EMPRESA_SEDE", "EMAIL_LEGAL", "MINIMO_LEVANTAMENTO", "PRAZO_MIN", "PRAZO_MAX"]);
@@ -79,9 +82,9 @@ for (const d of DOCUMENTOS) {
   // 2. texto do JSON == texto do .docx com SÓ o manifesto (extração independente)
   let esperado = paragrafosDocx(buf);
   if (!d.semLegalDocs) {   // a ÚNICA alteração fora do manifesto: a frase da data (exatamente 1 parágrafo; nenhuma outra palavra)
-    const ix = esperado.map((t, k) => t.includes(FRASE_POR_FIXAR) ? k : -1).filter((k) => k >= 0);
-    ok(ix.length === 1, `${etiqueta}: a frase «${FRASE_POR_FIXAR}» tem de existir exatamente 1 vez no .docx (encontrei ${ix.length}).`);
-    if (ix.length === 1 && DATA_VIGOR) esperado[ix[0]] = esperado[ix[0]].replace(FRASE_POR_FIXAR, `Data de entrada em vigor: ${DATA_VIGOR}`);
+    const ix = esperado.map((t, k) => FRASES_POR_FIXAR.some((f) => t.includes(f)) ? k : -1).filter((k) => k >= 0);
+    ok(ix.length === 1, `${etiqueta}: a frase da data («${FRASE_POR_FIXAR}» ou «${FRASE_MARCADOR}») tem de existir exatamente 1 vez no .docx (encontrei ${ix.length}).`);
+    if (ix.length === 1 && DATA_VIGOR) esperado[ix[0]] = esperado[ix[0]].replace(FRASES_POR_FIXAR.find((f) => esperado[ix[0]].includes(f)), `Data de entrada em vigor: ${DATA_VIGOR}`);
   }
   for (const e of manifesto.filter((x) => x.documento === d.chave)) {
     const idx = esperado.map((t, k) => t === e.original ? k : -1).filter((k) => k >= 0);
@@ -158,4 +161,4 @@ for (const [n, esp] of [[5000, "5.000 Kz"], [999, "999 Kz"], [1234567, "1.234.56
 ok((() => { try { R.validarConfig({ empresaNome: "x" }); return false; } catch { return true; } })(), "validarConfig aceitou uma configuração incompleta.");
 
 if (falhas.length) { console.error(`\n✖ Textos legais: ${falhas.length} problema(s) em ${verificacoes} verificações:\n` + falhas.map((f) => "  - " + f).join("\n") + "\n"); process.exit(1); }
-console.log(`✔ Textos legais (v2.3, v2.2 e v1.1): ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);
+console.log(`✔ Textos legais (v2.3, v2.2.1 e v1.1): ${verificacoes} verificações ok (${DOCUMENTOS.length} documentos, ${manifesto.length} alterações do manifesto, ${CONFIGS.length} configurações).`);

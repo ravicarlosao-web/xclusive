@@ -1,4 +1,6 @@
-# Textos legais v2.2
+# Textos legais v2.2 (histórico)
+
+> Substituída pela v2.2.1 (`../v2.2.1`) para Termos, Privacidade e Cookies: esta pasta fica só como histórico (já não é gerada nem importada).
 
 Em vigor para **Termos e Condições de Utilização**, **Política de Privacidade** e **Política de Cookies** (chave nova `cookies` em `LEGAL_DOCS`).
 Os outros documentos públicos estão na v2.3 (`../v2.3`: Conteúdo, Reembolsos e Pagamentos, Direitos de Autor e Criadoras) e, o Modelo de Consentimento de Terceiros, na v1.1 (`../v1.1`).
