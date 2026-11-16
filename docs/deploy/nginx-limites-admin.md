@@ -67,3 +67,17 @@ sudo rm /etc/nginx/conf.d/xclusive-limites.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 (Alternativa mais rápida: comentar as 2 linhas `limit_req` no site e recarregar; os limites deixam de se aplicar.)
+
+## 10. Verificação em dois passos (A4a): linha a acrescentar ao mapa do login — SÓ DOCUMENTADO, NADA APLICADO
+O 2.º passo do login (TOTP) é `POST /api/admin/auth/login/totp`. O mapa `xcl_admin_login_chave` (`xclusive-limites.conf`) só apanha `/api/admin/auth/login` (a regra acaba em `(\?|$)`), por isso o 2.º passo
+**fica só na zona geral** (`xcl_admin_geral`, 20 pedidos/s) e **não na zona do login** (10/min). O bloqueio da aplicação (A3: falhas de TOTP por conta e por IP) continua a proteger, mas convém o mesmo teto do Nginx.
+Alteração a fazer **por ti** no ficheiro do mapa (este PR não toca em nenhum `.conf`): trocar a linha
+```
+    ~*^/api/admin/auth/login(\?|$)       $binary_remote_addr;
+```
+por
+```
+    ~*^/api/admin/auth/login(/totp)?(\?|$)   $binary_remote_addr;
+```
+Depois `sudo nginx -t && sudo systemctl reload nginx`. Teste: 12 pedidos seguidos a `POST /api/admin/auth/login/totp` (corpo `{}`): os primeiros 6 chegam à aplicação (401), os seguintes levam 429 do Nginx.
+(Os restantes caminhos novos — `/api/admin/totp/*` e `/api/admin/administradores/:id/totp/repor` — estão debaixo de `/api/admin/` e já ficam na zona geral.)
