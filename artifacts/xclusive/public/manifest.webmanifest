@@ -11,7 +11,7 @@
   "dir": "ltr",
   "categories": ["social", "entertainment"],
   "prefer_related_applications": false,
-  "theme_color": "#ff3e72",
+  "theme_color": "#0a0a0a",
   "background_color": "#0a0a0a",
   "icons": [
     { "src": "/icon-192-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
