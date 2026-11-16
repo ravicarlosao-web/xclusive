@@ -2,7 +2,7 @@
 // Converte os .docx do advogado (docs/legal/<pasta>/originais) em JSON fiel à estrutura do documento
 // (título, subtítulo, linha de versão, artigos, parágrafos, listas, tabelas, negrito/itálico) e aplica SÓ as
 // alterações decididas pelo dono, listadas em docs/legal/<pasta>/alteracoes.json. Sem dependências externas.
-// Cada documento tem a sua `pasta` (a versão em vigor): v2.2 para termos, privacidade e cookies; v2.3 para conteúdo, reembolsos, direitos de autor e criadoras; v1.1 só para o Modelo de Consentimento de Terceiros.
+// Cada documento tem a sua `pasta` (a versão em vigor): v2.2.1 para termos, privacidade e cookies (a v2.2 fica só como histórico); v2.3 para conteúdo, reembolsos, direitos de autor e criadoras; v1.1 só para o Modelo de Consentimento de Terceiros.
 //
 //   node scripts/legal/docx-para-json.mjs            -> escreve docs/legal/<pasta>/*.json
 //   node scripts/legal/docx-para-json.mjs --raiz D   -> usa D como raiz do repositório
@@ -20,9 +20,9 @@ import { fileURLToPath } from "node:url";
  * Os documentos internos (08, 09 e 10 da v1.1) NÃO estão aqui nem no repositório: ver docs/legal/v1.1/LEIA-ME.md.
  */
 export const DOCUMENTOS = [
-  { chave: "termos", pasta: "v2.2", docx: "01-termos.docx", json: "01-termos.json" },
-  { chave: "privacidade", pasta: "v2.2", docx: "02-privacidade.docx", json: "02-privacidade.json" },
-  { chave: "cookies", pasta: "v2.2", docx: "03-politica-de-cookies.docx", json: "03-politica-de-cookies.json" },
+  { chave: "termos", pasta: "v2.2.1", docx: "01-termos.docx", json: "01-termos.json" },
+  { chave: "privacidade", pasta: "v2.2.1", docx: "02-privacidade.docx", json: "02-privacidade.json" },
+  { chave: "cookies", pasta: "v2.2.1", docx: "03-politica-de-cookies.docx", json: "03-politica-de-cookies.json" },
   { chave: "conteudo", pasta: "v2.3", docx: "04-politica-de-conteudo.docx", json: "04-politica-de-conteudo.json" },
   { chave: "reembolsos", pasta: "v2.3", docx: "05-reembolsos.docx", json: "05-reembolsos.json" },
   { chave: "direitosAutor", pasta: "v2.3", docx: "06-direitos-de-autor.docx", json: "06-direitos-de-autor.json" },
@@ -143,6 +143,9 @@ export function aplicarManifesto(blocos, entradas) {
 
 /** A frase do advogado cuja substituição pela data está autorizada (docs/legal/data-entrada-em-vigor.json). */
 export const FRASE_DATA_POR_FIXAR = "Data de entrada em vigor: a definir na publicação";
+/** v2.2.1: o advogado deixou, no mesmo sítio, o marcador «[dia do lançamento público]»; mapeia-se para a MESMA data (docs/legal/data-entrada-em-vigor.json). */
+export const FRASE_DATA_MARCADOR = "Data de entrada em vigor: [dia do lançamento público]";
+export const FRASES_DATA_POR_FIXAR = [FRASE_DATA_POR_FIXAR, FRASE_DATA_MARCADOR];
 
 /** Data de entrada em vigor (DD/MM/AAAA): o ÚNICO valor de origem, igual para os 7 documentos publicados. */
 export function lerDataEntradaEmVigor(raiz) {
@@ -151,6 +154,7 @@ export function lerDataEntradaEmVigor(raiz) {
   const d = m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
   if (!m || d.getUTCDate() !== +m[1] || d.getUTCMonth() !== +m[2] - 1) throw new Error(`data-entrada-em-vigor.json: «${j.data}» não é uma data DD/MM/AAAA válida.`);
   if (j.frase_original !== FRASE_DATA_POR_FIXAR) throw new Error("data-entrada-em-vigor.json: a frase original não é a autorizada.");
+  if (j.frase_original_v2_2_1 !== FRASE_DATA_MARCADOR) throw new Error("data-entrada-em-vigor.json: a frase do marcador da v2.2.1 não é a autorizada.");
   return j.data;
 }
 
@@ -160,10 +164,13 @@ export function aplicarDataEntradaEmVigor(blocos, data, chave) {
   const resultado = blocos.map((b) => {
     if (b.tipo === "tabela") return b;
     let mudou = false;
-    const runs = b.runs.map((r) => { if (!r.t.includes(FRASE_DATA_POR_FIXAR)) return r; n++; mudou = true; return { ...r, t: r.t.replace(FRASE_DATA_POR_FIXAR, `Data de entrada em vigor: ${data}`) }; });
+    const runs = b.runs.map((r) => {
+      const frase = FRASES_DATA_POR_FIXAR.find((f) => r.t.includes(f)); if (!frase) return r;
+      n++; mudou = true; return { ...r, t: r.t.replace(frase, `Data de entrada em vigor: ${data}`) };
+    });
     return mudou ? { ...b, runs, alterado: "data-entrada-em-vigor" } : b;
   });
-  if (n !== 1) throw new Error(`${chave}: a frase «${FRASE_DATA_POR_FIXAR}» foi encontrada ${n} vez(es) (tem de ser exatamente 1).`);
+  if (n !== 1) throw new Error(`${chave}: a frase da data («${FRASE_DATA_POR_FIXAR}» ou «${FRASE_DATA_MARCADOR}») foi encontrada ${n} vez(es) (tem de ser exatamente 1).`);
   return resultado;
 }
 

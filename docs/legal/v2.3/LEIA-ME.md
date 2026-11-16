@@ -1,7 +1,7 @@
 # Textos legais v2.3
 
 Em vigor para **Política de Conteúdo**, **Política de Reembolsos e Pagamentos**, **Direitos de Autor e Pedidos de Retirada** e **Termos para Criadoras**.
-Os outros três documentos públicos estão na v2.2 (`../v2.2`: Termos e Condições, Privacidade e Cookies). Só o Modelo de Consentimento de Terceiros ficou na v1.1 (`../v1.1`);
+Os outros três documentos públicos estão na v2.2.1 (`../v2.2.1`: Termos e Condições, Privacidade e Cookies). Só o Modelo de Consentimento de Terceiros ficou na v1.1 (`../v1.1`);
 o resto da v1.1 fica nas pastas só como histórico (já não é gerado nem importado).
 
 - `originais/*.docx` são a fonte (do advogado; não editar). `*.json` são **gerados** por `node scripts/legal/docx-para-json.mjs` (`pnpm legal:gerar`).
