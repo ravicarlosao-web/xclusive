@@ -19,7 +19,7 @@ import { avisarTotp } from "../lib/alertaTotpAdmin.js";
 const INDISPONIVEL = { error: "Serviço temporariamente indisponível." };
 const CODIGO_ERRADO = { error: "Código inválido ou expirado." };
 
-export function registarRotasTotp(router: Router, deps: { auditLogin: (adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>) => Promise<number> }): void {
+export function registarRotasTotp(router: Router, deps: { auditLogin: (adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>, alvoId?: number) => Promise<number> }): void {
   const { auditLogin } = deps;
 
   const naoGuardar = (res: Response) => res.setHeader("Cache-Control", "no-store");
@@ -59,6 +59,7 @@ export function registarRotasTotp(router: Router, deps: { auditLogin: (adminId: 
 
   router.get("/admin/totp/estado", async (req: AdminRequest, res): Promise<void> => {
     try {
+      if (!totpDisponivel()) { res.status(503).json(INDISPONIVEL); return; }
       naoGuardar(res);
       res.json({ ...(await estadoTotp(req.adminId!)), obrigatorio: await totpObrigatorio(), disponivel: totpDisponivel() });
     } catch (err) { trataErro(req, res, err); }
@@ -150,7 +151,7 @@ export function registarRotasTotp(router: Router, deps: { auditLogin: (adminId: 
       const tinha = await removerTotp(alvo.id, true);
       if (!tinha) { res.status(409).json({ error: "Este admin não tem verificação em dois passos ativa.", codigo: "totp_inativo" }); return; }
       const dispositivo = dispositivoDe(req);
-      await auditLogin(eu.id, "admin_totp_reposto_por_superadmin", req.ip, { alvoId: alvo.id, dispositivo });
+      await auditLogin(eu.id, "admin_totp_reposto_por_superadmin", req.ip, { alvoId: alvo.id, dispositivo }, alvo.id);
       res.json({ ok: true });
       void avisarTotp({ adminId: alvo.id, email: alvo.email, evento: "reposto", ip: req.ip, dispositivo }).catch(() => {});
     } catch (err) { trataErro(req, res, err); }

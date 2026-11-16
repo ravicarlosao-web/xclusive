@@ -23,8 +23,9 @@ if (!nome) falha("Indica exatamente UM utilizador.", 2);
 
 let pool;
 try { ({ pool } = await import("@workspace/db")); } catch (e) { falha(`Não foi possível ligar à base de dados (${e?.code ?? e?.name ?? "erro"}).`, 3); }
-const sair = async (codigo) => { try { await pool.end(); } catch { /* ignora */ } process.exit(codigo); };
-const cliente = await pool.connect().catch(async (e) => { console.error(`❌ Erro na base de dados (${e?.code ?? e?.name ?? "erro"}).`); await sair(3); });
+let cliente = null;
+const sair = async (codigo) => { try { cliente?.release(); } catch { /* ignora */ } try { await pool.end(); } catch { /* ignora */ } process.exit(codigo); };   // sem libertar o cliente, pool.end() espera para sempre
+cliente = await pool.connect().catch(async (e) => { console.error(`❌ Erro na base de dados (${e?.code ?? e?.name ?? "erro"}).`); await sair(3); });
 const q = (sql, p) => cliente.query(sql, p);
 
 try {
@@ -43,7 +44,7 @@ try {
   if (!opt["--confirmar"]) { console.log("\nSIMULAÇÃO: nada foi alterado. Repete com --confirmar para repor."); await sair(0); }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const resposta = await new Promise((res) => rl.question(`\nEscreve o nome do utilizador («${conta.username}») para confirmar a reposição: `, (r) => { rl.close(); res(r.trim()); }));
+  const resposta = await new Promise((res) => { rl.on("close", () => res("")); rl.question(`\nEscreve o nome do utilizador («${conta.username}») para confirmar a reposição: `, (r) => { res(r.trim()); rl.close(); }); });   // stdin fechado sem resposta = cancelado
   if (resposta !== conta.username) { console.error("\n❌ Confirmação diferente: cancelado, nada foi alterado."); await sair(4); }
 
   await q("begin");

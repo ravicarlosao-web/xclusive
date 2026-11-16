@@ -214,8 +214,8 @@ router.get("/admin/media", requireAdmin, async (req: AdminRequest, res): Promise
 // ── Login ────────────────────────────────────────────────────────────────────
 
 /** Auditoria do login de admin (só contas de admin existentes: audit_log.admin_id é obrigatório). Nunca leva palavra-passe nem hash. */
-async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>): Promise<number> {
-  const [r] = await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: adminId, details, ipAddress: ip ?? null }).returning({ id: auditLogTable.id });
+async function auditLogin(adminId: number, action: string, ip: string | undefined, details: Record<string, unknown>, alvoId?: number): Promise<number> {
+  const [r] = await db.insert(auditLogTable).values({ adminId, action, targetType: "user", targetId: alvoId ?? adminId, details, ipAddress: ip ?? null }).returning({ id: auditLogTable.id });
   return r.id;
 }
 
