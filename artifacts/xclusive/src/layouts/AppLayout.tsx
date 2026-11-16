@@ -16,6 +16,7 @@ import { CreatePostModal } from '@/components/shared/CreatePostModal';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
 import { Mais18Card } from '@/components/shared/Mais18';
 import { RodapeLegal } from '@/components/shared/RodapeLegal';
+import { InstalarAppItem } from '@/components/shared/PwaAvisos';
 import { useGetUnreadConversationsCount, getGetUnreadConversationsCountQueryKey, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
 // Rotas em que a página faz scroll no documento (o rodapé fica no fim). As de altura fixa / ecrã inteiro ficam de fora.
@@ -242,6 +243,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     <Settings className="w-5 h-5" /> Definições
                   </Button>
                 </Link>
+                <InstalarAppItem />
                 <div className="h-px bg-border my-1" />
                 <Button variant="ghost" className="w-full justify-start gap-3 rounded-lg h-11 px-3 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={logout}>
                   <LogOut className="w-5 h-5" /> Terminar sessão

@@ -39,8 +39,18 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32-v2.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192-v2.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
+    <!-- Barra do browser/app: as variantes por esquema de cor vêm primeiro (cores dos tokens: fundo claro 0 0% 100%, fundo escuro 0 0% 4%); o valor sem media (rosa da marca) fica de reserva. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
     <meta name="theme-color" content="#ff3e72" />
     <meta name="msapplication-TileColor" content="#ff3e72" />
+
+    <!-- App instalável (PWA): manifesto + meta do iOS (o Safari não usa o manifesto para o nome e o modo de ecrã inteiro). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Xclusive" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 
     <!-- ╔══════════════════════════════════════════╗ -->
     <!-- ║              PERFORMANCE                 ║ -->
