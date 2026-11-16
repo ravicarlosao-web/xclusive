@@ -1,3 +1,4 @@
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 /**
  * App instalável (PWA): registo do service worker, aviso de nova versão e instalação.
  *
@@ -32,8 +33,8 @@ function eIos(): boolean {
   } catch { return false; }
 }
 
-export function lerFlag(chave: string): boolean { try { return localStorage.getItem(chave) === '1'; } catch { return false; } }
-export function gravarFlag(chave: string): void { try { localStorage.setItem(chave, '1'); } catch { /* sem armazenamento: vale só nesta visita */ } }
+export function lerFlag(chave: string): boolean { try { return lerLocal(chave) === '1'; } catch { return false; } }
+export function gravarFlag(chave: string): void { try { escreverLocal(chave, '1'); } catch { /* sem armazenamento: vale só nesta visita */ } }
 
 let estado: EstadoPwa = { ativo: false, novaVersao: false, podeInstalar: false, instalada: false, ios: false };
 const ouvintes = new Set<() => void>();

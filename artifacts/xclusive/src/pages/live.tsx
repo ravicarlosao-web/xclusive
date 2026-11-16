@@ -52,6 +52,7 @@ import {
   type WebrtcFailReason,
   type WebrtcViewerSession,
 } from '@/lib/ovenWebrtcViewer';
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 
 // ─── Configuração CDN ─────────────────────────────────────────────────────────
 const BUNNY_LIVE_CDN_HOSTNAME =
@@ -121,7 +122,7 @@ const webrtcPlaybackCalls = new Map<string, number>();
 
 function isIceFailureRemembered(): boolean {
   try {
-    const until = Number(localStorage.getItem(WEBRTC_ICE_FAIL_KEY));
+    const until = Number(lerLocal(WEBRTC_ICE_FAIL_KEY));
     return Number.isFinite(until) && until > Date.now();
   } catch {
     return false;
@@ -130,7 +131,7 @@ function isIceFailureRemembered(): boolean {
 
 function rememberIceFailure(): void {
   try {
-    localStorage.setItem(WEBRTC_ICE_FAIL_KEY, String(Date.now() + WEBRTC_ICE_FAIL_MEMORY_MS));
+    escreverLocal(WEBRTC_ICE_FAIL_KEY, String(Date.now() + WEBRTC_ICE_FAIL_MEMORY_MS));
   } catch {
     /* localStorage indisponível: ignora */
   }
@@ -138,7 +139,7 @@ function rememberIceFailure(): void {
 
 function isTcpRemembered(): boolean {
   try {
-    const until = Number(localStorage.getItem(WEBRTC_TCP_KEY));
+    const until = Number(lerLocal(WEBRTC_TCP_KEY));
     return Number.isFinite(until) && until > Date.now();
   } catch {
     return false;
@@ -147,7 +148,7 @@ function isTcpRemembered(): boolean {
 
 function rememberTcpWorked(): void {
   try {
-    localStorage.setItem(WEBRTC_TCP_KEY, String(Date.now() + WEBRTC_TCP_MEMORY_MS));
+    escreverLocal(WEBRTC_TCP_KEY, String(Date.now() + WEBRTC_TCP_MEMORY_MS));
   } catch {
     /* localStorage indisponível: ignora */
   }

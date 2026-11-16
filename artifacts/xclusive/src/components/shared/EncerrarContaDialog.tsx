@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { escreverSessao, lerLocal } from '@/lib/armazenamento';
 
 /** Marca (por sessão do browser) de que a conta foi encerrada; o ecrã de login mostra o aviso (ver pages/login.tsx). */
 export const CHAVE_CONTA_ENCERRADA = 'xclusive_conta_encerrada';
@@ -16,7 +17,7 @@ type Passo = 1 | 2 | 3;
 
 const base = () => (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 const cabecalhos = (): Record<string, string> => {
-  const token = localStorage.getItem('xclusive_token');
+  const token = lerLocal('xclusive_token');
   return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 };
 
@@ -58,7 +59,7 @@ export function EncerrarContaDialog({ aberto, onFechar }: { aberto: boolean; onF
       const j = await r.json().catch(() => ({}));
       if (r.ok) {
         const msg = typeof j?.mensagem === 'string' ? j.mensagem : 'A tua conta foi encerrada.';
-        try { sessionStorage.setItem(CHAVE_CONTA_ENCERRADA, msg); } catch { /* sem armazenamento */ }
+        try { escreverSessao(CHAVE_CONTA_ENCERRADA, msg); } catch { /* sem armazenamento */ }
         setMensagemFinal(msg); setPasso(3);
         return;
       }

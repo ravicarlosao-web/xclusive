@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X, Smartphone, CreditCard, Receipt, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { lerLocal } from '@/lib/armazenamento';
 
 interface TopUpModalProps {
   open: boolean;
@@ -47,7 +48,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     if (!open) return;
     let vivo = true;
     const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-    const token = localStorage.getItem('xclusive_token');
+    const token = lerLocal('xclusive_token');
     setConfigErro(false);
     fetch(`${base}/api/wallet/topup/config`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -122,7 +123,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setLoading(true);
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const token = localStorage.getItem('xclusive_token');
+      const token = lerLocal('xclusive_token');
       const res = await fetch(`${base}/api/wallet/topup/appypay/gpo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -143,7 +144,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setLoading(true);
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const token = localStorage.getItem('xclusive_token');
+      const token = lerLocal('xclusive_token');
       const res = await fetch(`${base}/api/wallet/topup/appypay/ref`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

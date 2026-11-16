@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   ExternalLink,
 } from 'lucide-react';
+import { lerLocal } from '@/lib/armazenamento';
 
 export default function LivePublishTest() {
   const { user, isAuthenticated } = useAuth();
@@ -75,7 +76,7 @@ export default function LivePublishTest() {
     addLog('A contactar backend: POST /api/live/start...', 'info');
 
     try {
-      const token = localStorage.getItem('xclusive_token');
+      const token = lerLocal('xclusive_token');
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 
       const res = await fetch(`${base}/api/live/start`, {
@@ -172,7 +173,7 @@ export default function LivePublishTest() {
     setCheckingActive(true);
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/live/active`, { headers: { Authorization: `Bearer ${localStorage.getItem('xclusive_token') ?? ''}` } });
+      const res = await fetch(`${base}/api/live/active`, { headers: { Authorization: `Bearer ${lerLocal('xclusive_token') ?? ''}` } });
       const data = await res.json();
       setActiveLives(Array.isArray(data) ? data : []);
       addLog(`Lives ativas encontradas em /api/live/active: ${Array.isArray(data) ? data.length : 0}`, 'info');

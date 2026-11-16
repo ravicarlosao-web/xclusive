@@ -20,9 +20,10 @@ import {
   MINHAS_SUBS_KEY, SubscricaoError, apiSub, fetchPlanoCriador,
   type MinhaSubscricao, type PlanoCriador,
 } from '@/lib/subscricoes';
+import { chavesLocal, escreverLocal, escreverSessao, lerLocal, removerLocal } from '@/lib/armazenamento';
 
 // Wire the API client to always send the stored JWT token
-setAuthTokenGetter(() => localStorage.getItem('xclusive_token'));
+setAuthTokenGetter(() => lerLocal('xclusive_token'));
 
 /** Lê o campo `exp` de um JWT sem verificar a assinatura (payload é público). */
 function parseTokenExp(token: string): number | null {
@@ -40,9 +41,9 @@ function parseTokenExp(token: string): number | null {
 const MSG_SEM_SERVIDOR = 'Não foi possível contactar o servidor. Tenta novamente.';
 if (!import.meta.env.DEV) {
   try {
-    if ((localStorage.getItem('xclusive_token') ?? '').startsWith('mock_token_')) localStorage.removeItem('xclusive_token');
-    for (const k of Object.keys(localStorage)) {
-      if (k.startsWith('xclusive_mock_')) localStorage.removeItem(k);
+    if ((lerLocal('xclusive_token') ?? '').startsWith('mock_token_')) removerLocal('xclusive_token');
+    for (const k of chavesLocal()) {
+      if (k.startsWith('xclusive_mock_')) removerLocal(k);
     }
   } catch { /* localStorage indisponível */ }
 }
@@ -52,10 +53,10 @@ const CHAVE_CONTA_SUSPENSA = 'xclusive_conta_suspensa';
 /** Conta encerrada pelo próprio: guarda a mensagem (por sessão do browser) para o ecrã de login a mostrar. */
 const CHAVE_CONTA_ENCERRADA = 'xclusive_conta_encerrada';
 function marcarContaEncerrada(mensagem: string) {
-  try { sessionStorage.setItem(CHAVE_CONTA_ENCERRADA, mensagem); } catch { /* sem armazenamento */ }
+  try { escreverSessao(CHAVE_CONTA_ENCERRADA, mensagem); } catch { /* sem armazenamento */ }
 }
 function marcarContaSuspensa() {
-  try { sessionStorage.setItem(CHAVE_CONTA_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
+  try { escreverSessao(CHAVE_CONTA_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
 }
 
 // ─── Mock store helpers (DB-less mode) ───────────────────────────────────────
@@ -138,10 +139,10 @@ export interface MockTransaction {
   criadoEm: string;
 }
 function getTransactions(): MockTransaction[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_TRANSACTIONS_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(lerLocal(MOCK_TRANSACTIONS_KEY) || '[]'); } catch { return []; }
 }
 function saveTransactions(txs: MockTransaction[]) {
-  localStorage.setItem(MOCK_TRANSACTIONS_KEY, JSON.stringify(txs));
+  escreverLocal(MOCK_TRANSACTIONS_KEY, JSON.stringify(txs));
 }
 
 /**
@@ -159,7 +160,7 @@ function decodeDadosBancarios(enc: string): DadosBancarios | null {
 
 function getMockUsers(): MockUser[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(MOCK_KEY) || '[]') as Array<Record<string, unknown>>;
+    const raw = JSON.parse(lerLocal(MOCK_KEY) || '[]') as Array<Record<string, unknown>>;
     return raw.map(u => {
       // Suporte a dados legados em plaintext: migra na leitura
       if (u._dadosBancariosEnc && typeof u._dadosBancariosEnc === 'string') {
@@ -185,7 +186,7 @@ function saveMockUsers(users: MockUser[]) {
     // Guarda dados bancários obfuscados — nunca em plaintext
     return { ...rest, _dadosBancariosEnc: encodeDadosBancarios(dadosBancarios) };
   });
-  localStorage.setItem(MOCK_KEY, JSON.stringify(serialized));
+  escreverLocal(MOCK_KEY, JSON.stringify(serialized));
 }
 
 // Pre-seed test accounts so they work even without a real DB
@@ -248,7 +249,7 @@ async function mockLogin(data: LoginInput): Promise<{ token: string; user: UserP
   const user = users.find(u => u.email === data.email && u._devPassword === data.password);
   if (!user) throw new Error('Email ou palavra-passe incorretos.');
   const token = makeMockToken(user.id);
-  localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({ token, userId: user.id }));
+  escreverLocal(MOCK_SESSION_KEY, JSON.stringify({ token, userId: user.id }));
   return { token, user: mockUserToProfile(user) };
 }
 
@@ -283,17 +284,17 @@ async function mockRegister(data: RegisterInput & { pais?: string; telefone?: st
   };
   saveMockUsers([...users, newUser]);
   const token = makeMockToken(newUser.id);
-  localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify({ token, userId: newUser.id }));
+  escreverLocal(MOCK_SESSION_KEY, JSON.stringify({ token, userId: newUser.id }));
   return { token, user: mockUserToProfile(newUser) };
 }
 
 async function mockLogout() {
-  localStorage.removeItem(MOCK_SESSION_KEY);
+  removerLocal(MOCK_SESSION_KEY);
 }
 
 function getMockSession(): UserProfile | null {
   try {
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) return null;
     const users = getMockUsers();
     const user = users.find(u => u.id === session.userId);
@@ -303,7 +304,7 @@ function getMockSession(): UserProfile | null {
 
 function getCurrentMockUser(): MockUser | null {
   try {
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) return null;
     const users = getMockUsers();
     return users.find(u => u.id === session.userId) ?? null;
@@ -422,7 +423,7 @@ async function renovarSessao(): Promise<Renovacao> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [token, setTokenState] = useState<string | null>(() => localStorage.getItem('xclusive_token'));
+  const [token, setTokenState] = useState<string | null>(() => lerLocal('xclusive_token'));
   const [mockUser, setMockUser] = useState<UserProfile | null>(() => (import.meta.env.DEV ? getMockSession() : null));
   const [isMockMode, setIsMockMode] = useState(false);
   const [saldo, setSaldo] = useState<number | null>(() => (import.meta.env.DEV ? getMockSaldo() : null));
@@ -451,10 +452,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setToken = useCallback((newToken: string | null) => {
     if (newToken) {
-      localStorage.setItem('xclusive_token', newToken);
+      escreverLocal('xclusive_token', newToken);
       setTokenState(newToken);
     } else {
-      localStorage.removeItem('xclusive_token');
+      removerLocal('xclusive_token');
       setTokenState(null);
     }
   }, []);
@@ -500,13 +501,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     setOnTokenRefreshed((newToken) => {
-      localStorage.setItem('xclusive_token', newToken);
+      escreverLocal('xclusive_token', newToken);
       setTokenState(newToken);
     });
 
     setOnSessionExpired(() => {
       if (renovacaoFalhouTransitoria) return; // 429, 5xx ou rede ao renovar: não apaga a sessão
-      localStorage.removeItem('xclusive_token');
+      removerLocal('xclusive_token');
       setTokenState(null);
     });
 
@@ -549,7 +550,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (semSessao(status)) {
-        if (!localStorage.getItem('xclusive_token')) return; // o interceptor já terminou a sessão: nada a renovar
+        if (!lerLocal('xclusive_token')) return; // o interceptor já terminou a sessão: nada a renovar
         // O interceptor acabou de tentar renovar e falhou por motivo transitório: não repete já o pedido; mostra «Não foi possível ligar».
         if (renovacaoFalhouTransitoria) { setRenovacaoTransitoria(true); return; }
         tryRefreshToken().then(resultado => {
@@ -676,7 +677,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── Mock mode ──────────────────────────────────────────────────────────────
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const users = getMockUsers();
     const senderIdx = users.findIndex(u => u.id === session.userId);
@@ -727,7 +728,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── Mock mode ──────────────────────────────────────────────────────────────
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
     const user = freshUsers.find(u => u.id === session.userId);
@@ -777,7 +778,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── Mock mode ──────────────────────────────────────────────────────────────
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
     const senderIdx = freshUsers.findIndex(u => u.id === session.userId);
@@ -830,7 +831,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── Mock mode ──────────────────────────────────────────────────────────────
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
     const senderIdx = freshUsers.findIndex(u => u.id === session.userId);
@@ -935,7 +936,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     // ── Mock mode ──
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) return;
     const freshUsers = getMockUsers();
     const idx = freshUsers.findIndex(u => u.id === session.userId);
@@ -969,7 +970,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // ── Mock mode (demo local) ──
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) throw new Error('Não estás autenticado.');
     const freshUsers = getMockUsers();
     const idx = freshUsers.findIndex(u => u.id === session.userId);
@@ -999,7 +1000,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, isMockToken, ganhos, withdrawalApi, fetchApiWallet]);
 
   const getTransactionHistory = useCallback((): MockTransaction[] => {
-    const session = JSON.parse(localStorage.getItem(MOCK_SESSION_KEY) || 'null');
+    const session = JSON.parse(lerLocal(MOCK_SESSION_KEY) || 'null');
     if (!session) return [];
     const all = getTransactions();
     return all.filter(tx => tx.fromUserId === session.userId).sort((a, b) => b.id - a.id);
@@ -1035,11 +1036,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isMockToken && mockUser) {
       const updated: UserProfile = { ...mockUser, tipoConta: tipo, verificado: true };
       setMockUser(updated);
-      const session = localStorage.getItem(MOCK_SESSION_KEY);
+      const session = lerLocal(MOCK_SESSION_KEY);
       if (session) {
         try {
           const parsed = JSON.parse(session);
-          localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(parsed));
+          escreverLocal(MOCK_SESSION_KEY, JSON.stringify(parsed));
         } catch {}
       }
     }

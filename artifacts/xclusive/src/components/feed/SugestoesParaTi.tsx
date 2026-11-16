@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { useSeguir } from './useSeguir';
+import { lerLocal } from '@/lib/armazenamento';
 
 interface Sugestao {
   id: number;
@@ -26,7 +27,7 @@ export function SugestoesParaTi({ ativo, porPagina = 2 }: { ativo: boolean; porP
   const { data, isLoading, isError } = useQuery<Sugestao[]>({
     queryKey: ['/api/users/suggestions'],
     queryFn: async () => {
-      const token = localStorage.getItem('xclusive_token');
+      const token = lerLocal('xclusive_token');
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
       const res = await fetch(`${base}/api/users/suggestions`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error('Falha ao carregar sugestões');

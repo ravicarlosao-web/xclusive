@@ -13,6 +13,7 @@ import { EMAIL_CONTACTO } from '@/lib/contactos';
 import { Loader2, FlaskConical } from 'lucide-react';
 import { AuthSplitLayout, AuthHeader } from '@/components/AuthSplitLayout';
 import { ContinuarComGoogle } from '@/components/auth/ContinuarComGoogle';
+import { escreverSessao, lerSessao, removerSessao } from '@/lib/armazenamento';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -29,11 +30,11 @@ const CHAVE_SUSPENSA = 'xclusive_conta_suspensa';
 const CHAVE_ENCERRADA = 'xclusive_conta_encerrada';
 
 function lerMensagemEncerrada(): string | null {
-  try { return sessionStorage.getItem(CHAVE_ENCERRADA); } catch { return null; }
+  try { return lerSessao(CHAVE_ENCERRADA); } catch { return null; }
 }
 
 function lerFlagSuspensa(): boolean {
-  try { return sessionStorage.getItem(CHAVE_SUSPENSA) === '1'; } catch { return false; }
+  try { return lerSessao(CHAVE_SUSPENSA) === '1'; } catch { return false; }
 }
 
 /** Estado público dos registos (GET /api/registos/estado). null = não foi possível ler (o servidor decide no envio). */
@@ -81,17 +82,17 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       await login({ email: data.email, password: data.password, lembrar: data.lembrar });
-      try { sessionStorage.removeItem(CHAVE_SUSPENSA); sessionStorage.removeItem(CHAVE_ENCERRADA); } catch { /* sem armazenamento */ }
+      try { removerSessao(CHAVE_SUSPENSA); removerSessao(CHAVE_ENCERRADA); } catch { /* sem armazenamento */ }
     } catch (error: any) {
       // Conta encerrada (403 + codigo): aviso persistente com a mensagem do servidor, sem toast e sem sessão.
       if (error?.status === 403 && error?.data?.codigo === 'conta_encerrada' && typeof error?.data?.error === 'string') {
-        try { sessionStorage.setItem(CHAVE_ENCERRADA, error.data.error); } catch { /* sem armazenamento */ }
+        try { escreverSessao(CHAVE_ENCERRADA, error.data.error); } catch { /* sem armazenamento */ }
         setEncerrada(error.data.error);
         return;
       }
       // Conta suspensa (403 + codigo): aviso persistente na página, sem toast e sem sessão.
       if (error?.status === 403 && error?.data?.codigo === 'conta_suspensa') {
-        try { sessionStorage.setItem(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
+        try { escreverSessao(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ }
         setSuspensa(true);
         return;
       }
@@ -193,8 +194,8 @@ export default function Login() {
 
           <ContinuarComGoogle
             contexto="login"
-            aoContaEncerrada={(msg) => { try { sessionStorage.setItem(CHAVE_ENCERRADA, msg); } catch { /* sem armazenamento */ } setEncerrada(msg); }}
-            aoContaSuspensa={() => { try { sessionStorage.setItem(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ } setSuspensa(true); }}
+            aoContaEncerrada={(msg) => { try { escreverSessao(CHAVE_ENCERRADA, msg); } catch { /* sem armazenamento */ } setEncerrada(msg); }}
+            aoContaSuspensa={() => { try { escreverSessao(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ } setSuspensa(true); }}
           />
 
           {/* Contas de teste: SÓ em desenvolvimento local (removidas do build de produção) */}

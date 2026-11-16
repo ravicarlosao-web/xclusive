@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { lerLocal } from '@/lib/armazenamento';
 
 // ─── Tipos dos eventos recebidos pelo cliente ──────────────────────────────────
 
@@ -146,7 +147,7 @@ export function useSocket(
       return;
     }
 
-    const token = localStorage.getItem('xclusive_token');
+    const token = lerLocal('xclusive_token');
     if (!token) return; // Utilizador não autenticado — não conectar
 
     // Criar socket (usando o proxy do Vite em dev, ou o servidor em produção)
@@ -154,7 +155,7 @@ export function useSocket(
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       // Lê o token a cada tentativa (pode ter sido renovado durante uma queda longa)
-      auth: (cb) => cb({ token: localStorage.getItem('xclusive_token') ?? token }),
+      auth: (cb) => cb({ token: lerLocal('xclusive_token') ?? token }),
       // Reconectar sempre (um deploy pode deixar o backend em baixo durante minutos), com intervalo
       // crescente e jitter para não martelar o servidor quando muitos clientes voltam ao mesmo tempo.
       reconnectionAttempts: Infinity,

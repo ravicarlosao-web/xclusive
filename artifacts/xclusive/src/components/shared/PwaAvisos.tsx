@@ -30,6 +30,27 @@ export function InstalarAppItem() {
   );
 }
 
+/** Item fixo «Instalar app» das Definições (telemóvel): a mesma lógica do menu «Mais» (prompt nativo; instruções no iOS; escondido se já instalada). */
+export function InstalarAppDefinicoes() {
+  const p = usePwa();
+  const [ajuda, setAjuda] = useState(false);
+  if (!p.ativo || p.instalada || (!p.podeInstalar && !p.ios)) return null;
+  return (
+    <div className="px-4 pt-4 md:hidden" data-testid="instalar-app-definicoes">
+      <button
+        type="button"
+        data-testid="instalar-app-definicoes-botao"
+        onClick={() => { if (p.podeInstalar) void instalarApp(); else setAjuda((v) => !v); }}
+        className="flex w-full items-center gap-3 rounded-xl border border-border bg-secondary/30 px-4 min-h-[56px] text-left hover:bg-secondary transition-colors"
+      >
+        <Download className="w-5 h-5 shrink-0" aria-hidden="true" />
+        <span className="flex-1 font-semibold">Instalar app</span>
+      </button>
+      {ajuda && !p.podeInstalar && <p data-testid="instalar-app-definicoes-ios" className="px-1 pt-2 text-sm text-muted-foreground">{TEXTO_IOS}</p>}
+    </div>
+  );
+}
+
 /** Aviso de nova versão (só ao clicar é que a página recarrega) e aviso único, dispensável, para instalar no telemóvel. */
 export function PwaAvisos() {
   const p = usePwa();

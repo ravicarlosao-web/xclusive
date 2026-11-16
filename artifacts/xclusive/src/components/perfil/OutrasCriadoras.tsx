@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronUp } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { lerLocal } from '@/lib/armazenamento';
 
 interface Sugestao { id: number; username: string; nomeExibicao: string | null; avatarUrl: string | null; capaUrl?: string | null; verificado: boolean; tipoConta?: string }
 
@@ -17,7 +18,7 @@ export function OutrasCriadoras({ ativo, perfilUsername, meuUsername }: { ativo:
   const { data } = useQuery<Sugestao[]>({
     queryKey: ['/api/users/suggestions'],
     queryFn: async () => {
-      const token = localStorage.getItem('xclusive_token');
+      const token = lerLocal('xclusive_token');
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
       const res = await fetch(`${base}/api/users/suggestions`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error('Falha ao carregar sugestões');

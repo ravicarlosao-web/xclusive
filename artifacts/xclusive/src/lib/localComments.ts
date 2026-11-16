@@ -1,4 +1,5 @@
 import { Comment, UserSummary } from '@workspace/api-client-react';
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 
 /**
  * Local-only comments (DB-less / mock mode), persisted per post in localStorage.
@@ -16,14 +17,14 @@ interface StoredLocalComment {
 
 function readAll(): StoredLocalComment[] {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_COMMENTS_KEY) || '[]') as StoredLocalComment[];
+    return JSON.parse(lerLocal(LOCAL_COMMENTS_KEY) || '[]') as StoredLocalComment[];
   } catch {
     return [];
   }
 }
 
 function writeAll(comments: StoredLocalComment[]) {
-  localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
+  escreverLocal(LOCAL_COMMENTS_KEY, JSON.stringify(comments));
 }
 
 export function getLocalCommentsForPost(postId: number): Comment[] {

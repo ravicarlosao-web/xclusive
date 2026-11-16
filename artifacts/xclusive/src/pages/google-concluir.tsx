@@ -14,6 +14,7 @@ import { BlocoConsentimento } from '@/components/auth/BlocoConsentimento';
 import { TextoAdvogado } from '@/components/auth/TextoAdvogado';
 import { CHAVE_GOOGLE_NOME } from '@/components/auth/ContinuarComGoogle';
 import { fetchLegalDocs } from './legal/useLegalDocs';
+import { lerSessao, removerSessao } from '@/lib/armazenamento';
 
 const schema = z.object({
   username: z.string().min(3, 'Username deve ter pelo menos 3 caracteres').regex(/^[a-zA-Z0-9_]+$/, 'Apenas letras, números e underscores'),
@@ -31,7 +32,7 @@ type Valores = z.infer<typeof schema>;
 export default function GoogleConcluir() {
   const { entrarComToken } = useAuth();
   const [erro, setErro] = useState<{ texto: string; sessaoExpirada?: boolean } | null>(null);
-  const nome = (() => { try { return sessionStorage.getItem(CHAVE_GOOGLE_NOME) || null; } catch { return null; } })();
+  const nome = (() => { try { return lerSessao(CHAVE_GOOGLE_NOME) || null; } catch { return null; } })();
 
   const form = useForm<Valores>({ resolver: zodResolver(schema), defaultValues: { username: '', dataNascimento: '' } });
 
@@ -44,7 +45,7 @@ export default function GoogleConcluir() {
         dataNascimento: d.dataNascimento,
         aceite: { termos: docs.termos.versao, privacidade: docs.privacidade.versao, conteudo: docs.conteudo.versao, direitosAutor: docs.direitosAutor.versao, reembolsos: docs.reembolsos.versao, cookies: true, maioridade: true },
       });
-      try { sessionStorage.removeItem(CHAVE_GOOGLE_NOME); } catch { /* sem armazenamento */ }
+      try { removerSessao(CHAVE_GOOGLE_NOME); } catch { /* sem armazenamento */ }
       entrarComToken(r.token, r.user as CurrentUser, '/onboarding');
     } catch (e) {
       const err = e as { status?: number; data?: { codigo?: string; error?: string } } | null;

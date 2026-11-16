@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import { escreverLocal, lerLocal } from '@/lib/armazenamento';
 
 /** Chave guardada no navegador. Só o valor exato 'claro' tira o modo noturno; qualquer outra coisa (ou erro de acesso) = noturno. */
 export const CHAVE_TEMA = 'xclusive_tema';
@@ -9,7 +10,7 @@ const ouvintes = new Set<() => void>();
 
 function lerGuardado(): Tema {
   try {
-    return localStorage.getItem(CHAVE_TEMA) === 'claro' ? 'diurno' : 'noturno';
+    return lerLocal(CHAVE_TEMA) === 'claro' ? 'diurno' : 'noturno';
   } catch {
     return 'noturno';
   }
@@ -54,7 +55,7 @@ export function useTema() {
   const definir = useCallback((novo: Tema) => {
     aplicar(novo);
     try {
-      localStorage.setItem(CHAVE_TEMA, novo === 'diurno' ? 'claro' : 'escuro');
+      escreverLocal(CHAVE_TEMA, novo === 'diurno' ? 'claro' : 'escuro');
     } catch {
       /* sem armazenamento: a escolha vale só nesta sessão */
     }

@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { fetchLegalDocs } from './legal/useLegalDocs';
 import { VerificarEmail } from '@/components/settings/VerificarEmail';
 import { useEmailVerificado } from '@/hooks/useEmailVerificado';
+import { lerLocal } from '@/lib/armazenamento';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'intro' | 'personal' | 'document' | 'selfie' | 'liveness' | 'review' | 'success';
@@ -130,7 +131,7 @@ export default function KYCPage() {
   const [kycAnterior, setKycAnterior] = useState<{ estado: string; motivo: string | null } | null>(null);
   useEffect(() => {
     if (isMockMode) return;
-    const token = localStorage.getItem('xclusive_token');
+    const token = lerLocal('xclusive_token');
     if (!token) return;
     let vivo = true;
     fetch(`${import.meta.env.BASE_URL}api/users/me/kyc`, { headers: { Authorization: `Bearer ${token}` } })
@@ -229,7 +230,7 @@ export default function KYCPage() {
         updateTipoConta('criador');
       } else {
         // Modo real: chamar o backend — única via para promover a criador
-        const token = localStorage.getItem('xclusive_token');
+        const token = lerLocal('xclusive_token');
         // Versão vigente dos Termos para Criadoras, lida do servidor no momento do envio.
         const docs = await fetchLegalDocs();
         const res = await fetch(`${import.meta.env.BASE_URL}api/users/me/tornar-criador`, {
