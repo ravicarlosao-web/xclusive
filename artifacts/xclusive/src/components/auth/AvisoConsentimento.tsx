@@ -5,9 +5,9 @@ export function AvisoConsentimento() {
   return (
     <p data-testid="aviso-consentimento" className="text-xs text-center text-muted-foreground">
       Ao fazer login e usar a xclusive, você concorda com os nossos{' '}
-      <Link href="/termos" data-testid="aviso-termos" className="text-primary hover:underline">termos de serviços</Link>{' '}
+      <Link href="/termos" data-testid="aviso-termos" className="text-primary underline underline-offset-2">termos de serviços</Link>{' '}
       e{' '}
-      <Link href="/privacidade" data-testid="aviso-privacidade" className="text-primary hover:underline">política de privacidade</Link>{' '}
+      <Link href="/privacidade" data-testid="aviso-privacidade" className="text-primary underline underline-offset-2">política de privacidade</Link>{' '}
       e confirma que tem pelo menos 18 anos.
     </p>
   );
