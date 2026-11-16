@@ -5,7 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/layouts/AppLayout';
-import { AgeGate, idadeJaConfirmada } from '@/components/shared/AgeGate';
 import { PwaAvisos } from '@/components/shared/PwaAvisos';
 import { RobotsMeta } from '@/components/shared/RobotsMeta';
 import { useEffect } from 'react';
@@ -119,8 +118,7 @@ function PublicOnlyRoute({ component: Component, ...rest }: { component: any, pa
 }
 
 /**
- * Entrada ("/"): sem landing. Com sessão vai para /home; sem sessão vê SÓ o aviso 18+ (o AgeGate cobre o ecrã)
- * e, ao confirmar, o AgeGate leva a /login. Se a idade já foi confirmada, vai direto para /login.
+ * Entrada ("/"): sem landing. Com sessão vai para /home; sem sessão vai para /login.
  */
 function EntradaRoute() {
   const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
@@ -129,7 +127,7 @@ function EntradaRoute() {
   useEffect(() => {
     if (isLoading || erroLigacao) return;
     if (isAuthenticated) setLocation('/home');
-    else if (idadeJaConfirmada()) setLocation('/login');
+    else setLocation('/login');
   }, [isLoading, isAuthenticated, erroLigacao, setLocation]);
 
   if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
@@ -194,7 +192,6 @@ function App() {
           <RobotsMeta />
           <AuthProvider>
             <Router />
-            <AgeGate />
             <PwaAvisos />
           </AuthProvider>
         </WouterRouter>
