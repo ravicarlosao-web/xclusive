@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { EMAIL_CONTACTO } from '@/lib/contactos';
 import { Loader2, FlaskConical } from 'lucide-react';
 import { AuthSplitLayout, AuthHeader } from '@/components/AuthSplitLayout';
+import { AvisoConsentimento } from '@/components/auth/AvisoConsentimento';
 import { ContinuarComGoogle } from '@/components/auth/ContinuarComGoogle';
 import { escreverSessao, lerSessao, removerSessao } from '@/lib/armazenamento';
 
@@ -197,6 +198,8 @@ export default function Login() {
             aoContaEncerrada={(msg) => { try { escreverSessao(CHAVE_ENCERRADA, msg); } catch { /* sem armazenamento */ } setEncerrada(msg); }}
             aoContaSuspensa={() => { try { escreverSessao(CHAVE_SUSPENSA, '1'); } catch { /* sem armazenamento */ } setSuspensa(true); }}
           />
+
+          <AvisoConsentimento />
 
           {/* Contas de teste: SÓ em desenvolvimento local (removidas do build de produção) */}
           {import.meta.env.DEV && (

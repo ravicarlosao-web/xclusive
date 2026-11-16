@@ -15,6 +15,7 @@ import { fetchLegalDocs } from './legal/useLegalDocs';
 import { BlocoConsentimento } from '@/components/auth/BlocoConsentimento';
 import { ContinuarComGoogle } from '@/components/auth/ContinuarComGoogle';
 import { AuthSplitLayout, AuthHeader, AuthLogoMobile } from '@/components/AuthSplitLayout';
+import { AvisoConsentimento } from '@/components/auth/AvisoConsentimento';
 
 // ── Country / phone prefix config ──────────────────────────────────────────
 const COUNTRIES = [
@@ -412,6 +413,8 @@ export default function Register() {
         </Form>
 
         {step === 1 && <ContinuarComGoogle contexto="registo" />}
+
+        <AvisoConsentimento />
 
         <div className="text-center text-sm text-muted-foreground pt-4 border-t border-border">
           Já tens conta?{' '}

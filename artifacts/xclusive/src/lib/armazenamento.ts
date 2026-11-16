@@ -4,7 +4,7 @@
  *  - Todos os acessos, incluindo o do próprio getter `window.localStorage` / `window.sessionStorage`, estão em try/catch: com o armazenamento
  *    bloqueado (SecurityError, modo privado antigo, cookies bloqueados, quota cheia) nada lança.
  *  - Fallback em memória, por área, enquanto a página não for recarregada: a sessão (token) e as escolhas ficam só em memória (ao recarregar,
- *    o utilizador volta a entrar e o aviso 18+ volta a perguntar). Com armazenamento a funcionar o comportamento é o de sempre, com as mesmas chaves.
+ *    o utilizador volta a entrar). Com armazenamento a funcionar o comportamento é o de sempre, com as mesmas chaves.
  *  - Só texto (como o Web Storage). Quem guarda JSON faz JSON.stringify/parse (dentro do seu try/catch).
  */
 type Area = 'local' | 'sessao';

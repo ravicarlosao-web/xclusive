@@ -16,7 +16,7 @@ const CFG_SEM_TOKENS: LegalConfig = { empresaNome: '', empresaNif: null, empresa
 
 /**
  * `semTokens`: documento sem {{..}} (o Modelo de Consentimento): renderiza logo, sem esperar pelo legal-config e sem
- * erro se ele falhar. O rodapé continua a usar o legal-config (só links se falhar). As outras páginas não o usam.
+ * erro se ele falhar. As outras páginas não o usam (o rodapé tem só links).
  */
 export function LegalLayout({ docKey, marcas, acao, semTokens = false }: { docKey: PaginaLegalKey; marcas?: { emailTestId?: string; paragrafoComEmailTestId?: string }; acao?: ReactNode; semTokens?: boolean }) {
   const { config, erro, tentarOutraVez } = useLegalConfig();
@@ -65,7 +65,7 @@ export function LegalLayout({ docKey, marcas, acao, semTokens = false }: { docKe
 
       </main>
 
-      <RodapeLegal config={config} className="max-w-3xl mx-auto px-4 mt-4 pb-8" />
+      <RodapeLegal className="max-w-3xl mx-auto px-4 mt-4 pb-8" />
     </div>
   );
 }
