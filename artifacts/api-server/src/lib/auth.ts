@@ -18,6 +18,8 @@ export interface JwtPayload {
   username: string;
   role?: string;
   type?: "access" | "refresh";
+  /** Só em tokens de admin: a sessão passou o 2.º passo (TOTP, A4a). Sem esta marca, uma conta com TOTP ativo não tem acesso. */
+  mfa?: boolean;
   jti: string;
   iat?: number;
   exp?: number;
