@@ -68,16 +68,21 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 (Alternativa mais rápida: comentar as 2 linhas `limit_req` no site e recarregar; os limites deixam de se aplicar.)
 
-## 10. Verificação em dois passos (A4a): linha a acrescentar ao mapa do login — SÓ DOCUMENTADO, NADA APLICADO
-O 2.º passo do login (TOTP) é `POST /api/admin/auth/login/totp`. O mapa `xcl_admin_login_chave` (`xclusive-limites.conf`) só apanha `/api/admin/auth/login` (a regra acaba em `(\?|$)`), por isso o 2.º passo
-**fica só na zona geral** (`xcl_admin_geral`, 20 pedidos/s) e **não na zona do login** (10/min). O bloqueio da aplicação (A3: falhas de TOTP por conta e por IP) continua a proteger, mas convém o mesmo teto do Nginx.
-Alteração a fazer **por ti** no ficheiro do mapa (este PR não toca em nenhum `.conf`): trocar a linha
+## 10. Verificação em dois passos (A4a/A4b): o 2.º passo do login passa para a zona do login — NADA APLICADO, UM SÓ COMANDO
+O 2.º passo do login (TOTP) é `POST /api/admin/auth/login/totp`. O mapa `xcl_admin_login_chave` só apanhava `/api/admin/auth/login` (a regra acabava em `(\?|$)`), por isso o 2.º passo ficava só na zona geral
+(20 pedidos/s) e não na do login (10/min). O exemplo `docs/deploy/nginx-limites-admin.exemplo.conf` já traz a regra nova: `~*^/api/admin/auth/login(/totp)?(\?|$)`.
+No servidor, o ficheiro instalado é `/etc/nginx/conf.d/xclusive-limites.conf`. **UM comando** (copia de segurança com data → troca a regra → confirma que a troca ficou → `nginx -t` → recarrega SÓ se o teste passar; se algo falhar, não recarrega e repõe a cópia automaticamente):
+```bash
+F=/etc/nginx/conf.d/xclusive-limites.conf; B=/root/xclusive-limites.antes-do-totp.$(date +%F-%H%M).conf; sudo cp -a "$F" "$B" && sudo perl -0pi -e 's#auth/login\(\\\?\|\$\)#auth/login(/totp)?(\\?|\$)#' "$F" && sudo grep -q 'auth/login(/totp)?' "$F" && sudo nginx -t && sudo systemctl reload nginx && echo "OK: login/totp na zona do login (cópia em $B)" || { echo "FALHOU: nada foi recarregado; a repor a cópia"; sudo cp -a "$B" "$F"; }
 ```
-    ~*^/api/admin/auth/login(\?|$)       $binary_remote_addr;
+É seguro repetir (se a regra já estiver trocada, nada muda). Teste (sem credenciais): 12 pedidos seguidos a `POST /api/admin/auth/login/totp` com corpo `{}` → os primeiros ~6 chegam à aplicação (401) e os seguintes levam 429 do Nginx:
+```bash
+for i in $(seq 1 12); do curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'Content-Type: application/json' -d '{}' https://xclusive.ao/api/admin/auth/login/totp; done | sort | uniq -c
 ```
-por
+(Os restantes caminhos de TOTP — `/api/admin/totp/*` e `/api/admin/administradores/:id/totp/repor` — estão debaixo de `/api/admin/` e ficam na zona geral.)
+
+## 11. Reverter a troca da secção 10 (só se for preciso)
+```bash
+F=/etc/nginx/conf.d/xclusive-limites.conf; sudo cp -a "$(ls -t /root/xclusive-limites.antes-do-totp.*.conf | head -1)" "$F" && sudo nginx -t && sudo systemctl reload nginx
 ```
-    ~*^/api/admin/auth/login(/totp)?(\?|$)   $binary_remote_addr;
-```
-Depois `sudo nginx -t && sudo systemctl reload nginx`. Teste: 12 pedidos seguidos a `POST /api/admin/auth/login/totp` (corpo `{}`): os primeiros 6 chegam à aplicação (401), os seguintes levam 429 do Nginx.
-(Os restantes caminhos novos — `/api/admin/totp/*` e `/api/admin/administradores/:id/totp/repor` — estão debaixo de `/api/admin/` e já ficam na zona geral.)
+(repõe a cópia mais recente feita pelo comando da secção 10).

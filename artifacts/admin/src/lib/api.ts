@@ -42,6 +42,19 @@ export const adminApi = {
   login: (email: string, password: string) =>
     adminFetchMsg('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
+  /** 2.º passo do login (A4a): o pré-token (uso único, 5 min) + um código TOTP OU um código de recuperação. Nada disto se guarda: só viaja no corpo do pedido. */
+  loginTotp: (preAuth: string, entrada: { codigo: string } | { recuperacao: string }) =>
+    adminFetchMsg('/admin/auth/login/totp', { method: 'POST', body: JSON.stringify({ preAuth, ...entrada }) }),
+
+  /** Verificação em dois passos (endpoints do A4a). O segredo e os códigos de recuperação vêm UMA vez nas respostas: o chamador só os pode manter em memória do componente. */
+  getTotpEstado: () => adminFetchMsg('/admin/totp/estado'),
+  iniciarTotp: (password: string) => adminFetchMsg('/admin/totp/iniciar', { method: 'POST', body: JSON.stringify({ password }) }),
+  confirmarTotp: (codigo: string) => adminFetchMsg('/admin/totp/confirmar', { method: 'POST', body: JSON.stringify({ codigo }) }),
+  desativarTotp: (password: string, codigo: string) => adminFetchMsg('/admin/totp/desativar', { method: 'POST', body: JSON.stringify({ password, codigo }) }),
+  regenerarCodigosTotp: (codigo: string) => adminFetchMsg('/admin/totp/codigos-recuperacao', { method: 'POST', body: JSON.stringify({ codigo }) }),
+  /** Superadmin: repõe o TOTP de OUTRO admin (com o código TOTP do próprio superadmin). */
+  reporTotpAdministrador: (id: number, codigo: string) => adminFetchMsg('/admin/administradores/' + id + '/totp/repor', { method: 'POST', body: JSON.stringify({ codigo }) }),
+
   /** Troca da própria palavra-passe. Nunca se guarda nada destes valores (só viajam no corpo do pedido). */
   changePassword: (atual: string, nova: string, confirmacao: string) =>
     adminFetchMsg('/admin/auth/password', { method: 'POST', body: JSON.stringify({ atual, nova, confirmacao }) }),
