@@ -1,0 +1,42 @@
+# Migrações ANTERIORES à guarda de migrações (schema_migracoes): ficam isentas da convenção «o ficheiro termina com o INSERT que o regista».
+# Lista FECHADA: não se acrescentam nomes aqui. Toda a migração nova tem de terminar com
+#   INSERT INTO schema_migracoes (nome) VALUES ('<nome-do-ficheiro>.sql') ON CONFLICT DO NOTHING;
+# (verificado pelo teste «migracoes-convencao» do repositório de testes). Uma linha por ficheiro; as linhas que começam por # são comentários.
+add_aceite_multiplo_cookies.sql
+add_admin_login_protecao.sql
+add_admin_totp.sql
+add_ajustes_saldo.sql
+add_appypay_columns.sql
+add_banimento_permanente.sql
+add_bloqueios_e_regra_mensagens.sql
+add_comissao_personalizada_to_users.sql
+add_commission_to_purchases.sql
+add_creator_terms_acceptances.sql
+add_denuncia_mensagem.sql
+add_email_unico_minusculas.sql
+add_encerramento_conta.sql
+add_enquetes.sql
+add_financeiro_restrict.sql
+add_gorjeta_mensagens.sql
+add_infracoes_mais18.sql
+add_levantamentos_retido.sql
+add_live_streams_tables.sql
+add_live_tickets.sql
+add_login_google.sql
+add_mais18_conteudo.sql
+add_menores_sistema.sql
+add_provas_intocaveis.sql
+add_purchases_idempotencia.sql
+add_real_withdrawals.sql
+add_recuperacao_password.sql
+add_registo_evidencia.sql
+add_report_escalation.sql
+add_reports_and_takedown.sql
+add_subscription_expiry_and_type.sql
+add_taxa_comissao_and_seed_commission_rate.sql
+add_troca_password_obrigatoria.sql
+add_user_legal_acceptances.sql
+add_user_mais18_preferencia.sql
+add_username_minusculas_chk.sql
+add_verificacao_email_criador.sql
+drop_reels.sql

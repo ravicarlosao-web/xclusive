@@ -82,10 +82,5 @@ O 2.º passo (`/api/admin/auth/login/totp`) não está na zona de limites do log
 Ações no `audit_log` (sem segredos nem códigos): `admin_totp_ativacao_iniciada`, `admin_totp_ativado`, `admin_totp_desativado`, `admin_totp_login_ok`, `admin_totp_falhou`, `admin_totp_recuperacao_usada`, `admin_totp_codigos_regenerados`, `admin_totp_reposto_por_superadmin`, `admin_totp_reposto_por_script`.
 Emails ao admin (máx. 5/hora por conta): TOTP ativado, desativado, reposto, código de recuperação usado. O alerta de login (A6) passa a dizer se o login foi concluído com TOTP (ou com código de recuperação).
 
-## Proposta (não aplicada): guarda no `~/deploy.sh`
-Para não repetir o #138, o `deploy.sh` podia recusar o deploy com migrações por aplicar. Ideia (não se edita o ficheiro neste PR):
-```bash
-# antes do pm2 restart: para cada ficheiro de lib/db/src/migrations/*.sql, o deploy exige a confirmação de que foi aplicado
-for f in lib/db/src/migrations/*.sql; do grep -q "$(basename "$f")" ~/migracoes-aplicadas.txt || { echo "Migração por aplicar: $f"; exit 1; }; done
-```
-(com `~/migracoes-aplicadas.txt` a receber o nome do ficheiro depois de cada `psql -f` bem-sucedido).
+## Guarda de migrações no `~/deploy.sh`
+Para não repetir o #138 (código em produção antes da migração), o deploy passa a recusar quando há migrações por aplicar: ver `docs/deploy/guarda-migracoes.md` (tabela `schema_migracoes`, `scripts/verificar-migracoes.mjs`, exemplo `deploy.exemplo.sh` e o comando único para a instalar). A migração do TOTP (`add_admin_totp.sql`) é anterior à guarda e entra no baseline.
