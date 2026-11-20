@@ -1,3 +1,4 @@
+import { kursipayWebhookHandler } from "./routes/kursipayWebhook";
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -345,6 +346,11 @@ const topupLimiter = rateLimit({
   keyGenerator: userIdKey,
 });
 app.post("/api/wallet/topup", topupLimiter);
+// Carregamento pela kursiPay: as mesmas regras (5 pedidos CRIADOS por hora e por utilizador; os recusados não gastam a quota).
+app.post("/api/wallet/topup/kursipay", rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5, message: { error: "Demasiados pedidos de carregamento numa hora. Tenta novamente mais tarde." },
+  standardHeaders: true, legacyHeaders: false, skipFailedRequests: true, keyGenerator: userIdKey,
+}));
 app.post("/api/users/:username/follow", followLimiter);
 app.delete("/api/users/:username/follow", followLimiter);
 app.post("/api/posts", createPostLimiter);
@@ -377,6 +383,8 @@ app.use(
 // para que o body chegue ao handler como Buffer intacto (bytes exactos enviados pelo OME).
 // Todas as outras rotas continuam a usar express.json() normalmente.
 app.use("/api/live/admission", express.raw({ type: "application/json", limit: "1mb" }));
+// Webhook da kursiPay: corpo CRU (a assinatura é sobre os bytes exatos) e limite pequeno; registado ANTES do express.json global. Sem limitador por IP (os IPs de origem não são públicos).
+app.post("/api/webhooks/kursipay", express.raw({ type: () => true, limit: "64kb" }), kursipayWebhookHandler);
 // O pedido de carregamento manual leva um comprovativo PDF (≤ ≈5 MB): corpo de 8 MB SÓ nesta rota (o resto continua com o limite global). Tem de vir ANTES do parser global.
 app.post("/api/wallet/topup", express.json({ limit: CORPO_MAX }));
 app.use(express.json({ limit: "50mb" }));

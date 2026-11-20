@@ -34,7 +34,7 @@ try {
   const desvios = contas.filter((c) => c.emDesvio);
   const negativos = contas.filter((c) => c.saldoGuardado < 0 || c.ganhosGuardados < 0).map((c) => ({ id: c.id, username: c.username, saldo: c.saldoGuardado, ganhos: c.ganhosGuardados }));
   const semMarca = (await q(`select t.id, t.user_id, t.amount::float8 as amount, t.payment_method from topup_requests t
-      where t.status = 'aprovado' and t.payment_method not in ('gpo', 'ref')
+      where t.status = 'aprovado' and t.payment_method not in ('gpo', 'ref', 'kursipay')
         and not exists (select 1 from audit_log a where a.action = 'topup_approved' and a.target_type = 'topup' and a.target_id = t.id) order by t.id`)).rows;
   const orfas = [];
   for (const [tabela, coluna, ref] of REFS) {

@@ -12,6 +12,7 @@ import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 import { startReportEscalationJob } from "./lib/reportEscalation";
 import { avisarConfigEmail } from "./lib/email";
 import { avisoChaveTotp } from "./lib/totpCripto";
+import { avisoConfigKursipay } from "./lib/kursipay";
 import { garantirAmbienteArranque } from "./lib/ambienteArranque";
 
 // Falhas não tratadas: regista (o hook do logger redige erros de BD: sem query nem parâmetros) e TERMINA com
@@ -46,6 +47,9 @@ avisarConfigEmail();
 // TOTP de admin (A4a): sem a chave ADMIN_TOTP_CHAVE (32 bytes em base64) ou com ela inválida o servidor ARRANCA na mesma; só avisa (sem valores) e as operações TOTP respondem 503.
 const avisoTotp = avisoChaveTotp();
 if (avisoTotp) logger.warn({ codigo: "totp_chave" }, avisoTotp);
+// kursiPay: sem as chaves (ou inválidas) o servidor arranca na mesma; só avisa (nomes das variáveis, nunca valores) e as rotas da kursiPay respondem 503.
+const avisoKursipay = avisoConfigKursipay();
+if (avisoKursipay) logger.warn({ codigo: "kursipay_config" }, avisoKursipay);
 
 const rawPort = process.env["PORT"] || "8080";
 const port = Number(rawPort);

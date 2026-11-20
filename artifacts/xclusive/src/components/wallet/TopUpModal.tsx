@@ -14,13 +14,16 @@ interface TopUpModalProps {
 
 const PRESET_AMOUNTS = [1000, 2500, 5000, 10000, 25000, 50000];
 
-type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success';
+type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success' | 'kursipay_espera' | 'kursipay_ok';
 
 interface TopUpConfig {
   manual: { disponivel: boolean; nib?: string; nibFormatado?: string; titular?: string };
   gpo: { ativo: boolean; rotulo: string | null };
   ref: { ativo: boolean; rotulo: string | null };
 }
+
+/** «Pagar online» (kursiPay): só aparece quando o servidor o liga E esta conta é elegível. */
+interface KursipayConfig { ativo: boolean; valorMin?: number; valorMax?: number }
 
 export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const { topUp, saldo } = useAuth();
@@ -40,9 +43,14 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // States for AppyPay flows
-  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref'>('manual');
+  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref' | 'kursipay'>('manual');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [refData, setRefData] = useState<{ entity: string; referenceNumber: string; dueDate: string } | null>(null);
+
+  // Pagar online (kursiPay): o checkout abre noutro separador; o ecrã consulta o estado do pedido de poucos em poucos segundos enquanto está aberto.
+  const [kursipay, setKursipay] = useState<KursipayConfig | null>(null);
+  const [kursipayUrl, setKursipayUrl] = useState('');
+  const [kursipayTopupId, setKursipayTopupId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -54,8 +62,31 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((c: TopUpConfig) => { if (vivo) setConfig(c); })
       .catch(() => { if (vivo) { setConfig(null); setConfigErro(true); } });
+    fetch(`${base}/api/wallet/topup/kursipay/config`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((c: KursipayConfig) => { if (vivo) setKursipay(c); })
+      .catch(() => { if (vivo) setKursipay(null); });
     return () => { vivo = false; };
   }, [open]);
+
+  // Consulta curta (5 s) do estado do pedido kursiPay enquanto o ecrã de espera está aberto.
+  useEffect(() => {
+    if (!open || step !== 'kursipay_espera' || kursipayTopupId === null) return;
+    let vivo = true;
+    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const token = lerLocal('xclusive_token');
+    const id = window.setInterval(() => {
+      fetch(`${base}/api/wallet/topup/kursipay/${kursipayTopupId}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { status?: string } | null) => {
+          if (!vivo || !d) return;
+          if (d.status === 'aprovado') setStep('kursipay_ok');
+          else if (d.status === 'rejeitado') { setError('O pagamento não foi concluído (recusado ou expirado). Podes tentar de novo.'); setStep('method'); }
+        })
+        .catch(() => { /* sem rede: tenta na próxima */ });
+    }, 5000);
+    return () => { vivo = false; window.clearInterval(id); };
+  }, [open, step, kursipayTopupId]);
 
   const selectedAmount = amount !== '' ? amount : (customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0);
 
@@ -70,6 +101,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setPaymentMethod('manual');
     setPhoneNumber('');
     setRefData(null);
+    setKursipayUrl('');
+    setKursipayTopupId(null);
   }
 
   function handlePdfSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -166,7 +199,34 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     }
   }
 
+  async function handleKursipaySubmit() {
+    if (kursipay?.valorMax && selectedAmount > kursipay.valorMax) { setError(`Valor máximo no pagamento online: ${kursipay.valorMax.toLocaleString('pt-PT')} Kz.`); return; }
+    setError('');
+    setLoading(true);
+    try {
+      const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+      const token = lerLocal('xclusive_token');
+      const res = await fetch(`${base}/api/wallet/topup/kursipay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount: selectedAmount })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível criar o pagamento.');
+      if (typeof data.checkoutUrl !== 'string' || !data.checkoutUrl.startsWith('https://kursipay.com/')) throw new Error('Não foi possível abrir o pagamento.');
+      setKursipayUrl(data.checkoutUrl);
+      setKursipayTopupId(data.topupId);
+      setStep('kursipay_espera');
+      window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');   // se o navegador bloquear, a ligação do ecrã de espera faz o mesmo
+    } catch (e: any) {
+      setError(e.message || 'Erro ao processar pedido.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleMethodContinue() {
+    if (paymentMethod === 'kursipay') { if (!kursipay?.ativo) { setError('Este método não está disponível de momento.'); return; } void handleKursipaySubmit(); return; }
     if ((paymentMethod === 'gpo' && !ativoGpo) || (paymentMethod === 'ref' && !ativoRef) || (paymentMethod === 'manual' && !ativoManual)) { setError('Este método não está disponível de momento.'); return; }
     if (paymentMethod === 'gpo') setStep('gpo_phone');
     else if (paymentMethod === 'ref') handleRefSubmit();
@@ -264,6 +324,29 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             </DialogHeader>
 
             <div className="space-y-3 mb-6">
+              {kursipay?.ativo && (
+                <button
+                  onClick={() => setPaymentMethod('kursipay')}
+                  data-testid="metodo-kursipay"
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
+                    paymentMethod === 'kursipay'
+                      ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                      : "border-border bg-secondary/30 hover:border-border/80"
+                  )}
+                >
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-sm">Pagar online</h3>
+                    <p className="text-xs text-muted-foreground">Multicaixa Express, Referência ou PayPay</p>
+                  </div>
+                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
+                    {paymentMethod === 'kursipay' && <Check className="w-3 h-3 text-black" />}
+                  </div>
+                </button>
+              )}
               <button
                 onClick={() => ativoGpo && setPaymentMethod('gpo')}
                 disabled={!ativoGpo}
@@ -407,6 +490,34 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         )}
 
         {/* ── Step: GPO Success ── */}
+        {/* ── Pagar online (kursiPay): à espera do pagamento / concluído ── */}
+        {step === 'kursipay_espera' && (
+          <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-espera">
+            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
+              <CreditCard className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">A aguardar o pagamento</h2>
+            <p className="text-muted-foreground mb-6">
+              Conclui o pagamento de {selectedAmount.toLocaleString('pt-PT')} Kz na página que abriu. O saldo é creditado automaticamente quando o pagamento for confirmado.
+            </p>
+            <a href={kursipayUrl} target="_blank" rel="noopener noreferrer" data-testid="kursipay-abrir" className="w-full h-12 mb-3 inline-flex items-center justify-center font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black">
+              Abrir página de pagamento
+            </a>
+            <Button variant="outline" className="w-full rounded-xl" onClick={handleClose}>Fechar</Button>
+          </div>
+        )}
+
+        {step === 'kursipay_ok' && (
+          <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-ok">
+            <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Pagamento confirmado</h2>
+            <p className="text-muted-foreground mb-6">O saldo já está na tua carteira.</p>
+            <Button className="w-full h-12 font-bold rounded-xl" onClick={handleClose}>Concluir</Button>
+          </div>
+        )}
+
         {step === 'gpo_success' && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
