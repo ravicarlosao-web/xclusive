@@ -202,7 +202,7 @@ const completarSchema = z.object({
 }).strict();   // `sub`, `email` ou qualquer outro campo no corpo = 400: a identidade vem SÓ do bilhete
 
 router.post("/auth/google/completar", exigirGoogle, validate(completarSchema), async (req, res): Promise<void> => {
-  const { username, dataNascimento, tipoConta, aceite } = req.body as z.infer<typeof completarSchema>;
+  const { username, dataNascimento, aceite } = req.body as z.infer<typeof completarSchema>;   // `tipoConta` do corpo é ignorado de propósito: a conta nasce SEMPRE pessoal
   const bilhete = lerBilhete((req as Request & { cookies?: Record<string, unknown> }).cookies?.[BILHETE_COOKIE]);
   if (!bilhete) { res.status(400).json({ error: "A sessão de registo com o Google expirou. Volta a escolher «Continuar com o Google».", codigo: "bilhete_invalido" }); return; }
 
@@ -245,7 +245,7 @@ router.post("/auth/google/completar", exigirGoogle, validate(completarSchema), a
         passwordHash,
         passwordDefinida: false,
         dataNascimento,
-        tipoConta: tipoConta || "pessoal",
+        tipoConta: "pessoal",   // SEMPRE pessoal: criadoras só nascem por POST /users/me/tornar-criador
         emailVerificadoEm: new Date(),   // a Google verificou a caixa de correio
       }).returning();
       await tx.insert(userLegalAcceptancesTable).values({
