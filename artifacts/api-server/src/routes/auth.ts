@@ -118,6 +118,7 @@ export const registerSchema = z.object({
     // Declaração de maioridade: boolean estrito e true. Em falta, false ou de outro tipo => 400 (nada é criado).
     maioridade: z.literal(true, { error: "Tens de declarar que tens 18 anos ou mais." }),
   }),
+  // Só por compatibilidade com clientes antigos (PWA em cache) que ainda enviam o campo: o servidor IGNORA-O. Ninguém se regista como criadora; só «Tornar-se Criador» (KYC + Termos para Criadoras) cria criadoras.
   tipoConta: z.enum(["pessoal", "criador"]).optional(),
   pais: z.string().max(10).optional(),
   telefone: z.string().max(20).optional(),
@@ -190,7 +191,7 @@ export function violacaoUnica(err: unknown): "username" | "email" | undefined {
 }
 
 router.post("/auth/register", validate(registerSchema), async (req, res): Promise<void> => {
-  const { nomeCompleto, email, username, password, dataNascimento, tipoConta, aceite } = req.body;
+  const { nomeCompleto, email, username, password, dataNascimento, aceite } = req.body;   // `tipoConta` do corpo é ignorado de propósito (ver registerSchema)
   const emailN = normalizarEmailConta(email); // trim + minúsculas (não colapsa pontos nem «+»: contas diferentes continuam permitidas)
 
   // Registos fechados pelo admin: recusa logo no início (antes de bcrypt e de qualquer escrita), para qualquer tipo de conta.
@@ -262,7 +263,7 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
         username: usernameN,
         passwordHash,
         dataNascimento,
-        tipoConta: tipoConta || "pessoal",
+        tipoConta: "pessoal",   // SEMPRE pessoal: criadoras só nascem por POST /users/me/tornar-criador
       }).returning();
 
       await tx.insert(userLegalAcceptancesTable).values({

@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, User, Camera, ChevronDown } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { fetchLegalDocs } from './legal/useLegalDocs';
@@ -40,7 +40,6 @@ const registerSchema = z.object({
   password: z.string().min(8, 'A palavra-passe deve ter pelo menos 8 caracteres'),
   dataNascimento: z.string().min(1, 'Data de nascimento é obrigatória'),
   telefone: z.string().optional(),
-  tipoConta: z.enum(['pessoal', 'criador']),
   documentos: z.literal(true, {
     errorMap: () => ({ message: 'Tens de aceitar os documentos legais' }),
   }),
@@ -96,12 +95,10 @@ export default function Register() {
       password: '',
       dataNascimento: '',
       telefone: '',
-      tipoConta: 'pessoal',
     },
   });
 
   const watchPassword = form.watch('password');
-  const watchTipoConta = form.watch('tipoConta');
   const watchMaioridade = form.watch('maioridade');
   const watchDocumentos = form.watch('documentos');
   const watchCookies = form.watch('cookies');
@@ -131,7 +128,6 @@ export default function Register() {
         dataNascimento: data.dataNascimento,
         pais: country.name,
         telefone: data.telefone ? `${country.prefix}${data.telefone}` : undefined,
-        tipoConta: data.tipoConta,
         aceite: {
           termos: docs.termos.versao,
           privacidade: docs.privacidade.versao,
@@ -339,49 +335,6 @@ export default function Register() {
                         />
                       </div>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                {/* Account type */}
-                <FormField control={form.control} name="tipoConta" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Conta</FormLabel>
-                    <div className="grid grid-cols-2 gap-3 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => field.onChange('pessoal')}
-                        className={cn(
-                          'flex flex-col items-start p-4 border rounded-xl transition-all text-left',
-                          field.value === 'pessoal'
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-secondary/50 hover:bg-secondary'
-                        )}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center mb-2">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <span className="font-bold text-sm mb-0.5">Fã / Pessoal</span>
-                        <span className="text-xs text-muted-foreground">Segue criadores e descobre conteúdo exclusivo.</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => field.onChange('criador')}
-                        className={cn(
-                          'flex flex-col items-start p-4 border rounded-xl transition-all text-left',
-                          field.value === 'criador'
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-secondary/50 hover:bg-secondary'
-                        )}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mb-2">
-                          <Camera className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="font-bold text-sm mb-0.5 text-primary">Criador</span>
-                        <span className="text-xs text-muted-foreground">Partilha conteúdo e ganha em Kwanza.</span>
-                      </button>
-                    </div>
                     <FormMessage />
                   </FormItem>
                 )} />
