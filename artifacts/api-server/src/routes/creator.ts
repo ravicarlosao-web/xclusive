@@ -357,9 +357,10 @@ router.post("/subscriptions", requireAuth, validate(subscribeSchema), async (req
       if (criadorId === req.userId) throw new PaymentError("Não podes subscrever o teu próprio plano.", 400);
 
       // O tipo da conta é lido AGORA: só vale para novas subscrições.
-      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, criadorId));
+      const [criador] = await tx.select({ tipoConta: usersTable.tipoConta, tipoSubscricao: usersTable.tipoSubscricao, ativo: usersTable.ativo, role: usersTable.role, verificado: usersTable.verificado }).from(usersTable).where(eq(usersTable.id, criadorId));
       // Conta inativa (suspensa ou encerrada) ou de administração: não recebe subscrições (como se não existisse).
-      if (!criador || !criador.ativo || eContaAdmin(criador) || criador.tipoConta !== "criador") throw new PaymentError("Criador não encontrado.", 404);
+      // Só criadoras VERIFICADAS (KYC aprovado) recebem subscrições: uma criadora por aprovar é «não encontrada», como as outras contas que não recebem.
+      if (!criador || !criador.ativo || eContaAdmin(criador) || criador.tipoConta !== "criador" || !criador.verificado) throw new PaymentError("Criador não encontrado.", 404);
       // Par bloqueado (em qualquer dos sentidos): como se o criador não existisse, antes de qualquer cobrança.
       if (await bloqueadoEntre(req.userId!, criadorId, tx)) throw new PaymentError("Criador não encontrado.", 404);
       if (gratuita && criador.tipoSubscricao !== "gratuita") throw new PaymentError("Este criador tem subscrição paga: escolhe um plano.", 409);

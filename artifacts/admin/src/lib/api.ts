@@ -85,8 +85,9 @@ export const adminApi = {
   getCreators: (params?: Record<string, string>) =>
     adminFetch('/admin/creators?' + new URLSearchParams(params)),
   getKycQueue: () => adminFetch('/admin/creators/kyc-queue'),
+  // adminFetchMsg: o aviso mostra só a mensagem do servidor (em português), não o JSON em bruto.
   updateKyc: (id: number, data: any) =>
-    adminFetch('/admin/creators/' + id + '/kyc', { method: 'PATCH', body: JSON.stringify(data) }),
+    adminFetchMsg('/admin/creators/' + id + '/kyc', { method: 'PATCH', body: JSON.stringify(data) }),
   // Documentos KYC: pede ao backend o URL assinado (60 s); cada pedido fica no audit_log.
   // Só aceita caminhos do próprio backend (o token de admin nunca vai para outro destino).
   getKycDocumentUrl: (apiPath: string): Promise<{ url: string; expiraEm: string }> => {

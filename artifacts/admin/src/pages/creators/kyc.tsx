@@ -119,7 +119,7 @@ export default function KycQueue() {
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">Submetido: {req.kycSubmissao?.submissaoEm ? format(new Date(req.kycSubmissao.submissaoEm), 'dd MMM yyyy, HH:mm') : '—'}</p>
                 <p className="text-xs text-muted-foreground" data-testid="kyc-termos-criadoras">
-                  Termos para Criadoras: {req.termosCriadoras ? `v${req.termosCriadoras.versao} em ${format(new Date(req.termosCriadoras.aceiteEm), 'dd/MM/yyyy')}` : 'sem registo (conta anterior)'}
+                  Termos para Criadoras: {req.termosCriadoras ? `v${req.termosCriadoras.versao} em ${format(new Date(req.termosCriadoras.aceiteEm), 'dd/MM/yyyy')}` : 'sem registo de aceitação'}
                 </p>
               </CardHeader>
               <CardContent className="flex-1">
