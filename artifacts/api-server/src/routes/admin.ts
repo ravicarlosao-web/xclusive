@@ -1244,17 +1244,25 @@ function kycAccess(submissionId: number, tipo: string, _key: string): string {
 
 router.get("/admin/creators/kyc-queue", requireAdmin, async (req: AdminRequest, res) => {
   try {
+    // A fila lista SÓ o que o endpoint de decisão aceita: criadoras não verificadas e ativas COM uma submissão PENDENTE (sem pedido não há nada para decidir).
     const queue = await db
       .select()
       .from(usersTable)
-      .where(and(eq(usersTable.tipoConta, "criador"), eq(usersTable.verificado, false), eq(usersTable.ativo, true)))
+      .where(and(
+        eq(usersTable.tipoConta, "criador"), eq(usersTable.verificado, false), eq(usersTable.ativo, true),
+        sql`EXISTS (SELECT 1 FROM kyc_submissions k WHERE k.user_id = ${usersTable.id} AND k.status = 'pendente')`,
+      ))
       .orderBy(asc(usersTable.criadoEm));
 
     const userIds = queue.map((user) => user.id);
+    // Documentos e data vêm da submissão PENDENTE MAIS RECENTE (a mesma que a decisão escolhe), nunca de uma submissão noutro estado.
     const submissions = userIds.length > 0
-      ? await db.select().from(kycSubmissionsTable).where(inArray(kycSubmissionsTable.userId, userIds))
+      ? await db.select().from(kycSubmissionsTable)
+          .where(and(inArray(kycSubmissionsTable.userId, userIds), eq(kycSubmissionsTable.status, "pendente")))
+          .orderBy(sql`${kycSubmissionsTable.submetidoEm} DESC`, desc(kycSubmissionsTable.id))
       : [];
-    const submissionByUser = new Map(submissions.map((submission) => [submission.userId, submission]));
+    const submissionByUser = new Map<number, (typeof submissions)[number]>();
+    for (const submission of submissions) if (!submissionByUser.has(submission.userId)) submissionByUser.set(submission.userId, submission);   // a primeira de cada conta = a mais recente
 
     // Aceite dos Termos para Criadoras da submissão mostrada (só leitura; sem IP nem User-Agent). Sem linha = conta anterior.
     const submissionIds = [...submissionByUser.values()].map((submission) => submission.id);
