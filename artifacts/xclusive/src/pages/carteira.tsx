@@ -98,7 +98,7 @@ function TxRow({ tx }: { tx: DisplayTx }) {
           {tx.descricao && (
             <p className="text-xs text-muted-foreground truncate">{tx.descricao}</p>
           )}
-          <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/60">
+          <p className="text-[10px] text-muted-foreground">
             {new Date(tx.criadoEm).toLocaleDateString('pt-PT', {
               day: 'numeric', month: 'short', year: 'numeric',
               hour: '2-digit', minute: '2-digit',

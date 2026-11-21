@@ -202,7 +202,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <div
                 data-testid="menu-carteira"
                 className={cn(
-                  "group flex items-center gap-4 px-3 h-[calc(1.5rem+2*var(--sb-py))] rounded-xl transition-all duration-200 cursor-pointer hover:bg-secondary",
+                  "group flex items-center gap-4 px-3 h-[calc(1.5rem+2*var(--sb-py))] [@media(min-height:900px)]:h-[calc(25.5px+2*var(--sb-py))] rounded-xl transition-all duration-200 cursor-pointer hover:bg-secondary",
                   location.startsWith('/carteira') ? "text-primary font-semibold" : "text-foreground"
                 )}
               >
