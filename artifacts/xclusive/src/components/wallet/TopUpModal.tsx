@@ -23,7 +23,7 @@ interface TopUpConfig {
 }
 
 /** «Pagar online» (kursiPay): só aparece quando o servidor o liga E esta conta é elegível. */
-interface KursipayConfig { ativo: boolean; direto: boolean; valorMin?: number; valorMax?: number }
+interface KursipayConfig { ativo: boolean; hospedado: boolean; direto: boolean; valorMin?: number; valorMax?: number }
 interface KursipayReferencia { entidade: string; referencia: string; valor: number; validaAte: string | null }
 
 export function TopUpModal({ open, onClose }: TopUpModalProps) {
@@ -257,7 +257,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   }
 
   function handleMethodContinue() {
-    if (paymentMethod === 'kursipay') { if (!kursipay?.ativo) { setError('Este método não está disponível de momento.'); return; } void handleKursipaySubmit('hospedado'); return; }
+    if (paymentMethod === 'kursipay') { if (!kursipay?.hospedado) { setError('Este método não está disponível de momento.'); return; } void handleKursipaySubmit('hospedado'); return; }
     // Cobrança direta kursiPay (chave kursipay_direto_ativo ligada): os cartões «Multicaixa Express» e «Pagamento por Referência» passam a funcionar, sem sair do site.
     if (kursipay?.direto && paymentMethod === 'gpo') { setError(''); setStep('kursipay_phone'); return; }
     if (kursipay?.direto && paymentMethod === 'ref') { void handleKursipaySubmit('referencia'); return; }
@@ -359,7 +359,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             </DialogHeader>
 
             <div className="space-y-3 mb-6">
-              {kursipay?.ativo && (
+              {kursipay?.hospedado && (
                 <button
                   onClick={() => setPaymentMethod('kursipay')}
                   data-testid="metodo-kursipay"

@@ -21,20 +21,23 @@ export const KURSIPAY_SANDBOX_KEY = "kursipay_sandbox_utilizadores";
 export const KURSIPAY_VALOR_MAX_KEY = "kursipay_valor_max";
 /** Liga a cobrança DIRETA (sem sair do site). Ausente/false = desligada, em sandbox e em produção. NÃO é a chave da AppyPay (topup_metodos_automaticos_ativos). */
 export const KURSIPAY_DIRETO_KEY = "kursipay_direto_ativo";
+/** Liga o checkout HOSPEDADO («Pagar online», que abre a página da kursiPay). Ausente/false = desligado: o modal não o mostra e POST /wallet/topup/kursipay recusa sem chamar a kursiPay. A cobrança direta NÃO depende desta chave. */
+export const KURSIPAY_HOSPEDADO_KEY = "kursipay_hospedado_ativo";
 export const VALOR_MAX_PADRAO_KZ = 100_000;
-export const MSG_DIRETO_INDISPONIVEL = "O pagamento direto não está disponível de momento. Usa «Pagar online» ou a transferência bancária.";
+export const MSG_DIRETO_INDISPONIVEL = "O pagamento direto não está disponível de momento. Usa a transferência bancária.";
 export const MSG_INDISPONIVEL = "O pagamento online não está disponível de momento. Usa a transferência bancária.";
 
-export interface SettingsKursipay { ativo: boolean; diretoAtivo: boolean; sandboxIds: number[]; valorMaxKz: number }
+export interface SettingsKursipay { ativo: boolean; diretoAtivo: boolean; hospedadoAtivo: boolean; sandboxIds: number[]; valorMaxKz: number }
 export async function lerSettingsKursipay(q: Pick<typeof db, "select"> = db): Promise<SettingsKursipay> {
   const rows = await q.select({ key: platformSettingsTable.key, value: platformSettingsTable.value }).from(platformSettingsTable)
-    .where(inArray(platformSettingsTable.key, [KURSIPAY_ATIVO_KEY, KURSIPAY_DIRETO_KEY, KURSIPAY_SANDBOX_KEY, KURSIPAY_VALOR_MAX_KEY]));
+    .where(inArray(platformSettingsTable.key, [KURSIPAY_ATIVO_KEY, KURSIPAY_DIRETO_KEY, KURSIPAY_HOSPEDADO_KEY, KURSIPAY_SANDBOX_KEY, KURSIPAY_VALOR_MAX_KEY]));
   const v = (k: string): unknown => (rows.find((r) => r.key === k)?.value as { value?: unknown } | null)?.value;
   const ids = v(KURSIPAY_SANDBOX_KEY);
   const max = v(KURSIPAY_VALOR_MAX_KEY);
   return {
     ativo: v(KURSIPAY_ATIVO_KEY) === true,
     diretoAtivo: v(KURSIPAY_DIRETO_KEY) === true,
+    hospedadoAtivo: v(KURSIPAY_HOSPEDADO_KEY) === true,
     sandboxIds: Array.isArray(ids) ? ids.filter((x): x is number => Number.isInteger(x) && x > 0) : [],
     valorMaxKz: typeof max === "number" && Number.isFinite(max) && max >= VALOR_MIN && max <= 1_000_000 ? max : VALOR_MAX_PADRAO_KZ,
   };
@@ -43,6 +46,8 @@ export async function lerSettingsKursipay(q: Pick<typeof db, "select"> = db): Pr
 export const elegivel = (s: SettingsKursipay, cfg: ConfigKursipay, userId: number): boolean => s.ativo && (cfg.ambiente === "production" || s.sandboxIds.includes(userId));
 
 /** Pode ESTA conta usar a cobrança DIRETA? As mesmas barreiras do checkout hospedado MAIS a chave kursipay_direto_ativo (em produção, a cobrança direta fica bloqueada até estar ligada). */
+/** Pode ESTA conta usar o checkout HOSPEDADO («Pagar online»)? As barreiras base MAIS a chave kursipay_hospedado_ativo (ausente = desligado). */
+export const elegivelHospedado = (s: SettingsKursipay, cfg: ConfigKursipay, userId: number): boolean => elegivel(s, cfg, userId) && s.hospedadoAtivo;
 export const elegivelDireto = (s: SettingsKursipay, cfg: ConfigKursipay, userId: number): boolean => elegivel(s, cfg, userId) && s.diretoAtivo;
 
 // ── Limites de abuso da cobrança direta (em memória; nada de pessoal fica guardado) ──────────────────────────────────────────────────
@@ -105,7 +110,7 @@ async function alertar(msg: string, alvoId: number): Promise<void> {
 export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: number, amountKz: unknown, opc: { metodo?: unknown; telefone?: unknown } = {}): Promise<ResultadoCriar> {
   const s = await lerSettingsKursipay();
   const direto = opc.metodo !== undefined;
-  if (!(direto ? elegivelDireto(s, cfg, userId) : elegivel(s, cfg, userId))) return erro(403, "metodo_indisponivel", direto ? MSG_DIRETO_INDISPONIVEL : MSG_INDISPONIVEL);
+  if (!(direto ? elegivelDireto(s, cfg, userId) : elegivelHospedado(s, cfg, userId))) return erro(403, "metodo_indisponivel", direto ? MSG_DIRETO_INDISPONIVEL : MSG_INDISPONIVEL);
   const centimos = paraCentimos(amountKz);
   if (centimos === null) return erro(400, "valor_invalido", "O valor só pode ter até 2 casas decimais.");
   const kz = centimos / 100;
@@ -128,9 +133,9 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
     const lim = tentarLimitesDiretos(userId, telefone);
     if (lim) {
       logger.warn({ codigo: "kursipay_limite_direto", motivo: lim.motivo, userId, retryAfterS: lim.retryAfterS }, "kursiPay: cobrança direta recusada por limite");
-      const msg = lim.motivo === "utilizador_hora" ? `Atingiste o limite de ${MAX_DIRETOS_HORA} pagamentos diretos por hora. Tenta mais tarde ou usa «Pagar online».`
+      const msg = lim.motivo === "utilizador_hora" ? `Atingiste o limite de ${MAX_DIRETOS_HORA} pagamentos diretos por hora. Tenta mais tarde ou usa a transferência bancária.`
         : lim.motivo === "telefone_cooldown" ? `Já enviámos um pedido para este número há instantes. Aguarda ${lim.retryAfterS} segundos antes de tentar de novo.`
-        : "Este número já recebeu pedidos a mais na última hora. Tenta mais tarde ou usa «Pagar online».";
+        : "Este número já recebeu pedidos a mais na última hora. Tenta mais tarde ou usa a transferência bancária.";
       return { ok: false, erro: { http: 429, codigo: lim.motivo === "utilizador_hora" ? "limite_diretos" : "telefone_em_espera", mensagem: msg, retryAfterS: lim.retryAfterS } };
     }
   }

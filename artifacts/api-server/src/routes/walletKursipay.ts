@@ -10,7 +10,7 @@ import { and, eq } from "drizzle-orm";
 import { db, topupRequestsTable, kursipayPagamentosTable } from "@workspace/db";
 import { requireAuth, type AuthRequest } from "../lib/auth";
 import { lerConfigKursipay } from "../lib/kursipay";
-import { criarCarregamentoKursipay, elegivel, elegivelDireto, lerSettingsKursipay, type ResultadoCriar } from "../lib/kursipayServico";
+import { criarCarregamentoKursipay, elegivel, elegivelDireto, elegivelHospedado, lerSettingsKursipay, type ResultadoCriar } from "../lib/kursipayServico";
 import { VALOR_MIN } from "../lib/carregamento";
 import { erroSeguro } from "../lib/erroSeguro";
 
@@ -22,8 +22,9 @@ router.get("/wallet/topup/kursipay/config", requireAuth, async (req: AuthRequest
     res.setHeader("Cache-Control", "no-store");
     const cfg = lerConfigKursipay(); const s = await lerSettingsKursipay();
     const ativo = !!cfg && elegivel(s, cfg, req.userId!);
-    const direto = !!cfg && elegivelDireto(s, cfg, req.userId!);   // cobrança direta: precisa também da chave kursipay_direto_ativo (em produção e em sandbox)
-    res.json({ ativo, direto, ...(ativo ? { valorMin: VALOR_MIN, valorMax: s.valorMaxKz } : {}) });
+    const direto = !!cfg && elegivelDireto(s, cfg, req.userId!);   // cobrança direta: precisa também da chave kursipay_direto_ativo (em produção e em sandbox); NÃO depende da do hospedado
+    const hospedado = !!cfg && elegivelHospedado(s, cfg, req.userId!);   // «Pagar online»: chave própria kursipay_hospedado_ativo (ausente = desligado)
+    res.json({ ativo, hospedado, direto, ...(ativo ? { valorMin: VALOR_MIN, valorMax: s.valorMaxKz } : {}) });
   } catch (err) { req.log?.error(erroSeguro(err), "kursiPay: erro ao ler a configuração"); res.status(500).json({ error: "Erro ao obter a configuração." }); }
 });
 
