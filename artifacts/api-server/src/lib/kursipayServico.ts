@@ -11,7 +11,9 @@ import { randomInt } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, usersTable, topupRequestsTable, kursipayPagamentosTable, platformSettingsTable } from "@workspace/db";
 import { JANELA_REPETIDO_MS, MAX_PENDENTES, VALOR_MIN } from "./carregamento";
-import { criarPagamento, mensagemDeErro, urlCheckout, type ConfigKursipay, type ErroUtilizador } from "./kursipay";
+import { criarPagamento, formaCheckoutUrl, KursipayErro, mensagemDeErro, urlCheckout, type ConfigKursipay, type ErroUtilizador } from "./kursipay";
+import { logger } from "./logger";
+import { erroSeguro } from "./erroSeguro";
 import { notificarAdmins } from "./takedown";
 
 export const KURSIPAY_ATIVO_KEY = "topup_kursipay_ativo";
@@ -71,6 +73,14 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
       criado = await db.transaction(async (tx) => {
         const [conta] = await tx.select({ ativo: usersTable.ativo }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
         if (!conta || !conta.ativo) return { erro: erro(403, "conta_inativa", "Esta conta não pode fazer carregamentos.") };
+        // Órfãos: pedidos que ficaram «a_criar» (o processo caiu entre gravar o pedido e falar com a kursiPay): fecham-se SEM crédito para não ocuparem a quota de pendentes.
+        const orfaos = await tx.update(kursipayPagamentosTable).set({ estado: "failed", atualizadoEm: new Date() })
+          .where(and(eq(kursipayPagamentosTable.userId, userId), eq(kursipayPagamentosTable.estado, "a_criar"), sql`${kursipayPagamentosTable.criadoEm} < now() - interval '5 minutes'`)).returning({ topupId: kursipayPagamentosTable.topupRequestId });
+        if (orfaos.length) {
+          await tx.update(topupRequestsTable).set({ status: "rejeitado", processadoEm: new Date(), notas: "kursiPay: pedido nunca chegou a ser criado na kursiPay; fechado sem crédito." })
+            .where(and(inArray(topupRequestsTable.id, orfaos.map((o) => o.topupId)), eq(topupRequestsTable.status, "processando")));
+          logger.warn({ codigo: "kursipay_orfaos_fechados", userId, n: orfaos.length }, "kursiPay: pedidos «a_criar» antigos fechados sem crédito");
+        }
         const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(topupRequestsTable).where(and(eq(topupRequestsTable.userId, userId), inArray(topupRequestsTable.status, ["pendente", "processando"])));
         if (n >= MAX_PENDENTES) return { erro: erro(409, "pendentes_demais", `Já tens ${MAX_PENDENTES} pedidos de carregamento pendentes. Aguarda que sejam tratados.`) };
         const [igual] = await tx.select({ id: topupRequestsTable.id }).from(topupRequestsTable)
@@ -102,16 +112,39 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
     pagamento = await criarPagamento(cfg, { valorCentimos: centimos, referencia: reference });
   } catch (e) {
     const m = mensagemDeErro(e);
-    await falhar((e as { codigo?: string })?.codigo ?? "erro");
+    const k = e instanceof KursipayErro ? e : null;
+    // Motivo estruturado (códigos, estado HTTP da kursiPay e NOMES de campos; nunca chaves, cabeçalhos nem o corpo).
+    logger[m.http >= 500 ? "error" : "warn"]({ codigo: "kursipay_criacao_falhou", topupId, motivo: k?.codigo ?? "desconhecido", httpKursipay: k?.http ?? 0, campos: k?.campos, httpResposta: m.http }, "kursiPay: criação do pagamento falhou");
+    await falhar(k?.codigo ?? "erro");
+    // A kursiPay respondeu com sucesso (2xx) mas não percebemos a resposta: o pagamento pode existir lá. Os admins são avisados; um payment.paid futuro vai para revisão manual.
+    if (k?.codigo === "resposta_invalida" && k.http >= 200 && k.http < 300) await alertar(`kursiPay: a resposta à criação do pedido #${topupId} não pôde ser lida (campos: ${(k.campos ?? []).join(", ") || "?"}). O pagamento pode ter sido criado na kursiPay; o pedido ficou rejeitado e, se for pago, ficará em revisão manual.`, topupId);
     return { ok: false, erro: m };
   }
   // A resposta tem de coincidir com o que pedimos; senão não se manda o utilizador pagar.
   const url = urlCheckout(pagamento.checkoutUrl, pagamento.id);
-  if (pagamento.environment !== cfg.ambiente || pagamento.amount.amount !== centimos || pagamento.amount.currency !== "AOA" || pagamento.externalReference !== reference || !url) {
+  const divergencias = [
+    pagamento.environment !== cfg.ambiente && "ambiente",
+    pagamento.amount.amount !== centimos && "valor",
+    pagamento.amount.currency !== "AOA" && "moeda",
+    pagamento.externalReference !== reference && "referencia",
+    !url && "checkoutUrl",
+  ].filter((x): x is string => typeof x === "string");
+  if (divergencias.length) {
+    logger.error({ codigo: "kursipay_criacao_falhou", topupId, motivo: "resposta_incoerente", campos: divergencias, formaCheckoutUrl: formaCheckoutUrl(pagamento.checkoutUrl), kursipayId: pagamento.id }, "kursiPay: a resposta à criação não coincide com o pedido");
     await falhar("resposta_incoerente");
-    await alertar(`kursiPay: a resposta à criação do pedido #${topupId} não coincide com o pedido (valor, moeda, referência ou ambiente). Pedido rejeitado; confirma no painel da kursiPay o pagamento ${pagamento.id}.`, topupId);
+    await alertar(`kursiPay: a resposta à criação do pedido #${topupId} não coincide com o pedido (${divergencias.join(", ")}). Pedido rejeitado; confirma no painel da kursiPay o pagamento ${pagamento.id}.`, topupId);
     return { ok: false, erro: mensagemDeErro(new Error("incoerente")) };
   }
-  await db.update(kursipayPagamentosTable).set({ kursipayId: pagamento.id, estado: "pending", checkoutUrl: url, atualizadoEm: new Date() }).where(and(eq(kursipayPagamentosTable.topupRequestId, topupId), sql`${kursipayPagamentosTable.kursipayId} IS NULL`));
-  return { ok: true, topupId, checkoutUrl: url, ambiente: cfg.ambiente };
+  // A kursiPay JÁ criou o pagamento: se não o conseguirmos gravar, o pedido fecha-se sem crédito e os admins são avisados; um payment.paid futuro vai para revisão manual (não há id registado).
+  try {
+    const gravado = await db.update(kursipayPagamentosTable).set({ kursipayId: pagamento.id, estado: "pending", checkoutUrl: url, atualizadoEm: new Date() })
+      .where(and(eq(kursipayPagamentosTable.topupRequestId, topupId), sql`${kursipayPagamentosTable.kursipayId} IS NULL`)).returning({ id: kursipayPagamentosTable.id });
+    if (gravado.length !== 1) throw new Error("nenhuma linha gravada");
+  } catch (err) {
+    logger.error({ codigo: "kursipay_criacao_falhou", topupId, motivo: "gravacao_falhou", kursipayId: pagamento.id, erro: erroSeguro(err) }, "kursiPay: o pagamento foi criado mas não foi possível gravá-lo");
+    try { await falhar("gravacao_falhou"); } catch (e2) { logger.error({ codigo: "kursipay_fecho_falhou", topupId, erro: erroSeguro(e2) }, "kursiPay: não foi possível fechar o pedido órfão"); }
+    await alertar(`kursiPay: o pagamento ${pagamento.id} foi criado na kursiPay mas não foi gravado (pedido #${topupId}). O pedido ficou rejeitado; se for pago, ficará em revisão manual (nunca é creditado automaticamente).`, topupId);
+    return { ok: false, erro: mensagemDeErro(new KursipayErro("gravacao_falhou", 0)) };
+  }
+  return { ok: true, topupId, checkoutUrl: url!, ambiente: cfg.ambiente };
 }

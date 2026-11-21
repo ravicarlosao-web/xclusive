@@ -71,9 +71,11 @@ export function verificarAssinatura(corpoCru: Buffer, cabecalho: unknown, segred
 }
 
 // ── Esquemas (formatos da documentação) ───────────────────────────────────────────────────────────────────
+/** Id de pagamento (pay_…): letras, dígitos, «_» e «-», no máximo 40 caracteres no total (o tamanho da coluna). */
+export const RE_ID_PAGAMENTO = /^pay_[A-Za-z0-9_-]{4,36}$/;
 const Dinheiro = z.object({ amount: z.number().int().safe(), currency: z.string().min(3).max(3) });
 export const PagamentoSchema = z.object({
-  id: z.string().regex(/^pay_[A-Za-z0-9]{4,40}$/),
+  id: z.string().regex(RE_ID_PAGAMENTO),
   environment: z.enum(["sandbox", "production"]),
   status: z.string().min(1).max(30),
   amount: Dinheiro,
@@ -94,10 +96,14 @@ export type EnvelopeKursipay = z.infer<typeof EnvelopeSchema>;
 
 // ── Cliente HTTP (15 s; no máximo UMA repetição, com a mesma Idempotency-Key) ───────────────────────────────────
 export class KursipayErro extends Error {
-  constructor(public readonly codigo: string, public readonly http: number, public readonly retryAfterS?: number) { super(`kursiPay: ${codigo}`); this.name = "KursipayErro"; }
+  /** `http` = estado HTTP devolvido pela kursiPay (0 = sem resposta); `campos` = NOMES dos campos em falta ou inválidos (nunca valores). */
+  constructor(public readonly codigo: string, public readonly http: number, public readonly retryAfterS?: number, public readonly campos?: string[]) { super(`kursiPay: ${codigo}`); this.name = "KursipayErro"; }
 }
 
-async function pedir(cfg: ConfigKursipay, metodo: "GET" | "POST", caminho: string, opc: { corpo?: unknown; idempotencyKey?: string } = {}): Promise<unknown> {
+/** Nomes dos campos que o esquema recusou (ex.: «amount.currency»), sem valores. */
+const camposInvalidos = (e: z.ZodError): string[] => [...new Set(e.issues.map((i) => i.path.join(".") || "(raiz)"))].slice(0, 10);
+
+async function pedir(cfg: ConfigKursipay, metodo: "GET" | "POST", caminho: string, opc: { corpo?: unknown; idempotencyKey?: string } = {}): Promise<{ json: unknown; http: number }> {
   let ultimo: unknown;
   for (let tentativa = 0; tentativa < 2; tentativa++) {
     try {
@@ -109,14 +115,14 @@ async function pedir(cfg: ConfigKursipay, metodo: "GET" | "POST", caminho: strin
       });
       const texto = await res.text();
       let json: unknown = null; try { json = JSON.parse(texto); } catch { /* corpo não-JSON */ }
-      if (res.ok) { if (json === null) throw new KursipayErro("resposta_invalida", res.status); return json; }
+      if (res.ok) { if (json === null) throw new KursipayErro("resposta_invalida", res.status, undefined, ["(corpo não é JSON)"]); return { json, http: res.status }; }
       const codigo = String(((json as { error?: { code?: unknown } } | null)?.error?.code) ?? `http_${res.status}`).slice(0, 40);
       const ra = Number(res.headers.get("retry-after")); const e = new KursipayErro(codigo, res.status, Number.isFinite(ra) && ra > 0 ? Math.ceil(ra) : undefined);
       if (res.status >= 500 && tentativa === 0) { ultimo = e; continue; }   // 5xx: uma repetição
       throw e;
     } catch (err) {
       if (err instanceof KursipayErro) throw err;
-      ultimo = new KursipayErro("rede", 0);   // timeout ou falha de rede: sem detalhes (nunca o URL nem cabeçalhos)
+      ultimo = new KursipayErro("rede", 0, undefined, [err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError") ? "tempo_limite" : "falha_de_rede"]);   // sem detalhes (nunca o URL nem cabeçalhos)
       if (tentativa === 0) continue;
     }
   }
@@ -127,7 +133,7 @@ export interface PedidoCriarPagamento { valorCentimos: number; referencia: strin
 /** POST /v1/payments: SÓ o que é preciso (valor em cêntimos inteiros, AOA, descrição neutra, métodos sem cartão nem Pix, sem nenhum dado pessoal). */
 export async function criarPagamento(cfg: ConfigKursipay, p: PedidoCriarPagamento): Promise<PagamentoKursipay> {
   if (!Number.isSafeInteger(p.valorCentimos) || p.valorCentimos <= 0) throw new KursipayErro("valor_invalido", 0);
-  const json = await pedir(cfg, "POST", "/payments", {
+  const { json, http } = await pedir(cfg, "POST", "/payments", {
     idempotencyKey: `xclusive-${p.referencia}`,
     corpo: {
       amount: { amount: p.valorCentimos, currency: "AOA" },
@@ -137,21 +143,41 @@ export async function criarPagamento(cfg: ConfigKursipay, p: PedidoCriarPagament
       expiresInMin: 1440,
     },
   });
-  const r = PagamentoSchema.safeParse(json); if (!r.success) throw new KursipayErro("resposta_invalida", 0);
+  const r = PagamentoSchema.safeParse(json); if (!r.success) throw new KursipayErro("resposta_invalida", http, undefined, camposInvalidos(r.error));
   return r.data;
 }
 
 /** GET /v1/payments/:id com a chave secreta (a confirmação autoritativa; o payload do webhook nunca é fonte de verdade). */
 export async function obterPagamento(cfg: ConfigKursipay, id: string): Promise<PagamentoKursipay> {
-  if (!/^pay_[A-Za-z0-9]{4,40}$/.test(id)) throw new KursipayErro("id_invalido", 0);
-  const r = PagamentoSchema.safeParse(await pedir(cfg, "GET", `/payments/${id}`)); if (!r.success) throw new KursipayErro("resposta_invalida", 0);
+  if (!RE_ID_PAGAMENTO.test(id)) throw new KursipayErro("id_invalido", 0);
+  const { json, http } = await pedir(cfg, "GET", `/payments/${id}`);
+  const r = PagamentoSchema.safeParse(json); if (!r.success) throw new KursipayErro("resposta_invalida", http, undefined, camposInvalidos(r.error));
   return r.data;
 }
 
-/** URL absoluto do checkout: domínio fixo + caminho validado. */
+/** A FORMA do checkoutUrl recebido (nunca o conteúdo), para os registos: ausente | vazio | relativo | relativo_com_query | absoluto | outro. */
+export function formaCheckoutUrl(c: unknown): string {
+  if (c === undefined || c === null) return "ausente";
+  if (typeof c !== "string") return "tipo_invalido";
+  if (c === "") return "vazio";
+  if (c.startsWith("/")) return /[?#]/.test(c) ? "relativo_com_query" : "relativo";
+  return /^https?:\/\//i.test(c) ? "absoluto" : "outro";
+}
+
+/**
+ * URL absoluto do checkout. A documentação indica um caminho relativo («/checkout/pay_…», relativo a https://kursipay.com), e o SDK oficial resolve-o com `new URL(checkoutUrl, base)`,
+ * o que também aceita um URL absoluto: fazemos o mesmo, mas SÓ devolvemos um URL no nosso domínio fixo (https://kursipay.com, ou o seu «www»), caminho /checkout/<id deste pagamento>,
+ * sem credenciais nem porta; uma query só passa se for simples. Qualquer outra coisa → null (e o utilizador nunca é mandado para lá).
+ */
 export function urlCheckout(caminho: string | undefined, id: string): string | null {
-  if (typeof caminho !== "string" || !/^\/checkout\/pay_[A-Za-z0-9]{4,40}$/.test(caminho) || !caminho.endsWith(id)) return null;
-  return `${CHECKOUT_BASE}${caminho}`;
+  if (typeof caminho !== "string" || caminho.length === 0 || caminho.length > 300) return null;
+  let u: URL;
+  try { u = new URL(caminho, CHECKOUT_BASE); } catch { return null; }
+  if (u.protocol !== "https:" || (u.origin !== CHECKOUT_BASE && u.origin !== "https://www.kursipay.com") || u.username || u.password) return null;
+  const m = /^\/checkout\/(pay_[A-Za-z0-9_-]{4,36})\/?$/.exec(u.pathname);
+  if (!m || m[1] !== id) return null;
+  if (u.search && !/^\?[A-Za-z0-9_=&.%~+-]{1,200}$/.test(u.search)) return null;
+  return `${CHECKOUT_BASE}/checkout/${id}${u.search}`;
 }
 
 export interface ErroUtilizador { http: number; mensagem: string; codigo: string; retryAfterS?: number }

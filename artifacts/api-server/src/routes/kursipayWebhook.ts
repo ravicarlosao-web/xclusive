@@ -15,7 +15,7 @@
 import type { Request, Response } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, usersTable, topupRequestsTable, kursipayPagamentosTable, kursipayEventosTable, auditLogTable, notificationsTable } from "@workspace/db";
-import { EnvelopeSchema, lerConfigKursipay, obterPagamento, verificarAssinatura, type ConfigKursipay, type PagamentoKursipay } from "../lib/kursipay";
+import { EnvelopeSchema, KursipayErro, lerConfigKursipay, obterPagamento, verificarAssinatura, type ConfigKursipay, type PagamentoKursipay } from "../lib/kursipay";
 import { creditarCarregamento } from "../lib/creditarCarregamento";
 import { lerSettingsKursipay } from "../lib/kursipayServico";
 import { notificarAdmins, notificarSistema } from "../lib/takedown";
@@ -118,8 +118,8 @@ async function processarPago(req: Request, res: Response, cfg: ConfigKursipay, e
   // e) confirmação autoritativa. Falha (rede, 5xx, id inexistente…) → 5xx e o evento NÃO fica registado: a kursiPay reenvia.
   let conf: PagamentoKursipay;
   try { conf = await obterPagamento(cfg, payId); }
-  catch { req.log?.warn({ codigo: "kursipay_confirmacao_falhou", evento: ev.id }, "kursiPay webhook: não foi possível confirmar o pagamento: nada processado"); res.status(502).json({ error: "Não foi possível confirmar o pagamento." }); return; }
-  if (conf.id !== payId) { req.log?.warn({ codigo: "kursipay_confirmacao_incoerente" }, "kursiPay webhook: confirmação de outro pagamento"); res.status(502).json({ error: "Confirmação inválida." }); return; }
+  catch (e) { const k = e instanceof KursipayErro ? e : null; req.log?.warn({ codigo: "kursipay_confirmacao_falhou", evento: ev.id, motivo: k?.codigo ?? "desconhecido", httpKursipay: k?.http ?? 0, campos: k?.campos }, "kursiPay webhook: não foi possível confirmar o pagamento: nada processado"); res.status(502).json({ error: "Não foi possível confirmar o pagamento." }); return; }
+  if (conf.id !== payId) { req.log?.warn({ codigo: "kursipay_confirmacao_incoerente", evento: ev.id, motivo: "id_diferente" }, "kursiPay webhook: confirmação de outro pagamento"); res.status(502).json({ error: "Confirmação inválida." }); return; }
   if (conf.status !== "paid") { req.log?.warn({ codigo: "kursipay_nao_pago", evento: ev.id }, "kursiPay webhook: o payload diz «paid» mas a kursiPay não confirma: sem crédito"); res.status(409).json({ error: "Pagamento ainda não confirmado." }); return; }
 
   const settings = await lerSettingsKursipay();
@@ -140,6 +140,8 @@ async function processarPago(req: Request, res: Response, cfg: ConfigKursipay, e
       return { r: "revisao" };
     };
     if (!reg) return revisao("pedido_desconhecido", null);
+    // Sem id da kursiPay gravado no nosso registo (ex.: o pagamento foi criado mas a gravação falhou): NUNCA se credita automaticamente; fica em revisão manual, com o id agora ligado.
+    if (reg.kursipayId === null) return revisao("sem_id_registado", reg);
     if (conf.amount.currency !== "AOA" || reg.moeda !== "AOA") return revisao("moeda_diferente", reg);
     if (conf.amount.amount !== reg.valorCentimos) return revisao("valor_diferente", reg);
     if (conf.externalReference !== reg.reference) return revisao("referencia_diferente", reg);
