@@ -81,6 +81,8 @@ export const PagamentoSchema = z.object({
   amount: Dinheiro,
   externalReference: z.string().max(100).nullable().optional(),
   checkoutUrl: z.string().max(300).optional(),
+  method: z.string().max(40).nullable().optional(),
+  methodDetails: z.record(z.string(), z.unknown()).nullable().optional(),
   paidAt: z.string().nullable().optional(),
 }).passthrough();
 export type PagamentoKursipay = z.infer<typeof PagamentoSchema>;
@@ -129,13 +131,44 @@ async function pedir(cfg: ConfigKursipay, metodo: "GET" | "POST", caminho: strin
   throw ultimo instanceof KursipayErro ? ultimo : new KursipayErro("rede", 0);
 }
 
-export interface PedidoCriarPagamento { valorCentimos: number; referencia: string }
+/** Cobrança DIRETA (sem checkout): o utilizador nunca sai do nosso site. Só Multicaixa Express e Referência, em AOA. */
+export type MetodoDireto = "multicaixa_express" | "reference";
+export const METODOS_DIRETOS: readonly MetodoDireto[] = ["multicaixa_express", "reference"];
+
+/** Telefone angolano → «+244 9XX XXX XXX» (9 dígitos a começar por 9; aceita espaços, «+244», «00244» e «244»). null = inválido. Nunca é registado nem guardado. */
+export function normalizarTelefoneAO(bruto: unknown): string | null {
+  if (typeof bruto !== "string" || bruto.length > 30) return null;
+  let d = bruto.replace(/[\s().-]/g, "");
+  if (d.startsWith("+244")) d = d.slice(4); else if (d.startsWith("00244")) d = d.slice(5); else if (d.startsWith("244") && d.length === 12) d = d.slice(3);
+  if (!/^9\d{8}$/.test(d)) return null;
+  return `+244 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+}
+
+export interface DetalhesReferencia { entity: string; reference: string; dueAt: string }
+/** Entidade, referência (só dígitos) e prazo de uma cobrança direta por Referência; null se faltar ou vier inválido. */
+export function detalhesReferencia(p: { methodDetails?: Record<string, unknown> | null }): DetalhesReferencia | null {
+  const d = p.methodDetails; if (!d || typeof d !== "object") return null;
+  const entity = typeof d.entity === "string" ? d.entity.trim() : "", ref = typeof d.reference === "string" ? d.reference.replace(/\s/g, "") : "";
+  const due = typeof d.dueAt === "string" ? Date.parse(d.dueAt) : NaN;
+  if (!/^\d{3,10}$/.test(entity) || !/^\d{6,20}$/.test(ref) || !Number.isFinite(due)) return null;
+  return { entity, reference: ref, dueAt: new Date(due).toISOString() };
+}
+
+export interface PedidoCriarPagamento { valorCentimos: number; referencia: string; metodo?: MetodoDireto; telefone?: string }
 /** POST /v1/payments: SÓ o que é preciso (valor em cêntimos inteiros, AOA, descrição neutra, métodos sem cartão nem Pix, sem nenhum dado pessoal). */
 export async function criarPagamento(cfg: ConfigKursipay, p: PedidoCriarPagamento): Promise<PagamentoKursipay> {
   if (!Number.isSafeInteger(p.valorCentimos) || p.valorCentimos <= 0) throw new KursipayErro("valor_invalido", 0);
+  if (p.metodo && (!METODOS_DIRETOS.includes(p.metodo) || (p.metodo === "multicaixa_express" && !p.telefone))) throw new KursipayErro("metodo_invalido", 0);
   const { json, http } = await pedir(cfg, "POST", "/payments", {
     idempotencyKey: `xclusive-${p.referencia}`,
-    corpo: {
+    corpo: p.metodo ? {
+      // Cobrança direta: sem allowedMethods (a documentação proíbe-os juntos). Express: SÓ o telefone do comprador (mascarado nas respostas) e `wait: false` (resposta imediata; o resultado vem pelo webhook).
+      amount: { amount: p.valorCentimos, currency: "AOA" },
+      description: "Carregamento de saldo",
+      externalReference: p.referencia,
+      method: p.metodo,
+      ...(p.metodo === "multicaixa_express" ? { payer: { phone: p.telefone }, wait: false } : { expiresInMin: 1440 }),
+    } : {
       amount: { amount: p.valorCentimos, currency: "AOA" },
       description: "Carregamento de saldo",
       allowedMethods: ["multicaixa_express", "reference", "paypay"],
@@ -188,6 +221,8 @@ export function mensagemDeErro(e: unknown): ErroUtilizador {
     case "limit_exceeded": return { http: 422, codigo: "limite_excedido", mensagem: "Este valor excede o limite permitido para o pagamento online. Escolhe um valor mais baixo ou usa a transferência bancária." };
     case "production_disabled": return { http: 503, codigo: "pagamento_online_indisponivel", mensagem: "O pagamento online ainda não está disponível. Usa a transferência bancária." };
     case "rate_limited": return { http: 429, codigo: "muitos_pedidos", retryAfterS: k.retryAfterS, mensagem: `Há muitos pedidos ao serviço de pagamento neste momento. Tenta novamente${k.retryAfterS ? ` dentro de ${k.retryAfterS} segundos` : " dentro de instantes"}.` };
+    case "conflict": return { http: 409, codigo: "pedido_em_curso", mensagem: "Já existe um pedido de pagamento à espera de aprovação neste telemóvel. Aprova-o na app Multicaixa Express ou aguarda um minuto e tenta de novo." };
+    case "forbidden": return { http: 503, codigo: "pagamento_online_indisponivel", mensagem: "Este método de pagamento ainda não está disponível. Usa a transferência bancária." };
     case "validation_error": return { http: 422, codigo: "dados_invalidos", mensagem: "Não foi possível criar o pagamento com estes dados. Tenta outro valor ou usa a transferência bancária." };
     default: return { http: 502, codigo: "servico_indisponivel", mensagem: "O serviço de pagamento online não respondeu. Tenta mais tarde ou usa a transferência bancária." };
   }
