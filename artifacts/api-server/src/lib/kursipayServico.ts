@@ -11,7 +11,7 @@ import { randomInt } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, usersTable, topupRequestsTable, kursipayPagamentosTable, platformSettingsTable } from "@workspace/db";
 import { JANELA_REPETIDO_MS, MAX_PENDENTES, VALOR_MIN } from "./carregamento";
-import { criarPagamento, formaCheckoutUrl, KursipayErro, mensagemDeErro, urlCheckout, type ConfigKursipay, type ErroUtilizador } from "./kursipay";
+import { criarPagamento, detalhesReferencia, formaCheckoutUrl, KursipayErro, mensagemDeErro, METODOS_DIRETOS, normalizarTelefoneAO, urlCheckout, type ConfigKursipay, type DetalhesReferencia, type ErroUtilizador, type MetodoDireto } from "./kursipay";
 import { logger } from "./logger";
 import { erroSeguro } from "./erroSeguro";
 import { notificarAdmins } from "./takedown";
@@ -48,7 +48,7 @@ export function paraCentimos(kz: unknown): number | null {
   return Math.abs(kz * 100 - c) < 1e-6 && Number.isSafeInteger(c) ? c : null;
 }
 
-export type ResultadoCriar = { ok: true; topupId: number; checkoutUrl: string; ambiente: string } | { ok: false; erro: ErroUtilizador };
+export type ResultadoCriar = { ok: true; topupId: number; ambiente: string; checkoutUrl?: string; metodo?: MetodoDireto; referencia?: DetalhesReferencia } | { ok: false; erro: ErroUtilizador };
 const erro = (http: number, codigo: string, mensagem: string): ResultadoCriar => ({ ok: false, erro: { http, codigo, mensagem } });
 
 /** Alerta para os administradores (notificação do sistema; sem dados pessoais). Nunca lança. */
@@ -56,7 +56,8 @@ async function alertar(msg: string, alvoId: number): Promise<void> {
   try { await db.transaction(async (tx) => { await notificarAdmins(tx, msg, alvoId); }); } catch { /* o alerta nunca estraga a resposta */ }
 }
 
-export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: number, amountKz: unknown): Promise<ResultadoCriar> {
+/** `opc.metodo` ausente = checkout hospedado (compatibilidade); «multicaixa_express» | «reference» = cobrança DIRETA (o utilizador nunca sai do site). O telefone só é usado neste pedido: nunca é guardado nem registado. */
+export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: number, amountKz: unknown, opc: { metodo?: unknown; telefone?: unknown } = {}): Promise<ResultadoCriar> {
   const s = await lerSettingsKursipay();
   if (!elegivel(s, cfg, userId)) return erro(403, "metodo_indisponivel", MSG_INDISPONIVEL);
   const centimos = paraCentimos(amountKz);
@@ -64,6 +65,17 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
   const kz = centimos / 100;
   if (kz < VALOR_MIN) return erro(400, "valor_invalido", `Valor mínimo: ${VALOR_MIN} Kz`);
   if (kz > s.valorMaxKz) return erro(400, "valor_invalido", `Valor máximo no pagamento online: ${s.valorMaxKz.toLocaleString("pt-PT")} Kz`);
+
+  let metodo: MetodoDireto | undefined, telefone: string | undefined;
+  if (opc.metodo !== undefined) {
+    if (typeof opc.metodo !== "string" || !(METODOS_DIRETOS as readonly string[]).includes(opc.metodo)) return erro(400, "metodo_invalido", "Método de pagamento inválido.");
+    metodo = opc.metodo as MetodoDireto;
+    if (metodo === "multicaixa_express") {
+      const tel = normalizarTelefoneAO(opc.telefone);
+      if (!tel) return erro(400, "telefone_invalido", "Número de telemóvel inválido. Usa o número angolano do teu Multicaixa Express (9 dígitos, ex.: 923 456 789).");
+      telefone = tel;
+    }
+  }
 
   // 1. Pedido interno + registo do pagamento (uma transação; a conta bloqueada serializa os pedidos da mesma conta).
   let criado: { topupId: number; reference: string; pagamentoId: number } | { erro: ResultadoCriar } | null = null;
@@ -109,7 +121,7 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
   };
   let pagamento;
   try {
-    pagamento = await criarPagamento(cfg, { valorCentimos: centimos, referencia: reference });
+    pagamento = await criarPagamento(cfg, { valorCentimos: centimos, referencia: reference, metodo, telefone });
   } catch (e) {
     const m = mensagemDeErro(e);
     const k = e instanceof KursipayErro ? e : null;
@@ -121,13 +133,16 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
     return { ok: false, erro: m };
   }
   // A resposta tem de coincidir com o que pedimos; senão não se manda o utilizador pagar.
-  const url = urlCheckout(pagamento.checkoutUrl, pagamento.id);
+  const url = metodo ? null : urlCheckout(pagamento.checkoutUrl, pagamento.id);
+  const detalhes = metodo === "reference" ? detalhesReferencia(pagamento) : null;
   const divergencias = [
     pagamento.environment !== cfg.ambiente && "ambiente",
     pagamento.amount.amount !== centimos && "valor",
     pagamento.amount.currency !== "AOA" && "moeda",
     pagamento.externalReference !== reference && "referencia",
-    !url && "checkoutUrl",
+    !metodo && !url && "checkoutUrl",
+    metodo !== undefined && typeof pagamento.method === "string" && pagamento.method !== metodo && "metodo",
+    metodo === "reference" && !detalhes && "methodDetails",
   ].filter((x): x is string => typeof x === "string");
   if (divergencias.length) {
     logger.error({ codigo: "kursipay_criacao_falhou", topupId, motivo: "resposta_incoerente", campos: divergencias, formaCheckoutUrl: formaCheckoutUrl(pagamento.checkoutUrl), kursipayId: pagamento.id }, "kursiPay: a resposta à criação não coincide com o pedido");
@@ -137,14 +152,18 @@ export async function criarCarregamentoKursipay(cfg: ConfigKursipay, userId: num
   }
   // A kursiPay JÁ criou o pagamento: se não o conseguirmos gravar, o pedido fecha-se sem crédito e os admins são avisados; um payment.paid futuro vai para revisão manual (não há id registado).
   try {
-    const gravado = await db.update(kursipayPagamentosTable).set({ kursipayId: pagamento.id, estado: "pending", checkoutUrl: url, atualizadoEm: new Date() })
-      .where(and(eq(kursipayPagamentosTable.topupRequestId, topupId), sql`${kursipayPagamentosTable.kursipayId} IS NULL`)).returning({ id: kursipayPagamentosTable.id });
-    if (gravado.length !== 1) throw new Error("nenhuma linha gravada");
+    await db.transaction(async (tx) => {
+      const gravado = await tx.update(kursipayPagamentosTable).set({ kursipayId: pagamento.id, estado: "pending", checkoutUrl: url, atualizadoEm: new Date() })
+        .where(and(eq(kursipayPagamentosTable.topupRequestId, topupId), sql`${kursipayPagamentosTable.kursipayId} IS NULL`)).returning({ id: kursipayPagamentosTable.id });
+      if (gravado.length !== 1) throw new Error("nenhuma linha gravada");
+      // Referência: os dados que o utilizador precisa para pagar ficam no pedido (external_ref), para o ecrã os voltar a mostrar sem nova chamada à kursiPay.
+      if (detalhes) await tx.update(topupRequestsTable).set({ externalRef: detalhes }).where(eq(topupRequestsTable.id, topupId));
+    });
   } catch (err) {
     logger.error({ codigo: "kursipay_criacao_falhou", topupId, motivo: "gravacao_falhou", kursipayId: pagamento.id, erro: erroSeguro(err) }, "kursiPay: o pagamento foi criado mas não foi possível gravá-lo");
     try { await falhar("gravacao_falhou"); } catch (e2) { logger.error({ codigo: "kursipay_fecho_falhou", topupId, erro: erroSeguro(e2) }, "kursiPay: não foi possível fechar o pedido órfão"); }
     await alertar(`kursiPay: o pagamento ${pagamento.id} foi criado na kursiPay mas não foi gravado (pedido #${topupId}). O pedido ficou rejeitado; se for pago, ficará em revisão manual (nunca é creditado automaticamente).`, topupId);
     return { ok: false, erro: mensagemDeErro(new KursipayErro("gravacao_falhou", 0)) };
   }
-  return { ok: true, topupId, checkoutUrl: url!, ambiente: cfg.ambiente };
+  return { ok: true, topupId, ambiente: cfg.ambiente, ...(metodo ? { metodo, ...(detalhes ? { referencia: detalhes } : {}) } : { checkoutUrl: url! }) };
 }

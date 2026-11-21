@@ -22,7 +22,7 @@ router.get("/wallet/topup/kursipay/config", requireAuth, async (req: AuthRequest
     res.setHeader("Cache-Control", "no-store");
     const cfg = lerConfigKursipay(); const s = await lerSettingsKursipay();
     const ativo = !!cfg && elegivel(s, cfg, req.userId!);
-    res.json({ ativo, ...(ativo ? { valorMin: VALOR_MIN, valorMax: s.valorMaxKz } : {}) });
+    res.json({ ativo, ...(ativo ? { valorMin: VALOR_MIN, valorMax: s.valorMaxKz, metodos: ["multicaixa_express", "reference"] } : {}) });
   } catch (err) { req.log?.error(erroSeguro(err), "kursiPay: erro ao ler a configuração"); res.status(500).json({ error: "Erro ao obter a configuração." }); }
 });
 
@@ -30,14 +30,14 @@ router.post("/wallet/topup/kursipay", requireAuth, async (req: AuthRequest, res)
   const cfg = lerConfigKursipay();
   if (!cfg) { res.status(503).json(INDISPONIVEL); return; }
   try {
-    const r = await criarCarregamentoKursipay(cfg, req.userId!, req.body?.amount);
+    const r = await criarCarregamentoKursipay(cfg, req.userId!, req.body?.amount, { metodo: req.body?.method, telefone: req.body?.phone });
     if (!r.ok) {
       if (r.erro.retryAfterS) res.setHeader("Retry-After", String(r.erro.retryAfterS));
       res.status(r.erro.http).json({ error: r.erro.mensagem, codigo: r.erro.codigo });
       return;
     }
     res.setHeader("Cache-Control", "no-store");
-    res.status(201).json({ ok: true, topupId: r.topupId, checkoutUrl: r.checkoutUrl });
+    res.status(201).json({ ok: true, topupId: r.topupId, ...(r.metodo ? { metodo: r.metodo, ...(r.referencia ? { referencia: r.referencia } : {}) } : { checkoutUrl: r.checkoutUrl }) });
   } catch (err) {
     req.log?.error(erroSeguro(err), "kursiPay: erro ao criar o carregamento");
     res.status(500).json({ error: "Erro ao criar o pedido de carregamento." });
@@ -48,12 +48,13 @@ router.get("/wallet/topup/kursipay/:id", requireAuth, async (req: AuthRequest, r
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "ID inválido." }); return; }
   try {
-    const [r] = await db.select({ id: topupRequestsTable.id, status: topupRequestsTable.status, amount: topupRequestsTable.amount, estado: kursipayPagamentosTable.estado })
+    const [r] = await db.select({ id: topupRequestsTable.id, status: topupRequestsTable.status, amount: topupRequestsTable.amount, estado: kursipayPagamentosTable.estado, externalRef: topupRequestsTable.externalRef })
       .from(topupRequestsTable).innerJoin(kursipayPagamentosTable, eq(kursipayPagamentosTable.topupRequestId, topupRequestsTable.id))
       .where(and(eq(topupRequestsTable.id, id), eq(topupRequestsTable.userId, req.userId!))).limit(1);
     if (!r) { res.status(404).json({ error: "Pedido não encontrado." }); return; }
     res.setHeader("Cache-Control", "no-store");
-    res.json({ id: r.id, status: r.status, amount: Number(r.amount), pagamento: r.estado });
+    const ref = r.externalRef as { entity?: unknown; reference?: unknown; dueAt?: unknown } | null;
+    res.json({ id: r.id, status: r.status, amount: Number(r.amount), pagamento: r.estado, ...(ref && typeof ref.entity === "string" && typeof ref.reference === "string" ? { referencia: { entity: ref.entity, reference: ref.reference, dueAt: typeof ref.dueAt === "string" ? ref.dueAt : null } } : {}) });
   } catch (err) { req.log?.error(erroSeguro(err), "kursiPay: erro ao ler o estado"); res.status(500).json({ error: "Erro ao obter o estado do pedido." }); }
 });
 
