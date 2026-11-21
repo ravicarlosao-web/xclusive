@@ -31,22 +31,45 @@ const API = /^https:\/\/api\.kursipay\.com(\/v1)?$/.test(bruto) || /^http:\/\/(1
 const ambiente = chave.startsWith("kp_test_") ? "sandbox" : "production";
 
 // ── kursiPay: pagamentos pagos no intervalo (um dia de folga de cada lado para não falhar fronteiras) ──
+// Só se enviam os parâmetros do EXEMPLO da documentação (GET /v1/payments?status=paid,partially_refunded&from=AAAA-MM-DD&page=1): o tamanho de página fica no padrão da API (20; a documentação
+// não define um máximo, e 100 era recusado com 422) e NÃO se envia `to` (a documentação não diz se aceita o dia de amanhã): o fim do intervalo filtra-se aqui, pela data de criação.
 const somarDias = (s, n) => dia(new Date(Date.parse(s) + n * 86400000));
+const MAX_PAGINAS = 1000;   // 1000 × 20 = 20 000 pagamentos; acima disto pede-se um intervalo mais curto
+/** Remove chaves, segredos e tokens de qualquer texto que venha da API antes de o mostrar. */
+const redigir = (v) => String(v ?? "").replace(/kp_(test|live)_[A-Za-z0-9_-]+/g, "kp_***").replace(/whsec_[A-Za-z0-9_-]+/g, "whsec_***").replace(/Bearer\s+\S+/gi, "Bearer ***").replace(/[\r\n]+/g, " ").slice(0, 300);
+/** O erro da API para diagnóstico direto: HTTP, code, message, param, fieldErrors e os parâmetros da consulta; NUNCA a chave nem cabeçalhos. */
+async function descreverErro(res, consulta) {
+  let corpo = null; try { corpo = await res.json(); } catch { /* sem JSON */ }
+  const e = corpo && typeof corpo === "object" && corpo.error && typeof corpo.error === "object" ? corpo.error : null;
+  const partes = [`HTTP ${res.status}`];
+  if (!e) partes.push("(o corpo da resposta não tem o formato de erro da kursiPay)");
+  else {
+    if (e.code !== undefined) partes.push(`code=${redigir(e.code)}`);
+    if (e.message !== undefined) partes.push(`message=${redigir(e.message)}`);
+    if (e.param !== undefined) partes.push(`param=${redigir(e.param)}`);
+    if (e.fieldErrors && typeof e.fieldErrors === "object") partes.push(`fieldErrors: ${Object.entries(e.fieldErrors).slice(0, 10).map(([k, v]) => `${redigir(k)}=${redigir(v)}`).join("; ")}`);
+  }
+  partes.push(`consulta: GET /payments?${consulta}`);
+  return partes.join(" · ");
+}
 async function lerPagos() {
   const todos = [];
-  for (let pagina = 1; pagina <= 200; pagina++) {
-    const q = new URLSearchParams({ status: "paid,partially_refunded", from: somarDias(de, -1), to: somarDias(ate, 1), page: String(pagina), pageSize: "100" });
+  const limite = somarDias(ate, 1);   // o dia de folga depois de --ate (filtro local)
+  for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
+    const q = new URLSearchParams({ status: "paid,partially_refunded", from: somarDias(de, -1), page: String(pagina) });
     let res;
     try { res = await fetch(`${API}/payments?${q}`, { method: "GET", headers: { Authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(20000) }); }
     catch { falha("Não foi possível contactar a kursiPay.", 3); }
-    if (!res.ok) falha(`A kursiPay respondeu ${res.status} ao listar pagamentos.`, 3);
-    let j; try { j = await res.json(); } catch { falha("Resposta inválida da kursiPay.", 3); }
-    if (!Array.isArray(j?.data)) falha("Resposta inválida da kursiPay.", 3);
+    if (!res.ok) falha(`A kursiPay recusou a listagem de pagamentos: ${await descreverErro(res, q)}`, 3);
+    let j; try { j = await res.json(); } catch { falha("Resposta inválida da kursiPay (a listagem não veio em JSON).", 3); }
+    if (!Array.isArray(j?.data)) falha("Resposta inválida da kursiPay (sem a lista «data»).", 3);
     todos.push(...j.data);
     const total = Number(j?.pagination?.total ?? 0);
     if (j.data.length === 0 || todos.length >= total) break;
+    if (pagina === MAX_PAGINAS) falha(`Há mais de ${MAX_PAGINAS * 20} pagamentos desde ${somarDias(de, -1)}: usa um intervalo mais curto (--de/--ate).`, 2);
   }
-  return todos.filter((p) => p?.environment === ambiente);
+  const dataDe = (p) => String(p?.createdAt ?? p?.paidAt ?? "").slice(0, 10);
+  return todos.filter((p) => p?.environment === ambiente && (dataDe(p) === "" || dataDe(p) <= limite));
 }
 const pagosKp = await lerPagos();
 const kpPorId = new Map(pagosKp.map((p) => [p.id, p]));
