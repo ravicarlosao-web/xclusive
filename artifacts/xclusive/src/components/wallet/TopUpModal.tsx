@@ -287,8 +287,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           <div className="p-6">
             <DialogHeader className="mb-6">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-primary" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Carregar Carteira</DialogTitle>
               </div>
@@ -309,8 +309,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                   className={cn(
                     "py-2.5 px-3 rounded-xl text-sm font-bold transition-all border",
                     amount === v
-                      ? "bg-yellow-500 text-black border-yellow-500 shadow-none dark:shadow-[0_0_16px_rgba(234,179,8,0.4)]"
-                      : "bg-secondary border-border text-foreground hover:border-yellow-500/50"
+                      ? "bg-primary text-primary-foreground border-primary shadow-none"
+                      : "bg-secondary border-border text-foreground hover:border-primary/50"
                   )}
                 >
                   {v.toLocaleString('pt-PT')} Kz
@@ -338,7 +338,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             </div>
 
             <Button
-              className="w-full h-12 font-bold text-base bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+              className="w-full h-12 font-bold text-base bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
               disabled={!isAmountValid}
               onClick={() => setStep('method')}
             >
@@ -366,19 +366,19 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                   className={cn(
                     "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                     paymentMethod === 'kursipay'
-                      ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                      ? "border-primary bg-primary/5 shadow-none"
                       : "border-border bg-secondary/30 hover:border-border/80"
                   )}
                 >
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay' ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground")}>
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-bold text-sm">Pagar online</h3>
                     <p className="text-xs text-muted-foreground">PayPay e outros métodos (abre a página de pagamento)</p>
                   </div>
-                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                    {paymentMethod === 'kursipay' && <Check className="w-3 h-3 text-black" />}
+                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay' ? "border-primary bg-primary" : "border-muted")}>
+                    {paymentMethod === 'kursipay' && <Check className="w-3 h-3 text-primary-foreground" />}
                   </div>
                 </button>
               )}
@@ -390,7 +390,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'gpo'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-primary bg-primary/5 shadow-none"
                     : "border-border bg-secondary/30 hover:border-border/80",
                   !ativoGpo && "opacity-60 cursor-not-allowed"
                 )}
@@ -400,10 +400,10 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Multicaixa Express</h3>
-                  {ativoGpo ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Aprova no telemóvel, sem sair daqui' : 'Aprovação imediata no telemóvel'}</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-gpo">{config?.gpo.rotulo ?? 'Brevemente'}</p>}
+                  {ativoGpo ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Aprova no telemóvel, sem sair daqui' : 'Aprovação imediata no telemóvel'}</p> : <p className="text-xs font-semibold text-muted-foreground" data-testid="brevemente-gpo">{config?.gpo.rotulo ?? 'Brevemente'}</p>}
                 </div>
-                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'gpo' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                  {paymentMethod === 'gpo' && <Check className="w-3 h-3 text-black" />}
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'gpo' ? "border-primary bg-primary" : "border-muted")}>
+                  {paymentMethod === 'gpo' && <Check className="w-3 h-3 text-primary-foreground" />}
                 </div>
               </button>
 
@@ -415,7 +415,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'ref'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-primary bg-primary/5 shadow-none"
                     : "border-border bg-secondary/30 hover:border-border/80",
                   !ativoRef && "opacity-60 cursor-not-allowed"
                 )}
@@ -425,10 +425,10 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Pagamento por Referência</h3>
-                  {ativoRef ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Paga no ATM, Multicaixa Express ou banco' : 'Paga no ATM ou Homebanking'}</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-ref">{config?.ref.rotulo ?? 'Brevemente'}</p>}
+                  {ativoRef ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Paga no ATM, Multicaixa Express ou banco' : 'Paga no ATM ou Homebanking'}</p> : <p className="text-xs font-semibold text-muted-foreground" data-testid="brevemente-ref">{config?.ref.rotulo ?? 'Brevemente'}</p>}
                 </div>
-                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'ref' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                  {paymentMethod === 'ref' && <Check className="w-3 h-3 text-black" />}
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'ref' ? "border-primary bg-primary" : "border-muted")}>
+                  {paymentMethod === 'ref' && <Check className="w-3 h-3 text-primary-foreground" />}
                 </div>
               </button>
 
@@ -440,20 +440,20 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 className={cn(
                   "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
                   paymentMethod === 'manual'
-                    ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
+                    ? "border-primary bg-primary/5 shadow-none"
                     : "border-border bg-secondary/30 hover:border-border/80",
                   !ativoManual && "opacity-60 cursor-not-allowed"
                 )}
               >
-                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'manual' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
+                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'manual' ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground")}>
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Transferência Manual</h3>
                   <p className="text-xs text-muted-foreground" data-testid="manual-descricao">{ativoManual ? 'Envio de comprovativo (mais lento)' : configErro ? 'Não foi possível carregar os dados. Tenta mais tarde.' : config ? 'Indisponível de momento' : 'A carregar…'}</p>
                 </div>
-                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'manual' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                  {paymentMethod === 'manual' && <Check className="w-3 h-3 text-black" />}
+                <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'manual' ? "border-primary bg-primary" : "border-muted")}>
+                  {paymentMethod === 'manual' && <Check className="w-3 h-3 text-primary-foreground" />}
                 </div>
               </button>
             </div>
@@ -470,7 +470,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 Voltar
               </Button>
               <Button
-                className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                className="flex-1 h-12 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
                 onClick={handleMethodContinue}
                 disabled={loading}
               >
@@ -514,7 +514,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 Voltar
               </Button>
               <Button
-                className="flex-[2] h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                className="flex-[2] h-12 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
                 onClick={handleGpoSubmit}
                 disabled={loading || phoneNumber.length < 9}
               >
@@ -556,7 +556,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setError(''); setStep('method'); }} disabled={loading}>Voltar</Button>
               <Button
-                className="flex-[2] h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                className="flex-[2] h-12 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
                 data-testid="kursipay-pagar"
                 onClick={() => void handleKursipaySubmit('express')}
                 disabled={loading || phoneNumber.replace(/\D/g, '').length < 9}
@@ -569,8 +569,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
 
         {step === 'kursipay_espera' && (
           <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-espera">
-            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <Smartphone className={cn("w-10 h-10 text-yellow-700 dark:text-yellow-400", !kursipayPendente && "animate-pulse")} />
+            <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
+              <Smartphone className={cn("w-10 h-10 text-primary", !kursipayPendente && "animate-pulse")} />
             </div>
             {!kursipayPendente ? (
               <>
@@ -585,7 +585,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 <p className="text-muted-foreground mb-6">
                   Ainda não recebemos a tua aprovação. Se já aprovaste, o saldo é creditado automaticamente assim que o pagamento for confirmado. Se não recebeste o pedido, fecha e tenta de novo.
                 </p>
-                <Button className="w-full h-12 mb-3 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl" data-testid="kursipay-verificar" onClick={() => setKursipayVerificar((n) => n + 1)}>Verificar agora</Button>
+                <Button className="w-full h-12 mb-3 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl" data-testid="kursipay-verificar" onClick={() => setKursipayVerificar((n) => n + 1)}>Verificar agora</Button>
               </>
             )}
             <Button variant="outline" className="w-full rounded-xl" onClick={handleClose}>Fechar</Button>
@@ -594,14 +594,14 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
 
         {step === 'kursipay_hospedado' && (
           <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-hospedado">
-            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <CreditCard className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
+            <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
+              <CreditCard className="w-10 h-10 text-primary animate-pulse" />
             </div>
             <h2 className="text-2xl font-bold mb-2">A aguardar o pagamento</h2>
             <p className="text-muted-foreground mb-6">
               Conclui o pagamento de {selectedAmount.toLocaleString('pt-PT')} Kz na página que abriu. O saldo é creditado automaticamente quando o pagamento for confirmado.
             </p>
-            <a href={kursipayUrl} target="_blank" rel="noopener noreferrer" data-testid="kursipay-abrir" className="w-full h-12 mb-3 inline-flex items-center justify-center font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black">
+            <a href={kursipayUrl} target="_blank" rel="noopener noreferrer" data-testid="kursipay-abrir" className="w-full h-12 mb-3 inline-flex items-center justify-center font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground">
               Abrir página de pagamento
             </a>
             <Button variant="outline" className="w-full rounded-xl" onClick={handleClose}>Fechar</Button>
@@ -612,8 +612,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           <div className="p-6" data-testid="kursipay-ref">
             <DialogHeader className="mb-5">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                  <Receipt className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Receipt className="w-5 h-5 text-primary" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Referência Gerada</DialogTitle>
               </div>
@@ -680,8 +680,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
 
         {step === 'gpo_success' && (
           <div className="p-8 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <Smartphone className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
+            <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
+              <Smartphone className="w-10 h-10 text-primary animate-pulse" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Verifica o teu telemóvel!</h2>
             <p className="text-muted-foreground mb-6">
@@ -705,8 +705,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
           <div className="p-6">
             <DialogHeader className="mb-5">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/15 flex items-center justify-center">
-                  <Receipt className="w-5 h-5 text-yellow-700 dark:text-yellow-500" />
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Receipt className="w-5 h-5 text-primary" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Referência Gerada</DialogTitle>
               </div>
@@ -785,7 +785,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 Voltar
               </Button>
               <Button
-                className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                className="flex-1 h-12 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
                 onClick={() => setStep('confirm')}
               >
                 Já transferi
@@ -820,7 +820,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/40 hover:bg-secondary/70 hover:border-yellow-500/50 transition-all py-6 text-muted-foreground"
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-secondary/40 hover:bg-secondary/70 hover:border-primary/50 transition-all py-6 text-muted-foreground"
                 >
                   <Upload className="w-6 h-6" />
                   <span className="text-sm font-medium">Clica para anexar o PDF</span>
@@ -853,7 +853,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 Voltar
               </Button>
               <Button
-                className="flex-1 h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
+                className="flex-1 h-12 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
                 disabled={loading}
                 onClick={handleConfirmManual}
               >
@@ -866,8 +866,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         {/* ── Step: Manual Success ── */}
         {step === 'success' && (
           <div className="p-8 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <CheckCircle2 className="w-10 h-10 text-yellow-700 dark:text-yellow-400" />
+            <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
+              <CheckCircle2 className="w-10 h-10 text-primary" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Pedido enviado!</h2>
             <p className="text-muted-foreground mb-4">
