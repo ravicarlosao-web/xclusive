@@ -14,7 +14,7 @@ interface TopUpModalProps {
 
 const PRESET_AMOUNTS = [1000, 2500, 5000, 10000, 25000, 50000];
 
-type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success' | 'kursipay_espera' | 'kursipay_ok' | 'kursipay_phone' | 'kursipay_ref';
+type Step = 'amount' | 'method' | 'transfer' | 'confirm' | 'success' | 'gpo_phone' | 'gpo_success' | 'ref_success' | 'kursipay_espera' | 'kursipay_ok' | 'kursipay_phone' | 'kursipay_ref' | 'kursipay_hospedado';
 
 interface TopUpConfig {
   manual: { disponivel: boolean; nib?: string; nibFormatado?: string; titular?: string };
@@ -23,8 +23,8 @@ interface TopUpConfig {
 }
 
 /** «Pagar online» (kursiPay): só aparece quando o servidor o liga E esta conta é elegível. */
-interface KursipayConfig { ativo: boolean; valorMin?: number; valorMax?: number; metodos?: string[] }
-interface KursipayReferencia { entity: string; reference: string; dueAt: string | null }
+interface KursipayConfig { ativo: boolean; direto: boolean; valorMin?: number; valorMax?: number }
+interface KursipayReferencia { entidade: string; referencia: string; valor: number; validaAte: string | null }
 
 export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const { topUp, saldo } = useAuth();
@@ -44,13 +44,17 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // States for AppyPay flows
-  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref' | 'kursipay_express' | 'kursipay_ref'>('manual');
+  const [paymentMethod, setPaymentMethod] = useState<'manual' | 'gpo' | 'ref' | 'kursipay'>('manual');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [refData, setRefData] = useState<{ entity: string; referenceNumber: string; dueDate: string } | null>(null);
 
   // Pagamento online (kursiPay, cobrança DIRETA): o utilizador nunca sai do site. Multicaixa Express: aprova no telemóvel; Referência: mostramos entidade e referência. O ecrã consulta o estado do pedido de poucos em poucos segundos enquanto está aberto.
   const [kursipay, setKursipay] = useState<KursipayConfig | null>(null);
   const [kursipayRef, setKursipayRef] = useState<KursipayReferencia | null>(null);
+  const [kursipayUrl, setKursipayUrl] = useState('');                       // só no «Pagar online» (checkout hospedado)
+  const [kursipayPendente, setKursipayPendente] = useState(false);          // Express: passaram ~90 s sem resposta
+  const [kursipayVerificar, setKursipayVerificar] = useState(0);            // «Verificar agora»: recomeça a consulta
+  const [copiado, setCopiado] = useState('');
   const [kursipayTopupId, setKursipayTopupId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -70,24 +74,35 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     return () => { vivo = false; };
   }, [open]);
 
-  // Consulta curta (5 s) do estado do pedido kursiPay enquanto o ecrã de espera está aberto.
+  // Consulta do estado do pedido kursiPay (GET /estado, só o dono): de 3 em 3 s durante ~90 s. No Express, depois disso para e diz que ainda está pendente (com «Verificar agora»);
+  // na Referência e no checkout hospedado o utilizador paga fora do ecrã, por isso continua mais devagar (15 s) enquanto o ecrã estiver aberto.
   useEffect(() => {
-    if (!open || (step !== 'kursipay_espera' && step !== 'kursipay_ref') || kursipayTopupId === null) return;
+    if (!open || (step !== 'kursipay_espera' && step !== 'kursipay_ref' && step !== 'kursipay_hospedado') || kursipayTopupId === null) return;
     let vivo = true;
+    let timer: number | undefined;
+    const inicio = Date.now();
     const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
     const token = lerLocal('xclusive_token');
-    const id = window.setInterval(() => {
-      fetch(`${base}/api/wallet/topup/kursipay/${kursipayTopupId}`, { headers: { Authorization: `Bearer ${token}` } })
+    setKursipayPendente(false);
+    const consultar = () => {
+      fetch(`${base}/api/wallet/topup/kursipay/${kursipayTopupId}/estado`, { headers: { Authorization: `Bearer ${token}` } })
         .then((r) => (r.ok ? r.json() : null))
-        .then((d: { status?: string } | null) => {
-          if (!vivo || !d) return;
-          if (d.status === 'aprovado') setStep('kursipay_ok');
-          else if (d.status === 'rejeitado') { setError('O pagamento não foi concluído (recusado ou expirado). Podes tentar de novo.'); setStep('method'); }
+        .then((d: { resultado?: string } | null) => {
+          if (!vivo) return;
+          if (d?.resultado === 'pago') { setStep('kursipay_ok'); return; }
+          if (d?.resultado === 'recusado') { setError('O pagamento não foi concluído (recusado ou expirado). Podes tentar de novo.'); setStep('method'); return; }
+          agendar();
         })
-        .catch(() => { /* sem rede: tenta na próxima */ });
-    }, 5000);
-    return () => { vivo = false; window.clearInterval(id); };
-  }, [open, step, kursipayTopupId]);
+        .catch(() => { if (vivo) agendar(); /* sem rede: tenta na próxima */ });
+    };
+    const agendar = () => {
+      const passou = Date.now() - inicio;
+      if (step === 'kursipay_espera' && passou >= 90_000) { setKursipayPendente(true); return; }
+      timer = window.setTimeout(consultar, passou < 90_000 ? 3000 : 15000);
+    };
+    timer = window.setTimeout(consultar, 3000);
+    return () => { vivo = false; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [open, step, kursipayTopupId, kursipayVerificar]);
 
   const selectedAmount = amount !== '' ? amount : (customAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0);
 
@@ -103,6 +118,9 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     setPhoneNumber('');
     setRefData(null);
     setKursipayRef(null);
+    setKursipayUrl('');
+    setKursipayPendente(false);
+    setCopiado('');
     setKursipayTopupId(null);
   }
 
@@ -200,29 +218,32 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     }
   }
 
-  async function handleKursipaySubmit(metodo: 'multicaixa_express' | 'reference') {
+  async function handleKursipaySubmit(modo: 'express' | 'referencia' | 'hospedado') {
     if (kursipay?.valorMax && selectedAmount > kursipay.valorMax) { setError(`Valor máximo no pagamento online: ${kursipay.valorMax.toLocaleString('pt-PT')} Kz.`); return; }
     setError('');
     setLoading(true);
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
       const token = lerLocal('xclusive_token');
-      const res = await fetch(`${base}/api/wallet/topup/kursipay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(metodo === 'multicaixa_express' ? { amount: selectedAmount, method: metodo, phone: phoneNumber } : { amount: selectedAmount, method: metodo })
-      });
+      const url = modo === 'hospedado' ? `${base}/api/wallet/topup/kursipay` : `${base}/api/wallet/topup/kursipay/${modo}`;
+      const corpo = modo === 'express' ? { valor: selectedAmount, telefone: phoneNumber } : modo === 'referencia' ? { valor: selectedAmount } : { amount: selectedAmount };
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(corpo) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Não foi possível criar o pagamento.');
       if (typeof data.topupId !== 'number') throw new Error('Não foi possível criar o pagamento.');
       setKursipayTopupId(data.topupId);
-      if (metodo === 'reference') {
-        if (typeof data.referencia?.entity !== 'string' || typeof data.referencia?.reference !== 'string') throw new Error('Não foi possível gerar a referência.');
-        setKursipayRef(data.referencia);
+      if (modo === 'referencia') {
+        if (typeof data.entidade !== 'string' || typeof data.referencia !== 'string') throw new Error('Não foi possível gerar a referência.');
+        setKursipayRef({ entidade: data.entidade, referencia: data.referencia, valor: Number(data.valor) || selectedAmount, validaAte: typeof data.validaAte === 'string' ? data.validaAte : null });
         setStep('kursipay_ref');
-      } else {
-        setPhoneNumber('');
+      } else if (modo === 'express') {
+        setPhoneNumber('');   // o número não fica no ecrã nem na memória depois de enviado
         setStep('kursipay_espera');
+      } else {
+        if (typeof data.checkoutUrl !== 'string' || !data.checkoutUrl.startsWith('https://kursipay.com/')) throw new Error('Não foi possível abrir o pagamento.');
+        setKursipayUrl(data.checkoutUrl);
+        setStep('kursipay_hospedado');
+        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');   // se o navegador bloquear, a ligação do ecrã de espera faz o mesmo
       }
     } catch (e: any) {
       setError(e.message || 'Erro ao processar pedido.');
@@ -231,12 +252,15 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     }
   }
 
+  function copiar(texto: string, chave: string) {
+    try { void navigator.clipboard.writeText(texto).then(() => { setCopiado(chave); window.setTimeout(() => setCopiado(''), 2000); }).catch(() => { /* sem permissão */ }); } catch { /* sem clipboard */ }
+  }
+
   function handleMethodContinue() {
-    if (paymentMethod === 'kursipay_express' || paymentMethod === 'kursipay_ref') {
-      if (!kursipay?.ativo) { setError('Este método não está disponível de momento.'); return; }
-      if (paymentMethod === 'kursipay_express') { setError(''); setStep('kursipay_phone'); } else void handleKursipaySubmit('reference');
-      return;
-    }
+    if (paymentMethod === 'kursipay') { if (!kursipay?.ativo) { setError('Este método não está disponível de momento.'); return; } void handleKursipaySubmit('hospedado'); return; }
+    // Cobrança direta kursiPay (chave kursipay_direto_ativo ligada): os cartões «Multicaixa Express» e «Pagamento por Referência» passam a funcionar, sem sair do site.
+    if (kursipay?.direto && paymentMethod === 'gpo') { setError(''); setStep('kursipay_phone'); return; }
+    if (kursipay?.direto && paymentMethod === 'ref') { void handleKursipaySubmit('referencia'); return; }
     if ((paymentMethod === 'gpo' && !ativoGpo) || (paymentMethod === 'ref' && !ativoRef) || (paymentMethod === 'manual' && !ativoManual)) { setError('Este método não está disponível de momento.'); return; }
     if (paymentMethod === 'gpo') setStep('gpo_phone');
     else if (paymentMethod === 'ref') handleRefSubmit();
@@ -250,7 +274,8 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
     });
   }
 
-  const ativoGpo = !!config?.gpo.ativo, ativoRef = !!config?.ref.ativo, ativoManual = !!config?.manual.disponivel;
+  const diretoKursipay = !!kursipay?.direto;
+  const ativoGpo = !!config?.gpo.ativo || diretoKursipay, ativoRef = !!config?.ref.ativo || diretoKursipay, ativoManual = !!config?.manual.disponivel;
   const isAmountValid = selectedAmount >= 500;
 
   return (
@@ -334,49 +359,26 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             </DialogHeader>
 
             <div className="space-y-3 mb-6">
-              {kursipay?.ativo && kursipay.metodos?.includes('multicaixa_express') && (
+              {kursipay?.ativo && (
                 <button
-                  onClick={() => setPaymentMethod('kursipay_express')}
-                  data-testid="metodo-kursipay-express"
+                  onClick={() => setPaymentMethod('kursipay')}
+                  data-testid="metodo-kursipay"
                   className={cn(
                     "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
-                    paymentMethod === 'kursipay_express'
+                    paymentMethod === 'kursipay'
                       ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
                       : "border-border bg-secondary/30 hover:border-border/80"
                   )}
                 >
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay_express' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
-                    <Smartphone className="w-5 h-5" />
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
+                    <CreditCard className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-sm">Multicaixa Express</h3>
-                    <p className="text-xs text-muted-foreground">Aprova no telemóvel, sem sair daqui</p>
+                    <h3 className="font-bold text-sm">Pagar online</h3>
+                    <p className="text-xs text-muted-foreground">PayPay e outros métodos (abre a página de pagamento)</p>
                   </div>
-                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay_express' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                    {paymentMethod === 'kursipay_express' && <Check className="w-3 h-3 text-black" />}
-                  </div>
-                </button>
-              )}
-              {kursipay?.ativo && kursipay.metodos?.includes('reference') && (
-                <button
-                  onClick={() => setPaymentMethod('kursipay_ref')}
-                  data-testid="metodo-kursipay-ref"
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all",
-                    paymentMethod === 'kursipay_ref'
-                      ? "border-yellow-500 bg-yellow-500/5 shadow-none dark:shadow-[0_0_12px_rgba(234,179,8,0.15)]"
-                      : "border-border bg-secondary/30 hover:border-border/80"
-                  )}
-                >
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", paymentMethod === 'kursipay_ref' ? "bg-yellow-500 text-black" : "bg-secondary text-foreground")}>
-                    <Receipt className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-sm">Referência</h3>
-                    <p className="text-xs text-muted-foreground">Paga no ATM, Multicaixa Express ou banco</p>
-                  </div>
-                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay_ref' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
-                    {paymentMethod === 'kursipay_ref' && <Check className="w-3 h-3 text-black" />}
+                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'kursipay' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
+                    {paymentMethod === 'kursipay' && <Check className="w-3 h-3 text-black" />}
                   </div>
                 </button>
               )}
@@ -398,7 +400,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Multicaixa Express</h3>
-                  {ativoGpo ? <p className="text-xs text-muted-foreground">Aprovação imediata no telemóvel</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-gpo">{config?.gpo.rotulo ?? 'Brevemente'}</p>}
+                  {ativoGpo ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Aprova no telemóvel, sem sair daqui' : 'Aprovação imediata no telemóvel'}</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-gpo">{config?.gpo.rotulo ?? 'Brevemente'}</p>}
                 </div>
                 <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'gpo' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
                   {paymentMethod === 'gpo' && <Check className="w-3 h-3 text-black" />}
@@ -423,7 +425,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-sm">Pagamento por Referência</h3>
-                  {ativoRef ? <p className="text-xs text-muted-foreground">Paga no ATM ou Homebanking</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-ref">{config?.ref.rotulo ?? 'Brevemente'}</p>}
+                  {ativoRef ? <p className="text-xs text-muted-foreground">{diretoKursipay ? 'Paga no ATM, Multicaixa Express ou banco' : 'Paga no ATM ou Homebanking'}</p> : <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400" data-testid="brevemente-ref">{config?.ref.rotulo ?? 'Brevemente'}</p>}
                 </div>
                 <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", paymentMethod === 'ref' ? "border-yellow-500 bg-yellow-500" : "border-muted")}>
                   {paymentMethod === 'ref' && <Check className="w-3 h-3 text-black" />}
@@ -556,7 +558,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               <Button
                 className="flex-[2] h-12 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl"
                 data-testid="kursipay-pagar"
-                onClick={() => void handleKursipaySubmit('multicaixa_express')}
+                onClick={() => void handleKursipaySubmit('express')}
                 disabled={loading || phoneNumber.replace(/\D/g, '').length < 9}
               >
                 {loading ? 'A enviar pedido...' : `Pagar ${selectedAmount.toLocaleString('pt-PT')} Kz`}
@@ -568,12 +570,40 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
         {step === 'kursipay_espera' && (
           <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-espera">
             <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
-              <Smartphone className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
+              <Smartphone className={cn("w-10 h-10 text-yellow-700 dark:text-yellow-400", !kursipayPendente && "animate-pulse")} />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Verifica o teu telemóvel!</h2>
+            {!kursipayPendente ? (
+              <>
+                <h2 className="text-2xl font-bold mb-2">Aprova no teu telemóvel</h2>
+                <p className="text-muted-foreground mb-6">
+                  Enviámos um pedido de {selectedAmount.toLocaleString('pt-PT')} Kz para o teu Multicaixa Express. Abre a app e aprova o pagamento. O saldo é creditado automaticamente e este ecrã atualiza-se sozinho.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold mb-2" data-testid="kursipay-ainda-pendente">Ainda pendente</h2>
+                <p className="text-muted-foreground mb-6">
+                  Ainda não recebemos a tua aprovação. Se já aprovaste, o saldo é creditado automaticamente assim que o pagamento for confirmado. Se não recebeste o pedido, fecha e tenta de novo.
+                </p>
+                <Button className="w-full h-12 mb-3 font-bold bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl" data-testid="kursipay-verificar" onClick={() => setKursipayVerificar((n) => n + 1)}>Verificar agora</Button>
+              </>
+            )}
+            <Button variant="outline" className="w-full rounded-xl" onClick={handleClose}>Fechar</Button>
+          </div>
+        )}
+
+        {step === 'kursipay_hospedado' && (
+          <div className="p-8 flex flex-col items-center text-center" data-testid="kursipay-hospedado">
+            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center mb-5">
+              <CreditCard className="w-10 h-10 text-yellow-700 dark:text-yellow-400 animate-pulse" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">A aguardar o pagamento</h2>
             <p className="text-muted-foreground mb-6">
-              Enviámos um pedido de {selectedAmount.toLocaleString('pt-PT')} Kz para o teu Multicaixa Express. Abre a app e aprova o pagamento. O saldo é creditado automaticamente e este ecrã atualiza-se sozinho.
+              Conclui o pagamento de {selectedAmount.toLocaleString('pt-PT')} Kz na página que abriu. O saldo é creditado automaticamente quando o pagamento for confirmado.
             </p>
+            <a href={kursipayUrl} target="_blank" rel="noopener noreferrer" data-testid="kursipay-abrir" className="w-full h-12 mb-3 inline-flex items-center justify-center font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black">
+              Abrir página de pagamento
+            </a>
             <Button variant="outline" className="w-full rounded-xl" onClick={handleClose}>Fechar</Button>
           </div>
         )}
@@ -592,25 +622,43 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
               </p>
             </DialogHeader>
             <div className="bg-secondary/60 border border-border rounded-xl p-5 space-y-4 mb-6">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Entidade</p>
-                <p className="text-lg font-bold font-mono tracking-widest" data-testid="kursipay-entidade">{kursipayRef.entity}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Entidade</p>
+                  <p className="text-lg font-bold font-mono tracking-widest" data-testid="kursipay-entidade">{kursipayRef.entidade}</p>
+                </div>
+                <Button variant="outline" size="icon" className="rounded-lg shrink-0" aria-label="Copiar entidade" data-testid="kursipay-copiar-entidade" onClick={() => copiar(kursipayRef.entidade, 'entidade')}>
+                  {copiado === 'entidade' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                </Button>
               </div>
               <div className="h-px bg-border" />
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Referência</p>
-                <p className="text-xl font-bold font-mono tracking-widest text-primary" data-testid="kursipay-referencia">{kursipayRef.reference.replace(/(.{3})/g, '$1 ').trim()}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Referência</p>
+                  <p className="text-xl font-bold font-mono tracking-widest text-primary" data-testid="kursipay-referencia">{kursipayRef.referencia.replace(/(.{3})/g, '$1 ').trim()}</p>
+                </div>
+                <Button variant="outline" size="icon" className="rounded-lg shrink-0" aria-label="Copiar referência" data-testid="kursipay-copiar-referencia" onClick={() => copiar(kursipayRef.referencia, 'referencia')}>
+                  {copiado === 'referencia' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                </Button>
               </div>
               <div className="h-px bg-border" />
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Valor a Pagar</p>
-                <p className="text-lg font-bold">{selectedAmount.toLocaleString('pt-PT')} Kz</p>
+                <p className="text-lg font-bold" data-testid="kursipay-valor">{kursipayRef.valor.toLocaleString('pt-PT')} Kz</p>
               </div>
+              {kursipayRef.validaAte && (
+                <>
+                  <div className="h-px bg-border" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Válida até</p>
+                    <p className="text-sm font-semibold" data-testid="kursipay-prazo">{new Date(kursipayRef.validaAte).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}</p>
+                  </div>
+                </>
+              )}
             </div>
             <div className="w-full bg-secondary/60 border border-border rounded-xl p-4 mb-6">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                O saldo será creditado <span className="font-semibold text-foreground">automaticamente</span> assim que o pagamento for confirmado.
-                {kursipayRef.dueAt && <> A referência é válida até {new Date(kursipayRef.dueAt).toLocaleDateString('pt-PT')}.</>}
+                Depois de pagares, o saldo entra <span className="font-semibold text-foreground">automaticamente</span> na tua carteira assim que o pagamento for confirmado. Não precisas de enviar comprovativo.
               </p>
             </div>
             <Button className="w-full h-12 font-bold rounded-xl" onClick={handleClose}>

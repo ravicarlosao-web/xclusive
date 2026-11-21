@@ -215,14 +215,16 @@ export function urlCheckout(caminho: string | undefined, id: string): string | n
 
 export interface ErroUtilizador { http: number; mensagem: string; codigo: string; retryAfterS?: number }
 /** Erros da kursiPay → mensagens claras em português, sem detalhes técnicos. */
-export function mensagemDeErro(e: unknown): ErroUtilizador {
+export function mensagemDeErro(e: unknown, opc: { direto?: boolean } = {}): ErroUtilizador {
   const k = e instanceof KursipayErro ? e : new KursipayErro("desconhecido", 0);
   switch (k.codigo) {
     case "limit_exceeded": return { http: 422, codigo: "limite_excedido", mensagem: "Este valor excede o limite permitido para o pagamento online. Escolhe um valor mais baixo ou usa a transferência bancária." };
     case "production_disabled": return { http: 503, codigo: "pagamento_online_indisponivel", mensagem: "O pagamento online ainda não está disponível. Usa a transferência bancária." };
     case "rate_limited": return { http: 429, codigo: "muitos_pedidos", retryAfterS: k.retryAfterS, mensagem: `Há muitos pedidos ao serviço de pagamento neste momento. Tenta novamente${k.retryAfterS ? ` dentro de ${k.retryAfterS} segundos` : " dentro de instantes"}.` };
-    case "conflict": return { http: 409, codigo: "pedido_em_curso", mensagem: "Já existe um pedido de pagamento à espera de aprovação neste telemóvel. Aprova-o na app Multicaixa Express ou aguarda um minuto e tenta de novo." };
-    case "forbidden": return { http: 503, codigo: "pagamento_online_indisponivel", mensagem: "Este método de pagamento ainda não está disponível. Usa a transferência bancária." };
+    case "conflict": return { http: 409, codigo: "pedido_em_curso", mensagem: "Já tens um pedido pendente no telemóvel. Aprova-o na app Multicaixa Express ou aguarda um minuto e tenta de novo." };
+    case "forbidden": return opc.direto
+      ? { http: 503, codigo: "pagamento_direto_indisponivel", mensagem: "O pagamento direto ainda não está disponível. Usa «Pagar online» ou a transferência bancária." }
+      : { http: 503, codigo: "pagamento_online_indisponivel", mensagem: "Este método de pagamento ainda não está disponível. Usa a transferência bancária." };
     case "validation_error": return { http: 422, codigo: "dados_invalidos", mensagem: "Não foi possível criar o pagamento com estes dados. Tenta outro valor ou usa a transferência bancária." };
     default: return { http: 502, codigo: "servico_indisponivel", mensagem: "O serviço de pagamento online não respondeu. Tenta mais tarde ou usa a transferência bancária." };
   }
