@@ -22,6 +22,13 @@ export const kursipayPagamentosTable = pgTable("kursipay_pagamentos", {
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
   pagoEm: timestamp("pago_em"),
+  // Cobrança direta (migração add_kursipay_direto.sql): sem sair do site. O telefone completo NUNCA se guarda: só a versão mascarada devolvida pela kursiPay.
+  modo: varchar("modo", { length: 10 }).notNull().default("hospedado"),   // hospedado | direto
+  metodo: varchar("metodo", { length: 24 }),                              // multicaixa_express | reference (só no modo direto)
+  entidade: varchar("entidade", { length: 12 }),
+  referencia: varchar("referencia", { length: 24 }),
+  validaAte: timestamp("valida_ate"),
+  telefoneMascarado: varchar("telefone_mascarado", { length: 24 }),
 }, (t) => [index("kursipay_pagamentos_user_idx").on(t.userId)]);
 
 export const kursipayEventosTable = pgTable("kursipay_eventos", {

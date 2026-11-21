@@ -61,31 +61,33 @@ const fmt = (c) => (Number(c) / 100).toLocaleString("pt-PT", { minimumFractionDi
 
 try {
   await q("begin transaction isolation level repeatable read read only");
-  const nossos = (await q(`select k.id, k.kursipay_id, k.ambiente, k.valor_centimos::bigint as centimos, k.moeda, k.estado, k.pago_em, t.id as topup_id, t.status, t.reference, t.amount::numeric as amount
+  const nossos = (await q(`select k.id, k.kursipay_id, k.ambiente, k.valor_centimos::bigint as centimos, k.moeda, k.estado, k.pago_em, k.modo, k.metodo, t.id as topup_id, t.status, t.reference, t.amount::numeric as amount
       from kursipay_pagamentos k join topup_requests t on t.id = k.topup_request_id where k.ambiente = $1`, [ambiente])).rows;
   await q("rollback");
   const porId = new Map(nossos.filter((n) => n.kursipay_id).map((n) => [n.kursipay_id, n]));
   const porRef = new Map(nossos.map((n) => [n.reference, n]));
 
+  // O MODO do pagamento: «direto» (sem sair do site: Multicaixa Express ou Referência) ou «hospedado» (checkout da kursiPay). Vem do nosso registo; sem registo, da própria kursiPay (chargeMode).
+  const modoDe = (n, p) => n?.modo ?? (p?.chargeMode === "direct" ? "direto" : "hospedado");
   const semCredito = [], divergentes = [];
   for (const p of pagosKp) {
     const n = porId.get(p.id) ?? porRef.get(p.externalReference);
     const centimos = p?.amount?.amount, moeda = p?.amount?.currency;
-    if (!n || n.status !== "aprovado") { semCredito.push({ id: p.id, valor: fmt(centimos), referencia: p.externalReference ?? null, nosso: n ? `pedido #${n.topup_id} (${n.status})` : "sem pedido nosso" }); continue; }
+    if (!n || n.status !== "aprovado") { semCredito.push({ id: p.id, modo: modoDe(n, p), metodo: n?.metodo ?? p.method ?? null, valor: fmt(centimos), referencia: p.externalReference ?? null, nosso: n ? `pedido #${n.topup_id} (${n.status})` : "sem pedido nosso" }); continue; }
     if (moeda !== "AOA" || String(n.moeda) !== "AOA" || Number(n.centimos) !== centimos || Math.round(Number(n.amount) * 100) !== centimos) {
-      divergentes.push({ id: p.id, pedido: n.topup_id, kursipay: `${fmt(centimos)} ${moeda}`, nosso: `${fmt(n.centimos)} ${n.moeda} (pedido ${Number(n.amount).toFixed(2)})` });
+      divergentes.push({ id: p.id, modo: modoDe(n, p), metodo: n.metodo ?? p.method ?? null, pedido: n.topup_id, kursipay: `${fmt(centimos)} ${moeda}`, nosso: `${fmt(n.centimos)} ${n.moeda} (pedido ${Number(n.amount).toFixed(2)})` });
     }
   }
   const emIntervalo = (d) => { if (!d) return false; const s = dia(new Date(d)); return s >= de && s <= ate; };
-  const semPagamento = nossos.filter((n) => n.status === "aprovado" && emIntervalo(n.pago_em) && !kpPorId.has(n.kursipay_id ?? "")).map((n) => ({ pedido: n.topup_id, id: n.kursipay_id, valor: fmt(n.centimos), referencia: n.reference }));
+  const semPagamento = nossos.filter((n) => n.status === "aprovado" && emIntervalo(n.pago_em) && !kpPorId.has(n.kursipay_id ?? "")).map((n) => ({ pedido: n.topup_id, id: n.kursipay_id, modo: n.modo, metodo: n.metodo, valor: fmt(n.centimos), referencia: n.reference }));
 
-  const resumo = { ambiente, de, ate, pagosNaKursipay: pagosKp.length, creditadosNossos: nossos.filter((n) => n.status === "aprovado" && emIntervalo(n.pago_em)).length, pagosSemCredito: semCredito.length, creditosSemPagamento: semPagamento.length, valoresDivergentes: divergentes.length, ok: semCredito.length + semPagamento.length + divergentes.length === 0 };
+  const resumo = { ambiente, de, ate, pagosNaKursipay: pagosKp.length, pagosPorModo: { direto: pagosKp.filter((p) => p.chargeMode === "direct").length, hospedado: pagosKp.filter((p) => p.chargeMode !== "direct").length }, creditadosNossos: nossos.filter((n) => n.status === "aprovado" && emIntervalo(n.pago_em)).length, pagosSemCredito: semCredito.length, creditosSemPagamento: semPagamento.length, valoresDivergentes: divergentes.length, ok: semCredito.length + semPagamento.length + divergentes.length === 0 };
   if (opt["--json"]) console.log(JSON.stringify({ resumo, pagosSemCredito: semCredito, creditosSemPagamento: semPagamento, valoresDivergentes: divergentes }, null, 2));
   else {
-    console.log(`Reconciliação kursiPay (só leitura) — ambiente ${ambiente}, de ${de} a ${ate}: ${resumo.pagosNaKursipay} pagamento(s) pago(s) na kursiPay, ${resumo.creditadosNossos} crédito(s) nosso(s).\n`);
-    if (semCredito.length) { console.log("PAGOS na kursiPay SEM crédito nosso:"); for (const x of semCredito) console.log(`  ${x.id}  ${x.valor} Kz  ref ${x.referencia ?? "—"}  → ${x.nosso}`); console.log(""); }
+    console.log(`Reconciliação kursiPay (só leitura) — ambiente ${ambiente}, de ${de} a ${ate}: ${resumo.pagosNaKursipay} pagamento(s) pago(s) na kursiPay (${resumo.pagosPorModo.direto} direto(s), ${resumo.pagosPorModo.hospedado} hospedado(s)), ${resumo.creditadosNossos} crédito(s) nosso(s).\n`);
+    if (semCredito.length) { console.log("PAGOS na kursiPay SEM crédito nosso:"); for (const x of semCredito) console.log(`  ${x.id}  [${x.modo}${x.metodo ? "/" + x.metodo : ""}]  ${x.valor} Kz  ref ${x.referencia ?? "—"}  → ${x.nosso}`); console.log(""); }
     if (semPagamento.length) { console.log("CRÉDITOS nossos SEM pagamento pago na kursiPay:"); for (const x of semPagamento) console.log(`  pedido #${x.pedido}  ${x.id ?? "sem id"}  ${x.valor} Kz  ref ${x.referencia}`); console.log(""); }
-    if (divergentes.length) { console.log("VALORES (ou moedas) DIVERGENTES:"); for (const x of divergentes) console.log(`  ${x.id}  pedido #${x.pedido}: kursiPay ${x.kursipay} ≠ nosso ${x.nosso}`); console.log(""); }
+    if (divergentes.length) { console.log("VALORES (ou moedas) DIVERGENTES:"); for (const x of divergentes) console.log(`  ${x.id}  [${x.modo}${x.metodo ? "/" + x.metodo : ""}]  pedido #${x.pedido}: kursiPay ${x.kursipay} ≠ nosso ${x.nosso}`); console.log(""); }
     console.log(`Resumo: sem crédito ${resumo.pagosSemCredito}; sem pagamento ${resumo.creditosSemPagamento}; divergentes ${resumo.valoresDivergentes}.`);
     console.log(resumo.ok ? "✅ Tudo certo: a kursiPay e os nossos créditos batem." : "⚠️  Há desvios (código de saída 1).");
   }
