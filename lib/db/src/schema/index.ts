@@ -15,3 +15,4 @@ export * from "./menores";
 export * from "./emailTokens";
 export * from "./adminLogin";
 export * from "./adminTotp";
+export * from "./kursipay";

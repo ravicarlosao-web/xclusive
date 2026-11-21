@@ -79,6 +79,7 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
         amount: topupRequestsTable.amount,
         reference: topupRequestsTable.reference,
         status: topupRequestsTable.status,
+        paymentMethod: topupRequestsTable.paymentMethod,
         criadoEm: topupRequestsTable.criadoEm,
       })
       .from(topupRequestsTable)
@@ -109,10 +110,11 @@ router.get("/wallet/transactions", requireAuth, async (req: AuthRequest, res): P
       tipo: "carregamento" as const,
       amount: parseFloat(t.amount as string),
       status: t.status,
-      descricao: "Carregamento por transferência",
+      descricao: t.paymentMethod === "kursipay" ? "Carregamento online" : "Carregamento por transferência",
       criadoEm: t.criadoEm.toISOString(),
       credit: t.status === "aprovado",
-      pendente: t.status === "pendente",
+      // Um pagamento online (kursiPay) em curso aparece como pendente (como o manual por aprovar); o resto dos métodos fica como estava.
+      pendente: t.status === "pendente" || (t.status === "processando" && t.paymentMethod === "kursipay"),
     }));
 
     // Combinar, ordenar por data e paginar
