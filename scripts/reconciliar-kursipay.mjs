@@ -31,10 +31,13 @@ const API = /^https:\/\/api\.kursipay\.com(\/v1)?$/.test(bruto) || /^http:\/\/(1
 const ambiente = chave.startsWith("kp_test_") ? "sandbox" : "production";
 
 // ── kursiPay: pagamentos pagos no intervalo (um dia de folga de cada lado para não falhar fronteiras) ──
-// Só se enviam os parâmetros do EXEMPLO da documentação (GET /v1/payments?status=paid,partially_refunded&from=AAAA-MM-DD&page=1): o tamanho de página fica no padrão da API (20; a documentação
-// não define um máximo, e 100 era recusado com 422) e NÃO se envia `to` (a documentação não diz se aceita o dia de amanhã): o fim do intervalo filtra-se aqui, pela data de criação.
+// A API REAL recusa (422 validation_error) o que a documentação sugere: `status` aceita UM só valor (não uma lista separada por vírgulas) e `from`/`to` dão «Campo não permitido».
+// Por isso: um pedido por estado (`paid` e, em separado, `partially_refunded`), com paginação por `page` (tamanho por defeito da API: 20; `pageSize` também não se envia) e SEM `from`/`to`:
+// a janela de datas filtra-se aqui, pela data de criação (`createdAt`) devolvida em cada pagamento. A documentação diz «mais recentes primeiro»: quando uma página inteira é anterior ao início
+// da janela, as seguintes também o são e a leitura desse estado pára.
 const somarDias = (s, n) => dia(new Date(Date.parse(s) + n * 86400000));
-const MAX_PAGINAS = 1000;   // 1000 × 20 = 20 000 pagamentos; acima disto pede-se um intervalo mais curto
+const MAX_PAGINAS = 1000;   // por estado: 1000 × 20 = 20 000 pagamentos; acima disto pede-se um intervalo mais curto
+const ESTADOS = ["paid", "partially_refunded"];
 /** Remove chaves, segredos e tokens de qualquer texto que venha da API antes de o mostrar. */
 const redigir = (v) => String(v ?? "").replace(/kp_(test|live)_[A-Za-z0-9_-]+/g, "kp_***").replace(/whsec_[A-Za-z0-9_-]+/g, "whsec_***").replace(/Bearer\s+\S+/gi, "Bearer ***").replace(/[\r\n]+/g, " ").slice(0, 300);
 /** O erro da API para diagnóstico direto: HTTP, code, message, param, fieldErrors e os parâmetros da consulta; NUNCA a chave nem cabeçalhos. */
@@ -53,23 +56,27 @@ async function descreverErro(res, consulta) {
   return partes.join(" · ");
 }
 async function lerPagos() {
-  const todos = [];
-  const limite = somarDias(ate, 1);   // o dia de folga depois de --ate (filtro local)
-  for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
-    const q = new URLSearchParams({ status: "paid,partially_refunded", from: somarDias(de, -1), page: String(pagina) });
-    let res;
-    try { res = await fetch(`${API}/payments?${q}`, { method: "GET", headers: { Authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(20000) }); }
-    catch { falha("Não foi possível contactar a kursiPay.", 3); }
-    if (!res.ok) falha(`A kursiPay recusou a listagem de pagamentos: ${await descreverErro(res, q)}`, 3);
-    let j; try { j = await res.json(); } catch { falha("Resposta inválida da kursiPay (a listagem não veio em JSON).", 3); }
-    if (!Array.isArray(j?.data)) falha("Resposta inválida da kursiPay (sem a lista «data»).", 3);
-    todos.push(...j.data);
-    const total = Number(j?.pagination?.total ?? 0);
-    if (j.data.length === 0 || todos.length >= total) break;
-    if (pagina === MAX_PAGINAS) falha(`Há mais de ${MAX_PAGINAS * 20} pagamentos desde ${somarDias(de, -1)}: usa um intervalo mais curto (--de/--ate).`, 2);
-  }
+  const inicio = somarDias(de, -1), limite = somarDias(ate, 1);   // a janela, com o dia de folga de cada lado (filtro local)
   const dataDe = (p) => String(p?.createdAt ?? p?.paidAt ?? "").slice(0, 10);
-  return todos.filter((p) => p?.environment === ambiente && (dataDe(p) === "" || dataDe(p) <= limite));
+  const porId = new Map();
+  for (const estado of ESTADOS) {
+    let lidos = 0;   // pagamentos já lidos DESTE estado (o tamanho da página é o da API, não o assumimos)
+    for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
+      const q = new URLSearchParams({ status: estado, page: String(pagina) });
+      let res;
+      try { res = await fetch(`${API}/payments?${q}`, { method: "GET", headers: { Authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(20000) }); }
+      catch { falha("Não foi possível contactar a kursiPay.", 3); }
+      if (!res.ok) falha(`A kursiPay recusou a listagem de pagamentos: ${await descreverErro(res, q)}`, 3);
+      let j; try { j = await res.json(); } catch { falha("Resposta inválida da kursiPay (a listagem não veio em JSON).", 3); }
+      if (!Array.isArray(j?.data)) falha("Resposta inválida da kursiPay (sem a lista «data»).", 3);
+      for (const p of j.data) if (p?.id && !porId.has(p.id)) porId.set(p.id, p);
+      lidos += j.data.length; const total = Number(j?.pagination?.total ?? 0);
+      if (j.data.length === 0 || lidos >= total) break;
+      if (j.data.every((p) => dataDe(p) !== "" && dataDe(p) < inicio)) break;   // «mais recentes primeiro»: o resto é anterior à janela
+      if (pagina === MAX_PAGINAS) falha(`Há mais de ${MAX_PAGINAS * 20} pagamentos «${estado}»: usa um intervalo mais curto (--de/--ate) ou fala com o suporte da kursiPay.`, 2);
+    }
+  }
+  return [...porId.values()].filter((p) => p?.environment === ambiente && (dataDe(p) === "" || (dataDe(p) >= inicio && dataDe(p) <= limite)));
 }
 const pagosKp = await lerPagos();
 const kpPorId = new Map(pagosKp.map((p) => [p.id, p]));
