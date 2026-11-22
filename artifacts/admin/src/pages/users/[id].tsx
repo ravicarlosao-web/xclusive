@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { InfracoesMais18 } from '@/components/mais18/InfracoesMais18';
+import { AjustarSaldo } from '@/components/financeiro/AjustarSaldo';
 
 export default function UserDetail() {
   const [, params] = useRoute('/users/:id');
@@ -215,23 +216,21 @@ export default function UserDetail() {
           </TabsContent>
 
           <TabsContent value="financeiro" className="m-0">
-            {user.role === 'creator' ? (
-              <div className="space-y-4">
-                <Card className="bg-muted/30">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Saldo Atual</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold text-primary">{user.saldo?.toLocaleString()} Kz</p>
-                  </CardContent>
-                </Card>
-                <AjustesSaldo userId={id} />
-              </div>
-            ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                Dados financeiros apenas disponíveis para criadores.
-              </div>
-            )}
+            <div className="space-y-4">
+              <Card className="bg-muted/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Saldo Atual</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-3xl font-bold text-primary" data-testid="saldo-atual">{(user.saldo ?? 0).toLocaleString()} Kz</p>
+                  <AjustarSaldo
+                    userId={id} username={user.username} saldo={Number(user.saldo ?? 0)}
+                    onFeito={() => { queryClient.invalidateQueries({ queryKey: ['user', id] }); queryClient.invalidateQueries({ queryKey: ['ajustes-saldo', id] }); }}
+                  />
+                </CardContent>
+              </Card>
+              <AjustesSaldo userId={id} />
+            </div>
           </TabsContent>
 
           <TabsContent value="moderacao" className="m-0">

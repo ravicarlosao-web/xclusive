@@ -106,8 +106,9 @@ export const adminApi = {
   },
   getCreatorPlans: (id: number) => adminFetch('/admin/creators/' + id + '/plans'),
   getAjustesSaldo: (id: number) => adminFetch('/admin/users/' + id + '/ajustes-saldo'),
+  /** Ajuste de saldo de QUALQUER conta (só superadmin; o servidor recusa os outros com 403). `data`: { valor (± Kz), motivo (10 a 500), chave, saldoEsperado }. Erros legíveis (409 «saldo mudou»/«insuficiente»). */
   adjustBalance: (id: number, data: any) =>
-    adminFetch('/admin/creators/' + id + '/balance-adjustment', { method: 'POST', body: JSON.stringify(data) }),
+    adminFetchMsg('/admin/users/' + id + '/balance-adjustment', { method: 'POST', body: JSON.stringify(data) }),
 
   getPosts: (params?: Record<string, string>) =>
     adminFetch('/admin/posts?' + new URLSearchParams(params)),
