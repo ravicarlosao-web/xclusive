@@ -196,21 +196,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="shrink-0 px-3 lg:px-4 py-[var(--sb-foot-py)] mt-auto flex flex-col gap-[var(--sb-foot-gap)]">
-          {/* Carteira / Saldo */}
+          {/* Carteira / Saldo: um item do menu como os outros (alinhado à esquerda, mesma altura, padding e tipografia) */}
           {saldo !== null && (
             <Link href="/carteira">
-              <div className="group flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50 border border-border/50 hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-all cursor-pointer">
-                <Wallet className="w-5 h-5 text-yellow-600 dark:text-yellow-500 stroke-[1.5px] shrink-0 group-hover:scale-110 transition-transform" />
+              <div
+                data-testid="menu-carteira"
+                className={cn(
+                  "group flex items-center gap-4 px-3 h-[calc(1.5rem+2*var(--sb-py))] [@media(min-height:900px)]:h-[calc(25.5px+2*var(--sb-py))] rounded-xl transition-all duration-200 cursor-pointer hover:bg-secondary",
+                  location.startsWith('/carteira') ? "text-primary font-semibold" : "text-foreground"
+                )}
+              >
+                <Wallet className={cn("w-6 h-6 shrink-0", location.startsWith('/carteira') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
                 <div className="hidden lg:flex flex-col leading-tight flex-1 min-w-0">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Carteira</span>
-                  <span className="text-sm font-bold">{saldo.toLocaleString('pt-PT')} Kz</span>
+                  <span className="text-[15px] [@media(min-height:900px)]:text-[17px]">Carteira</span>
+                  <span className="text-xs font-normal text-muted-foreground truncate">{saldo.toLocaleString('pt-PT')} Kz</span>
                 </div>
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTopUpOpen(true); }}
-                  className="hidden lg:flex w-6 h-6 rounded-full bg-yellow-500/20 hover:bg-yellow-500/40 items-center justify-center transition-colors shrink-0"
+                  className="relative hidden lg:flex w-7 h-7 rounded-full items-center justify-center text-muted-foreground hover:text-primary transition-colors shrink-0 after:content-[''] after:absolute after:-inset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title="Carregar carteira"
                 >
-                  <Plus className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-500" />
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             </Link>
