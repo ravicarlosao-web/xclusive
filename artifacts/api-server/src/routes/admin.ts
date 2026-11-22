@@ -1524,50 +1524,77 @@ router.patch("/admin/creators/:id/plans/:planId", requireAdmin, async (req: Admi
   }
 });
 
-router.post("/admin/creators/:id/balance-adjustment", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+// ── Ajuste manual de saldo (crédito/débito) de QUALQUER conta de utilizador: SÓ superadmin ─────────────────────────────────────────────────────
+// POST /admin/users/:id/balance-adjustment (a rota antiga /admin/creators/:id/balance-adjustment continua a funcionar e é o MESMO handler).
+// Corpo: { valor (número ≠ 0, ≤ 2 decimais, |valor| ≤ 1 000 000 000; positivo credita, negativo debita), motivo (OBRIGATÓRIO, 10 a 500 caracteres),
+//         chave? (identificador do pedido: o mesmo pedido repetido não ajusta duas vezes), saldoEsperado? (o saldo que o painel mostrou na confirmação: se mudou, 409 sem alterar nada) }.
+// Tudo na MESMA transação, com a linha da conta bloqueada (FOR UPDATE): saldo, audit_log («balance_adjustment», antes/depois, motivo) e ajustes_saldo. Sem migração.
+const MOTIVO_AJUSTE_MIN = 10, MOTIVO_AJUSTE_MAX = 500;
+const RE_CHAVE_AJUSTE = /^[A-Za-z0-9_-]{8,64}$/;
+async function ajustarSaldoHandler(req: AdminRequest, res: any): Promise<void> {
   try {
+    if (!soSuperadmin(req, res, "ajustar o saldo de uma conta")) return;
     const id = idDe(req.params.id);
     if (id === null) return void res.status(400).json({ error: "ID inválido." });
-    const { valor, motivo } = req.body ?? {};
+    if (id === req.adminId) return void res.status(403).json({ error: "Não podes ajustar o teu próprio saldo.", codigo: "proprio_saldo" });
+    const { valor, motivo, chave, saldoEsperado } = req.body ?? {};
     // Só número: diferente de 0, no máximo 1 000 000 000 em módulo e com no máximo 2 decimais (texto, null, «» e 0 são recusados).
     if (typeof valor !== "number" || !Number.isFinite(valor) || valor === 0 || Math.abs(valor) > 1_000_000_000 || Math.abs(valor * 100 - Math.round(valor * 100)) > 1e-6) {
       return void res.status(400).json({ error: "Valor inválido." });
     }
+    const motivoLimpo = typeof motivo === "string" ? motivo.trim() : "";
+    if (motivoLimpo.length < MOTIVO_AJUSTE_MIN || motivoLimpo.length > MOTIVO_AJUSTE_MAX) {
+      return void res.status(400).json({ error: `Indica o motivo do ajuste (${MOTIVO_AJUSTE_MIN} a ${MOTIVO_AJUSTE_MAX} caracteres).`, codigo: "motivo_invalido" });
+    }
+    if (chave !== undefined && (typeof chave !== "string" || !RE_CHAVE_AJUSTE.test(chave))) return void res.status(400).json({ error: "Identificador do pedido inválido.", codigo: "chave_invalida" });
+    if (saldoEsperado !== undefined && (typeof saldoEsperado !== "number" || !Number.isFinite(saldoEsperado))) return void res.status(400).json({ error: "Saldo esperado inválido." });
     const valorCent = Math.round(valor * 100);
 
-    // A linha do criador bloqueia-se (FOR UPDATE) ANTES de ler o saldo e de calcular o novo valor: um débito/crédito concorrente
-    // (gorjeta, compra, carregamento) espera pelo ajuste em vez de ser sobrescrito por um saldo calculado com um valor antigo.
+    // A linha da conta bloqueia-se (FOR UPDATE) ANTES de ler o saldo e de calcular o novo valor: um débito/crédito concorrente
+    // (gorjeta, compra, carregamento, outro ajuste) espera pelo ajuste em vez de ser sobrescrito por um saldo calculado com um valor antigo.
     const r = await db.transaction(async (tx) => {
-      const [user] = await tx.select().from(usersTable)
-        .where(and(eq(usersTable.id, id), eq(usersTable.tipoConta, "criador"))).limit(1).for("update");
+      const [user] = await tx.select().from(usersTable).where(eq(usersTable.id, id)).limit(1).for("update");
       if (!user) return { erro: 404 as const };
 
+      // Pedido repetido (duplo clique, nova tentativa depois de um timeout): com a mesma chave NÃO se ajusta outra vez; devolve o resultado do primeiro. Serializado pelo bloqueio da conta.
+      if (chave) {
+        const [antes] = await tx.select({ details: auditLogTable.details }).from(auditLogTable)
+          .where(and(eq(auditLogTable.action, "balance_adjustment"), eq(auditLogTable.adminId, req.adminId!), eq(auditLogTable.targetId, id), sql`${auditLogTable.details}->>'chave' = ${chave}`)).limit(1);
+        if (antes) { const d = antes.details as { before?: { saldo?: number }; after?: { saldo?: number } }; return { repetido: true as const, saldoAnterior: Number(d.before?.saldo), novoSaldo: Number(d.after?.saldo) }; }
+      }
+
       const saldoAnterior = Number(user.saldo);
+      // O painel mostrou «saldo antes X → depois Y»: se o saldo mudou entretanto, não se ajusta (a confirmação deixaria de ser verdadeira).
+      if (saldoEsperado !== undefined && Math.round(saldoEsperado * 100) !== Math.round(saldoAnterior * 100)) return { erro: 409 as const, codigo: "saldo_mudou" as const, saldoAnterior };
       const novoCent = Math.round(saldoAnterior * 100) + valorCent;
-      if (novoCent < 0) return { erro: 409 as const }; // débito acima do saldo: nada muda (a BD também o recusaria)
+      if (novoCent < 0) return { erro: 409 as const, codigo: "saldo_insuficiente" as const, saldoAnterior }; // débito acima do saldo: nada muda (a BD também o recusaria)
       const novoSaldo = novoCent / 100;
       await tx.update(usersTable).set({ saldo: novoSaldo.toFixed(2) }).where(eq(usersTable.id, id));
-      // Audit na MESMA transação (com a linha do criador ainda bloqueada): se falhar, o ajuste desfaz-se.
+      // Audit na MESMA transação (com a conta ainda bloqueada): se falhar, o ajuste desfaz-se.
       const auditId = await auditNaTransacao(tx, req, "balance_adjustment", "user", id, {
-        before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor, motivo: motivo ?? null,
+        before: { saldo: saldoAnterior }, after: { saldo: novoSaldo }, valor, motivo: motivoLimpo, tipoConta: user.tipoConta, chave: chave ?? null,
       });
       // Linha financeira do ajuste (entra no extrato e na reconciliação), na MESMA transação do UPDATE do saldo: sem uma não há a outra.
       await tx.insert(ajustesSaldoTable).values({
         userId: id, campo: "saldo", valor: (valorCent / 100).toFixed(2), saldoAntes: saldoAnterior.toFixed(2), saldoDepois: novoSaldo.toFixed(2),
-        motivo: typeof motivo === "string" && motivo.trim() ? motivo.trim().slice(0, 500) : null, adminId: req.adminId!, auditId,
+        motivo: motivoLimpo, adminId: req.adminId!, auditId,
       });
       return { saldoAnterior, novoSaldo };
     });
     if ("erro" in r) {
-      return void (r.erro === 404 ? res.status(404).json({ error: "Criador não encontrado" }) : res.status(409).json({ error: "Saldo insuficiente para este débito." }));
+      if (r.erro === 404) return void res.status(404).json({ error: "Utilizador não encontrado" });
+      if (r.codigo === "saldo_mudou") return void res.status(409).json({ error: `O saldo mudou entretanto (agora ${r.saldoAnterior.toLocaleString("pt-PT")} Kz). Confirma de novo.`, codigo: "saldo_mudou", saldoAtual: r.saldoAnterior });
+      return void res.status(409).json({ error: "Saldo insuficiente para este débito.", codigo: "saldo_insuficiente" });
     }
-    const { novoSaldo } = r;
-    res.json({ success: true, novoSaldo });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ success: true, novoSaldo: r.novoSaldo, saldoAnterior: r.saldoAnterior, ...("repetido" in r ? { repetido: true } : {}) });
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao ajustar saldo");
     res.status(500).json({ error: "Erro interno." });
   }
-});
+}
+router.post("/admin/users/:id/balance-adjustment", requireAdmin, ajustarSaldoHandler);
+router.post("/admin/creators/:id/balance-adjustment", requireAdmin, ajustarSaldoHandler);   // alias da rota antiga (agora igual: qualquer conta, superadmin, motivo obrigatório)
 
 /** Histórico dos ajustes manuais de saldo de uma conta (linha financeira própria; mais recentes primeiro). Só leitura. */
 router.get("/admin/users/:id/ajustes-saldo", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
