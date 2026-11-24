@@ -1927,6 +1927,67 @@ export const DeleteSubscriptionPlanResponse = zod.void()
 
 
 /**
+ * @summary Mensagem automática de boas-vindas da criadora (só criadoras verificadas)
+ */
+export const GetBoasVindasResponse = zod.object({
+  "configurada": zod.boolean(),
+  "texto": zod.string(),
+  "midiaTipo": zod.enum(['nenhuma', 'imagem']),
+  "midiaUrl": zod.string().nullable(),
+  "ativa": zod.boolean(),
+  "desativadaPorAdmin": zod.boolean(),
+  "atualizadoEm": zod.string().nullable()
+})
+
+
+/**
+ * @summary Guardar a mensagem de boas-vindas (só vale para novos seguidores)
+ */
+export const SaveBoasVindasBody = zod.object({
+  "texto": zod.string().optional(),
+  "midiaTipo": zod.enum(['nenhuma', 'imagem']).optional(),
+  "midiaUrl": zod.string().nullish(),
+  "ativa": zod.boolean().optional()
+})
+
+export const SaveBoasVindasResponse = zod.object({
+  "configurada": zod.boolean(),
+  "texto": zod.string(),
+  "midiaTipo": zod.enum(['nenhuma', 'imagem']),
+  "midiaUrl": zod.string().nullable(),
+  "ativa": zod.boolean(),
+  "desativadaPorAdmin": zod.boolean(),
+  "atualizadoEm": zod.string().nullable()
+})
+
+
+/**
+ * @summary Apagar a mensagem de boas-vindas
+ */
+export const DeleteBoasVindasResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Ativar ou desativar a mensagem de boas-vindas
+ */
+export const SetBoasVindasAtivaBody = zod.object({
+  "ativa": zod.boolean()
+})
+
+export const SetBoasVindasAtivaResponse = zod.object({
+  "configurada": zod.boolean(),
+  "texto": zod.string(),
+  "midiaTipo": zod.enum(['nenhuma', 'imagem']),
+  "midiaUrl": zod.string().nullable(),
+  "ativa": zod.boolean(),
+  "desativadaPorAdmin": zod.boolean(),
+  "atualizadoEm": zod.string().nullable()
+})
+
+
+/**
  * @summary Ganhos do criador ao longo do tempo
  */
 export const getCreatorEarningsQueryPeriodDefault = `30d`;

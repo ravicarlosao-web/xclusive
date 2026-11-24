@@ -292,6 +292,9 @@ async function processarUm(tx: Tx, e: Envio, agora: Date, resumo: ResumoLote): P
 export async function processarFilaBoasVindas(opcoes: { agora?: Date; lote?: number } = {}): Promise<ResumoLote> {
   const agora = opcoes.agora ?? new Date();
   const resumo = novoResumo();
+  // Ciclo ocioso barato: uma única consulta simples (sem transação nem trinco) quando não há nada para enviar.
+  const alguma = await db.execute(sql`SELECT 1 AS x FROM boas_vindas_envios WHERE estado = 'pendente' AND proxima_em <= ${agora.toISOString()}::timestamp LIMIT 1`);
+  if (alguma.rows.length === 0) return resumo;
   await db.transaction(async (tx) => {
     const lock = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(${CHAVE_LOCK}) AS ok`);
     if (!(lock.rows[0] as { ok: boolean }).ok) { resumo.ocupado = true; return; }

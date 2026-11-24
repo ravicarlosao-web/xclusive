@@ -7,6 +7,11 @@
  */
 
 export * from './authResponse';
+export * from './boasVindasAtivaInput';
+export * from './boasVindasConfig';
+export * from './boasVindasConfigMidiaTipo';
+export * from './boasVindasInput';
+export * from './boasVindasInputMidiaTipo';
 export * from './changePasswordInput';
 export * from './comment';
 export * from './commentInput';
@@ -17,6 +22,7 @@ export * from './conversationsPage';
 export * from './conversationTipo';
 export * from './creatorStats';
 export * from './currentUser';
+export * from './deleteBoasVindas200';
 export * from './denunciaMensagemInput';
 export * from './denunciaMensagemInputMotivo';
 export * from './denunciaMensagemResultado';

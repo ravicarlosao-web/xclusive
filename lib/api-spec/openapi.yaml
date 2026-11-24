@@ -1669,6 +1669,71 @@ paths:
         "204":
           description: Eliminado
 
+  /creator/boas-vindas:
+    get:
+      operationId: getBoasVindas
+      tags: [creator]
+      summary: Mensagem automática de boas-vindas da criadora (só criadoras verificadas)
+      responses:
+        "200":
+          description: Configuração atual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoasVindasConfig"
+
+    put:
+      operationId: saveBoasVindas
+      tags: [creator]
+      summary: Guardar a mensagem de boas-vindas (só vale para novos seguidores)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoasVindasInput"
+      responses:
+        "200":
+          description: Configuração guardada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoasVindasConfig"
+
+    delete:
+      operationId: deleteBoasVindas
+      tags: [creator]
+      summary: Apagar a mensagem de boas-vindas
+      responses:
+        "200":
+          description: Apagada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+
+  /creator/boas-vindas/ativa:
+    patch:
+      operationId: setBoasVindasAtiva
+      tags: [creator]
+      summary: Ativar ou desativar a mensagem de boas-vindas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoasVindasAtivaInput"
+      responses:
+        "200":
+          description: Configuração atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoasVindasConfig"
+
   /creator/earnings:
     get:
       operationId: getCreatorEarnings
@@ -2839,6 +2904,32 @@ components:
             type: integer
 
     # CREATOR / MONETIZATION
+    BoasVindasConfig:
+      type: object
+      required: [configurada, texto, midiaTipo, midiaUrl, ativa, desativadaPorAdmin, atualizadoEm]
+      properties:
+        configurada: { type: boolean }
+        texto: { type: string }
+        midiaTipo: { type: string, enum: [nenhuma, imagem] }
+        midiaUrl: { type: [string, "null"] }
+        ativa: { type: boolean }
+        desativadaPorAdmin: { type: boolean }
+        atualizadoEm: { type: [string, "null"] }
+
+    BoasVindasAtivaInput:
+      type: object
+      required: [ativa]
+      properties:
+        ativa: { type: boolean }
+
+    BoasVindasInput:
+      type: object
+      properties:
+        texto: { type: string }
+        midiaTipo: { type: string, enum: [nenhuma, imagem] }
+        midiaUrl: { type: [string, "null"] }
+        ativa: { type: boolean }
+
     CreatorStats:
       type: object
       required: [ganhosMes, totalSubscritores, taxaRetencao, visualizacoesTotais]
