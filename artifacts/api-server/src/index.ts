@@ -10,6 +10,7 @@ import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionExpiry";
 import { startReportEscalationJob } from "./lib/reportEscalation";
+import { startBoasVindasJob } from "./lib/boasVindas";
 import { avisarConfigEmail } from "./lib/email";
 import { avisoChaveTotp } from "./lib/totpCripto";
 import { avisoConfigKursipay } from "./lib/kursipay";
@@ -79,6 +80,7 @@ startSubscriptionExpiryJob();
 
 // Avisa os admins de denúncias urgentes por tratar (1 h e 24 h); idempotente e com lock
 startReportEscalationJob();
+startBoasVindasJob();
 
 // Aumentar os limites de tempo do servidor Node.js para suportar uploads de ficheiros até 500MB (40 minutos / 2400s):
 server.requestTimeout = 40 * 60 * 1000; // 2.400.000 ms (alinhado com o Nginx a 2400s)

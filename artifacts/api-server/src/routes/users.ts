@@ -19,6 +19,7 @@ import { erroSeguro } from "../lib/erroSeguro";
 import { bloqueadoEntre } from "../lib/permissaoMensagem";
 import { lerPostsDoAutor } from "../lib/feed";
 import { identificadorBloqueado, MSG_PEDIDO_RECUSADO } from "../lib/banimento";
+import { agendarBoasVindas } from "../lib/boasVindas";
 import { MAIS18_TEXTO_VERSAO, PREFERENCIAS_MAIS18, IDADE_MINIMA_VER, idadeEmAnos } from "../lib/mais18";
 
 const updateProfileSchema = z.object({
@@ -672,6 +673,8 @@ router.post("/users/:username/follow", requireAuth, async (req: AuthRequest, res
         atorId: userId,
         alvoId: null,
       }).onConflictDoNothing();
+      // Mensagem automática de boas-vindas (se a criadora tiver uma ativa e o interruptor geral estiver ligado): fora do pedido, nunca espera nem falha o seguir.
+      agendarBoasVindas(target.id, userId);
     }
   }
   res.json({ ok: true });

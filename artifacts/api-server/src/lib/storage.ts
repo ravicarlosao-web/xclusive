@@ -462,14 +462,14 @@ export function urlImagemMensagem(url: string, userId: number): string | null {
  * Confirma no CDN (HEAD, sem descarregar o ficheiro) que a imagem existe, é image/* e tem no máximo
  * MENSAGEM_IMAGEM_MAX_BYTES. Recusa se não conseguir confirmar. Não toca no fluxo de upload.
  */
-export async function verificarImagemMensagem(urlCanonicoImagem: string): Promise<"ok" | "inexistente" | "grande" | "tipo"> {
+export async function verificarImagemMensagem(urlCanonicoImagem: string, maxBytes: number = MENSAGEM_IMAGEM_MAX_BYTES): Promise<"ok" | "inexistente" | "grande" | "tipo"> {
   try {
     const r = await fetch(urlParaServidor(urlCanonicoImagem), { method: "HEAD", redirect: "error", signal: AbortSignal.timeout(5000) });
     if (!r.ok) return "inexistente";
     if (!/^image\/(jpeg|png|webp)\b/i.test(r.headers.get("content-type") ?? "")) return "tipo";
     const tam = Number(r.headers.get("content-length"));
     if (!Number.isFinite(tam) || tam <= 0) return "inexistente";
-    return tam > MENSAGEM_IMAGEM_MAX_BYTES ? "grande" : "ok";
+    return tam > maxBytes ? "grande" : "ok";
   } catch {
     return "inexistente";
   }

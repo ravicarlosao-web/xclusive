@@ -16,3 +16,4 @@ export * from "./emailTokens";
 export * from "./adminLogin";
 export * from "./adminTotp";
 export * from "./kursipay";
+export * from "./boasVindas";
