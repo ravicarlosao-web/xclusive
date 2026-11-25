@@ -17,4 +17,6 @@ export interface BoasVindasConfig {
   desativadaPorAdmin: boolean;
   /** @nullable */
   atualizadoEm: string | null;
+  /** Interruptor geral da plataforma (platform_settings.boas_vindas_ativas); desligado = guarda-se mas ainda não se envia */
+  plataformaAtiva: boolean;
 }

@@ -1,12 +1,12 @@
 import { useAuth, DadosBancarios, WithdrawalItem } from '@/contexts/AuthContext';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useEffect, useState } from 'react';
 import { PlanDialog } from '@/components/monetization/PlanDialog';
 import { TipoSubscricaoCard, type TipoSubscricao } from '@/components/subscricoes/TipoSubscricaoCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, Loader2, Radio } from 'lucide-react';
+import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, Loader2, Radio, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -363,6 +363,18 @@ export default function Monetization() {
       <div className="mb-8">
         <TipoSubscricaoCard onTipo={setTipoSub} />
       </div>
+
+      {/* Mensagem automática de boas-vindas (só criadoras verificadas) */}
+      {user?.verificado === true && (
+        <Link href="/definicoes/monetizacao/boas-vindas" data-testid="link-boas-vindas"
+          className="mb-8 flex min-h-[44px] items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="min-w-0">
+            <span className="block font-semibold">Mensagem de boas-vindas</span>
+            <span className="block text-sm text-muted-foreground">Envia uma mensagem automática a quem começa a seguir-te.</span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      )}
 
       {/* Chart + Plans */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
