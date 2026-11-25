@@ -21,6 +21,9 @@ import type {
 
 import type {
   AuthResponse,
+  BoasVindasAtivaInput,
+  BoasVindasConfig,
+  BoasVindasInput,
   ChangePasswordInput,
   Comment,
   CommentInput,
@@ -30,6 +33,7 @@ import type {
   ConversationsPage,
   CreatorStats,
   CurrentUser,
+  DeleteBoasVindas200,
   DenunciaMensagemInput,
   DenunciaMensagemResultado,
   EarningPoint,
@@ -5420,6 +5424,296 @@ export const useDeleteSubscriptionPlan = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteSubscriptionPlanMutationOptions(options));
+    }
+
+export const getGetBoasVindasUrl = () => {
+
+
+
+
+  return `/api/creator/boas-vindas`
+}
+
+/**
+ * @summary Mensagem automática de boas-vindas da criadora (só criadoras verificadas)
+ */
+export const getBoasVindas = async ( options?: Parameters<typeof customFetch>[1]): Promise<BoasVindasConfig> => {
+
+  return customFetch<BoasVindasConfig>(getGetBoasVindasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBoasVindasQueryKey = () => {
+    return [
+    `/api/creator/boas-vindas`
+    ] as const;
+    }
+
+
+export const getGetBoasVindasQueryOptions = <TData = Awaited<ReturnType<typeof getBoasVindas>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBoasVindas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBoasVindasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBoasVindas>>> = ({ signal }) => getBoasVindas({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBoasVindas>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBoasVindasQueryResult = NonNullable<Awaited<ReturnType<typeof getBoasVindas>>>
+export type GetBoasVindasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Mensagem automática de boas-vindas da criadora (só criadoras verificadas)
+ */
+
+export function useGetBoasVindas<TData = Awaited<ReturnType<typeof getBoasVindas>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBoasVindas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBoasVindasQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveBoasVindasUrl = () => {
+
+
+
+
+  return `/api/creator/boas-vindas`
+}
+
+/**
+ * @summary Guardar a mensagem de boas-vindas (só vale para novos seguidores)
+ */
+export const saveBoasVindas = async (boasVindasInput: BoasVindasInput, options?: Parameters<typeof customFetch>[1]): Promise<BoasVindasConfig> => {
+
+  return customFetch<BoasVindasConfig>(getSaveBoasVindasUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(boasVindasInput)
+  }
+);}
+
+
+
+
+
+export const getSaveBoasVindasMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBoasVindas>>, TError,{data: BodyType<BoasVindasInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveBoasVindas>>, TError,{data: BodyType<BoasVindasInput>}, TContext> => {
+
+const mutationKey = ['saveBoasVindas'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveBoasVindas>>, {data: BodyType<BoasVindasInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveBoasVindas(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveBoasVindasMutationResult = NonNullable<Awaited<ReturnType<typeof saveBoasVindas>>>
+    export type SaveBoasVindasMutationBody = BodyType<BoasVindasInput>
+    export type SaveBoasVindasMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Guardar a mensagem de boas-vindas (só vale para novos seguidores)
+ */
+export const useSaveBoasVindas = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBoasVindas>>, TError,{data: BodyType<BoasVindasInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveBoasVindas>>,
+        TError,
+        {data: BodyType<BoasVindasInput>},
+        TContext
+      > => {
+      return useMutation(getSaveBoasVindasMutationOptions(options));
+    }
+
+export const getDeleteBoasVindasUrl = () => {
+
+
+
+
+  return `/api/creator/boas-vindas`
+}
+
+/**
+ * @summary Apagar a mensagem de boas-vindas
+ */
+export const deleteBoasVindas = async ( options?: Parameters<typeof customFetch>[1]): Promise<DeleteBoasVindas200> => {
+
+  return customFetch<DeleteBoasVindas200>(getDeleteBoasVindasUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBoasVindasMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBoasVindas>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBoasVindas>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteBoasVindas'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBoasVindas>>, void> = () => {
+
+
+          return  deleteBoasVindas(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBoasVindasMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBoasVindas>>>
+
+    export type DeleteBoasVindasMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Apagar a mensagem de boas-vindas
+ */
+export const useDeleteBoasVindas = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBoasVindas>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBoasVindas>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteBoasVindasMutationOptions(options));
+    }
+
+export const getSetBoasVindasAtivaUrl = () => {
+
+
+
+
+  return `/api/creator/boas-vindas/ativa`
+}
+
+/**
+ * @summary Ativar ou desativar a mensagem de boas-vindas
+ */
+export const setBoasVindasAtiva = async (boasVindasAtivaInput: BoasVindasAtivaInput, options?: Parameters<typeof customFetch>[1]): Promise<BoasVindasConfig> => {
+
+  return customFetch<BoasVindasConfig>(getSetBoasVindasAtivaUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(boasVindasAtivaInput)
+  }
+);}
+
+
+
+
+
+export const getSetBoasVindasAtivaMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBoasVindasAtiva>>, TError,{data: BodyType<BoasVindasAtivaInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setBoasVindasAtiva>>, TError,{data: BodyType<BoasVindasAtivaInput>}, TContext> => {
+
+const mutationKey = ['setBoasVindasAtiva'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setBoasVindasAtiva>>, {data: BodyType<BoasVindasAtivaInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setBoasVindasAtiva(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetBoasVindasAtivaMutationResult = NonNullable<Awaited<ReturnType<typeof setBoasVindasAtiva>>>
+    export type SetBoasVindasAtivaMutationBody = BodyType<BoasVindasAtivaInput>
+    export type SetBoasVindasAtivaMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Ativar ou desativar a mensagem de boas-vindas
+ */
+export const useSetBoasVindasAtiva = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBoasVindasAtiva>>, TError,{data: BodyType<BoasVindasAtivaInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setBoasVindasAtiva>>,
+        TError,
+        {data: BodyType<BoasVindasAtivaInput>},
+        TContext
+      > => {
+      return useMutation(getSetBoasVindasAtivaMutationOptions(options));
     }
 
 export const getGetCreatorEarningsUrl = (params?: GetCreatorEarningsParams,) => {

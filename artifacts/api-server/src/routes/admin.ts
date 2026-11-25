@@ -42,6 +42,8 @@ import {
   notificationsTable,
   infracoesMais18Table,
   ajustesSaldoTable,
+  boasVindasConfigTable,
+  boasVindasEnviosTable,
 } from "@workspace/db";
 import {
   eq,
@@ -1180,6 +1182,53 @@ router.post("/admin/users/:id/reabrir", requireAdmin, async (req: AdminRequest, 
   } catch (err) {
     if (err instanceof EncerramentoErro) return void res.status(err.httpStatus).json({ error: err.message });
     (req as any).log?.error(erroSeguro(err), "Erro ao reabrir conta");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+/**
+ * Mensagem de boas-vindas de uma criadora (admin e superadmin): ver e DESATIVAR (com motivo, registado em audit_log). Não há reativação por aqui
+ * (a criadora não a reativa sozinha: ver lib/boasVindas.ts). Os envios ainda em espera dessa criadora passam a «ignorada / desativada_admin».
+ */
+router.get("/admin/creators/:id/boas-vindas", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  try {
+    const [c] = await db.select().from(boasVindasConfigTable).where(eq(boasVindasConfigTable.criadoraId, id)).limit(1);
+    const contagens = await db.select({ estado: boasVindasEnviosTable.estado, n: sql<number>`count(*)::int` }).from(boasVindasEnviosTable).where(eq(boasVindasEnviosTable.criadoraId, id)).groupBy(boasVindasEnviosTable.estado);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      configurada: !!c && (c.texto !== "" || c.midiaTipo !== "nenhuma"),
+      texto: c?.texto ?? "", midiaTipo: c?.midiaTipo ?? "nenhuma", midiaUrl: urlMedia(c?.midiaUrl ?? null),
+      ativa: !!c && c.ativa && !c.desativadaAdminEm,
+      desativadaPorAdmin: !!c?.desativadaAdminEm, desativadaAdminEm: c?.desativadaAdminEm?.toISOString() ?? null, desativadaAdminMotivo: c?.desativadaAdminMotivo ?? null,
+      envios: Object.fromEntries(contagens.map((x) => [x.estado, x.n])),
+    });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro ao ler a mensagem de boas-vindas");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.post("/admin/creators/:id/boas-vindas/desativar", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return void res.status(400).json({ error: "ID inválido" });
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (motivo.length < 10 || motivo.length > 500) return void res.status(400).json({ error: "Indica o motivo da desativação (entre 10 e 500 caracteres).", codigo: "motivo_invalido" });
+  try {
+    const r = await db.transaction(async (tx) => {
+      const [c] = await tx.select().from(boasVindasConfigTable).where(eq(boasVindasConfigTable.criadoraId, id)).for("update").limit(1);
+      if (!c) return { erro: 404 as const };
+      if (c.desativadaAdminEm) return { erro: 409 as const };
+      await tx.update(boasVindasConfigTable).set({ ativa: false, desativadaAdminEm: new Date(), desativadaAdminPor: req.adminId!, desativadaAdminMotivo: motivo, atualizadoEm: new Date() }).where(eq(boasVindasConfigTable.criadoraId, id));
+      const parados = await tx.update(boasVindasEnviosTable).set({ estado: "ignorada", motivo: "desativada_admin" }).where(and(eq(boasVindasEnviosTable.criadoraId, id), eq(boasVindasEnviosTable.estado, "pendente"))).returning({ id: boasVindasEnviosTable.id });
+      await auditNaTransacao(tx, req, "boas_vindas_desativada", "user", id, { motivo, envios_em_espera_parados: parados.length, tinha_midia: c.midiaTipo !== "nenhuma", estava_ativa: c.ativa });
+      return { ok: true as const, parados: parados.length };
+    });
+    if (!("ok" in r)) return void res.status(r.erro).json({ error: r.erro === 404 ? "Esta criadora não tem mensagem de boas-vindas." : "A mensagem já está desativada pelo administrador.", ...(r.erro === 409 ? { codigo: "ja_desativada" } : {}) });
+    res.json({ success: true, enviosEmEsperaParados: r.parados });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro ao desativar a mensagem de boas-vindas");
     res.status(500).json({ error: "Erro interno." });
   }
 });

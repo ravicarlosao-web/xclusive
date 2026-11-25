@@ -933,6 +933,46 @@ export interface HighlightInput {
   storyIds: number[];
 }
 
+export type BoasVindasConfigMidiaTipo = typeof BoasVindasConfigMidiaTipo[keyof typeof BoasVindasConfigMidiaTipo];
+
+
+export const BoasVindasConfigMidiaTipo = {
+  nenhuma: 'nenhuma',
+  imagem: 'imagem',
+} as const;
+
+export interface BoasVindasConfig {
+  configurada: boolean;
+  texto: string;
+  midiaTipo: BoasVindasConfigMidiaTipo;
+  /** @nullable */
+  midiaUrl: string | null;
+  ativa: boolean;
+  desativadaPorAdmin: boolean;
+  /** @nullable */
+  atualizadoEm: string | null;
+}
+
+export interface BoasVindasAtivaInput {
+  ativa: boolean;
+}
+
+export type BoasVindasInputMidiaTipo = typeof BoasVindasInputMidiaTipo[keyof typeof BoasVindasInputMidiaTipo];
+
+
+export const BoasVindasInputMidiaTipo = {
+  nenhuma: 'nenhuma',
+  imagem: 'imagem',
+} as const;
+
+export interface BoasVindasInput {
+  texto?: string;
+  midiaTipo?: BoasVindasInputMidiaTipo;
+  /** @nullable */
+  midiaUrl?: string | null;
+  ativa?: boolean;
+}
+
 export interface CreatorStats {
   ganhosMes: number;
   totalSubscritores: number;
@@ -1128,6 +1168,10 @@ export type MarkConversationRead200 = {
 
 export type GetNotificationsParams = {
 page?: number;
+};
+
+export type DeleteBoasVindas200 = {
+  ok: boolean;
 };
 
 export type GetCreatorEarningsParams = {
