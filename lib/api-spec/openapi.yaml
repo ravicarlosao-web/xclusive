@@ -2906,7 +2906,7 @@ components:
     # CREATOR / MONETIZATION
     BoasVindasConfig:
       type: object
-      required: [configurada, texto, midiaTipo, midiaUrl, ativa, desativadaPorAdmin, atualizadoEm]
+      required: [configurada, texto, midiaTipo, midiaUrl, ativa, desativadaPorAdmin, atualizadoEm, plataformaAtiva]
       properties:
         configurada: { type: boolean }
         texto: { type: string }
@@ -2915,6 +2915,7 @@ components:
         ativa: { type: boolean }
         desativadaPorAdmin: { type: boolean }
         atualizadoEm: { type: [string, "null"] }
+        plataformaAtiva: { type: boolean, description: "Interruptor geral da plataforma (platform_settings.boas_vindas_ativas); desligado = guarda-se mas ainda não se envia" }
 
     BoasVindasAtivaInput:
       type: object

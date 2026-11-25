@@ -24,6 +24,7 @@ import MessageThread from '@/pages/message-thread';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import Monetization from '@/pages/monetization';
+import BoasVindas from '@/pages/boas-vindas';
 import Onboarding from '@/pages/onboarding';
 import KYCPage from '@/pages/kyc';
 import Carteira from '@/pages/carteira';
@@ -169,6 +170,7 @@ function Router() {
       <Route path="/perfil/:username">{(params) => <ProtectedRoute component={Profile} path="/perfil/:username" />}</Route>
       <Route path="/definicoes">{(params) => <ProtectedRoute component={Settings} path="/definicoes" />}</Route>
       <Route path="/definicoes/monetizacao">{(params) => <ProtectedRoute component={Monetization} path="/definicoes/monetizacao" />}</Route>
+      <Route path="/definicoes/monetizacao/boas-vindas">{() => <ProtectedRoute component={BoasVindas} path="/definicoes/monetizacao/boas-vindas" />}</Route>
       <Route path="/carteira">{(params) => <ProtectedRoute component={Carteira} path="/carteira" />}</Route>
       <Route path="/ir-em-direto">{() => <ProtectedRoute component={IrEmDireto} path="/ir-em-direto" />}</Route>
       <Route path="/live/:streamId">{() => <ProtectedRoute component={LivePage} path="/live/:streamId" />}</Route>

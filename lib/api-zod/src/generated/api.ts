@@ -1936,7 +1936,8 @@ export const GetBoasVindasResponse = zod.object({
   "midiaUrl": zod.string().nullable(),
   "ativa": zod.boolean(),
   "desativadaPorAdmin": zod.boolean(),
-  "atualizadoEm": zod.string().nullable()
+  "atualizadoEm": zod.string().nullable(),
+  "plataformaAtiva": zod.boolean().describe('Interruptor geral da plataforma (platform_settings.boas_vindas_ativas); desligado = guarda-se mas ainda não se envia')
 })
 
 
@@ -1957,7 +1958,8 @@ export const SaveBoasVindasResponse = zod.object({
   "midiaUrl": zod.string().nullable(),
   "ativa": zod.boolean(),
   "desativadaPorAdmin": zod.boolean(),
-  "atualizadoEm": zod.string().nullable()
+  "atualizadoEm": zod.string().nullable(),
+  "plataformaAtiva": zod.boolean().describe('Interruptor geral da plataforma (platform_settings.boas_vindas_ativas); desligado = guarda-se mas ainda não se envia')
 })
 
 
@@ -1983,7 +1985,8 @@ export const SetBoasVindasAtivaResponse = zod.object({
   "midiaUrl": zod.string().nullable(),
   "ativa": zod.boolean(),
   "desativadaPorAdmin": zod.boolean(),
-  "atualizadoEm": zod.string().nullable()
+  "atualizadoEm": zod.string().nullable(),
+  "plataformaAtiva": zod.boolean().describe('Interruptor geral da plataforma (platform_settings.boas_vindas_ativas); desligado = guarda-se mas ainda não se envia')
 })
 
 
