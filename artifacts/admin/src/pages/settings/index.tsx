@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Save } from 'lucide-react';
+import { ContaOficialCard } from './ContaOficialCard';
 
 
 
@@ -145,6 +146,8 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        <ContaOficialCard />
 
         <div className="flex justify-end">
           <Button

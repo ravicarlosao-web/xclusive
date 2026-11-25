@@ -27,7 +27,7 @@ DELETE FROM platform_settings WHERE key = 'boas_vindas_ativas';
 - **Uma vez por par, para sempre:** `boas_vindas_envios` tem restrição única (criadora, seguidor). Deixar de seguir e voltar a seguir não reenvia.
 - **O seguir nunca falha nem demora por causa disto:** o pedido só grava uma linha de fila (e só com o interruptor ligado); o envio faz-se fora do pedido.
 - **Não recebe:** conta inativa (suspensa, encerrada, em fecho, banida) da criadora ou do seguidor; bloqueio em qualquer sentido; seguidor sem data de nascimento válida com 18 anos ou mais, sem linha de aceitação
-  com `maioridade_confirmada = true` ou sem email verificado; mensagem desativada (pela criadora ou por um admin); contas admin; a própria criadora; quem já não segue; a regra «quem pode escrever» do destinatário.
+  com `maioridade_confirmada = true`; mensagem desativada (pela criadora ou por um admin); contas admin; a própria criadora; quem já não segue; a regra «quem pode escrever» do destinatário.
   Cada caso fica registado em `boas_vindas_envios.estado/motivo` (códigos, sem dados pessoais).
 - **Mensagem automática:** é uma linha normal em `messages` (autor = criadora). Sabe-se que é automática pela ligação `boas_vindas_envios.message_id`. A tabela `messages` e o enum de tipos NÃO foram alterados.
 - **Notificação:** a normal de nova mensagem: a conversa aparece na lista do seguidor e o contador de não lidas sobe 1 (as mensagens privadas não têm tempo real; o cliente consulta de 30 em 30 s).
@@ -52,22 +52,20 @@ A criadora não a reativa (nem apagando e criando de novo). Não há reativaçã
 As duas tabelas referenciam `users` com `ON DELETE CASCADE`: os scripts `apagar-contas-teste` e `zerar-financeiro` não precisam de alteração.
 
 ## Contagem (SÓ LEITURA) das contas que ficam de fora — para correres no Neon
-Antes de ligar o interruptor, vê quantas contas ativas não cumpririam o requisito (idade ≥ 18 com data válida, aceitação com maioridade confirmada, email verificado):
+Antes de ligar o interruptor, vê quantas contas ativas não cumpririam o requisito (idade ≥ 18 com data válida e aceitação com maioridade confirmada; o email por verificar NÃO impede o envio):
 
 ```sql
 WITH c AS (
   SELECT u.id,
     COALESCE(u.data_nascimento ~ '^\d{4}-\d{2}-\d{2}$' AND u.data_nascimento <= to_char(current_date - interval '18 years', 'YYYY-MM-DD'), false) AS idade_ok,
-    EXISTS (SELECT 1 FROM user_legal_acceptances a WHERE a.user_id = u.id AND a.maioridade_confirmada = true) AS aceitou,
-    (u.email_verificado_em IS NOT NULL) AS email_ok
+    EXISTS (SELECT 1 FROM user_legal_acceptances a WHERE a.user_id = u.id AND a.maioridade_confirmada = true) AS aceitou
   FROM users u WHERE u.ativo AND u.role NOT IN ('admin', 'superadmin')
 )
 SELECT count(*)                                              AS contas_ativas_de_utilizador,
-       count(*) FILTER (WHERE idade_ok AND aceitou AND email_ok)     AS elegiveis,
-       count(*) FILTER (WHERE NOT (idade_ok AND aceitou AND email_ok)) AS ficam_de_fora,
+       count(*) FILTER (WHERE idade_ok AND aceitou)     AS elegiveis,
+       count(*) FILTER (WHERE NOT (idade_ok AND aceitou)) AS ficam_de_fora,
        count(*) FILTER (WHERE NOT idade_ok)                  AS sem_data_valida_ou_menores,
-       count(*) FILTER (WHERE NOT aceitou)                   AS sem_aceitacao_com_maioridade,
-       count(*) FILTER (WHERE NOT email_ok)                  AS email_por_verificar
+       count(*) FILTER (WHERE NOT aceitou)                   AS sem_aceitacao_com_maioridade
 FROM c;
 ```
 (A coluna `data_nascimento` é texto: a query compara-a como texto `AAAA-MM-DD`; uma data impossível como `2000-02-31` passa nesta contagem mas o servidor recusa-a.)

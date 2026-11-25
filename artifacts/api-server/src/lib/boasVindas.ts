@@ -211,7 +211,7 @@ async function avaliar(tx: Tx, e: Envio, agora: Date): Promise<Veredicto> {
 
   const r = await tx.execute(sql`
     SELECT c.ativo AS c_ativo, c.tipo_conta AS c_tipo, c.verificado AS c_verif, c.role AS c_role,
-           f.ativo AS f_ativo, f.role AS f_role, f.data_nascimento AS f_nasc, (f.email_verificado_em IS NOT NULL) AS f_email,
+           f.ativo AS f_ativo, f.role AS f_role, f.data_nascimento AS f_nasc,
            EXISTS (SELECT 1 FROM follows WHERE seguidor_id = f.id AND seguido_id = c.id) AS segue,
            EXISTS (SELECT 1 FROM user_legal_acceptances a WHERE a.user_id = f.id AND a.maioridade_confirmada = true) AS aceitou,
            (g.criadora_id IS NOT NULL) AS tem_cfg, COALESCE(g.ativa, false) AS cfg_ativa, (g.desativada_admin_em IS NOT NULL) AS cfg_admin
@@ -230,7 +230,6 @@ async function avaliar(tx: Tx, e: Envio, agora: Date): Promise<Veredicto> {
   if (!x.segue) return { acao: "descartar", motivo: "deixou_de_seguir" };
   const idade = idadeEmAnos(typeof x.f_nasc === "string" ? x.f_nasc : null);
   if (idade === null || idade < IDADE_MINIMA_VER || !x.aceitou) return { acao: "ignorar", motivo: "sem_requisito_idade" };
-  if (!x.f_email) return { acao: "ignorar", motivo: "email_nao_verificado" };
   const perm = await permissaoMensagem(e.criadora_id, { destinatarioId: e.seguidor_id }, tx);
   if (perm.estado === "fui_bloqueado" || perm.estado === "bloqueaste") return { acao: "ignorar", motivo: "bloqueio" };
   if (perm.estado === "regra") return { acao: "ignorar", motivo: "regra_do_destinatario" };

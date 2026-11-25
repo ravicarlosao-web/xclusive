@@ -170,6 +170,10 @@ export const adminApi = {
   updateSettings: (data: any) =>
     adminFetch('/admin/settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  getContaOficial: () => adminFetch('/admin/conta-oficial'),
+  updateContaOficial: (data: { ativo?: boolean; username?: string }) =>
+    adminFetch('/admin/conta-oficial', { method: 'PUT', body: JSON.stringify(data) }),
+
   getCommissionOverview: () => adminFetch('/admin/users/commission-overview'),
   setCreatorCommission: (id: number, comissaoPersonalizada: number | null) =>
     adminFetch('/admin/users/' + id + '/commission', {
