@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { AlertCircle, CheckCircle2, Unlock, Wallet } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Unlock } from 'lucide-react';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 interface UnlockPostModalProps {
   open: boolean;
   onClose: () => void;
@@ -75,7 +76,7 @@ export function UnlockPostModal({ open, onClose, postId, creatorUsername, creato
 
             {/* Balance check */}
             <div className={`flex items-center gap-2.5 rounded-xl p-3 mb-5 text-sm ${hasSaldo ? 'bg-secondary/50 border border-border' : 'bg-destructive/10 border border-destructive/30'}`}>
-              <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
+              <MoneyIcon className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
               <div>
                 <span className="text-muted-foreground">O teu saldo: </span>
                 <span className={`font-bold ${hasSaldo ? 'text-foreground' : 'text-destructive'}`}>

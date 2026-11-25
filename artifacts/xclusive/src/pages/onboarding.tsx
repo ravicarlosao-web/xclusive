@@ -10,6 +10,7 @@ import { ProfileUpdateTipoConta } from '@workspace/api-client-react';
 import { Check, Camera, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 const CATEGORIES = ['Moda', 'Fitness', 'Arte', 'Música', 'Viagens', 'Culinária', 'Tecnologia', 'Comédia', 'Lifestyle'];
 
 export default function Onboarding() {
@@ -221,7 +222,7 @@ function Step5Suggestions({ onComplete }: { onComplete: () => void }) {
                     <div className="font-semibold text-sm flex items-center gap-1">
                       {user.username}
                       {user.verificado && (
-                        <svg className="w-3 h-3 text-primary fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                        <VerifiedIcon className="w-3 h-3 text-primary fill-current" />
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground truncate w-[120px] sm:w-[200px]">{user.nomeExibicao}</div>

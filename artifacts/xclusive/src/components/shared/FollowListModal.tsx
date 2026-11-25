@@ -6,6 +6,7 @@ import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 /** Lista estática usada em mock mode (sem DB real). */
 const MOCK_FOLLOW_USERS = [
   { id: 2, username: 'ana_kriativa', nomeExibicao: 'Ana Kriativa', avatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=ana&backgroundColor=1a1a2e&radius=50', verificado: true },
@@ -90,9 +91,7 @@ export function FollowListModal({ open, onClose, username, type, total }: Follow
                       <span className="font-bold text-sm flex items-center gap-1 truncate">
                         {u.nomeExibicao || u.username}
                         {u.verificado && (
-                          <svg className="w-3.5 h-3.5 text-primary fill-current shrink-0" viewBox="0 0 24 24">
-                            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/>
-                          </svg>
+                          <VerifiedIcon className="w-3.5 h-3.5 text-primary fill-current shrink-0" />
                         )}
                       </span>
                       <span className="text-xs text-muted-foreground truncate">@{u.username}</span>

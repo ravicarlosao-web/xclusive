@@ -6,10 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { CheckCircle2, XCircle, Wallet, Clock, TrendingUp, Ban, FileText, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, TrendingUp, Ban, FileText, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { adminApi } from '@/lib/api';
 
+import { MoneyIcon } from '@/components/icons/MoneyIcon';
 interface TopUpRequest {
   id: string;
   userId: number;
@@ -360,7 +361,7 @@ export default function TopUps() {
       {/* Como funciona */}
       {pending.length > 0 && (
         <div className="flex items-start gap-3 bg-yellow-500/8 border border-yellow-500/20 rounded-xl p-4">
-          <Wallet className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
+          <MoneyIcon className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-yellow-300 mb-1">
               {pending.length} pedido{pending.length > 1 ? 's' : ''} aguarda{pending.length === 1 ? '' : 'm'} verificação

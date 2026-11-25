@@ -10,18 +10,15 @@ import { Progress } from '@/components/ui/progress';
 import { CameraCapture } from '@/components/shared/CameraCapture';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Shield, ChevronLeft, ChevronRight, CheckCircle2, Star,
-  BarChart3, BadgeCheck, Clock, AlertTriangle, Camera,
-  FileText, ScanFace, ClipboardList, Sparkles, X,
-  Eye, Loader2, RefreshCw, Info, Wallet, Smile
-} from 'lucide-react';
+import { Shield, ChevronLeft, ChevronRight, CheckCircle2, Star, BarChart3, Clock, AlertTriangle, Camera, FileText, ScanFace, ClipboardList, Sparkles, X, Eye, Loader2, RefreshCw, Info, Smile } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchLegalDocs } from './legal/useLegalDocs';
 import { VerificarEmail } from '@/components/settings/VerificarEmail';
 import { useEmailVerificado } from '@/hooks/useEmailVerificado';
 import { lerLocal } from '@/lib/armazenamento';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'intro' | 'personal' | 'document' | 'selfie' | 'liveness' | 'review' | 'success';
 
@@ -347,9 +344,9 @@ export default function KYCPage() {
             {/* Benefits */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { icon: Wallet, title: 'Monetiza', sub: 'Conteúdo exclusivo' },
+                { icon: MoneyIcon, title: 'Monetiza', sub: 'Conteúdo exclusivo' },
                 { icon: BarChart3, title: 'Analytics', sub: 'Ganhos em tempo real' },
-                { icon: BadgeCheck, title: 'Verificado', sub: 'Selo de criador' },
+                { icon: VerifiedIcon, title: 'Verificado', sub: 'Selo de criador' },
               ].map(b => (
                 <div key={b.title} className="bg-secondary/50 border border-border rounded-2xl p-3 text-center space-y-1">
                   <b.icon className="w-6 h-6 mx-auto text-primary" />
@@ -840,7 +837,7 @@ export default function KYCPage() {
                 onClick={() => setLocation(user ? `/perfil/${user.username}` : '/home')}
                 className="w-full h-13 font-bold bg-primary hover:bg-primary/90 text-white rounded-2xl gap-2"
               >
-                <BadgeCheck className="w-5 h-5" /> Ver o meu perfil de criador
+                <VerifiedIcon className="w-5 h-5" /> Ver o meu perfil de criador
               </Button>
               <Button
                 onClick={() => setLocation('/definicoes/monetizacao')}

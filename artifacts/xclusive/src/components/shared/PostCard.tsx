@@ -1,6 +1,6 @@
 import { Post, useLikePost, useUnlikePost, useSavePost, useUnsavePost, useDeletePost, useUpdatePostMais18 } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Forward, Bookmark, Flag, Coins, Play, Trash2, MoreHorizontal, Link2 } from 'lucide-react';
+import { Heart, MessageCircle, Forward, Bookmark, Flag, Play, Trash2, MoreHorizontal, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
@@ -20,6 +20,8 @@ import { haTempo } from '@/lib/tempoRelativo';
 import { EnqueteCorpo } from './EnqueteCorpo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 interface PostCardProps {
   post: Post;
   onLike?: (postId: number) => void;
@@ -283,7 +285,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
               <span className={cn('font-bold hover:underline flex items-center gap-1.5', noFeed ? 'text-sm' : 'text-[15px]')}>
                 {post.autor.username}
                 {post.autor.verificado && (
-                  <svg className="w-3.5 h-3.5 text-primary fill-current" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                  <VerifiedIcon className="w-3.5 h-3.5 text-primary fill-current" role="img" aria-label="Verificado" />
                 )}
               </span>
               <span className={cn('text-muted-foreground', noFeed ? 'text-xs' : 'text-sm')} data-testid="post-tempo">
@@ -497,7 +499,7 @@ export function PostCard({ post, onLike, onUnlike, onSave, onUnsave, variante = 
                   className="group flex items-center gap-1"
                   title="Dar gorjeta"
                 >
-                  <Coins className={cn(
+                  <MoneyIcon className={cn(
                     "w-7 h-7 transition-all group-active:scale-90",
                     gorjetasCount > 0
                       ? "text-yellow-600 dark:text-yellow-500 fill-yellow-500/20"

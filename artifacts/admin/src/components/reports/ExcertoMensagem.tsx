@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
-import { AlertTriangle, Coins, Flag, ImageOff, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Flag, ImageOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
+import { MoneyIcon } from '@/components/icons/MoneyIcon';
 /** Os URLs assinados das cópias de prova duram 5 minutos (PROVA_URL_TTL_SECONDS no servidor). */
 const VALIDADE_URL_MS = 5 * 60 * 1000;
 
@@ -88,7 +89,7 @@ export function ExcertoMensagem({ excerto, denunciante, denunciado, sha256, capt
 
                 {m.tipo === 'gorjeta' && m.gorjeta && (
                   <div className="mb-1 flex items-center gap-2 rounded border border-border bg-muted p-2" data-testid="excerto-gorjeta">
-                    <Coins className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    <MoneyIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     <p className="min-w-0 text-xs">Gorjeta de <strong>{kz(m.gorjeta.valor)}</strong> · comissão {kz(m.gorjeta.comissao)} · compra #{m.gorjeta.purchaseId ?? '—'}</p>
                   </div>
                 )}

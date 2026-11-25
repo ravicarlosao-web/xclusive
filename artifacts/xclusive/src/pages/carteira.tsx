@@ -2,15 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth, MockTransaction } from '@/contexts/AuthContext';
 import { TopUpModal } from '@/components/wallet/TopUpModal';
-import {
-  Wallet, Plus, ArrowUpRight, ArrowDownLeft, Unlock,
-  Sparkles, Coins, TrendingDown, Clock, RefreshCw, ChevronRight,
-} from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownLeft, Unlock, Sparkles, TrendingDown, Clock, RefreshCw, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { lerLocal } from '@/lib/armazenamento';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface ApiTransaction {
@@ -39,7 +37,7 @@ type DisplayTx = {
 
 const TX_META: Record<string, { icon: React.FC<any>; color: string; label: string }> = {
   carregamento: { icon: ArrowDownLeft, color: 'text-green-700 dark:text-green-400',  label: 'Carregamento'  },
-  gorjeta:      { icon: Coins,         color: 'text-foreground',    label: 'Gorjeta'        },
+  gorjeta:      { icon: MoneyIcon,         color: 'text-foreground',    label: 'Gorjeta'        },
   ppv:          { icon: Unlock,        color: 'text-foreground',     label: 'Desbloqueio'   },
   subscricao:   { icon: Sparkles,      color: 'text-primary',    label: 'Subscrição'    },
   levantamento: { icon: TrendingDown,  color: 'text-muted-foreground', label: 'Levantamento'  },
@@ -71,7 +69,7 @@ function useWalletTransactions(enabled: boolean) {
 // ─── Componente de linha de transação ─────────────────────────────────────────
 
 function TxRow({ tx }: { tx: DisplayTx }) {
-  const meta = TX_META[tx.tipo] ?? { icon: Coins, color: 'text-foreground', label: tx.tipo };
+  const meta = TX_META[tx.tipo] ?? { icon: MoneyIcon, color: 'text-foreground', label: tx.tipo };
   const Icon = meta.icon;
 
   return (
@@ -171,7 +169,7 @@ export default function Carteira() {
       <Card className="mb-4 bg-card border-border" data-testid="cartao-saldo">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Wallet className="w-4 h-4 text-primary" />
+            <MoneyIcon className="w-4 h-4 text-primary" />
             Saldo disponível
           </CardTitle>
         </CardHeader>
@@ -256,7 +254,7 @@ export default function Carteira() {
             </div>
           ) : displayTxs.length === 0 ? (
             <div className="border-t border-border p-10 flex flex-col items-center text-center text-muted-foreground">
-              <Wallet className="w-10 h-10 mb-3 opacity-30" />
+              <MoneyIcon className="w-10 h-10 mb-3 opacity-30" />
               <p className="font-medium mb-1">Sem transações ainda</p>
               <p className="text-sm mb-4">Carrega a tua carteira para começar a usar a plataforma.</p>
               <Button

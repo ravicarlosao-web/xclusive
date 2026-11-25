@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Coins, Wallet, CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LIMITES_GORJETA, kzLimite, textoLimitePublicacao } from '@/lib/limitesGorjeta';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
 const novaChave = (): string => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`);
@@ -122,21 +124,21 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     <AvatarFallback className="text-xl font-bold">{(creator.nomeExibicao || creator.username)[0].toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gradient-to-br from-yellow-500 dark:from-yellow-400 to-orange-600 dark:to-orange-500 rounded-full flex items-center justify-center shadow-md">
-                    <Coins className="w-4 h-4 text-white" />
+                    <MoneyIcon className="w-4 h-4 text-white" />
                   </div>
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-base leading-tight">
                     {creator.nomeExibicao || creator.username}
                     {creator.verificado && (
-                      <svg className="inline w-4 h-4 text-primary fill-current ml-1 -mt-0.5" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                      <VerifiedIcon className="inline w-4 h-4 text-primary fill-current ml-1 -mt-0.5" />
                     )}
                   </p>
                   <p className="text-sm text-muted-foreground">@{creator.username}</p>
                 </div>
                 {saldo !== null && (
                   <div className="flex items-center gap-1.5 bg-secondary border border-border rounded-full px-3 py-1">
-                    <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+                    <MoneyIcon className="w-3.5 h-3.5 text-muted-foreground" />
                     <span className="text-xs font-semibold">{saldo.toLocaleString('pt-PT')} Kz</span>
                   </div>
                 )}
@@ -198,7 +200,7 @@ export function TipModal({ open, onClose, creator, postId, onTipSent }: TipModal
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
-                      <Coins className="w-5 h-5 mr-2" />
+                      <MoneyIcon className="w-5 h-5 mr-2" />
                       {effectiveAmount ? `Dar ${effectiveAmount.toLocaleString('pt-PT')} Kz` : 'Dar gorjeta'}
                     </>
                   )}

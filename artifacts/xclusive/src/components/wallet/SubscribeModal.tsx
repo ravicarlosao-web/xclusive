@@ -7,8 +7,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   SubscricaoError, ehSessaoMock, fetchPlanoCriador, formatarData, kz, type PlanoCriador,
 } from '@/lib/subscricoes';
-import { AlertCircle, CalendarDays, CheckCircle2, Loader2, Sparkles, Wallet } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 interface SubscribeModalProps {
   open: boolean;
   onClose: () => void;
@@ -129,7 +131,7 @@ export function SubscribeModal({
                 </Avatar>
                 {creatorVerificado && (
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                    <svg className="w-3 h-3 text-white fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                    <VerifiedIcon className="w-3 h-3 text-white fill-current" />
                   </div>
                 )}
               </div>
@@ -173,7 +175,7 @@ export function SubscribeModal({
 
             {!gratuita && (
               <div className={`flex items-center gap-2.5 rounded-xl p-3 mb-5 mt-3 text-sm ${hasSaldo ? 'bg-secondary/50 border border-border' : 'bg-destructive/10 border border-destructive/30'}`}>
-                <Wallet className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
+                <MoneyIcon className={`w-4 h-4 shrink-0 ${hasSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
                 <div>
                   <span className="text-muted-foreground">O teu saldo: </span>
                   <span className={`font-bold ${hasSaldo ? 'text-foreground' : 'text-destructive'}`}>

@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable, Column } from '@/components/tables/DataTable';
 import { StatusBadge } from '@/components/badges/StatusBadge';
-import { Download, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Download, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { format } from 'date-fns';
 
+import { MoneyIcon } from '@/components/icons/MoneyIcon';
 export default function Finance() {
   const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ['finance', 'kpis'],
@@ -95,7 +96,7 @@ export default function Finance() {
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-primary">Receita da Plataforma (Taxas)</CardTitle>
-            <Wallet className="h-4 w-4 text-primary" />
+            <MoneyIcon className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-primary">

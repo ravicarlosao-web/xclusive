@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSendMessageTip, getGetMessagesQueryKey } from '@workspace/api-client-react';
-import { Coins, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { TopUpModal } from '@/components/wallet/TopUpModal';
 import { cn } from '@/lib/utils';
 import { LIMITES_GORJETA, textoLimitesMensagem } from '@/lib/limitesGorjeta';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 /** Limites do backend (lib/gorjetaMensagem.ts): ver também lib/limitesGorjeta.ts. */
 const MIN_KZ = LIMITES_GORJETA.mensagem.min;
 const MAX_KZ = LIMITES_GORJETA.mensagem.max;
@@ -110,7 +111,7 @@ export function GorjetaDialog({ aberto, onFechar, convId, criador }: {
       <Dialog open={aberto} onOpenChange={(o) => { if (!o && !aEnviar) onFechar(); }}>
         <DialogContent className="max-w-sm gap-4" data-testid="gorjeta-dialogo">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Coins className="h-5 w-5 text-primary" aria-hidden="true" /> Enviar gorjeta a @{criador.username}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><MoneyIcon className="h-5 w-5 text-primary" aria-hidden="true" /> Enviar gorjeta a @{criador.username}</DialogTitle>
             <DialogDescription>A gorjeta fica na conversa. O valor é debitado da tua carteira.</DialogDescription>
           </DialogHeader>
 

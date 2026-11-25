@@ -3,10 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Wallet, Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X, Smartphone, CreditCard, Receipt, Building2 } from 'lucide-react';
+import { Copy, Check, AlertCircle, CheckCircle2, ChevronRight, FileText, Upload, X, Smartphone, CreditCard, Receipt, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { lerLocal } from '@/lib/armazenamento';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 interface TopUpModalProps {
   open: boolean;
   onClose: () => void;
@@ -288,7 +289,7 @@ export function TopUpModal({ open, onClose }: TopUpModalProps) {
             <DialogHeader className="mb-6">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-primary" />
+                  <MoneyIcon className="w-5 h-5 text-primary" />
                 </div>
                 <DialogTitle className="text-xl font-bold">Carregar Carteira</DialogTitle>
               </div>

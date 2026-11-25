@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } fr
 import { Link, useLocation } from 'wouter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { ArrowDown, ArrowLeft, Ban, Coins, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Ban, Info, Image as ImageIcon, Heart, Loader2, MoreVertical, UserRoundCheck, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BloqueioDialog, textoErroServidor } from './bloqueio';
 import { GorjetaCartao } from './GorjetaCartao';
@@ -30,6 +30,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 function formatMsgTime(dateStr: string) {
   try {
     return format(new Date(dateStr), 'HH:mm', { locale: pt });
@@ -597,7 +598,7 @@ export function ConversaPainel({ convId }: { convId: number }) {
           {mostraGorjeta && (
             <button type="button" aria-label="Enviar gorjeta" data-testid="conversa-gorjeta" onClick={() => setGorjetaAberta(true)} disabled={isSending}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Coins className="h-5 w-5" aria-hidden="true" />
+              <MoneyIcon className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
           <button

@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Star, DollarSign, Activity, AlertCircle, ShieldAlert, CreditCard, Percent } from 'lucide-react';
+import { Users, Star, Activity, AlertCircle, ShieldAlert, CreditCard, Percent } from 'lucide-react';
 import { LineChart } from '@/components/charts/LineChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
 
+import { MoneyIcon } from '@/components/icons/MoneyIcon';
 export default function Dashboard() {
   const [, setLocation] = useLocation();
 
@@ -40,7 +41,7 @@ export default function Dashboard() {
   const kpiCards = [
     { title: 'Total Utilizadores', value: kpis?.totalUtilizadores, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { title: 'Criadores Ativos', value: kpis?.totalCriadores, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-    { title: 'Receita Total', value: `${kpis?.receitaTotal?.toLocaleString()} Kz`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { title: 'Receita Total', value: `${kpis?.receitaTotal?.toLocaleString()} Kz`, icon: MoneyIcon, color: 'text-green-500', bg: 'bg-green-500/10' },
     { title: 'Posts Hoje', value: kpis?.postsHoje, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-500/10' },
     { title: 'Novos Hoje', value: kpis?.novosHoje, icon: ShieldAlert, color: 'text-orange-500', bg: 'bg-orange-500/10' },
     { title: 'Denúncias', value: kpis?.denunciasPendentes, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', alert: (kpis?.denunciasPendentes || 0) > 5 },

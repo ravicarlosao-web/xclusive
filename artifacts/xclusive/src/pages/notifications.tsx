@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { Heart, MessageCircle, Star, DollarSign, UserPlus, AtSign, Bell, CheckCheck, Coins } from 'lucide-react';
+import { Heart, MessageCircle, Star, UserPlus, AtSign, Bell, CheckCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { ColunaDescobrir } from '@/components/feed/ColunaDescobrir';
@@ -14,6 +14,7 @@ import { pt } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetNotificationsQueryKey } from '@workspace/api-client-react';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 type NotifTipo = 'novo_seguidor' | 'like_post' | 'comentario' | 'nova_subscricao' | 'pagamento_recebido' | 'mencao' | 'sistema' | 'gorjeta_recebida';
 
 type FilterType = 'tudo' | 'mencoes';
@@ -28,9 +29,9 @@ function renderIcon(tipo: NotifTipo) {
     case 'comentario':         return <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-500 fill-green-600 dark:fill-green-500" />;
     case 'mencao':             return <AtSign className="w-4 h-4 text-sky-600 dark:text-sky-400" />;
     case 'nova_subscricao':    return <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500 fill-yellow-600 dark:fill-yellow-500" />;
-    case 'pagamento_recebido': return <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />;
+    case 'pagamento_recebido': return <MoneyIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />;
     case 'sistema':            return <Bell className="w-4 h-4 text-purple-500 fill-purple-500" />;
-    case 'gorjeta_recebida':   return <Coins className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />;
+    case 'gorjeta_recebida':   return <MoneyIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />;
     default:                   return null;
   }
 }

@@ -4,6 +4,7 @@ import { Radio } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 /** Botão redondo só com ícone (alvo de toque de 44 px) e nome acessível. */
 export function BotaoRedondo({ rotulo, children, onClick, href, ativo, destaque, desativado, testid }: {
   rotulo: string; children: ReactNode; onClick?: () => void; href?: string; ativo?: boolean; destaque?: 'primario' | 'live'; desativado?: boolean; testid?: string;
@@ -34,7 +35,7 @@ export function PerfilIdentidade({ nome, username, avatarUrl, verificado, bio, l
 
       <h1 className="mt-3 flex items-center gap-2 text-xl font-bold sm:text-2xl" data-testid="perfil-nome">
         <span className="min-w-0 truncate">{nome}</span>
-        {verificado && <svg className="h-5 w-5 shrink-0 fill-current text-primary" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z" /></svg>}
+        {verificado && <VerifiedIcon className="h-5 w-5 shrink-0 fill-current text-primary" role="img" aria-label="Verificado" />}
         {aoVivo && <span className="inline-flex shrink-0 animate-pulse items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white"><Radio className="h-3 w-3" aria-hidden="true" />AO VIVO</span>}
       </h1>
       <p className="font-medium text-muted-foreground">@{username}</p>

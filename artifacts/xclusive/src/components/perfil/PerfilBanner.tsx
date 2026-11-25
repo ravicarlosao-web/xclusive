@@ -1,8 +1,9 @@
 import { ArrowLeft, Image as ImagemIcone, Users } from 'lucide-react';
 import { PerfilMenu } from './PerfilMenu';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 const Verificado = () => (
-  <svg className="h-5 w-5 shrink-0 fill-current text-white" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z" /></svg>
+  <VerifiedIcon className="h-5 w-5 shrink-0 fill-current text-white" aria-hidden="true" />
 );
 
 export interface EstatisticasPerfil {
