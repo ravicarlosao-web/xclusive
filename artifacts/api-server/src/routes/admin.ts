@@ -78,6 +78,8 @@ import { enviarEmail, lerConfigEmail, type MotivoFalha } from "../lib/email.js";
 import { suspenderConta, desligarSockets, MSG_CONTA_SUSPENSA, CODIGO_CONTA_SUSPENSA } from "../lib/suspensao.js";
 import { marcarMais18PorAdmin, anularInfracao, contarInfracoesAtivas, efeitosAposCommit, isTipoMais18 } from "../lib/infracoesMais18.js";
 import { REGISTOS_KEY, registosAbertosDe } from "../lib/registos.js";
+import { lerSeguirOficial, SEGUIR_OFICIAL } from "../lib/seguirOficial.js";
+import { lerConfigBoasVindas, boasVindasLigadas } from "../lib/boasVindas.js";
 import { COMMISSION_KEY, lerTaxaGlobal, taxaValida, taxaComDuasCasas } from "../lib/commission.js";
 
 // ── Audit log helper ─────────────────────────────────────────────────────────
@@ -719,6 +721,7 @@ router.get("/admin/dashboard/activity-feed", async (req, res) => {
 function formatAuditMessage(action: string, admin: string, targetType: string | null, targetId: number | null, details: any): string {
   const target = targetId ? ` #${targetId}` : "";
   switch (action) {
+    case "conta_oficial_update": return `${admin} alterou a conta oficial (seguir automático: ${details?.anterior?.ativo ? "ligado" : "desligado"} → ${details?.novo?.ativo ? "ligado" : "desligado"}; conta: ${details?.anterior?.username ?? "—"} → ${details?.novo?.username ?? "—"})`;
     case "registos_update": return `${admin} ${details?.novo ? "abriu" : "fechou"} os registos de novas contas`;
     case "user_suspend": return `${admin} suspendeu utilizador${target}`;
     case "user_reactivate": return `${admin} reactivou utilizador${target}`;
@@ -2975,6 +2978,72 @@ router.patch("/admin/settings", requireAdmin, async (req: AdminRequest, res): Pr
     res.json(after);
   } catch (err) {
     (req as any).log?.error({ err }, "Erro ao actualizar definições");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// CONTA OFICIAL (seguir automático no registo) — só superadmin
+// ────────────────────────────────────────────────────────────────────────────
+
+const USERNAME_OFICIAL_RE = /^[a-zA-Z0-9_]{3,50}$/;
+
+async function estadoContaOficial(username: string) {
+  const [u] = await db.select({ id: usersTable.id, ativo: usersTable.ativo, role: usersTable.role, tipoConta: usersTable.tipoConta, verificado: usersTable.verificado, username: usersTable.username })
+    .from(usersTable).where(eq(usersTable.username, username.toLowerCase())).limit(1);
+  if (!u) return { existe: false as const, ativa: false, valida: false, motivo: "A conta não existe." };
+  const admin = u.role === "admin" || u.role === "superadmin";
+  const valida = u.ativo && !admin;
+  const motivo = !u.ativo ? "A conta está inativa (encerrada, banida ou suspensa)." : admin ? "A conta é de administração e não pode ser seguida." : null;
+  const bv = await lerConfigBoasVindas(u.id);
+  return {
+    existe: true as const, ativa: u.ativo, valida, motivo, username: u.username, tipoConta: u.tipoConta, verificado: u.verificado,
+    boasVindas: { podeConfigurar: u.tipoConta === "criador" && u.verificado, configurada: bv.configurada, ativa: bv.ativa, desativadaPorAdmin: bv.desativadaPorAdmin, temImagem: bv.midiaTipo === "imagem" },
+  };
+}
+
+router.get("/admin/conta-oficial", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode ver esta definição." }); return; }
+  try {
+    const cfg = await lerSeguirOficial();
+    res.json({ ativo: cfg.ativo, username: cfg.username, conta: await estadoContaOficial(cfg.username), boasVindasPlataformaAtiva: await boasVindasLigadas() });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro ao obter a conta oficial");
+    res.status(500).json({ error: "Erro interno." });
+  }
+});
+
+router.put("/admin/conta-oficial", requireAdmin, async (req: AdminRequest, res): Promise<void> => {
+  if (req.adminRole !== "superadmin") { res.status(403).json({ error: "Apenas o superadmin pode alterar a conta oficial." }); return; }
+  try {
+    const b = (req.body ?? {}) as { ativo?: unknown; username?: unknown };
+    if (b.ativo === undefined && b.username === undefined) { res.status(400).json({ error: "Nada para alterar." }); return; }
+    if (b.ativo !== undefined && typeof b.ativo !== "boolean") { res.status(400).json({ error: "«ativo» tem de ser verdadeiro ou falso." }); return; }
+    if (b.username !== undefined && (typeof b.username !== "string" || !USERNAME_OFICIAL_RE.test(b.username.trim()))) { res.status(400).json({ error: "O username só pode ter letras, números e _ (3 a 50 caracteres)." }); return; }
+    const antes0 = await lerSeguirOficial();
+    const novoUsername = b.username !== undefined ? (b.username as string).trim().toLowerCase() : antes0.username;
+    const novoAtivo = b.ativo !== undefined ? (b.ativo as boolean) : antes0.ativo;
+    // A conta tem de existir, estar ativa e não ser de administração quando o seguir automático fica ligado ou quando se muda a conta.
+    if (novoAtivo || b.username !== undefined) {
+      const est = await estadoContaOficial(novoUsername);
+      if (!est.valida) { res.status(400).json({ error: est.motivo ?? "A conta oficial não é válida.", codigo: "conta_oficial_invalida" }); return; }
+    }
+    await db.transaction(async (tx) => {
+      const ler = async (k: string) => ((await tx.select({ value: platformSettingsTable.value }).from(platformSettingsTable).where(eq(platformSettingsTable.key, k)).for("update").limit(1))[0]?.value as { value?: unknown } | undefined)?.value;
+      const aAtivo = (await ler(SEGUIR_OFICIAL.CHAVE_ATIVO)) === true;
+      const aNome = await ler(SEGUIR_OFICIAL.CHAVE_USERNAME);
+      const anterior = { ativo: aAtivo, username: typeof aNome === "string" && aNome.trim() ? aNome.trim().toLowerCase() : SEGUIR_OFICIAL.USERNAME_POR_DEFEITO };
+      for (const [key, value] of [[SEGUIR_OFICIAL.CHAVE_ATIVO, novoAtivo], [SEGUIR_OFICIAL.CHAVE_USERNAME, novoUsername]] as const) {
+        await tx.insert(platformSettingsTable).values({ key, value: { value } as any, updatedBy: req.adminId ?? undefined })
+          .onConflictDoUpdate({ target: platformSettingsTable.key, set: { value: { value } as any, updatedBy: req.adminId ?? undefined, updatedAt: new Date() } });
+      }
+      if (anterior.ativo !== novoAtivo || anterior.username !== novoUsername) {
+        await tx.insert(auditLogTable).values({ adminId: req.adminId!, action: "conta_oficial_update", targetType: "platform", targetId: 0, details: { anterior, novo: { ativo: novoAtivo, username: novoUsername } }, ipAddress: req.ip ?? null });
+      }
+    });
+    res.json({ ativo: novoAtivo, username: novoUsername, conta: await estadoContaOficial(novoUsername), boasVindasPlataformaAtiva: await boasVindasLigadas() });
+  } catch (err) {
+    (req as any).log?.error(erroSeguro(err), "Erro ao atualizar a conta oficial");
     res.status(500).json({ error: "Erro interno." });
   }
 });

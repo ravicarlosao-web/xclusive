@@ -1,3 +1,4 @@
+import { agendarSeguirOficial } from "../lib/seguirOficial";
 import { linkSeguro } from "../lib/linkSeguro";
 import { Router, type Response } from "express";
 import { db, usersTable, followsTable, revokedTokensTable, userLegalAcceptancesTable } from "@workspace/db";
@@ -292,6 +293,7 @@ router.post("/auth/register", validate(registerSchema), async (req, res): Promis
       (req.ip ?? "").slice(0, 45) || undefined, // req.ip respeita "trust proxy": não aceita o X-Forwarded-For forjado
     );
 
+    agendarSeguirOficial(user.id);   // fora do pedido: nunca espera nem falha o registo
     res.status(201).json({
       token: accessToken,
       user: formatUser(user, 0, 0, 0),

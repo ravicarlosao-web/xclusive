@@ -20,6 +20,7 @@
  * dentro da transação, email banido ou já usado, username, idade, aceite); (5) uma segunda utilização falha nas restrições UNIQUE da base de dados (email em users e google_sub), por isso o
  * mesmo bilhete nunca cria duas contas.
  */
+import { agendarSeguirOficial } from "../lib/seguirOficial";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
@@ -258,6 +259,7 @@ router.post("/auth/google/completar", exigirGoogle, validate(completarSchema), a
       return created;
     });
     apagarCookie(res, BILHETE_COOKIE);
+    agendarSeguirOficial(user.id);   // fora do pedido: nunca espera nem falha o registo
     await emitirSessao(req, res, user, 201);
   } catch (err) {
     if (err instanceof RegistosFechadosError) { res.status(403).json({ error: MSG_REGISTOS_FECHADOS, codigo: CODIGO_REGISTOS_FECHADOS }); return; }
