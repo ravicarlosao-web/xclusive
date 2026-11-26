@@ -1,4 +1,5 @@
-import { Coins } from 'lucide-react';
+
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 
 const kz = (v: number) => v.toLocaleString('pt-PT');
 
@@ -7,7 +8,7 @@ export function GorjetaCartao({ valor, mensagem, enviada }: { valor: number; men
   return (
     <div data-testid="gorjeta-cartao" className="flex w-full max-w-[260px] min-w-[200px] flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-foreground">
       <div className="flex items-center gap-3">
-        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Coins className="h-5 w-5" /></span>
+        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><MoneyIcon className="h-5 w-5" /></span>
         <div className="min-w-0">
           <p className="text-sm font-bold leading-tight" data-testid="gorjeta-cartao-valor">Gorjeta de {kz(valor)} Kz</p>
           <p className="text-xs text-muted-foreground" data-testid="gorjeta-cartao-papel">{enviada ? 'Enviaste uma gorjeta' : 'Recebeste uma gorjeta'}</p>

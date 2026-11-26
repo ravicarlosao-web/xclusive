@@ -3,13 +3,14 @@ import { SeloMais18 } from './MarcacaoMais18';
 import { createPortal } from 'react-dom';
 import { StoryGroup } from '@workspace/api-client-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { X, ChevronLeft, ChevronRight, Trash2, Heart, Send, Coins, Flag } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash2, Heart, Send, Flag } from 'lucide-react';
 import { ReportDialog } from '@/components/shared/ReportDialog';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { TipModal } from '@/components/shared/TipModal';
 import { useToast } from '@/hooks/use-toast';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 interface StoryViewerProps {
   groups: StoryGroup[];
   /** Index of the group to start on */
@@ -296,7 +297,7 @@ export function StoryViewer({ groups, initialGroupIndex, onClose, onStoryViewed,
               aria-label="Enviar gorjeta"
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors shrink-0"
             >
-              <Coins className="w-6 h-6 text-white" />
+              <MoneyIcon className="w-6 h-6 text-white" />
             </button>
             {replyText.trim() && (
               <button

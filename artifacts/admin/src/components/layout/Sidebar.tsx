@@ -1,14 +1,11 @@
 import { Link, useLocation } from 'wouter';
-import { 
-  LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, 
-  Flag, TrendingUp, Wallet, Bell, Settings, ClipboardList,
-  PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent, ShieldAlert, UserCog, Smartphone
-} from 'lucide-react';
+import { LayoutDashboard, Users, Star, ShieldCheck, Image as ImageIcon, Flag, TrendingUp, Bell, Settings, ClipboardList, PanelLeftClose, PanelLeftOpen, ArrowDownToLine, Percent, ShieldAlert, UserCog, Smartphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 
+import { MoneyIcon } from '@/components/icons/MoneyIcon';
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -41,7 +38,7 @@ export function Sidebar({ collapsed, onToggle, isMobile = false }: SidebarProps)
     { href: '/finance', label: 'Financeiro', icon: TrendingUp },
     { href: '/commissions', label: 'Comissões', icon: Percent },
     { href: '/topups', label: 'Carregamentos', icon: ArrowDownToLine },
-    { href: '/withdrawals', label: 'Levantamentos', icon: Wallet, badge: kpis?.levantamentosPendentes || undefined },
+    { href: '/withdrawals', label: 'Levantamentos', icon: MoneyIcon, badge: kpis?.levantamentosPendentes || undefined },
     { href: '/broadcast', label: 'Broadcast', icon: Bell },
     { href: '/administradores', label: 'Administradores', icon: UserCog },
     { href: '/settings', label: 'Definições', icon: Settings },

@@ -7,6 +7,7 @@ import { SuggestionSkeleton } from '@/components/shared/SkeletonLoaders';
 import { useSeguir } from './useSeguir';
 import { lerLocal } from '@/lib/armazenamento';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 export interface TopCreator {
   id: number;
   username: string;
@@ -19,7 +20,7 @@ export interface TopCreator {
 }
 
 const Verificado = () => (
-  <svg className="h-3.5 w-3.5 shrink-0 fill-current text-primary" viewBox="0 0 24 24" role="img" aria-label="Verificado"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z" /></svg>
+  <VerifiedIcon className="h-3.5 w-3.5 shrink-0 fill-current text-primary" role="img" aria-label="Verificado" />
 );
 
 /** Top Criadores: chama, "Ver todos", posição, avatar, nome, verificado, nome de exibição, "N posts" e Seguir. Uma chamada, em cache. */

@@ -10,6 +10,7 @@ import { getLocalCommentsForPost, addLocalComment } from '@/lib/localComments';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
+import { VerifiedIcon } from '@/components/shared/VerifiedIcon';
 interface CommentsSectionProps {
   open: boolean;
   postId: number;
@@ -118,7 +119,7 @@ export function CommentsSection({ open, postId, postAuthorUsername, seedComments
                         <span className="font-semibold mr-1.5">
                           {comment.autor.username}
                           {comment.autor.verificado && (
-                            <svg className="inline w-3 h-3 text-primary fill-current ml-0.5 -mt-0.5" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z"/></svg>
+                            <VerifiedIcon className="inline w-3 h-3 text-primary fill-current ml-0.5 -mt-0.5" />
                           )}
                         </span>
                         <span className="whitespace-pre-wrap break-words">{comment.texto}</span>

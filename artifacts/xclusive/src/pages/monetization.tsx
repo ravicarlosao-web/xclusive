@@ -6,7 +6,7 @@ import { TipoSubscricaoCard, type TipoSubscricao } from '@/components/subscricoe
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Eye, Activity, Plus, TrendingUp, Wallet, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, Loader2, Radio, ChevronRight } from 'lucide-react';
+import { Users, Eye, Activity, Plus, TrendingUp, Building2, CheckCircle2, AlertCircle, ArrowDownToLine, Loader2, Radio, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -22,6 +22,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { AvisoVerificarEmail } from '@/components/settings/AvisoVerificarEmail';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 type Period = '7d' | '30d' | '1y';
 
 function formatKz(value: number): string {
@@ -506,7 +507,7 @@ export default function Monetization() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-green-700 dark:text-green-400" />
+              <MoneyIcon className="w-5 h-5 text-green-700 dark:text-green-400" />
               Saldo para Levantamento
             </CardTitle>
           </CardHeader>

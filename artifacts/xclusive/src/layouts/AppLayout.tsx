@@ -1,9 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  Home, Compass, Mail, Heart, PlusSquare, BarChart, 
-  Menu, LogOut, Settings, User as UserIcon, Sparkles, Wallet, Plus, Radio, Sun, Moon
-} from 'lucide-react';
+import { Home, Compass, Mail, Heart, PlusSquare, BarChart, Menu, LogOut, Settings, User as UserIcon, Sparkles, Plus, Radio, Sun, Moon } from 'lucide-react';
 import { useTema } from '@/hooks/useTema';
 import { useDesktop } from '@/hooks/useDesktop';
 import { useScrollCentro } from '@/hooks/useScrollCentro';
@@ -19,6 +16,7 @@ import { RodapeLegal } from '@/components/shared/RodapeLegal';
 import { InstalarAppItem } from '@/components/shared/PwaAvisos';
 import { useGetUnreadConversationsCount, getGetUnreadConversationsCountQueryKey, useGetUnreadNotificationsCount } from '@workspace/api-client-react';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 // Rotas em que a página faz scroll no documento (o rodapé fica no fim). As de altura fixa / ecrã inteiro ficam de fora.
 // O /home saiu da lista (o feed tem o seu próprio desenho): o rodapé legal está nas Definições, em "Mais" → Definições.
 const ROTAS_COM_RODAPE = ['/perfil/', '/definicoes', '/carteira'];
@@ -206,7 +204,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   location.startsWith('/carteira') ? "text-primary font-semibold" : "text-foreground"
                 )}
               >
-                <Wallet className={cn("w-6 h-6 shrink-0", location.startsWith('/carteira') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
+                <MoneyIcon className={cn("w-6 h-6 shrink-0", location.startsWith('/carteira') ? "stroke-[2.5px]" : "stroke-[1.5px] group-hover:scale-110 transition-transform")} />
                 <div className="hidden lg:flex flex-col leading-tight flex-1 min-w-0">
                   <span className="text-[15px] [@media(min-height:900px)]:text-[17px]">Carteira</span>
                   <span className="text-xs font-normal text-muted-foreground truncate">{saldo.toLocaleString('pt-PT')} Kz</span>

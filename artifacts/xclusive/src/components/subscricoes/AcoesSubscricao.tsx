@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { MINHAS_SUBS_KEY, SubscricaoError, formatarData, kz, type MinhaSubscricao } from '@/lib/subscricoes';
-import { AlertCircle, CalendarDays, CheckCircle2, Loader2, Wallet } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Loader2 } from 'lucide-react';
 
+import { MoneyIcon } from '@/components/shared/MoneyIcon';
 /**
  * Diálogos de renovar e cancelar uma subscrição. Tudo vem do servidor (GET /subscriptions/me):
  * preço atual do plano, fim do período (periodoAtual) e datas. Renovar debita UMA vez: o botão fica
@@ -79,7 +80,7 @@ export function RenovarDialog({ sub, open, onClose }: { sub: MinhaSubscricao | n
               </div>
             </div>
             <div className={`flex items-center gap-2.5 rounded-xl p-3 text-sm ${temSaldo ? 'bg-secondary/50 border border-border' : 'bg-destructive/10 border border-destructive/30'}`}>
-              <Wallet className={`w-4 h-4 shrink-0 ${temSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
+              <MoneyIcon className={`w-4 h-4 shrink-0 ${temSaldo ? 'text-yellow-700 dark:text-yellow-500' : 'text-destructive'}`} />
               <div>
                 <span className="text-muted-foreground">O teu saldo: </span>
                 <span className="font-bold">{saldo != null ? kz(saldo) : '—'}</span>
