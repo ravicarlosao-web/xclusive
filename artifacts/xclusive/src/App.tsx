@@ -118,28 +118,12 @@ function PublicOnlyRoute({ component: Component, ...rest }: { component: any, pa
   return <Component />;
 }
 
-/**
- * Entrada ("/"): sem landing. Com sessão vai para /home; sem sessão vai para /login.
- */
-function EntradaRoute() {
-  const { isAuthenticated, isLoading, erroLigacao, tentarNovamente } = useAuth();
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    if (isLoading || erroLigacao) return;
-    if (isAuthenticated) setLocation('/home');
-    else setLocation('/login');
-  }, [isLoading, isAuthenticated, erroLigacao, setLocation]);
-
-  if (erroLigacao) return <EcraSemLigacao onTentar={tentarNovamente} />;
-  if (isLoading) return <div className="min-h-[100dvh] bg-background flex items-center justify-center">A carregar...</div>;
-  return <div className="min-h-[100dvh] bg-background" />;
-}
-
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={EntradaRoute} />
+      {/* Entrada: «/» é o ecrã de login (o mesmo componente de /login), sem redirecionamento: o visitante sem sessão (e o Googlebot) vê-o logo, sem depender da API;
+          com sessão guardada espera pela verificação e segue para /home. /login continua como está. */}
+      <Route path="/">{() => <PublicOnlyRoute component={Login} path="/" />}</Route>
       <Route path="/login">{(params) => <PublicOnlyRoute component={Login} path="/login" />}</Route>
       <Route path="/google/concluir">{() => <PublicOnlyRoute component={GoogleConcluir} path="/google/concluir" />}</Route>
       <Route path="/registo">{(params) => <PublicOnlyRoute component={Register} path="/registo" />}</Route>
