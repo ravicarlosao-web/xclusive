@@ -17,3 +17,12 @@ export function politicaRobots(caminho: string): string {
   const p = (caminho.split(/[?#]/)[0] || '/').replace(/\/+$/, '') || '/';
   return PAGINAS_INDEXAVEIS.includes(p) ? ROBOTS_INDEXAVEL : ROBOTS_PRIVADO;
 }
+
+/** Endereço canónico do site (a página inicial é o ecrã de login). */
+export const CANONICO_INICIAL = 'https://xclusive.ao/';
+
+/** <link rel="canonical"> de um caminho: só a página inicial tem; as outras rotas não (null). */
+export function canonicoDe(caminho: string): string | null {
+  const p = (caminho.split(/[?#]/)[0] || '/').replace(/\/+$/, '') || '/';
+  return p === '/' ? CANONICO_INICIAL : null;
+}
